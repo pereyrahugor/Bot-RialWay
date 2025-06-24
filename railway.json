@@ -1,0 +1,28 @@
+{
+  "name": "Bot WhatsApp BuilderBot",
+  "description": "Bot de WhatsApp con integración OpenAI, multiagente y soporte de comandos",
+  "plugins": ["docker"],
+  "envs": [
+    {
+      "key": "ASSISTANT_ID",
+      "name": "Assistant ID",
+      "required": true
+    },
+    {
+      "key": "OPENAI_API_KEY",
+      "name": "Clave API OpenAI",
+      "required": true
+    },
+    {
+      "key": "ID_GRUPO_RESUMEN",
+      "name": "ID del grupo de resumen",
+      "required": true
+    },
+    {
+      "key": "PORT",
+      "name": "Puerto de escucha",
+      "required": false,
+      "defaultValue": "3000"
+    }
+  ]
+}
