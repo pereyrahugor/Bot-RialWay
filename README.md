@@ -4,7 +4,7 @@
   <img src="https://builderbot.vercel.app/assets/thumbnail-vector.png" height="80">
 </p>
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/new?repository=https://github.com/pereyrahugor/Bot-RialWay&envs=ASSISTANT_ID,OPENAI_API_KEY,ID_GRUPO_RESUMEN,PORT&optionalEnvs=PORT)
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/yNqO9f?referralCode=yO-oOz)
 
 This project creates a WhatsApp bot that integrates with an AI assistant using BuilderBot technology. It allows for automated conversations and intelligent responses powered by OpenAI's assistant API.
 
