@@ -8,8 +8,6 @@ import { idleFlow } from "./Flows/idleFlow";
 import { welcomeFlowTxt } from "./Flows/welcomeFlowTxt";
 import { welcomeFlowVoice } from "./Flows/welcomeFlowVoice";
 import { welcomeFlowImg } from "./Flows/welcomeFlowImg";
-import { getSheet2 } from "./addModule/getSheet2";
-import { getSheet1 } from "./addModule/getSheet1";
 import { ErrorReporter } from "./utils/errorReporter";
 
 /** Puerto en el que se ejecutará el servidor */
@@ -73,15 +71,6 @@ const processUserMessage = async (
 ) => {
     await typing(ctx, provider);
     try {
-
-if (ctx.body === "#ACTUALIZAR#") {
-
-            console.log("📌 BaseProductos Actualizado...");
-            await getSheet2();
-            console.log("📌 Ventas Actualizado...");
-            await getSheet1();
-            console.log("📌 Alquiler Actualizado...");
-        }
 
         // const response = await toAsk(ASSISTANT_ID, ctx.body, state);
         const response = await getAssistantResponse(ASSISTANT_ID, ctx.body, state, "Por favor, responde aunque sea brevemente.", ctx.from);
@@ -155,24 +144,6 @@ const handleQueue = async (userId) => {
 
 // Main function to initialize the bot and load Google Sheets data
 const main = async () => {
-    // Paso 1: Inicializar datos desde Google Sheets
-    console.log("📌 Inicializando datos desde Google Sheets...");
-
-    // Paso 2: Cargar datos de ventas desde la hoja de cálculo
-    const sheetVentas = await getSheet2();
-    if (!sheetVentas || sheetVentas.length === 0) {
-        console.warn("⚠️ No se encontraron datos en la hoja de cálculo de ventas. Continuando sin datos de ventas...");
-    } else {
-        console.log("✅ Datos de ventas cargados en memoria.");
-    }
-
-    // Paso 3: Cargar datos de alquiler desde la hoja de cálculo
-    const sheetAlquiler = await getSheet1();
-    if (!sheetAlquiler || sheetAlquiler.length === 0) {
-        console.warn("⚠️ No se encontraron datos en la hoja de cálculo de alquiler. Continuando sin datos de alquiler...");
-    } else {
-        console.log("✅ Datos de alquiler cargados en memoria.");
-    }
 
     // Paso 4: Crear el flujo principal del bot
     const adapterFlow = createFlow([welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, idleFlow]);
