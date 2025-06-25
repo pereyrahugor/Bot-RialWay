@@ -4,7 +4,7 @@
   <img src="https://builderbot.vercel.app/assets/thumbnail-vector.png" height="80">
 </p>
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/6VbbLI?referralCode=jyd_0y)
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/renewed-enchantment?referralCode=yO-oOz)
 
 This project creates a WhatsApp bot that integrates with an AI assistant using BuilderBot technology. It allows for automated conversations and intelligent responses powered by OpenAI's assistant API.
 
@@ -225,4 +225,4 @@ Una vez que te hayas cerciorado efectivamente que el usuario no necesita más de
 
 nombre:
 consulta:
-curso_interes:# Bot-Proyecto-Maqueta-Base-V2
+curso_interes:
