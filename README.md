@@ -79,4 +79,11 @@ Built with [BuilderBot](https://www.builderbot.app/en) - Empowering conversation
 
 This code is developed for Pereyra Hugo from DusckCodes.
 
+---
+
+### ☕ ¿Te resultó útil este proyecto?
+
+Puedes apoyar el desarrollo y agradecer el aporte con una donación aquí:
+[https://coff.ee/duskcodes](https://coff.ee/duskcodes)
+
 
