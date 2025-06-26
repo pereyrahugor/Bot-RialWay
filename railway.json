@@ -1,28 +1,19 @@
+
 {
   "name": "Bot WhatsApp BuilderBot",
   "description": "Bot de WhatsApp con integración OpenAI, multiagente y soporte de comandos",
   "plugins": ["docker"],
   "envs": [
-    {
-      "key": "ASSISTANT_ID",
-      "name": "Assistant ID",
-      "required": true
-    },
-    {
-      "key": "OPENAI_API_KEY",
-      "name": "Clave API OpenAI",
-      "required": true
-    },
-    {
-      "key": "ID_GRUPO_RESUMEN",
-      "name": "ID del grupo de resumen",
-      "required": true
-    },
-    {
-      "key": "PORT",
-      "name": "Puerto de escucha",
-      "required": false,
-      "defaultValue": "3000"
-    }
+    { "key": "ASSISTANT_ID", "name": "Assistant ID", "required": true },
+    { "key": "OPENAI_API_KEY", "name": "Clave API OpenAI", "required": true },
+    { "key": "ID_GRUPO_RESUMEN", "name": "ID del grupo de resumen", "required": true },
+    { "key": "PORT", "name": "Puerto de escucha", "required": false, "defaultValue": "3000" },
+    { "key": "msjCierre", "name": "Mensaje de cierre", "required": false },
+    { "key": "msjSeguimiento1", "name": "Mensaje de seguimiento 1", "required": false },
+    { "key": "msjSeguimiento2", "name": "Mensaje de seguimiento 2", "required": false },
+    { "key": "msjSeguimiento3", "name": "Mensaje de seguimiento 3", "required": false },
+    { "key": "timeOutCierre", "name": "Timeout de cierre (minutos)", "required": false, "defaultValue": "7" },
+    { "key": "timeOutSeguimiento2", "name": "Timeout seguimiento 2 (minutos)", "required": false, "defaultValue": "120" },
+    { "key": "timeOutSeguimiento3", "name": "Timeout seguimiento 3 (minutos)", "required": false, "defaultValue": "1" }
   ]
 }

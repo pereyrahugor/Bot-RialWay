@@ -25,6 +25,9 @@ export class ReconectionFlow {
     private readonly onSuccess: (data: ResumenData) => Promise<void>; // Acción al obtener nombre
     private readonly onFail: () => Promise<void>; // Acción al fallar todos los intentos
     private readonly ASSISTANT_ID = process.env.ASSISTANT_ID ?? '';
+    private readonly MsjSeguimiento1 = process.env.MsjSeguimiento1 ?? '';
+    private readonly MsjSeguimiento2 = process.env.MsjSeguimiento2 ?? '';
+    private readonly MsjSeguimiento3 = process.env.MsjSeguimiento3 ?? '';
 
     constructor(options: ReconectionOptions) {
         this.ctx = options.ctx;
@@ -59,16 +62,24 @@ export class ReconectionFlow {
             let timeout: number;
             switch (this.attempts) {
                 case 1:
-                    msg = 'MSJ 1 de Seguimiento.\n(Este es un mensaje de seguimiento 😉)';
-                    timeout = 2700000; // 45 min para el siguiente msj
+                    msg = this.MsjSeguimiento1 && this.MsjSeguimiento1.trim() !== ''
+                        ? this.MsjSeguimiento1
+                        : 'MSJ 1 de Seguimiento.\n(Este es un mensaje de seguimiento 😉)';
+                    // Usa timeOutSeguimiento2 si está definido, en minutos, sino el valor actual (45 min)
+                    timeout = process.env.timeOutSeguimiento2 ? Number(process.env.timeOutSeguimiento2) * 60 * 1000 : 2700000;
                     break;
                 case 2:
-                    msg = 'MSJ 2 de seguimiento, \nSigo aquí para ayudarte a optimizar ventas';
-                    timeout = 7200000; // 120 minutos para el siguiente msj
+                    msg = this.MsjSeguimiento2 && this.MsjSeguimiento2.trim() !== ''
+                        ? this.MsjSeguimiento2
+                        : 'MSJ 2 de seguimiento, \nSigo aquí para ayudarte a optimizar ventas';
+                    // Usa timeOutSeguimiento3 si está definido, en minutos, sino el valor actual (120 min)
+                    timeout = process.env.timeOutSeguimiento3 ? Number(process.env.timeOutSeguimiento3) * 60 * 1000 : 7200000;
                     break;
                 case 3:
                 default:
-                    msg = 'Msj 3 de seguimiento.\n\nAquí estoy para potenciar tus ventas, hablemos que puedo hacer por tu negocio.';
+                    msg = this.MsjSeguimiento3 && this.MsjSeguimiento3.trim() !== ''
+                        ? this.MsjSeguimiento3
+                        : 'Msj 3 de seguimiento.\n\nAquí estoy para potenciar tus ventas, hablemos que puedo hacer por tu negocio.';
                     timeout = 60000; // 1 minuto para el siguiente msj
                     break;
             }
