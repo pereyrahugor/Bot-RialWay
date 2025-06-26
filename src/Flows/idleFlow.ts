@@ -104,7 +104,7 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
         }
 
         // Mensaje de cierre del flujo
-        return endFlow("SALUDOS, ¡GRACIAS POR TU TIEMPO! Si necesitas más ayuda, no dudes en contactarnos. 😊 - TEST");
+        return endFlow("Msj de cierre y envio de reporte. 😊 - TEST");
     }
 );
 

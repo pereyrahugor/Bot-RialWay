@@ -59,16 +59,16 @@ export class ReconectionFlow {
             let timeout: number;
             switch (this.attempts) {
                 case 1:
-                    msg = 'La Inteligencia Artificial ayuda a los empresarios a ahorrar costos y optimizar ventas.\n(Este es un mensaje de seguimiento 😉)';
+                    msg = 'MSJ 1 de Seguimiento.\n(Este es un mensaje de seguimiento 😉)';
                     timeout = 2700000; // 45 min para el siguiente msj
                     break;
                 case 2:
-                    msg = 'Más del 34% de los leads se pierden por falta de seguimiento del vendedor, yo como IA de ventas te doy seguimiento, \nSigo aquí para ayudarte a optimizar ventas';
+                    msg = 'MSJ 2 de seguimiento, \nSigo aquí para ayudarte a optimizar ventas';
                     timeout = 7200000; // 120 minutos para el siguiente msj
                     break;
                 case 3:
                 default:
-                    msg = 'El 90% de los vendedores humanos sólo envían 2 mensajes de seguimiento.\n\nAquí estoy para potenciar tus ventas, hablemos que puedo hacer por tu negocio.';
+                    msg = 'Msj 3 de seguimiento.\n\nAquí estoy para potenciar tus ventas, hablemos que puedo hacer por tu negocio.';
                     timeout = 60000; // 1 minuto para el siguiente msj
                     break;
             }
