@@ -8,7 +8,7 @@ import path from "path";
 import fs from "fs";
 
 // Si se define timeOutCierre en minutos en .env, se multiplica por 60*1000 para obtener milisegundos
-const setTime = process.env.timeOutCierre ? Number(process.env.timeOutCierre) * 60 * 1000 : 7 * 60 * 1000;
+const setTime = Number(process.env.timeOutCierre) * 60 * 1000;
 
 export const welcomeFlowVoice = addKeyword<BaileysProvider, MemoryDB>(EVENTS.VOICE_NOTE)
     .addAction(async (ctx, { gotoFlow, flowDynamic, state, provider }) => {

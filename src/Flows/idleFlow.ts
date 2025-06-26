@@ -10,7 +10,7 @@ import { ReconectionFlow } from './reconectionFlow';
 //** Variables de entorno para el envio de msj de resumen a grupo de WS */
 const ASSISTANT_ID = process.env.ASSISTANT_ID ?? '';
 const ID_GRUPO_RESUMEN = process.env.ID_GRUPO_RESUMEN ?? '';
-const msjCierre = process.env.msjCierre ?? '';
+const msjCierre = process.env.msjCierre;
 
 //** Flow para cierre de conversación, generación de resumen y envio a grupo de WS */
 const idleFlow = addKeyword(EVENTS.ACTION).addAction(
@@ -105,11 +105,7 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
         }
 
         // Mensaje de cierre del flujo
-        if (msjCierre && msjCierre.trim() !== "") {
-            return endFlow(msjCierre);
-        } else {
-            return endFlow("Msj de cierre y envio de reporte. 😊 - TEST");
-        }
+        return endFlow(msjCierre);
     }
 );
 

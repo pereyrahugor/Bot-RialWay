@@ -62,24 +62,16 @@ export class ReconectionFlow {
             let timeout: number;
             switch (this.attempts) {
                 case 1:
-                    msg = this.MsjSeguimiento1 && this.MsjSeguimiento1.trim() !== ''
-                        ? this.MsjSeguimiento1
-                        : 'MSJ 1 de Seguimiento.\n(Este es un mensaje de seguimiento 😉)';
-                    // Usa timeOutSeguimiento2 si está definido, en minutos, sino el valor actual (45 min)
-                    timeout = process.env.timeOutSeguimiento2 ? Number(process.env.timeOutSeguimiento2) * 60 * 1000 : 2700000;
+                    msg = this.MsjSeguimiento1;
+                    timeout = Number(process.env.timeOutSeguimiento2) * 60 * 1000;
                     break;
                 case 2:
-                    msg = this.MsjSeguimiento2 && this.MsjSeguimiento2.trim() !== ''
-                        ? this.MsjSeguimiento2
-                        : 'MSJ 2 de seguimiento, \nSigo aquí para ayudarte a optimizar ventas';
-                    // Usa timeOutSeguimiento3 si está definido, en minutos, sino el valor actual (120 min)
-                    timeout = process.env.timeOutSeguimiento3 ? Number(process.env.timeOutSeguimiento3) * 60 * 1000 : 7200000;
+                    msg = this.MsjSeguimiento2;
+                    timeout = Number(process.env.timeOutSeguimiento3) * 60 * 1000;
                     break;
                 case 3:
                 default:
-                    msg = this.MsjSeguimiento3 && this.MsjSeguimiento3.trim() !== ''
-                        ? this.MsjSeguimiento3
-                        : 'Msj 3 de seguimiento.\n\nAquí estoy para potenciar tus ventas, hablemos que puedo hacer por tu negocio.';
+                    msg = this.MsjSeguimiento3;
                     timeout = 60000; // 1 minuto para el siguiente msj
                     break;
             }

@@ -4,7 +4,7 @@ import { MemoryDB } from "@builderbot/bot";
 import { reset } from "~/utils/timeOut";
 import { handleQueue, userQueues, userLocks } from "~/app";
 // Si se define timeOutCierre en minutos en .env, se multiplica por 60*1000 para obtener milisegundos
-const setTime = process.env.timeOutCierre ? Number(process.env.timeOutCierre) * 60 * 1000 : 7 * 60 * 1000;
+const setTime = Number(process.env.timeOutCierre) * 60 * 1000;
 
 export const welcomeFlowTxt = addKeyword<BaileysProvider, MemoryDB>(EVENTS.WELCOME)
     .addAction(async (ctx, { gotoFlow, flowDynamic, state, provider }) => {
