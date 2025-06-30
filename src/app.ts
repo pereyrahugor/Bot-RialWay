@@ -91,7 +91,7 @@ const processUserMessage = async (
             if (/un momento/i.test(chunk.trim())) {
                 await flowDynamic([{ body: chunk.trim() }]);
                 // Esperar 5 segundos y volver a consultar al asistente por la respuesta final
-                await new Promise(res => setTimeout(res, 5000));
+                await new Promise(res => setTimeout(res, 20000));
                 const followup = await toAsk(ASSISTANT_ID, ctx.body, state);
                 if (followup && !/un momento/i.test(followup)) {
                     await flowDynamic([{ body: String(followup).trim() }]);
