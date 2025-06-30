@@ -72,14 +72,24 @@ export class ReconectionFlow {
             let msg: string;
             let timeout: number;
             switch (this.attempts) {
-                case 1:
+                case 1: {
                     msg = this.MsjSeguimiento1;
-                    timeout = Number(process.env.timeOutSeguimiento2) * 60 * 1000;
+                    const t2 = process.env.timeOutSeguimiento2;
+                    if (!t2 || isNaN(Number(t2))) {
+                        throw new Error('[ReconectionFlow] Falta o es inválida la variable de entorno timeOutSeguimiento2.');
+                    }
+                    timeout = Number(t2) * 60 * 1000;
                     break;
-                case 2:
+                }
+                case 2: {
                     msg = this.MsjSeguimiento2;
-                    timeout = Number(process.env.timeOutSeguimiento3) * 60 * 1000;
+                    const t3 = process.env.timeOutSeguimiento3;
+                    if (!t3 || isNaN(Number(t3))) {
+                        throw new Error('[ReconectionFlow] Falta o es inválida la variable de entorno timeOutSeguimiento3.');
+                    }
+                    timeout = Number(t3) * 60 * 1000;
                     break;
+                }
                 case 3:
                 default:
                     msg = this.MsjSeguimiento3;
@@ -87,6 +97,9 @@ export class ReconectionFlow {
                     break;
             }
             if (typeof timeout !== 'number' || isNaN(timeout)) timeout = this.timeoutMs;
+            if (!msg || typeof msg !== 'string' || msg.trim() === '') {
+                throw new Error(`[ReconectionFlow] El mensaje de seguimiento para el intento ${this.attempts} es vacío o inválido. Verifica tus variables de entorno.`);
+            }
             if (jid) {
                 try {
                     console.log(`[ReconectionFlow] Enviando mensaje de reconexión a:`, jid);
