@@ -25,9 +25,9 @@ export class ReconectionFlow {
     private readonly onSuccess: (data: ResumenData) => Promise<void>; // Acción al obtener nombre
     private readonly onFail: () => Promise<void>; // Acción al fallar todos los intentos
     private readonly ASSISTANT_ID = process.env.ASSISTANT_ID ?? '';
-    private readonly MsjSeguimiento1: string;
-    private readonly MsjSeguimiento2: string;
-    private readonly MsjSeguimiento3: string;
+    private readonly msjSeguimiento1: string;
+    private readonly msjSeguimiento2: string;
+    private readonly msjSeguimiento3: string;
 
     constructor(options: ReconectionOptions) {
         this.ctx = options.ctx;
@@ -39,15 +39,15 @@ export class ReconectionFlow {
         this.onFail = options.onFail;
 
         // Validar que las variables de entorno requeridas existen y no son vacías
-        const msj1 = process.env.MsjSeguimiento1;
-        const msj2 = process.env.MsjSeguimiento2;
-        const msj3 = process.env.MsjSeguimiento3;
+        const msj1 = process.env.msjSeguimiento1;
+        const msj2 = process.env.msjSeguimiento2;
+        const msj3 = process.env.msjSeguimiento3;
         if (!msj1 || !msj2 || !msj3) {
-            throw new Error('[ReconectionFlow] Faltan variables de entorno obligatorias: MsjSeguimiento1, MsjSeguimiento2 o MsjSeguimiento3. Verifica tu configuración.');
+            throw new Error('[ReconectionFlow] Faltan variables de entorno obligatorias: msjSeguimiento1, msjSeguimiento2 o msjSeguimiento3. Verifica tu configuración.');
         }
-        this.MsjSeguimiento1 = msj1;
-        this.MsjSeguimiento2 = msj2;
-        this.MsjSeguimiento3 = msj3;
+        this.msjSeguimiento1 = msj1;
+        this.msjSeguimiento2 = msj2;
+        this.msjSeguimiento3 = msj3;
     }
 
     // Inicia el ciclo de reconexión
@@ -73,7 +73,7 @@ export class ReconectionFlow {
             let timeout: number;
             switch (this.attempts) {
                 case 1: {
-                    msg = this.MsjSeguimiento1;
+                    msg = this.msjSeguimiento1;
                     const t2 = process.env.timeOutSeguimiento2;
                     if (!t2 || isNaN(Number(t2))) {
                         throw new Error('[ReconectionFlow] Falta o es inválida la variable de entorno timeOutSeguimiento2.');
@@ -82,7 +82,7 @@ export class ReconectionFlow {
                     break;
                 }
                 case 2: {
-                    msg = this.MsjSeguimiento2;
+                    msg = this.msjSeguimiento2;
                     const t3 = process.env.timeOutSeguimiento3;
                     if (!t3 || isNaN(Number(t3))) {
                         throw new Error('[ReconectionFlow] Falta o es inválida la variable de entorno timeOutSeguimiento3.');
@@ -92,7 +92,7 @@ export class ReconectionFlow {
                 }
                 case 3:
                 default:
-                    msg = this.MsjSeguimiento3;
+                    msg = this.msjSeguimiento3;
                     timeout = 60000; // 1 minuto para el siguiente msj
                     break;
             }
