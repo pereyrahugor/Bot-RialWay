@@ -25,9 +25,9 @@ export class ReconectionFlow {
     private readonly onSuccess: (data: ResumenData) => Promise<void>; // Acción al obtener nombre
     private readonly onFail: () => Promise<void>; // Acción al fallar todos los intentos
     private readonly ASSISTANT_ID = process.env.ASSISTANT_ID ?? '';
-    private readonly MsjSeguimiento1: string = process.env.MsjSeguimiento1 as string;
-    private readonly MsjSeguimiento2: string = process.env.MsjSeguimiento2 as string;
-    private readonly MsjSeguimiento3: string = process.env.MsjSeguimiento3 as string;
+    private readonly MsjSeguimiento1: string;
+    private readonly MsjSeguimiento2: string;
+    private readonly MsjSeguimiento3: string;
 
     constructor(options: ReconectionOptions) {
         this.ctx = options.ctx;
@@ -37,6 +37,17 @@ export class ReconectionFlow {
         this.timeoutMs = options.timeoutMs ?? 60000;
         this.onSuccess = options.onSuccess;
         this.onFail = options.onFail;
+
+        // Validar que las variables de entorno requeridas existen y no son vacías
+        const msj1 = process.env.MsjSeguimiento1;
+        const msj2 = process.env.MsjSeguimiento2;
+        const msj3 = process.env.MsjSeguimiento3;
+        if (!msj1 || !msj2 || !msj3) {
+            throw new Error('[ReconectionFlow] Faltan variables de entorno obligatorias: MsjSeguimiento1, MsjSeguimiento2 o MsjSeguimiento3. Verifica tu configuración.');
+        }
+        this.MsjSeguimiento1 = msj1;
+        this.MsjSeguimiento2 = msj2;
+        this.MsjSeguimiento3 = msj3;
     }
 
     // Inicia el ciclo de reconexión
