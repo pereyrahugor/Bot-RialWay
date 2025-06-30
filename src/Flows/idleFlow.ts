@@ -10,7 +10,7 @@ import { ReconectionFlow } from './reconectionFlow';
 //** Variables de entorno para el envio de msj de resumen a grupo de WS */
 const ASSISTANT_ID = process.env.ASSISTANT_ID ?? '';
 const ID_GRUPO_RESUMEN = process.env.ID_GRUPO_RESUMEN ?? '';
-const msjCierre = process.env.msjCierre;
+const msjCierre: string = process.env.msjCierre as string;
 
 //** Flow para cierre de conversación, generación de resumen y envio a grupo de WS */
 const idleFlow = addKeyword(EVENTS.ACTION).addAction(
