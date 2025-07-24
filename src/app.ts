@@ -8,6 +8,7 @@ import { idleFlow } from "./Flows/idleFlow";
 import { welcomeFlowTxt } from "./Flows/welcomeFlowTxt";
 import { welcomeFlowVoice } from "./Flows/welcomeFlowVoice";
 import { welcomeFlowImg } from "./Flows/welcomeFlowImg";
+import { welcomeFlowDoc } from "./Flows/welcomeFlowDoc";
 import { ErrorReporter } from "./utils/errorReporter";
 
 /** Puerto en el que se ejecutará el servidor */
@@ -146,7 +147,7 @@ const handleQueue = async (userId) => {
 const main = async () => {
 
     // Paso 4: Crear el flujo principal del bot
-    const adapterFlow = createFlow([welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, idleFlow]);
+    const adapterFlow = createFlow([welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowDoc,idleFlow]);
     // Paso 5: Crear el proveedor de WhatsApp (Baileys)
     const adapterProvider = createProvider(BaileysProvider, {
         groupsIgnore: false,
@@ -171,7 +172,7 @@ process.on('unhandledRejection', (reason, promise) => {
     console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
 });
 
-export { welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg,
+export { welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowDoc,
     handleQueue, userQueues, userLocks,
  };
 
