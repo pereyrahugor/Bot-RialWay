@@ -10,6 +10,7 @@ import { welcomeFlowVoice } from "./Flows/welcomeFlowVoice";
 import { welcomeFlowImg } from "./Flows/welcomeFlowImg";
 import { welcomeFlowDoc } from "./Flows/welcomeFlowDoc";
 import { ErrorReporter } from "./utils/errorReporter";
+import Vapi from '@vapi-ai/web';
 
 /** Puerto en el que se ejecutará el servidor */
 const PORT = process.env.PORT ?? "";
@@ -147,7 +148,7 @@ const handleQueue = async (userId) => {
 const main = async () => {
 
     // Paso 4: Crear el flujo principal del bot
-    const adapterFlow = createFlow([welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowDoc,idleFlow]);
+    const adapterFlow = createFlow([welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowDoc, idleFlow]);
     // Paso 5: Crear el proveedor de WhatsApp (Baileys)
     const adapterProvider = createProvider(BaileysProvider, {
         groupsIgnore: false,
@@ -166,6 +167,19 @@ const main = async () => {
     httpInject(adapterProvider.server);
     // Paso 9: Iniciar el servidor HTTP en el puerto especificado
     httpServer(+PORT);
+
+    // Ejecutar la llamada Vapi al iniciar el bot
+    try {
+        const { DerivationFlowCall } = await import('./utils/derivationFlowCall');
+        const vapi = new DerivationFlowCall('744e89bf-37d1-4f2a-bdf5-ec6bb02b1a4b');
+        vapi.startCall('65689436-679f-4889-9774-091545cc846b', 'e732810d-144e-482f-80a2-2419319b56e4', {
+            customer: {
+                number: '+5491130792789' // número destino
+            }
+        });
+    } catch (err) {
+        console.error('Error en la llamada Vapi desde main:', err);
+    }
 };
 
 process.on('unhandledRejection', (reason, promise) => {

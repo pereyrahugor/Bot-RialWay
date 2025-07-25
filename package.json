@@ -17,6 +17,8 @@
     "@builderbot/provider-baileys": "^1.2.8",
     "@deepgram/sdk": "^3.11.1",
     "@types/fs-extra": "^11.0.4",
+    "@vapi-ai/server-sdk": "^0.10.0",
+    "@vapi-ai/web": "^2.3.8",
     "@whiskeysockets/baileys": "6.6.0",
     "axios": "^1.7.9",
     "docker": "^0.2.14",
