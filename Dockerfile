@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3 make g+
 # Instalar dependencias node
 RUN pnpm install
 
-# Compilar (si falla, verás el error real)
+# Compilar y mostrar el error real en el log de Docker
 RUN pnpm run build
 
 # Limpiar dependencias de build
