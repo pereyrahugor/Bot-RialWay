@@ -10,8 +10,9 @@ ENV PNPM_HOME=/usr/local/bin
 
 
 
-# Copiar solo package.json y lock para instalar dependencias primero (mejor cache)
-COPY package*.json *-lock.yaml ./
+
+# Copiar solo package.json, lock y archivos de configuración necesarios para build (mejor cache)
+COPY package*.json *-lock.yaml rollup.config.js ./
 
 # Instalar dependencias del sistema necesarias para build
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ git ca-certificates poppler-utils && update-ca-certificates
