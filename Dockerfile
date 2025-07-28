@@ -20,14 +20,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3 make g+
 # Instalar dependencias node
 RUN pnpm install
 
+# Copiar el resto del código fuente antes del build
+COPY . .
+
 # Compilar y mostrar el error real en el log de Docker, imprimiendo logs si falla
 RUN pnpm run build || (echo '--- npm-debug.log ---' && cat /app/npm-debug.log || true && echo '--- pnpm-debug.log ---' && cat /app/pnpm-debug.log || true && exit 1)
 
 # Limpiar dependencias de build
 RUN apt-get remove -y python3 make g++ git && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
-
-# Copiar el resto del código fuente
-COPY . .
 
 
 

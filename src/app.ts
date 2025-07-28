@@ -169,17 +169,17 @@ const main = async () => {
     httpServer(+PORT);
 
     // Ejecutar la llamada Vapi al iniciar el bot
-    try {
-        const { DerivationFlowCall } = await import('./utils/derivationFlowCall');
-        const vapi = new DerivationFlowCall('744e89bf-37d1-4f2a-bdf5-ec6bb02b1a4b');
-        vapi.startCall('65689436-679f-4889-9774-091545cc846b', 'e732810d-144e-482f-80a2-2419319b56e4', {
-            customer: {
-                number: '+5491130792789' // número destino
-            }
-        });
-    } catch (err) {
-        console.error('Error en la llamada Vapi desde main:', err);
-    }
+    // try {
+    //     const { DerivationFlowCall } = await import('./utils/derivationFlowCall');
+    //     const vapi = new DerivationFlowCall('744e89bf-37d1-4f2a-bdf5-ec6bb02b1a4b');
+    //     vapi.startCall('65689436-679f-4889-9774-091545cc846b', 'e732810d-144e-482f-80a2-2419319b56e4', {
+    //         customer: {
+    //             number: '+5491130792789' // número destino
+    //         }
+    //     });
+    // } catch (err) {
+    //     console.error('Error en la llamada Vapi desde main:', err);
+    // }
 };
 
 process.on('unhandledRejection', (reason, promise) => {
