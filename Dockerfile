@@ -10,15 +10,18 @@ ENV PNPM_HOME=/usr/local/bin
 
 
 COPY . .
-
-
 COPY package*.json *-lock.yaml ./
 
+RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ git ca-certificates poppler-utils && update-ca-certificates
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3 make g++ git ca-certificates poppler-utils \
-    && update-ca-certificates \
-    && pnpm install && pnpm run build \
+# Instalar dependencias node
+RUN pnpm install
+
+# Compilar (si falla, verás el error real)
+RUN pnpm run build
+
+# Limpiar dependencias de build
+RUN apt-get remove -y python3 make g++ git && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
     && apt-get remove -y python3 make g++ git \
     && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*
