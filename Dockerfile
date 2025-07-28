@@ -9,32 +9,29 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 ENV PNPM_HOME=/usr/local/bin
 
 
-
-# Copiar solo package.json y lock para instalar dependencias primero (mejor cache)
-COPY package*.json *-lock.yaml ./
-
-# Instalar dependencias del sistema necesarias para build
-RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ git ca-certificates && update-ca-certificates
-
-
-# Instalar dependencias node y compilar
-RUN pnpm install
-RUN pnpm run build || (echo '--- BUILD ERROR LOG ---' && cat /app/npm-debug.log || true && exit 1)
-
-# Limpiar dependencias de build
-RUN apt-get remove -y python3 make g++ git && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
-
-# Copiar el resto del código fuente
 COPY . .
 
+
+COPY package*.json *-lock.yaml ./
+
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 make g++ git ca-certificates poppler-utils \
+    && update-ca-certificates \
+    && pnpm install && pnpm run build \
+    && apt-get remove -y python3 make g++ git \
+    && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/*
 # Instala poppler-utils (pdftoppm) en la imagen final
 RUN apt-get update && apt-get install -y --no-install-recommends poppler-utils && rm -rf /var/lib/apt/lists/*
+
 
 
 FROM node:slim AS deploy
 
 # Instalar poppler-utils en la imagen final para que pdftoppm esté disponible
 RUN apt-get update && apt-get install -y --no-install-recommends poppler-utils && rm -rf /var/lib/apt/lists/*
+
 
 WORKDIR /app
 
