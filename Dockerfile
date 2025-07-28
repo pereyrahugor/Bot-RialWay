@@ -16,9 +16,10 @@ COPY package*.json *-lock.yaml ./
 # Instalar dependencias del sistema necesarias para build
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ git ca-certificates && update-ca-certificates
 
+
 # Instalar dependencias node y compilar
 RUN pnpm install
-RUN pnpm run build
+RUN pnpm run build || (echo '--- BUILD ERROR LOG ---' && cat /app/npm-debug.log || true && exit 1)
 
 # Limpiar dependencias de build
 RUN apt-get remove -y python3 make g++ git && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
