@@ -9,9 +9,11 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 ENV PNPM_HOME=/usr/local/bin
 
 
-COPY . .
+
+# Copiar solo package.json y lock para instalar dependencias primero (mejor cache)
 COPY package*.json *-lock.yaml ./
 
+# Instalar dependencias del sistema necesarias para build
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ git ca-certificates poppler-utils && update-ca-certificates
 
 # Instalar dependencias node
@@ -22,11 +24,9 @@ RUN pnpm run build
 
 # Limpiar dependencias de build
 RUN apt-get remove -y python3 make g++ git && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
-    && apt-get remove -y python3 make g++ git \
-    && apt-get autoremove -y \
-    && rm -rf /var/lib/apt/lists/*
-# Instala poppler-utils (pdftoppm) en la imagen final
-RUN apt-get update && apt-get install -y --no-install-recommends poppler-utils && rm -rf /var/lib/apt/lists/*
+
+# Copiar el resto del código fuente
+COPY . .
 
 
 
