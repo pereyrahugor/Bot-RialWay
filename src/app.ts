@@ -18,9 +18,8 @@ import { welcomeFlowDoc } from "./Flows/welcomeFlowDoc";
 import { ErrorReporter } from "./utils/errorReporter";
 //import { testAuth } from './utils/test-google-auth.js';
 import { AssistantBridge } from './utils/AssistantBridge';
-import express from 'express';
+import polka from 'polka';
 import http from 'http';
-import { Server } from 'socket.io';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
