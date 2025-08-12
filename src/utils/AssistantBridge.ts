@@ -24,8 +24,7 @@ export class AssistantBridge {
     // Servir el archivo webchat.html en /webchat (Polka no tiene sendFile)
 
     app.get('/webchat', (req, res) => {
-      const currentDir = path.dirname(fileURLToPath(import.meta.url));
-      const filePath = path.resolve(currentDir, '../webchat.html');
+      const filePath = path.join(process.cwd(), 'src', 'webchat.html');
       res.setHeader('Content-Type', 'text/html');
       res.end(fs.readFileSync(filePath));
     });
