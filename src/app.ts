@@ -239,19 +239,29 @@ const main = async () => {
                 });
                 httpInject(adapterProvider.server);
 
-                // Crear el servidor HTTP manualmente y montar Polka y Socket.IO
+                // Usar la instancia Polka (adapterProvider.server) para rutas
                 const polkaApp = adapterProvider.server;
-                const http = await import('http');
-                const server = http.createServer(polkaApp.handler);
+                // Agregar ruta personalizada para el webchat
+                polkaApp.get('/webchat', (req, res) => {
+                    res.sendFile(path.join(__dirname, '../webchat.html'));
+                });
 
-                // Integrar Socket.IO sobre el servidor HTTP
-                const io = new Server(server, { cors: { origin: '*' } });
+                // Obtener el servidor HTTP real de BuilderBot después de httpInject
+                const realHttpServer = adapterProvider.server.server;
+
+                // Integrar Socket.IO sobre el servidor HTTP real de BuilderBot
+                const io = new Server(realHttpServer, { cors: { origin: '*' } });
                 io.on('connection', (socket) => {
                     console.log('💬 Cliente web conectado');
                     socket.on('message', async (msg) => {
-                        // Aquí conecta con tu lógica de asistente
-                        // const reply = await processUserMessageWeb(msg);
-                        // socket.emit('reply', reply);
+                        // Procesar el mensaje usando la lógica del asistente web
+                        try {
+                            const reply = await processUserMessageWeb(msg);
+                            socket.emit('reply', reply);
+                        } catch (err) {
+                            console.error('Error procesando mensaje webchat:', err);
+                            socket.emit('reply', 'Hubo un error procesando tu mensaje.');
+                        }
                     });
                 });
 
@@ -263,12 +273,49 @@ const main = async () => {
 
                 // Integrar AssistantBridge si es necesario
                 const assistantBridge = new AssistantBridge();
-                assistantBridge.setupWebChat(polkaApp, server);
+                assistantBridge.setupWebChat(polkaApp, realHttpServer);
 
-                // Iniciar el servidor en el puerto correcto
-                server.listen(PORT, () => {
-                    console.log(`Servidor escuchando en http://localhost:${PORT}`);
-                });
+                                polkaApp.post('/webchat-api', async (req, res) => {
+                                    console.log('Llamada a /webchat-api'); // log para debug
+                                    // Si el body ya está disponible (por ejemplo, con body-parser), úsalo directamente
+                                    if (req.body && req.body.message) {
+                                        console.log('Body recibido por body-parser:', req.body); // debug
+                                        try {
+                                            const message = req.body.message;
+                                            console.log('Mensaje recibido en webchat:', message); // debug
+                                            const reply = await processUserMessageWeb(message);
+                                            res.setHeader('Content-Type', 'application/json');
+                                            res.end(JSON.stringify({ reply }));
+                                        } catch (err) {
+                                            console.error('Error en /webchat-api:', err); // debug
+                                            res.statusCode = 500;
+                                            res.end(JSON.stringify({ reply: 'Hubo un error procesando tu mensaje.' }));
+                                        }
+                                    } else {
+                                        // Fallback manual si req.body no está disponible
+                                        let body = '';
+                                        req.on('data', chunk => { body += chunk; });
+                                        req.on('end', async () => {
+                                            console.log('Body recibido en /webchat-api:', body); // log para debug
+                                            try {
+                                                const { message } = JSON.parse(body);
+                                                console.log('Mensaje recibido en webchat:', message); // debug
+                                                const reply = await processUserMessageWeb(message);
+                                                res.setHeader('Content-Type', 'application/json');
+                                                res.end(JSON.stringify({ reply }));
+                                            } catch (err) {
+                                                console.error('Error en /webchat-api:', err); // debug
+                                                res.statusCode = 500;
+                                                res.end(JSON.stringify({ reply: 'Hubo un error procesando tu mensaje.' }));
+                                            }
+                                        });
+                                    }
+                                });
+
+            // No llamar a listen, BuilderBot ya inicia el servidor
+
+    // ...existing code...
+    httpServer(+PORT);
 };
 
 process.on('unhandledRejection', (reason, promise) => {
