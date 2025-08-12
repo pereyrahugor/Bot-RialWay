@@ -20,7 +20,7 @@ export class AssistantBridge {
   constructor() {}
 
   // Inicializa el webchat en el servidor principal
-  public setupWebChat(app: express.Express, server: http.Server) {
+  public setupWebChat(app: any, server: http.Server) {
     // Servir el archivo webchat.html en /webchat (Polka no tiene sendFile)
 
     app.get('/webchat', (req, res) => {
