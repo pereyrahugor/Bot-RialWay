@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Web Chat Bot</title>
-  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <!-- Eliminado socket.io, solo fetch/AJAX -->
   <style>
     html, body {
       height: 100%;
@@ -101,29 +101,32 @@
   </div>
 
   <script>
-  const socket = io(window.location.origin);
-
     const input = document.getElementById('input');
     const sendBtn = document.getElementById('send');
 
-    function sendMessage() {
+    async function sendMessage() {
       const msg = input.value;
       if (!msg) return;
       addMessage(msg, 'user');
-      socket.emit('message', msg);
       input.value = '';
+      try {
+        const res = await fetch('/webchat-api', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: msg })
+        });
+        const data = await res.json();
+        addMessage(data.reply, 'bot');
+      } catch (err) {
+        addMessage('Hubo un error procesando tu mensaje.', 'bot');
+      }
     }
 
     sendBtn.onclick = sendMessage;
-
     input.addEventListener('keydown', function(e) {
       if (e.key === 'Enter') {
         sendMessage();
       }
-    });
-
-    socket.on('reply', (msg) => {
-      addMessage(msg, 'bot');
     });
 
     function addMessage(text, type) {
