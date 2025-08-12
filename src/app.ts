@@ -226,8 +226,8 @@ const main = async () => {
 
         // Inicializar el servidor Express y Socket.IO para el webchat en el puerto 3000
         const webchatApp = express();
-        webchatApp.get('/webchat', (req, res) => {
-            res.sendFile(path.resolve(__dirname, 'webchat.html'));
+        webchatApp.get('/v1/form', (req, res) => {
+          res.sendFile(path.resolve(__dirname, 'src/webchat.html'));
         });
 
         const webchatServer = http.createServer(webchatApp);
