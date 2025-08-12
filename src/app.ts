@@ -246,12 +246,11 @@ const main = async () => {
                     res.sendFile(path.join(__dirname, '../webchat.html'));
                 });
 
-                // Obtener el servidor HTTP real para Socket.IO y AssistantBridge
-                // Normalmente BuilderBot expone el servidor HTTP como polkaApp.server
-                const httpInstance = polkaApp.server;
+                // Obtener el servidor HTTP real de Polka
+                const realHttpServer = polkaApp.server;
 
-                // Integrar Socket.IO sobre el servidor HTTP de BuilderBot
-                const io = new Server(httpInstance, { cors: { origin: '*' } });
+                // Integrar Socket.IO sobre el servidor HTTP real de BuilderBot
+                const io = new Server(realHttpServer, { cors: { origin: '*' } });
                 io.on('connection', (socket) => {
                     console.log('💬 Cliente web conectado');
                     socket.on('message', async (msg) => {
@@ -269,7 +268,7 @@ const main = async () => {
 
                 // Integrar AssistantBridge si es necesario
                 const assistantBridge = new AssistantBridge();
-                assistantBridge.setupWebChat(polkaApp, httpInstance);
+                assistantBridge.setupWebChat(polkaApp, realHttpServer);
 
             // No llamar a listen, BuilderBot ya inicia el servidor
 
