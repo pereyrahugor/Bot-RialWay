@@ -225,22 +225,18 @@ const main = async () => {
 
 
         // Inicializar el servidor Express y Socket.IO para el webchat en el puerto 3000
-        const webchatApp = express();
-        // Solo las rutas principales necesarias
-        webchatApp.get('/', (req, res) => {
+        const app = express();
+
+        app.get('/', (req, res) => {
           res.sendFile(path.resolve(__dirname, 'src/webchat.html'));
         });
-
-        webchatApp.get('/qr', (req, res) => {
-          res.sendFile(path.resolve(__dirname, 'bot.qr.png'));
-        });
-
-        webchatApp.get('/webchat', (req, res) => {
+        
+        app.get('/webchat', (req, res) => {
           res.sendFile(path.join(__dirname, 'public', 'webchat.html'));
         });
 
-        const webchatServer = http.createServer(webchatApp);
-        const io = new Server(webchatServer, {
+        const server = http.createServer(app);
+        const io = new Server(server, {
             cors: { origin: "*" }
         });
 
@@ -261,9 +257,6 @@ const main = async () => {
             });
         });
 
-        webchatServer.listen(3000, () => {
-            console.log('🚀 Webchat escuchando en http://localhost:3000/webchat');
-        });
     // ...existing code...
     const adapterFlow = createFlow([welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowDoc, idleFlow]);
     const adapterProvider = createProvider(BaileysProvider, {
