@@ -5,7 +5,7 @@ import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { processUserMessageWeb } from './processUserMessageWeb';
-
+import fs from 'fs';
 export interface Message {
   id: string;
   text: string;
@@ -19,16 +19,17 @@ export class AssistantBridge {
 
   constructor() {}
 
-  // Inicializa el servidor web chat
-  public startWebChatServer(port = 3000) {
-    const app = express();
-    // Servir el archivo webchat.html en /webchat
+  // Inicializa el webchat en el servidor principal
+  public setupWebChat(app: express.Express, server: http.Server) {
+    // Servir el archivo webchat.html en /webchat (Polka no tiene sendFile)
+
     app.get('/webchat', (req, res) => {
       const currentDir = path.dirname(fileURLToPath(import.meta.url));
-      res.sendFile(path.resolve(currentDir, '../../webchat.html'));
+      const filePath = path.resolve(currentDir, '../webchat.html');
+      res.setHeader('Content-Type', 'text/html');
+      res.end(fs.readFileSync(filePath));
     });
 
-    const server = http.createServer(app);
     this.io = new Server(server, {
       cors: { origin: "*" }
     });
@@ -52,11 +53,6 @@ export class AssistantBridge {
       socket.on('disconnect', () => {
         console.log('👋 Cliente web desconectado');
       });
-    });
-
-    server.listen(port, () => {
-      console.log(`🚀 Servidor WebChat escuchando en http://localhost:${port}`);
-      console.log(`🌐 Accede al chat web en http://localhost:${port}/webchat`);
     });
   }
 

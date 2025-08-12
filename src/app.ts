@@ -224,52 +224,36 @@ const main = async () => {
     // ...existing code...
 
 
-        // Inicializar el servidor Express y Socket.IO para el webchat en el puerto 3000
-        const app = express();
+                // ...existing code...
+                const adapterFlow = createFlow([welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowDoc, idleFlow]);
+                const adapterProvider = createProvider(BaileysProvider, {
+                    groupsIgnore: false,
+                    readStatus: false,
+                });
+                const adapterDB = new MemoryDB();
+                const { httpServer } = await createBot({
+                    flow: adapterFlow,
+                    provider: adapterProvider,
+                    database: adapterDB,
+                });
+                httpInject(adapterProvider.server);
 
-        app.get('/', (req, res) => {
-          res.sendFile(path.resolve(__dirname, 'src/webchat.html'));
-        });
-        
-        app.get('/webchat', (req, res) => {
-          res.sendFile(path.join(__dirname, 'public', 'webchat.html'));
-        });
+                // Usar la instancia Polka (adapterProvider.server) para rutas
+                const polkaApp = adapterProvider.server;
+                // Agregar ruta personalizada para el webchat
+                polkaApp.get('/webchat', (req, res) => {
+                    res.sendFile(path.join(__dirname, '../webchat.html'));
+                });
 
-        const server = http.createServer(app);
-        const io = new Server(server, {
-            cors: { origin: "*" }
-        });
+                // Obtener el servidor HTTP real para Socket.IO y AssistantBridge
+                // Normalmente BuilderBot expone el servidor HTTP como polkaApp.server
+                const httpInstance = polkaApp.server;
+                const assistantBridge = new AssistantBridge();
+                assistantBridge.setupWebChat(polkaApp, httpInstance);
 
-        io.on('connection', (socket) => {
-            console.log('💬 Cliente web conectado');
-            socket.on('message', async (msg) => {
-                try {
-                    console.log(`📩 Mensaje web: ${msg}`);
-                    const reply = await processUserMessageWeb(msg);
-                    socket.emit('reply', reply);
-                } catch (err) {
-                    console.error("❌ Error procesando mensaje:", err);
-                    socket.emit('reply', "Hubo un error procesando tu mensaje.");
-                }
-            });
-            socket.on('disconnect', () => {
-                console.log('👋 Cliente web desconectado');
-            });
-        });
+            // No llamar a listen, BuilderBot ya inicia el servidor
 
     // ...existing code...
-    const adapterFlow = createFlow([welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowDoc, idleFlow]);
-    const adapterProvider = createProvider(BaileysProvider, {
-        groupsIgnore: false,
-        readStatus: false,
-    });
-    const adapterDB = new MemoryDB();
-    const { httpServer } = await createBot({
-        flow: adapterFlow,
-        provider: adapterProvider,
-        database: adapterDB,
-    });
-    httpInject(adapterProvider.server);
     httpServer(+PORT);
 };
 
