@@ -29,8 +29,8 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import { processUserMessageWeb } from './utils/processUserMessageWeb';
 
-/** Puerto en el que se ejecutará el servidor */
-const PORT = process.env.PORT ?? "";
+/** Puerto en el que se ejecutará el servidor (Railway usa 8080 por defecto) */
+const PORT = process.env.PORT || 8080;
 /** ID del asistente de OpenAI */
 export const ASSISTANT_ID = process.env.ASSISTANT_ID;
 const ID_GRUPO_RESUMEN = process.env.ID_GRUPO_WS ?? "";
