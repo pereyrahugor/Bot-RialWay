@@ -1,3 +1,32 @@
+// ...existing imports y lógica del bot...
+
+import polka from 'polka';
+import http from 'http';
+import { Server } from 'socket.io';
+import fs from 'fs';
+import path from 'path';
+
+const polkaApp = polka();
+const server = http.createServer(polkaApp.handler);
+
+polkaApp.get('/webchat', (req, res) => {
+    res.setHeader('Content-Type', 'text/html');
+    res.end(fs.readFileSync(path.join(process.cwd(), 'src', 'webchat.html')));
+});
+
+const io = new Server(server, { cors: { origin: '*' } });
+io.on('connection', (socket) => {
+    console.log('💬 Cliente web conectado');
+    socket.on('message', async (msg) => {
+        // Aquí conecta con tu lógica de asistente
+        // const reply = await processUserMessageWeb(msg);
+        // socket.emit('reply', reply);
+    });
+});
+
+server.listen(process.env.PORT || 3000, () => {
+    console.log(`Servidor Polka + Socket.IO escuchando en http://localhost:${process.env.PORT || 3000}`);
+});
 // Estado global para encender/apagar el bot
 let botEnabled = true;
 import "dotenv/config";
@@ -18,9 +47,6 @@ import { welcomeFlowDoc } from "./Flows/welcomeFlowDoc";
 import { ErrorReporter } from "./utils/errorReporter";
 //import { testAuth } from './utils/test-google-auth.js';
 import { AssistantBridge } from './utils/AssistantBridge';
-import polka from 'polka';
-import http from 'http';
-import path from 'path';
 import { fileURLToPath } from 'url';
 
 // Definir __dirname para ES modules
