@@ -19,8 +19,10 @@ export class DerivationFlowCall {
                 ...(options ?? {})
             });
             console.log('Call started:', call);
+            return call;
         } catch (error) {
             console.error('Error starting call:', error);
+            return null;
         }
     }
 }

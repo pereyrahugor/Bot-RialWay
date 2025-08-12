@@ -42,9 +42,11 @@ WORKDIR /app
 
 ARG PORT
 
-ENV PORT=3000
+ENV PORT=3008
 
 EXPOSE $PORT
+EXPOSE 3000
+EXPOSE 3008
 
 # Asegurar que la carpeta de credenciales exista
 RUN mkdir -p /app/credentials
