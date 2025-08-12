@@ -239,18 +239,13 @@ const main = async () => {
                 });
                 httpInject(adapterProvider.server);
 
-                // Usar la instancia Polka (adapterProvider.server) para rutas
+                // Crear el servidor HTTP manualmente y montar Polka y Socket.IO
                 const polkaApp = adapterProvider.server;
-                // Agregar ruta personalizada para el webchat
-                polkaApp.get('/webchat', (req, res) => {
-                    res.sendFile(path.join(__dirname, '../webchat.html'));
-                });
+                const http = await import('http');
+                const server = http.createServer(polkaApp.handler);
 
-                // Obtener el servidor HTTP real de Polka
-                const realHttpServer = polkaApp.server;
-
-                // Integrar Socket.IO sobre el servidor HTTP real de BuilderBot
-                const io = new Server(realHttpServer, { cors: { origin: '*' } });
+                // Integrar Socket.IO sobre el servidor HTTP
+                const io = new Server(server, { cors: { origin: '*' } });
                 io.on('connection', (socket) => {
                     console.log('💬 Cliente web conectado');
                     socket.on('message', async (msg) => {
@@ -268,12 +263,12 @@ const main = async () => {
 
                 // Integrar AssistantBridge si es necesario
                 const assistantBridge = new AssistantBridge();
-                assistantBridge.setupWebChat(polkaApp, realHttpServer);
+                assistantBridge.setupWebChat(polkaApp, server);
 
-            // No llamar a listen, BuilderBot ya inicia el servidor
-
-    // ...existing code...
-    httpServer(+PORT);
+                // Iniciar el servidor en el puerto correcto
+                server.listen(PORT, () => {
+                    console.log(`Servidor escuchando en http://localhost:${PORT}`);
+                });
 };
 
 process.on('unhandledRejection', (reason, promise) => {
