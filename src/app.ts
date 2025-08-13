@@ -22,12 +22,16 @@ import { welcomeFlowDoc } from "./Flows/welcomeFlowDoc";
 //import { listImg } from "./addModule/listImg";
 import { ErrorReporter } from "./utils/errorReporter";
 //import { testAuth } from './utils/test-google-auth.js';
-import { AssistantBridge } from './utils/AssistantBridge';
+import { AssistantBridge } from './utils-web/AssistantBridge';
+import { WebChatManager } from './utils-web/WebChatManager';
+import { WebChatSession } from './utils-web/WebChatSession';
 import { fileURLToPath } from 'url';
 
 // Definir __dirname para ES modules
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-import { processUserMessageWeb } from './utils/processUserMessageWeb';
+// Instancia global de WebChatManager para sesiones webchat
+const webChatManager = new WebChatManager();
+// Eliminado: processUserMessageWeb. Usar lógica principal para ambos canales.
 
 /** Puerto en el que se ejecutará el servidor (Railway usa 8080 por defecto) */
 const PORT = process.env.PORT || 8080;
@@ -50,7 +54,7 @@ const TIMEOUT_MS = 30000;
 // Control de timeout por usuario para evitar ejecuciones automáticas superpuestas
 const userTimeouts = new Map();
 
-const getAssistantResponse = async (assistantId, message, state, fallbackMessage, userId) => {
+export const getAssistantResponse = async (assistantId, message, state, fallbackMessage, userId, thread_id = null) => {
   // Si hay un timeout previo, lo limpiamos
   if (userTimeouts.has(userId)) {
     clearTimeout(userTimeouts.get(userId));
@@ -68,8 +72,8 @@ const getAssistantResponse = async (assistantId, message, state, fallbackMessage
     userTimeouts.set(userId, timeoutId);
   });
 
-  // Lanzamos la petición a OpenAI
-  const askPromise = toAsk(assistantId, message, state).then((result) => {
+    // Lanzamos la petición a OpenAI, pasando thread_id si existe
+    const askPromise = toAsk(assistantId, message, state).then((result) => {
     // Si responde antes del timeout, limpiamos el timeout
     if (userTimeouts.has(userId)) {
       clearTimeout(userTimeouts.get(userId));
@@ -84,7 +88,7 @@ const getAssistantResponse = async (assistantId, message, state, fallbackMessage
   return Promise.race([askPromise, timeoutPromise]);
 };
 
-const processUserMessage = async (
+export const processUserMessage = async (
     ctx,
     { flowDynamic, state, provider, gotoFlow }
 ) => {
@@ -125,11 +129,13 @@ const processUserMessage = async (
         //     return gotoFlow(imgResponseFlow);
         // }
 
-        // const response = await toAsk(ASSISTANT_ID, ctx.body, state);
-        const response = await getAssistantResponse(ASSISTANT_ID, ctx.body, state, "Por favor, responde aunque sea brevemente.", ctx.from);
+        // Usar el nuevo wrapper para obtener respuesta y thread_id
+        const response = await getAssistantResponse(ASSISTANT_ID, ctx.body, state, "Por favor, responde aunque sea brevemente.", ctx.from, ctx.thread_id);
 
-        if (!response) {
-            // Enviar reporte de error al grupo de WhatsApp
+        if (
+            !response ||
+            (typeof response === 'object' && response !== null && !('text' in response))
+        ) {
             await errorReporter.reportError(
                 new Error("No se recibió respuesta del asistente."),
                 ctx.from,
@@ -137,41 +143,48 @@ const processUserMessage = async (
             );
         }
 
-        const textResponse = typeof response === "string" ? response : String(response);
+        // Guardar thread_id en el contexto si lo retorna la respuesta
+        if (
+            response &&
+            typeof response === 'object' &&
+            response !== null &&
+            'thread_id' in response
+        ) {
+            ctx.lastThreadId = (response as { thread_id: string }).thread_id;
+        }
+
+        const textResponse =
+            response && typeof response === 'object' && response !== null && 'text' in response
+                ? (response as { text: string }).text
+                : String(response);
         const chunks = textResponse.split(/\n\n+/);
+    const allChunks = [];
         for (const chunk of chunks) {
             // Detecta trigger de imagen en la respuesta del asistente
             const imgMatch = chunk.trim().match(/\[IMG\]\s*(.+)/i);
             if (imgMatch) {
-                const imageName = imgMatch[1].trim();
-                // Buscar imagen en Drive usando el flow
-                // const { getDriveImageUrl } = await import("./Flows/imgResponse.js");
-                // const imageUrl = await getDriveImageUrl(imageName);
-                // if (imageUrl) {
-                //     await flowDynamic([
-                //         {
-                //             body: `Aquí tienes la imagen solicitada: ${imageName}`,
-                //             media: imageUrl
-                //         }
-                //     ]);
-                // }
-                // No enviar el chunk como texto
                 continue;
             }
-            // Detecta "un momento" en cualquier combinación de mayúsculas/minúsculas
             if (/un momento/i.test(chunk.trim())) {
-                await flowDynamic([{ body: chunk.trim() }]);
-                // Esperar 5 segundos y volver a consultar al asistente por la respuesta final
+                allChunks.push(chunk.trim());
                 await new Promise(res => setTimeout(res, 10000));
-                const followup = await toAsk(ASSISTANT_ID, ctx.body, state);
-                if (followup && !/un momento/i.test(followup)) {
-                    await flowDynamic([{ body: String(followup).trim() }]);
+                // Usar el wrapper también para followup
+                const followup = await getAssistantResponse(ASSISTANT_ID, ctx.body, state, undefined, ctx.from, ctx.thread_id);
+                if (
+                    followup &&
+                    typeof followup === 'object' &&
+                    followup !== null &&
+                    'text' in followup &&
+                    (followup as { text: string }).text &&
+                    !/un momento/i.test((followup as { text: string }).text)
+                ) {
+                    allChunks.push(String((followup as { text: string }).text).trim());
                 }
                 continue;
             }
-            // Enviar el chunk tal como lo entrega el asistente, sin limpiar ni alterar el formato
-            await flowDynamic([{ body: chunk.trim() }]);
+            allChunks.push(chunk.trim());
         }
+        await flowDynamic([{ body: allChunks.join('\n\n') }]);
         return state;
     } catch (error) {
         console.error("Error al procesar el mensaje del usuario:", error);
@@ -254,10 +267,59 @@ const main = async () => {
                 io.on('connection', (socket) => {
                     console.log('💬 Cliente web conectado');
                     socket.on('message', async (msg) => {
-                        // Procesar el mensaje usando la lógica del asistente web
+                        // Procesar el mensaje usando la lógica principal del bot
                         try {
-                            const reply = await processUserMessageWeb(msg);
-                            socket.emit('reply', reply);
+                            let ip = '';
+                            const xff = socket.handshake.headers['x-forwarded-for'];
+                            if (typeof xff === 'string') {
+                                ip = xff.split(',')[0];
+                            } else if (Array.isArray(xff)) {
+                                ip = xff[0];
+                            } else {
+                                ip = socket.handshake.address || '';
+                            }
+                            // Centralizar historial y estado igual que WhatsApp
+                            if (!global.webchatHistories) global.webchatHistories = {};
+                            const historyKey = `webchat_${ip}`;
+                            if (!global.webchatHistories[historyKey]) global.webchatHistories[historyKey] = [];
+                            const _history = global.webchatHistories[historyKey];
+                            const state = {
+                                get: function (key) {
+                                    if (key === 'history') return _history;
+                                    return undefined;
+                                },
+                                update: async function (msg, role = 'user') {
+                                    if (_history.length > 0) {
+                                        const last = _history[_history.length - 1];
+                                        if (last.role === role && last.content === msg) return;
+                                    }
+                                    _history.push({ role, content: msg });
+                                    if (_history.length >= 6) {
+                                        const last3 = _history.slice(-3);
+                                        if (last3.every(h => h.role === 'user' && h.content === msg)) {
+                                            _history.length = 0;
+                                        }
+                                    }
+                                },
+                                clear: async function () { _history.length = 0; }
+                            };
+                            const provider = undefined;
+                            const gotoFlow = () => {};
+                            let replyText = '';
+                            const flowDynamic = async (arr) => {
+                                if (Array.isArray(arr)) {
+                                    replyText = arr.map(a => a.body).join('\n');
+                                } else if (typeof arr === 'string') {
+                                    replyText = arr;
+                                }
+                            };
+                            if (msg.trim().toLowerCase() === "#reset" || msg.trim().toLowerCase() === "#cerrar") {
+                                await state.clear();
+                                replyText = "🔄 El chat ha sido reiniciado. Puedes comenzar una nueva conversación.";
+                            } else {
+                                await processUserMessage({ from: ip, body: msg, type: 'webchat' }, { flowDynamic, state, provider, gotoFlow });
+                            }
+                            socket.emit('reply', replyText);
                         } catch (err) {
                             console.error('Error procesando mensaje webchat:', err);
                             socket.emit('reply', 'Hubo un error procesando tu mensaje.');
@@ -283,9 +345,48 @@ const main = async () => {
                                         try {
                                             const message = req.body.message;
                                             console.log('Mensaje recibido en webchat:', message); // debug
-                                            const reply = await processUserMessageWeb(message);
+                                            let ip = '';
+                                            const xff = req.headers['x-forwarded-for'];
+                                            if (typeof xff === 'string') {
+                                                ip = xff.split(',')[0];
+                                            } else if (Array.isArray(xff)) {
+                                                ip = xff[0];
+                                            } else {
+                                                ip = req.socket.remoteAddress || '';
+                                            }
+                                            // Crear un ctx similar al de WhatsApp, usando el IP como 'from'
+                                            const ctx = {
+                                                from: ip,
+                                                body: message,
+                                                type: 'webchat',
+                                                // Puedes agregar más propiedades si tu lógica lo requiere
+                                            };
+                                            // Usar la lógica principal del bot (processUserMessage)
+                                            let replyText = '';
+                                            // Simular flowDynamic para capturar la respuesta
+                                            const flowDynamic = async (arr) => {
+                                                if (Array.isArray(arr)) {
+                                                    replyText = arr.map(a => a.body).join('\n');
+                                                } else if (typeof arr === 'string') {
+                                                    replyText = arr;
+                                                }
+                                            };
+                                                // Usar WebChatManager y WebChatSession para gestionar la sesión webchat
+                                                const { getOrCreateThreadId, sendMessageToThread, deleteThread } = await import('./utils-web/openaiThreadBridge');
+                                                const session = webChatManager.getSession(ip);
+                                                if (message.trim().toLowerCase() === "#reset" || message.trim().toLowerCase() === "#cerrar") {
+                                                    await deleteThread(session);
+                                                    session.clear();
+                                                    replyText = "🔄 El chat ha sido reiniciado. Puedes comenzar una nueva conversación.";
+                                                } else {
+                                                    session.addUserMessage(message);
+                                                    const threadId = await getOrCreateThreadId(session);
+                                                    const reply = await sendMessageToThread(threadId, message, ASSISTANT_ID);
+                                                    session.addAssistantMessage(reply);
+                                                    replyText = reply;
+                                            }
                                             res.setHeader('Content-Type', 'application/json');
-                                            res.end(JSON.stringify({ reply }));
+                                            res.end(JSON.stringify({ reply: replyText }));
                                         } catch (err) {
                                             console.error('Error en /webchat-api:', err); // debug
                                             res.statusCode = 500;
@@ -300,9 +401,64 @@ const main = async () => {
                                             try {
                                                 const { message } = JSON.parse(body);
                                                 console.log('Mensaje recibido en webchat:', message); // debug
-                                                const reply = await processUserMessageWeb(message);
+                                                let ip = '';
+                                                const xff = req.headers['x-forwarded-for'];
+                                                if (typeof xff === 'string') {
+                                                    ip = xff.split(',')[0];
+                                                } else if (Array.isArray(xff)) {
+                                                    ip = xff[0];
+                                                } else {
+                                                    ip = req.socket.remoteAddress || '';
+                                                }
+                                                // Centralizar historial y estado igual que WhatsApp
+                                                if (!global.webchatHistories) global.webchatHistories = {};
+                                                const historyKey = `webchat_${ip}`;
+                                                if (!global.webchatHistories[historyKey]) global.webchatHistories[historyKey] = { history: [], thread_id: null };
+                                                const _store = global.webchatHistories[historyKey];
+                                                const _history = _store.history;
+                                                const state = {
+                                                    get: function (key) {
+                                                        if (key === 'history') return _history;
+                                                        if (key === 'thread_id') return _store.thread_id;
+                                                        return undefined;
+                                                    },
+                                                    setThreadId: function (id) {
+                                                        _store.thread_id = id;
+                                                    },
+                                                    update: async function (msg, role = 'user') {
+                                                        if (_history.length > 0) {
+                                                            const last = _history[_history.length - 1];
+                                                            if (last.role === role && last.content === msg) return;
+                                                        }
+                                                        _history.push({ role, content: msg });
+                                                        if (_history.length >= 6) {
+                                                            const last3 = _history.slice(-3);
+                                                            if (last3.every(h => h.role === 'user' && h.content === msg)) {
+                                                                _history.length = 0;
+                                                                _store.thread_id = null;
+                                                            }
+                                                        }
+                                                    },
+                                                    clear: async function () { _history.length = 0; _store.thread_id = null; }
+                                                };
+                                                const provider = undefined;
+                                                const gotoFlow = () => {};
+                                                let replyText = '';
+                                                const flowDynamic = async (arr) => {
+                                                    if (Array.isArray(arr)) {
+                                                        replyText = arr.map(a => a.body).join('\n');
+                                                    } else if (typeof arr === 'string') {
+                                                        replyText = arr;
+                                                    }
+                                                };
+                                                if (message.trim().toLowerCase() === "#reset" || message.trim().toLowerCase() === "#cerrar") {
+                                                    await state.clear();
+                                                    replyText = "🔄 El chat ha sido reiniciado. Puedes comenzar una nueva conversación.";
+                                                } else {
+                                                    // ...thread_id gestionado por openaiThreadBridge, no es necesario actualizar aquí...
+                                                }
                                                 res.setHeader('Content-Type', 'application/json');
-                                                res.end(JSON.stringify({ reply }));
+                                                res.end(JSON.stringify({ reply: replyText }));
                                             } catch (err) {
                                                 console.error('Error en /webchat-api:', err); // debug
                                                 res.statusCode = 500;
