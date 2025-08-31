@@ -22,6 +22,7 @@
     "@vapi-ai/web": "^2.3.8",
     "@whiskeysockets/baileys": "6.6.0",
     "axios": "^1.7.9",
+    "builderbot-provider-sherpa": "^0.0.4",
     "docker": "^0.2.14",
     "dotenv": "^16.4.7",
     "exceljs": "^4.4.0",
