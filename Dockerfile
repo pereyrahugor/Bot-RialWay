@@ -42,6 +42,8 @@ FROM node:slim AS deploy
 
 # Instalar git en la imagen final para dependencias que requieren clonado
 RUN apt-get update && apt-get install -y --no-install-recommends git
+# Instalar certificados CA para evitar error de verificación SSL
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && update-ca-certificates
 
 
 # Instalar poppler-utils y ffmpeg en la imagen final para que pdftoppm y ffmpeg estén disponibles
