@@ -17,8 +17,10 @@ COPY package*.json *-lock.yaml rollup.config.js ./
 # Instalar dependencias del sistema necesarias para build
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ git ca-certificates poppler-utils && update-ca-certificates
 
-# Instalar dependencias node
-RUN pnpm install
+# Instalar dependencias node (forzar instalación aunque lockfile esté desactualizado)
+RUN pnpm install --no-frozen-lockfile
+# Asegurar instalación de socket.io por si pnpm falla en la resolución
+RUN pnpm add socket.io
 
 
 # Copiar el resto del código fuente antes del build
