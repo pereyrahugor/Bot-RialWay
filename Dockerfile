@@ -40,6 +40,9 @@ RUN apt-get remove -y python3 make g++ git && apt-get autoremove -y && rm -rf /v
 
 FROM node:slim AS deploy
 
+# Instalar git en la imagen final para dependencias que requieren clonado
+RUN apt-get update && apt-get install -y --no-install-recommends git
+
 
 # Instalar poppler-utils y ffmpeg en la imagen final para que pdftoppm y ffmpeg estén disponibles
 RUN apt-get update && apt-get install -y --no-install-recommends poppler-utils ffmpeg && rm -rf /var/lib/apt/lists/*
