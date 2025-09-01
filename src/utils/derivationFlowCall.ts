@@ -5,7 +5,7 @@ import { VapiClient } from '@vapi-ai/server-sdk';
 
 export class DerivationFlowCall {
 
-    private client: VapiClient;
+    private client: InstanceType<typeof VapiClient>;
 
     constructor(token: string) {
         this.client = new VapiClient({ token });
