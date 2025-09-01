@@ -21,6 +21,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3 make g+
 RUN pnpm install --no-frozen-lockfile
 # Asegurar instalación de socket.io por si pnpm falla en la resolución
 RUN pnpm add socket.io
+# Asegurar instalación de tipos de express para TypeScript
+RUN pnpm add @types/express --save-dev
 
 
 # Copiar el resto del código fuente antes del build
