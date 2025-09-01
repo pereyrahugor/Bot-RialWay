@@ -23,6 +23,8 @@ RUN pnpm install --no-frozen-lockfile
 RUN pnpm add socket.io
 # Asegurar instalación de tipos de express para TypeScript
 RUN pnpm add @types/express --save-dev
+# Asegurar instalación de tipos de @vapi-ai/server-sdk para TypeScript (no falla si no existen)
+RUN pnpm add @types/vapi-ai__server-sdk --save-dev || true
 
 
 # Copiar el resto del código fuente antes del build
