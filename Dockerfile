@@ -75,6 +75,8 @@ RUN mkdir /app/tmp
 RUN npm cache clean --force && pnpm install --production --ignore-scripts \
     && npm install polka @types/polka \
     && rm -rf $PNPM_HOME/.npm $PNPM_HOME/.node-gyp
+# Asegurar instalación de socket.io en producción
+RUN pnpm add socket.io
 
 # Parchear la versión de Baileys automáticamente
 RUN sed -i 's/version: \[[0-9, ]*\]/version: [2, 3000, 1023223821]/' node_modules/@builderbot/provider-baileys/dist/index.cjs
