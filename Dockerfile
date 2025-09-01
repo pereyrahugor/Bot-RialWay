@@ -20,8 +20,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3 make g+
 # Instalar dependencias node
 RUN pnpm install
 
-# Instalar tipos de socket.io para evitar error de compilación
-RUN pnpm install @types/socket.io --save-dev
 
 # Copiar el resto del código fuente antes del build
 COPY . .
