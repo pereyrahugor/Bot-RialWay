@@ -68,7 +68,9 @@ RUN npm cache clean --force && pnpm install --production --ignore-scripts \
 RUN sed -i 's/version: \[[0-9, ]*\]/version: [2, 3000, 1023223821]/' node_modules/@builderbot/provider-baileys/dist/index.cjs
 
 RUN groupadd -g 1001 nodejs && useradd -u 1001 -g nodejs -m nodejs
-RUN mkdir -p /app/node_modules/@ffmpeg-installer/linux-x64 && ln -sf /usr/bin/ffmpeg /app/node_modules/@ffmpeg-installer/linux-x64/ffmpeg
+RUN mkdir -p /app/node_modules/@ffmpeg-installer/linux-x64 \
+    && echo '{}' > /app/node_modules/@ffmpeg-installer/linux-x64/package.json \
+    && ln -sf /usr/bin/ffmpeg /app/node_modules/@ffmpeg-installer/linux-x64/ffmpeg
 
 
 CMD ["npm", "start"]
