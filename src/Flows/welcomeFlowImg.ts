@@ -30,9 +30,7 @@ const IMGUR_CLIENT_ID = "dbe415c6bbb950d";
 const setTime = 7 * 60 * 1000; // 7 minutos
 
 
-const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAnswer(
-  "Procesando tu imagen, por favor espera unos segundos...",
-  { capture: false },
+const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
   async (ctx, { flowDynamic, provider, gotoFlow, state }) => {
     const userId = ctx.from;
     reset(ctx, gotoFlow, setTime);

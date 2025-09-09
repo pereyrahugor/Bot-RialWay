@@ -10,3 +10,4 @@ temp/voiceNote
 
 *.log
 *qr.png
+.env
