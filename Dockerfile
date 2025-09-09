@@ -66,7 +66,7 @@ RUN mkdir -p /app/credentials
 COPY --from=builder /app/assets ./assets
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/*.json /app/*-lock.yaml ./
-COPY --from=builder /app/src/webchat.html ./src/webchat.html
+COPY --from=builder /app/src/index.html ./src/index.html
 
 
 RUN corepack enable && corepack prepare pnpm@latest --activate
