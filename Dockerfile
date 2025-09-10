@@ -11,24 +11,30 @@ ENV PNPM_HOME=/usr/local/bin
 
 
 
-# Copiar solo package.json, lock y archivos de configuración necesarios para build (mejor cache)
-COPY package*.json *-lock.yaml rollup.config.js ./
+# Copiar archivos de configuración y dependencias primero para aprovechar la cache
+COPY package*.json ./
+COPY *-lock.yaml ./
+COPY rollup.config.js ./
+COPY tsconfig.json ./
 
 # Instalar dependencias del sistema necesarias para build
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ git ca-certificates poppler-utils && update-ca-certificates
 
-# Instalar dependencias node (forzar instalación aunque lockfile esté desactualizado)
-RUN pnpm install --no-frozen-lockfile
-# Asegurar instalación de socket.io por si pnpm falla en la resolución
-RUN pnpm add socket.io
-# Asegurar instalación de tipos de express para TypeScript
-RUN pnpm add @types/express --save-dev
-# Asegurar instalación de tipos de @vapi-ai/server-sdk para TypeScript (no falla si no existen)
-RUN pnpm add @types/vapi-ai__server-sdk --save-dev || true
+# Instalar dependencias node
+RUN pnpm install
 
-
-# Copiar el resto del código fuente antes del build
-COPY . .
+# Copiar el resto del código fuente y carpetas necesarias antes del build
+COPY src/ ./src/
+COPY assets/ ./assets/
+COPY src/js/ ./src/js/
+COPY src/style/ ./src/style/
+COPY src/utils/ ./src/utils/
+COPY src/utils-web/ ./src/utils-web/
+COPY temp/ ./temp/
+COPY tmp/ ./tmp/
+COPY README.md ./
+COPY nodemon.json ./
+COPY railway.json ./
 
 # Compilar y mostrar el error real en el log de Docker, imprimiendo logs si falla
 RUN pnpm run build || (echo '--- npm-debug.log ---' && cat /app/npm-debug.log || true && echo '--- pnpm-debug.log ---' && cat /app/pnpm-debug.log || true && exit 1)
@@ -40,14 +46,8 @@ RUN apt-get remove -y python3 make g++ git && apt-get autoremove -y && rm -rf /v
 
 FROM node:slim AS deploy
 
-# Instalar git en la imagen final para dependencias que requieren clonado
-RUN apt-get update && apt-get install -y --no-install-recommends git
-# Instalar certificados CA para evitar error de verificación SSL
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && update-ca-certificates
-
-
-# Instalar poppler-utils y ffmpeg en la imagen final para que pdftoppm y ffmpeg estén disponibles
-RUN apt-get update && apt-get install -y --no-install-recommends poppler-utils ffmpeg && rm -rf /var/lib/apt/lists/*
+# Instalar poppler-utils en la imagen final para que pdftoppm esté disponible
+RUN apt-get update && apt-get install -y --no-install-recommends poppler-utils && rm -rf /var/lib/apt/lists/*
 
 
 WORKDIR /app
@@ -63,28 +63,30 @@ EXPOSE $PORT
 RUN mkdir -p /app/credentials
 
 
+# Copiar los artefactos necesarios desde builder
 COPY --from=builder /app/assets ./assets
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/*.json /app/*-lock.yaml ./
-COPY --from=builder /app/src/index.html ./src/index.html
+COPY --from=builder /app/*.json ./
+COPY --from=builder /app/*-lock.yaml ./
+COPY --from=builder /app/src/webchat.html ./src/webchat.html
+COPY --from=builder /app/README.md ./
+COPY --from=builder /app/nodemon.json ./
+COPY --from=builder /app/railway.json ./
+COPY --from=builder /app/src/js ./src/js
+COPY --from=builder /app/src/style ./src/style
 
 
 RUN corepack enable && corepack prepare pnpm@latest --activate
 ENV PNPM_HOME=/usr/local/bin
 RUN mkdir /app/tmp
 RUN npm cache clean --force && pnpm install --production --ignore-scripts \
-    && npm install polka @types/polka \
+    && npm install polka @types/polka --legacy-peer-deps \
     && rm -rf $PNPM_HOME/.npm $PNPM_HOME/.node-gyp
-# Asegurar instalación de socket.io en producción
-RUN pnpm add socket.io
 
 # Parchear la versión de Baileys automáticamente
 RUN sed -i 's/version: \[[0-9, ]*\]/version: [2, 3000, 1023223821]/' node_modules/@builderbot/provider-baileys/dist/index.cjs
 
 RUN groupadd -g 1001 nodejs && useradd -u 1001 -g nodejs -m nodejs
-RUN mkdir -p /app/node_modules/@ffmpeg-installer/linux-x64 \
-    && echo '{}' > /app/node_modules/@ffmpeg-installer/linux-x64/package.json \
-    && ln -sf /usr/bin/ffmpeg /app/node_modules/@ffmpeg-installer/linux-x64/ffmpeg
 
 
 CMD ["npm", "start"]
