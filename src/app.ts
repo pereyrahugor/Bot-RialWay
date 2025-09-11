@@ -58,9 +58,9 @@ const userTimeouts = new Map();
 export const getAssistantResponse = async (assistantId, message, state, fallbackMessage, userId, thread_id = null) => {
     // Si es un nuevo hilo, envía primero la fecha y hora actual
     if (!thread_id) {
-        const moment = (await import('moment')).default;
-        const fechaHoraActual = moment().format('YYYY-MM-DD HH:mm');
-        const mensajeFecha = `La fecha y hora actual es: ${fechaHoraActual}`;
+        const moment = (await import('moment-timezone')).default;
+        const fechaHoraArgentina = moment().tz('America/Argentina/Buenos_Aires').format('YYYY-MM-DD HH:mm');
+        const mensajeFecha = `La fecha y hora actual (Argentina) es: ${fechaHoraArgentina}`;
         await toAsk(assistantId, mensajeFecha, state);
     }
   // Si hay un timeout previo, lo limpiamos
