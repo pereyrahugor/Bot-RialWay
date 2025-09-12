@@ -266,7 +266,7 @@ const main = async () => {
                 polkaApp.use("/style", serve("src/style"));
                 // Agregar ruta personalizada para el webchat
                 polkaApp.get('/webchat', (req, res) => {
-                    res.sendFile(path.join(__dirname, '../index.html'));
+                    res.sendFile(path.join(__dirname, '../webchat.html'));
                 });
 
                 // Obtener el servidor HTTP real de BuilderBot después de httpInject
@@ -340,7 +340,7 @@ const main = async () => {
                 // Agregar ruta personalizada para el webchat
                 polkaApp.get('/webchat', (req, res) => {
                     res.setHeader('Content-Type', 'text/html');
-                    res.end(fs.readFileSync(path.join(__dirname, '../index.html')));
+                    res.end(fs.readFileSync(path.join(__dirname, '../webchat.html')));
                 });
 
                 // Integrar AssistantBridge si es necesario
