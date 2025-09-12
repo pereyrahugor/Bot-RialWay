@@ -53,12 +53,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends poppler-utils &
 WORKDIR /app
 
 
-ARG PORT
-
-ENV PORT=3000
-
-EXPOSE $PORT
-
 # Asegurar que la carpeta de credenciales exista
 RUN mkdir -p /app/credentials
 
