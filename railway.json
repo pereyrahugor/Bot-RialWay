@@ -7,7 +7,7 @@
     { "key": "ASSISTANT_ID", "name": "Assistant ID", "required": true },
     { "key": "OPENAI_API_KEY", "name": "Clave API OpenAI", "required": true },
     { "key": "ID_GRUPO_RESUMEN", "name": "ID del grupo de resumen", "required": true },
-    { "key": "PORT", "name": "Puerto de escucha", "required": false, "defaultValue": "3000" },
+    { "key": "PORT", "name": "Puerto de escucha", "required": false, "defaultValue": "8080" },
     { "key": "msjCierre", "name": "Mensaje de cierre", "required": true },
     { "key": "msjSeguimiento1", "name": "Mensaje de seguimiento 1", "required": true },
     { "key": "msjSeguimiento2", "name": "Mensaje de seguimiento 2", "required": true },
