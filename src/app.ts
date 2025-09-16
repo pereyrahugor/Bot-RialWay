@@ -17,6 +17,7 @@ import { welcomeFlowTxt } from "./Flows/welcomeFlowTxt";
 import { welcomeFlowVoice } from "./Flows/welcomeFlowVoice";
 import { welcomeFlowImg } from "./Flows/welcomeFlowImg";
 import { welcomeFlowDoc } from "./Flows/welcomeFlowDoc";
+import { locationFlow } from "./Flows/locationFlow";
 //import { imgResponseFlow } from "./Flows/imgResponse";
 //import { getSheet2 } from "./addModule/getSheet2";
 //import { getSheet1 } from "./addModule/getSheet1";
@@ -247,7 +248,7 @@ const main = async () => {
 
 
                 // ...existing code...
-                const adapterFlow = createFlow([welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowDoc, idleFlow]);
+                const adapterFlow = createFlow([welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowDoc, locationFlow, idleFlow]);
                 const adapterProvider = createProvider(BaileysProvider, {
                     groupsIgnore: false,
                     readStatus: false,
@@ -492,7 +493,7 @@ process.on('unhandledRejection', (reason, promise) => {
     console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
 });
 
-export { welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowDoc,
+export { welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowDoc, locationFlow,
         handleQueue, userQueues, userLocks,
  };
 

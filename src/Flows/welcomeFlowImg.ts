@@ -27,7 +27,7 @@ import { handleQueue, userQueues, userLocks } from "../app";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY_IMG });
 const IMGUR_CLIENT_ID = "dbe415c6bbb950d";
-const setTime = 7 * 60 * 1000; // 7 minutos
+const setTime = Number(process.env.timeOutCierre) * 60 * 1000;
 
 
 const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(

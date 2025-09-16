@@ -6,12 +6,14 @@ const extraerDatosResumen = (resumen: string): ResumenData => {
     // Acepta 'Producto Interes:', 'producto_interes:', 'producto interes:', etc.
     const productoMatch = resumen.match(/Producto[:_]?\s*(.*)/i);
     const linkWSMatch = resumen.match(/WhatsApp[:_]?\s*(.*)/i);
+    const tipoMatch = resumen.match(/Tipo[:_]?\s*(.*)/i);
 
     return {
         nombre: nombreMatch ? nombreMatch[1].trim() : "",
         consulta: consultaMatch ? consultaMatch[1].trim() : "",
         producto: productoMatch ? productoMatch[1].trim() : "",
         linkWS: linkWSMatch ? linkWSMatch[1].trim() : "",
+        tipo: tipoMatch ? tipoMatch[1].trim() : undefined,
     };
 };
 

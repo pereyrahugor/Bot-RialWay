@@ -10,6 +10,7 @@ export interface ResumenData {
     consulta: string;
     producto: string;
     linkWS: string;
+    tipo?: string;
 }
 
 // Cargar credenciales desde un archivo JSON

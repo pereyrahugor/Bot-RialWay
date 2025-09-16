@@ -23,7 +23,6 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
 
             // Verifica que haya resumen y grupo destino
             if (resumen && ID_GRUPO_RESUMEN) {
-
                 let data: ResumenData;
                 try {
                     // Intentamos parsear JSON
@@ -32,6 +31,12 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                     // Si no es JSON, extrae los datos manualmente
                     console.warn("⚠️ El resumen no es JSON. Se extraerán los datos manualmente.");
                     data = extraerDatosResumen(resumen);
+                }
+
+                // Si el tipo es NO_REPORTA o NO_REPORTAR, no enviar resumen al grupo
+                if (data.tipo === 'NO_REPORTA' || data.tipo === 'NO_REPORTAR') {
+                    console.log('El resumen tiene tipo NO_REPORTA, no se enviará al grupo.');
+                    return endFlow();
                 }
 
                 // Si el campo nombre está vacío o tiene valores inválidos, inicia el ciclo de reconexión
