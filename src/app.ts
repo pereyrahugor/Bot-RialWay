@@ -1,12 +1,12 @@
-// ...existing imports y lógica del bot...
 
+// ...existing imports y lógica del bot...
+import "dotenv/config";
 import path from 'path';
 import serve from 'serve-static';
 import { Server } from 'socket.io';
 import fs from 'fs';
 // Estado global para encender/apagar el bot
 let botEnabled = true;
-import "dotenv/config";
 import { createBot, createProvider, createFlow, addKeyword, EVENTS } from "@builderbot/bot";
 import { MemoryDB } from "@builderbot/bot";
 import { BaileysProvider } from "@builderbot/provider-baileys";
@@ -265,9 +265,16 @@ const main = async () => {
                 polkaApp.use("/js", serve("src/js"));
                 polkaApp.use("/style", serve("src/style"));
                 polkaApp.use("/assets", serve("src/assets"));
+                // Endpoint para obtener el nombre del asistente de forma dinámica
+                polkaApp.get('/api/assistant-name', (req, res) => {
+                    const assistantName = process.env.ASSISTANT_NAME || 'Asistente demo';
+                    res.setHeader('Content-Type', 'application/json');
+                    res.end(JSON.stringify({ name: assistantName }));
+                });
                 // Agregar ruta personalizada para el webchat
                 polkaApp.get('/webchat', (req, res) => {
-                    res.sendFile(path.join(__dirname, '../webchat.html'));
+                    res.setHeader('Content-Type', 'text/html');
+                    res.end(fs.readFileSync(path.join(__dirname, '../webchat.html')));
                 });
 
                 // Obtener el servidor HTTP real de BuilderBot después de httpInject
@@ -338,11 +345,7 @@ const main = async () => {
                     });
                 });
 
-                // Agregar ruta personalizada para el webchat
-                polkaApp.get('/webchat', (req, res) => {
-                    res.setHeader('Content-Type', 'text/html');
-                    res.end(fs.readFileSync(path.join(__dirname, '../webchat.html')));
-                });
+
 
                 // Integrar AssistantBridge si es necesario
                 const assistantBridge = new AssistantBridge();

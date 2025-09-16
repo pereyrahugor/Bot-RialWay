@@ -16,6 +16,7 @@
     { "key": "timeOutSeguimiento2", "name": "Timeout seguimiento 2 (minutos)", "required": true },
     { "key": "timeOutSeguimiento3", "name": "Timeout seguimiento 3 (minutos)", "required": true },
     { "key": "ASSISTANT_ID_IMG", "name": "Assistant ID para imágenes", "required": true },
-    { "key": "OPENAI_API_KEY_IMG", "name": "Clave API OpenAI para imágenes", "required": true }
+    { "key": "OPENAI_API_KEY_IMG", "name": "Clave API OpenAI para imágenes", "required": true },
+    { "key": "ASSISTANT_NAME", "name": "Nombre del asistente", "required": false, "defaultValue": "Asistente demo" }
   ]
 }
