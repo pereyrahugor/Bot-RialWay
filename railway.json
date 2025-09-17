@@ -1,4 +1,3 @@
-
 {
   "name": "Bot WhatsApp BuilderBot",
   "description": "Bot de WhatsApp con integración OpenAI, multiagente y soporte de comandos",
@@ -17,6 +16,10 @@
     { "key": "timeOutSeguimiento3", "name": "Timeout seguimiento 3 (minutos)", "required": true },
     { "key": "ASSISTANT_ID_IMG", "name": "Assistant ID para imágenes", "required": true },
     { "key": "OPENAI_API_KEY_IMG", "name": "Clave API OpenAI para imágenes", "required": true },
-    { "key": "ASSISTANT_NAME", "name": "Nombre del asistente", "required": false, "defaultValue": "Asistente demo" }
+    { "key": "ASSISTANT_NAME", "name": "Nombre del asistente", "required": false, "defaultValue": "Asistente demo" },
+    { "key": "GOOGLE_CLIENT_EMAIL", "name": "Google Client Email", "required": true },
+    { "key": "GOOGLE_PRIVATE_KEY", "name": "Google Private Key", "required": true },
+    { "key": "SHEET_ID_RESUMEN", "name": "ID de la hoja de resumen", "required": true },
+    { "key": "GOOGLE_MAPS_API_KEY", "name": "Clave API Google Maps", "required": true }
   ]
 }
