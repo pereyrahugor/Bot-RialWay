@@ -1,7 +1,6 @@
 import { addKeyword, EVENTS } from '@builderbot/bot';
 import { toAsk } from '@builderbot-plugins/openai-assistants';
-import { ResumenData } from '~/utils/googleSheetsResumen';
-import { extraerDatosResumen } from '~/utils/extractJsonData';
+import { GenericResumenData, extraerDatosResumen } from '~/utils/extractJsonData';
 import { addToSheet } from '~/utils/googleSheetsResumen';
 import fs from 'fs';
 import path from 'path';// Import the new logic
@@ -23,7 +22,7 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
 
             // Verifica que haya resumen y grupo destino
             if (resumen && ID_GRUPO_RESUMEN) {
-                let data: ResumenData;
+                let data: GenericResumenData;
                 try {
                     // Intentamos parsear JSON
                     data = JSON.parse(resumen);
@@ -62,7 +61,7 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                             } catch (err) {
                                 console.error(`❌ TEST: No se pudo enviar el resumen al grupo ${ID_GRUPO_RESUMEN}:`, err?.message || err);
                             }
-                            // await addToSheet(newData); // <-- Guardado en Google Sheets comentado
+                             await addToSheet(newData); // <-- Guardado en Google Sheets comentado
                             return;
                         },
                         onFail: async () => {
@@ -75,7 +74,7 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                             } catch (err) {
                                 console.error(`❌ No se pudo enviar el aviso al grupo ${ID_GRUPO_RESUMEN}:`, err?.message || err);
                             }
-                            // await addToSheet(data); // <-- Guardado en Google Sheets comentado
+                             await addToSheet(data); // <-- Guardado en Google Sheets comentado
                             return;
                         }
                     });
@@ -99,7 +98,7 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                 } catch (err) {
                     console.error(`❌ TEST: No se pudo enviar el resumen al grupo ${ID_GRUPO_RESUMEN}:`, err?.message || err);
                 }
-                // await addToSheet(data); // <-- Guardado en Google Sheets comentado
+                 await addToSheet(data); // <-- Guardado en Google Sheets comentado
             } else {
                 // Si no hay resumen o falta el ID del grupo, mostrar advertencia
                 console.warn("No se pudo obtener el resumen o falta ID_GRUPO_RESUMEN.");

@@ -57,12 +57,27 @@ const TIMEOUT_MS = 30000;
 const userTimeouts = new Map();
 
 export const getAssistantResponse = async (assistantId, message, state, fallbackMessage, userId, thread_id = null) => {
-    // Si es un nuevo hilo, envía primero la fecha y hora actual
-    if (!thread_id) {
+    // Solo enviar la fecha/hora si es realmente un hilo nuevo (no existe thread_id ni en el argumento ni en el state)
+    let effectiveThreadId = thread_id;
+    if (!effectiveThreadId && state && typeof state.get === 'function') {
+        effectiveThreadId = state.get('thread_id');
+    }
+    if (!effectiveThreadId) {
         const moment = (await import('moment-timezone')).default;
         const fechaHoraArgentina = moment().tz('America/Argentina/Buenos_Aires').format('YYYY-MM-DD HH:mm');
         const mensajeFecha = `La fecha y hora actual (Argentina) es: ${fechaHoraArgentina}`;
-        await toAsk(assistantId, mensajeFecha, state);
+        // Si state tiene un método update, evitamos agregar el mensaje de fecha al historial
+        if (state && typeof state.update === 'function') {
+            // Guardar referencia al método original
+            const originalUpdate = state.update;
+            // Temporalmente reemplazar update por un no-op
+            state.update = async () => {};
+            await toAsk(assistantId, mensajeFecha, state);
+            // Restaurar el método original
+            state.update = originalUpdate;
+        } else {
+            await toAsk(assistantId, mensajeFecha, state);
+        }
     }
   // Si hay un timeout previo, lo limpiamos
   if (userTimeouts.has(userId)) {

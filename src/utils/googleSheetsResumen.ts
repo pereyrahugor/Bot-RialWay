@@ -1,21 +1,17 @@
+
 import { google } from "googleapis";
 import moment from "moment";
 import "dotenv/config";
 import fs from "fs";
 import path from "path";
+import { GenericResumenData } from "./extractJsonData";
 
-// Definir la estructura de los datos que enviaremos
-export interface ResumenData {
-    nombre: string;
-    consulta: string;
-    producto: string;
-    linkWS: string;
-    tipo?: string;
-}
 
-// Cargar credenciales desde un archivo JSON
-const credentialsPath = path.resolve("./././credentials/bot-test-v1-450813-c85b778a9c36.json"); // Cambia la ruta real
-const credentials = JSON.parse(fs.readFileSync(credentialsPath, "utf-8"));
+// Construir credenciales desde variables de entorno
+const credentials = {
+    client_email: process.env.GOOGLE_CLIENT_EMAIL,
+    private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+};
 
 const auth = new google.auth.GoogleAuth({
     credentials,
@@ -26,24 +22,19 @@ const auth = new google.auth.GoogleAuth({
 const SHEET_ID = process.env.SHEET_ID_RESUMEN ?? "";
 
 /**
- * Función para agregar datos a Google Sheets
- * @param {ResumenData} data - Datos del usuario que se enviarán a Sheets
+ * Función para agregar datos genéricos a Google Sheets
+ * @param {GenericResumenData} data - Datos dinámicos que se enviarán a Sheets
  */
-export const addToSheet = async (data: ResumenData): Promise<void> => {
+export const addToSheet = async (data: GenericResumenData): Promise<void> => {
     try {
         const sheets = google.sheets({ version: "v4", auth });
 
         // Obtener la fecha y hora actual
         const fechaHora: string = moment().format("YYYY-MM-DD HH:mm:ss");
 
-        // Datos a insertar en la hoja de cálculo (según la nueva interface)
-        const values = [[
-            fechaHora,
-            data.nombre,
-            data.consulta,
-            data.producto,
-            data.linkWS
-        ]];
+        // Convertir el objeto a un array de valores (ordenados por clave)
+        const keys = Object.keys(data);
+        const values = [[fechaHora, ...keys.map(key => data[key])]];
 
         // Insertar en Google Sheets
         await sheets.spreadsheets.values.append({

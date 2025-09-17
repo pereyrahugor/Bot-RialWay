@@ -1,7 +1,6 @@
 // Clase para manejar la lógica de reconexión cuando el campo nombre está vacío
 import { toAsk } from '@builderbot-plugins/openai-assistants';
-import { extraerDatosResumen } from '~/utils/extractJsonData';
-import { ResumenData } from '~/utils/googleSheetsResumen';
+import { extraerDatosResumen, GenericResumenData } from '~/utils/extractJsonData';
 
 // Opciones para configurar el flujo de reconexión
 interface ReconectionOptions {
@@ -10,7 +9,7 @@ interface ReconectionOptions {
     provider: any; // Proveedor de mensajería
     maxAttempts?: number; // Máximo de intentos de reconexión
     timeoutMs?: number; // Tiempo de espera entre intentos (ms)
-    onSuccess: (data: ResumenData) => Promise<void>; // Callback si se obtiene el nombre
+    onSuccess: (data: GenericResumenData) => Promise<void>; // Callback si se obtiene el nombre
     onFail: () => Promise<void>; // Callback si se alcanzan los intentos máximos
 }
 
@@ -22,7 +21,7 @@ export class ReconectionFlow {
     private readonly ctx: any; // Contexto del usuario
     private readonly state: any; // Estado de la conversación
     private readonly provider: any; // Proveedor de mensajería
-    private readonly onSuccess: (data: ResumenData) => Promise<void>; // Acción al obtener nombre
+    private readonly onSuccess: (data: GenericResumenData) => Promise<void>; // Acción al obtener nombre
     private readonly onFail: () => Promise<void>; // Acción al fallar todos los intentos
     private readonly ASSISTANT_ID = process.env.ASSISTANT_ID ?? '';
     private readonly msjSeguimiento1: string;
@@ -118,14 +117,14 @@ export class ReconectionFlow {
                 // Limpiar el estado de reconexión al éxito
                 if (this.state) delete this.state.reconectionFlow;
                 const resumen = await toAsk(this.ASSISTANT_ID, "GET_RESUMEN", this.state);
-                const data: ResumenData = extraerDatosResumen(resumen);
+                const data: GenericResumenData = extraerDatosResumen(resumen);
                 await this.onSuccess(data);
                 return;
             }
 
             // Si no respondió, intentar obtener el resumen nuevamente desde el asistente
             const resumen = await toAsk(this.ASSISTANT_ID, "GET_RESUMEN", this.state);
-            const data: ResumenData = extraerDatosResumen(resumen);
+            const data: GenericResumenData = extraerDatosResumen(resumen);
             const nombreInvalido = !data.nombre || data.nombre.trim() === "" ||
                 data.nombre.trim() === "- Nombre:" ||
                 data.nombre.trim() === "- Interés:" ||
