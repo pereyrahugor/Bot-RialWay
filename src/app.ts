@@ -129,6 +129,12 @@ export const processUserMessage = async (
             return;
         }
 
+        // Ignorar mensajes de listas de difusión (ID termina en @broadcast)
+        if (ctx.from && /@broadcast$/.test(ctx.from)) {
+            console.log('Mensaje de difusión ignorado:', ctx.from);
+            return;
+        }
+
         // Interceptar trigger de imagen antes de pasar al asistente
         // if (body === "#TestImg#") {
         //     // Usar el flow de imagen para responder y detener el flujo
