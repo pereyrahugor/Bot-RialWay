@@ -71,6 +71,19 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                             return;
                         },
                         onFail: async () => {
+                            // Obtener el resumen final antes de avisar
+                            const resumenFinal = await toAsk(ASSISTANT_ID, "GET_RESUMEN", state);
+                            let dataFinal: GenericResumenData;
+                            try {
+                                dataFinal = JSON.parse(resumenFinal);
+                            } catch (error) {
+                                dataFinal = extraerDatosResumen(resumenFinal);
+                            }
+                            if (dataFinal.tipo === 'NO_REPORTA' || dataFinal.tipo === 'NO_REPORTAR') {
+                                console.log('El resumen final tiene tipo NO_REPORTA, no se enviará aviso al grupo (onFail reconnection).');
+                                await addToSheet(dataFinal);
+                                return;
+                            }
                             // Al llegar al máximo de intentos, enviar aviso al grupo
                             const whatsappLink = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
                             const aviso = `El contacto ${whatsappLink} no respondió.`;
@@ -80,7 +93,7 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                             } catch (err) {
                                 console.error(`❌ No se pudo enviar el aviso al grupo ${ID_GRUPO_RESUMEN}:`, err?.message || err);
                             }
-                             await addToSheet(data); // <-- Guardado en Google Sheets comentado
+                            await addToSheet(dataFinal);
                             return;
                         }
                     });
