@@ -51,6 +51,12 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                         provider,
                         maxAttempts: 3, // Máximo de intentos de reconexión
                         onSuccess: async (newData) => {
+                            // Si el tipo es NO_REPORTA o NO_REPORTAR, no enviar resumen al grupo
+                            if (newData.tipo === 'NO_REPORTA' || newData.tipo === 'NO_REPORTAR') {
+                                console.log('El resumen tiene tipo NO_REPORTA, no se enviará al grupo (onSuccess reconnection).');
+                                await addToSheet(newData);
+                                return;
+                            }
                             // Si se obtiene el nombre, continuar flujo normal
                             const whatsappLink = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
                             newData.linkWS = whatsappLink;
@@ -61,7 +67,7 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                             } catch (err) {
                                 console.error(`❌ TEST: No se pudo enviar el resumen al grupo ${ID_GRUPO_RESUMEN}:`, err?.message || err);
                             }
-                             await addToSheet(newData); // <-- Guardado en Google Sheets comentado
+                            await addToSheet(newData);
                             return;
                         },
                         onFail: async () => {
