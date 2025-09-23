@@ -84,15 +84,7 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                                 await addToSheet(dataFinal);
                                 return;
                             }
-                            // Al llegar al máximo de intentos, enviar aviso al grupo
-                            const whatsappLink = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
-                            const aviso = `El contacto ${whatsappLink} no respondió.`;
-                            try {
-                                await provider.sendText(ID_GRUPO_RESUMEN, aviso);
-                                console.log(`✅ Aviso enviado al grupo ${ID_GRUPO_RESUMEN}: ${aviso}`);
-                            } catch (err) {
-                                console.error(`❌ No se pudo enviar el aviso al grupo ${ID_GRUPO_RESUMEN}:`, err?.message || err);
-                            }
+                            // Al llegar al máximo de intentos, solo guardar en Google Sheets y terminar
                             await addToSheet(dataFinal);
                             return;
                         }
