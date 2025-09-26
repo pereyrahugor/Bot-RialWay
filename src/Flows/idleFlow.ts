@@ -42,92 +42,42 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                     console.log("[idleFlow] tipo=NO_REPORTAR_BAJA: No seguimiento, no se envía resumen al grupo.");
                     return endFlow(msjCierre);
 
-                case "NO_REPORTAR_SEGUIR":
-                    // Realizar seguimiento, no enviar resumen al grupo
-                    // Si el campo nombre está vacío o inválido, iniciar reconexión
-                    {
-                        const nombreInvalido = !data.nombre || data.nombre.trim() === "" ||
-                            data.nombre.trim() === "- Nombre:" ||
-                            data.nombre.trim() === "- Interés:" ||
-                            data.nombre.trim() === "- Nombre de la Empresa:" ||
-                            data.nombre.trim() === "- Cargo:";
-                        if (nombreInvalido) {
-                            const reconFlow = new ReconectionFlow({
-                                ctx,
-                                state,
-                                provider,
-                                maxAttempts: 3,
-                                onSuccess: async (newData) => {
-                                    // No enviar resumen al grupo aunque se obtenga nombre
-                                    await addToSheet(newData);
-                                    return;
-                                },
-                                onFail: async () => {
-                                    // Solo guardar en Google Sheets
-                                    await addToSheet(data);
-                                    return;
-                                }
-                            });
-                            await reconFlow.start();
-                            return endFlow(msjCierre);
+                case "NO_REPORTAR_SEGUIR": {
+                    // Realizar seguimiento (reconexión), no enviar resumen al grupo
+                    const reconFlow = new ReconectionFlow({
+                        ctx,
+                        state,
+                        provider,
+                        maxAttempts: 3,
+                        onSuccess: async (newData) => {
+                            // Nunca enviar resumen al grupo, solo guardar
+                            await addToSheet(newData);
+                            return;
+                        },
+                        onFail: async () => {
+                            // Solo guardar en Google Sheets
+                            await addToSheet(data);
+                            return;
                         }
-                        // Si el nombre es válido, solo guardar en Google Sheets
-                        await addToSheet(data);
-                        return endFlow(msjCierre);
-                    }
+                    });
+                    await reconFlow.start();
+                    return endFlow(msjCierre);
+                }
 
                 case "SI_RESUMEN":
                 default:
                     // No seguimiento, enviar resumen al grupo
-                    {
-                        // Si el campo nombre está vacío o inválido, iniciar reconexión
-                        const nombreInvalido = !data.nombre || data.nombre.trim() === "" ||
-                            data.nombre.trim() === "- Nombre:" ||
-                            data.nombre.trim() === "- Interés:" ||
-                            data.nombre.trim() === "- Nombre de la Empresa:" ||
-                            data.nombre.trim() === "- Cargo:";
-                        if (nombreInvalido) {
-                            const reconFlow = new ReconectionFlow({
-                                ctx,
-                                state,
-                                provider,
-                                maxAttempts: 3,
-                                onSuccess: async (newData) => {
-                                    // Enviar resumen al grupo si se obtiene nombre válido
-                                    const whatsappLink = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
-                                    newData.linkWS = whatsappLink;
-                                    const resumenConLink = `${resumen}\n\n🔗 [Chat del usuario](${whatsappLink})`;
-                                    try {
-                                        await provider.sendText(ID_GRUPO_RESUMEN, resumenConLink);
-                                        console.log(`✅ TEST: Resumen enviado a ${ID_GRUPO_RESUMEN} con enlace de WhatsApp`);
-                                    } catch (err) {
-                                        console.error(`❌ TEST: No se pudo enviar el resumen al grupo ${ID_GRUPO_RESUMEN}:`, err?.message || err);
-                                    }
-                                    await addToSheet(newData);
-                                    return;
-                                },
-                                onFail: async () => {
-                                    // Solo guardar en Google Sheets
-                                    await addToSheet(data);
-                                    return;
-                                }
-                            });
-                            await reconFlow.start();
-                            return endFlow(msjCierre);
-                        }
-                        // Si el nombre es válido, enviar resumen al grupo
-                        const whatsappLink = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
-                        data.linkWS = whatsappLink;
-                        const resumenConLink = `${resumen}\n\n🔗 [Chat del usuario](${whatsappLink})`;
-                        try {
-                            await provider.sendText(ID_GRUPO_RESUMEN, resumenConLink);
-                            console.log(`✅ TEST: Resumen enviado a ${ID_GRUPO_RESUMEN} con enlace de WhatsApp`);
-                        } catch (err) {
-                            console.error(`❌ TEST: No se pudo enviar el resumen al grupo ${ID_GRUPO_RESUMEN}:`, err?.message || err);
-                        }
-                        await addToSheet(data);
-                        return endFlow(msjCierre);
+                    const whatsappLink = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
+                    data.linkWS = whatsappLink;
+                    const resumenConLink = `${resumen}\n\n🔗 [Chat del usuario](${whatsappLink})`;
+                    try {
+                        await provider.sendText(ID_GRUPO_RESUMEN, resumenConLink);
+                        console.log(`✅ TEST: Resumen enviado a ${ID_GRUPO_RESUMEN} con enlace de WhatsApp`);
+                    } catch (err) {
+                        console.error(`❌ TEST: No se pudo enviar el resumen al grupo ${ID_GRUPO_RESUMEN}:`, err?.message || err);
                     }
+                    await addToSheet(data);
+                    return endFlow(msjCierre);
             }
         } catch (error) {
             // Captura errores generales del flujo

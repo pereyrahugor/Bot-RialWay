@@ -125,16 +125,17 @@ export class ReconectionFlow {
             // Si no respondió, intentar obtener el resumen nuevamente desde el asistente
             const resumen = await toAsk(this.ASSISTANT_ID, "GET_RESUMEN", this.state);
             const data: GenericResumenData = extraerDatosResumen(resumen);
-            const nombreInvalido = !data.nombre || data.nombre.trim() === "" ||
-                data.nombre.trim() === "- Nombre:" ||
-                data.nombre.trim() === "- Interés:" ||
-                data.nombre.trim() === "- Nombre de la Empresa:" ||
-                data.nombre.trim() === "- Cargo:";
-            if (!nombreInvalido) {
+            const tipo = data.tipo || "SI_RESUMEN";
+            if (tipo === "SI_RESUMEN") {
                 if (this.state) delete this.state.reconectionFlow;
                 await this.onSuccess(data);
                 return;
-            }
+            } else if (tipo === "NO_REPORTAR_BAJA") {
+                if (this.state) delete this.state.reconectionFlow;
+                // No hacer nada más, terminar el ciclo
+                await this.onFail();
+                return;
+            } // Si es NO_REPORTAR_SEGUIR, continúa el ciclo normalmente
         }
         // Limpiar el estado de reconexión al fallar
         if (this.state) delete this.state.reconectionFlow;
