@@ -36,48 +36,43 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
             // Normalizar tipo
             const tipo = data.tipo || "SI_RESUMEN";
 
-            switch (tipo) {
-                case "NO_REPORTAR_BAJA":
-                    // No seguimiento, no enviar resumen
-                    console.log("[idleFlow] tipo=NO_REPORTAR_BAJA: No seguimiento, no se envía resumen al grupo.");
-                    return endFlow(msjCierre);
-
-                case "NO_REPORTAR_SEGUIR": {
-                    // Realizar seguimiento (reconexión), no enviar resumen al grupo
-                    const reconFlow = new ReconectionFlow({
-                        ctx,
-                        state,
-                        provider,
-                        maxAttempts: 3,
-                        onSuccess: async (newData) => {
-                            // Nunca enviar resumen al grupo, solo guardar
-                            await addToSheet(newData);
-                            return;
-                        },
-                        onFail: async () => {
-                            // Solo guardar en Google Sheets
-                            await addToSheet(data);
-                            return;
-                        }
-                    });
-                    await reconFlow.start();
-                    return endFlow(msjCierre);
-                }
-
-                case "SI_RESUMEN":
-                default:
-                    // No seguimiento, enviar resumen al grupo
-                    const whatsappLink = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
-                    data.linkWS = whatsappLink;
-                    const resumenConLink = `${resumen}\n\n🔗 [Chat del usuario](${whatsappLink})`;
-                    try {
-                        await provider.sendText(ID_GRUPO_RESUMEN, resumenConLink);
-                        console.log(`✅ TEST: Resumen enviado a ${ID_GRUPO_RESUMEN} con enlace de WhatsApp`);
-                    } catch (err) {
-                        console.error(`❌ TEST: No se pudo enviar el resumen al grupo ${ID_GRUPO_RESUMEN}:`, err?.message || err);
+            if (tipo === "NO_REPORTAR_BAJA") {
+                // No seguimiento, no enviar resumen
+                console.log("[idleFlow] tipo=NO_REPORTAR_BAJA: No seguimiento, no se envía resumen al grupo.");
+                return endFlow(msjCierre);
+            } else if (tipo === "NO_REPORTAR_SEGUIR") {
+                // Realizar seguimiento (reconexión), no enviar resumen al grupo
+                const reconFlow = new ReconectionFlow({
+                    ctx,
+                    state,
+                    provider,
+                    maxAttempts: 3,
+                    onSuccess: async (newData) => {
+                        // Nunca enviar resumen al grupo, solo guardar
+                        await addToSheet(newData);
+                        return;
+                    },
+                    onFail: async () => {
+                        // Solo guardar en Google Sheets
+                        await addToSheet(data);
+                        return;
                     }
-                    await addToSheet(data);
-                    return endFlow(msjCierre);
+                });
+                await reconFlow.start();
+                return endFlow(msjCierre);
+            } else {
+                // No seguimiento, enviar resumen al grupo
+                const whatsappLink = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
+                data.linkWS = whatsappLink;
+                const resumenConLink = `${resumen}\n\n🔗 [Chat del usuario](${whatsappLink})`;
+                try {
+                    await provider.sendText(ID_GRUPO_RESUMEN, resumenConLink);
+                    console.log(`✅ TEST: Resumen enviado a ${ID_GRUPO_RESUMEN} con enlace de WhatsApp`);
+                } catch (err) {
+                    console.error(`❌ TEST: No se pudo enviar el resumen al grupo ${ID_GRUPO_RESUMEN}:`, err?.message || err);
+                }
+                await addToSheet(data);
+                return endFlow(msjCierre);
             }
         } catch (error) {
             // Captura errores generales del flujo
