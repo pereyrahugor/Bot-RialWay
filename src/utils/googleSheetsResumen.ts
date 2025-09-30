@@ -37,9 +37,15 @@ export const addToSheet = async (data: GenericResumenData): Promise<void> => {
         const values = [[fechaHora, ...keys.map(key => data[key])]];
 
         // Insertar en Google Sheets
+
+        // Usar un rango por defecto si no está definido en el entorno
+        const range = process.env.SHEET_RESUMEN_RANGE && process.env.SHEET_RESUMEN_RANGE.trim() !== ""
+            ? process.env.SHEET_RESUMEN_RANGE
+            : "Hoja1!A1";
+
         await sheets.spreadsheets.values.append({
             spreadsheetId: SHEET_ID,
-            range: process.env.SHEET_RESUMEN_RANGE ?? "",
+            range,
             valueInputOption: "RAW",
             requestBody: { values },
         });
