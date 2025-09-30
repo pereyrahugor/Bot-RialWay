@@ -10,11 +10,16 @@ const extraerDatosResumen = (resumen: string): GenericResumenData => {
     for (const line of lines) {
         const match = line.match(/^\s*([\wÁÉÍÓÚáéíóúñÑ ._-]+)\s*[:=]\s*(.+)$/);
         if (match) {
-            const key = match[1].trim();
+            const key = match[1].trim().replace(/^[-–—\s]+/, '');
             const value = match[2].trim();
             data[key] = value;
+            // Si la clave es 'Tipo', también guardar como 'tipo' en minúsculas
+            if (key.toLowerCase() === 'tipo') {
+                data['tipo'] = value;
+            }
         }
     }
+    console.log('[extractJsonData] data extraído:', data);
     return data;
 };
 
