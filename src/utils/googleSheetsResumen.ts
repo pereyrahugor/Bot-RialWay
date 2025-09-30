@@ -32,10 +32,11 @@ export const addToSheet = async (data: GenericResumenData): Promise<void> => {
         // Obtener la fecha y hora actual
         const fechaHora: string = moment().format("YYYY-MM-DD HH:mm:ss");
 
-        // Convertir el objeto a un array de valores (ordenados por clave)
-        const keys = Object.keys(data);
-        const values = [[fechaHora, ...keys.map(key => data[key])]];
-
+        // Siempre poner fecha en A y linkWS en B, el resto en el orden recibido (sin duplicar linkWS)
+        const linkWS = data.linkWS || '';
+        // Excluir linkWS de los datos extra
+        const keys = Object.keys(data).filter(key => key !== 'linkWS');
+        const values = [[fechaHora, linkWS, ...keys.map(key => data[key])]];
         // Insertar en Google Sheets
 
         // Usar un rango por defecto si no está definido en el entorno
