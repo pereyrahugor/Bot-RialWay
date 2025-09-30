@@ -59,7 +59,6 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                     }
                 });
                 await reconFlow.start();
-                return endFlow(msjCierre);
             } else {
                 // No seguimiento, enviar resumen al grupo
                 const whatsappLink = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
