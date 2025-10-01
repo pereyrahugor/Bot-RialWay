@@ -11,12 +11,16 @@ const ASSISTANT_ID = process.env.ASSISTANT_ID ?? '';
 const ID_GRUPO_RESUMEN = process.env.ID_GRUPO_RESUMEN ?? '';
 const msjCierre: string = process.env.msjCierre as string;
 
+                // Agregar link de WhatsApp al objeto data
+                // const whatsappLink = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
+                // data.linkWS = whatsappLink;
 //** Flow para cierre de conversación, generación de resumen y envio a grupo de WS */
 const idleFlow = addKeyword(EVENTS.ACTION).addAction(
     async (ctx, { endFlow, provider, state }) => {
         console.log("Ejecutando idleFlow...");
 
         try {
+                        // Agregar link también en onSuccess
             // Obtener el resumen del asistente de OpenAI
             const resumen = await toAsk(ASSISTANT_ID, "GET_RESUMEN", state);
 
@@ -42,23 +46,34 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                 return endFlow(msjCierre);
             } else if (tipo === "NO_REPORTAR_SEGUIR") {
                 // Realizar seguimiento (reconexión), no enviar resumen al grupo
+                const whatsappLink = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
+                data.linkWS = whatsappLink;
+                let usuarioRespondio = false;
                 const reconFlow = new ReconectionFlow({
                     ctx,
                     state,
                     provider,
                     maxAttempts: 3,
                     onSuccess: async (newData) => {
-                        // Nunca enviar resumen al grupo, solo guardar
+                        // Agregar link también en onSuccess
+                        newData.linkWS = whatsappLink;
                         await addToSheet(newData);
+                        usuarioRespondio = true;
                         return;
                     },
                     onFail: async () => {
                         // Solo guardar en Google Sheets
                         await addToSheet(data);
+                        usuarioRespondio = false;
                         return;
                     }
                 });
                 await reconFlow.start();
+                if (!usuarioRespondio) {
+                    return endFlow(msjCierre);
+                }
+                // Si el usuario respondió, no cerrar el flujo, dejar que continúe la conversación
+                return;
             } else {
                 // No seguimiento, enviar resumen al grupo
                 const whatsappLink = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
