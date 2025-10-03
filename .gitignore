@@ -11,4 +11,4 @@ temp/voiceNote
 *.log
 *qr.png
 .env
-.env
+instructivo_variables_entorno.txt

@@ -17,16 +17,15 @@ import { welcomeFlowVoice } from "./Flows/welcomeFlowVoice";
 import { welcomeFlowImg } from "./Flows/welcomeFlowImg";
 import { welcomeFlowDoc } from "./Flows/welcomeFlowDoc";
 import { locationFlow } from "./Flows/locationFlow";
-//import { imgResponseFlow } from "./Flows/imgResponse";
-//import { getSheet2 } from "./addModule/getSheet2";
-//import { getSheet1 } from "./addModule/getSheet1";
-//import { listImg } from "./addModule/listImg";
+import { updateMain } from "./addModule/updateMain";
 import { ErrorReporter } from "./utils/errorReporter";
-//import { testAuth } from './utils/test-google-auth.js';
 import { AssistantBridge } from './utils-web/AssistantBridge';
 import { WebChatManager } from './utils-web/WebChatManager';
 import { WebChatSession } from './utils-web/WebChatSession';
 import { fileURLToPath } from 'url';
+//import { imgResponseFlow } from "./Flows/imgResponse";
+//import { listImg } from "./addModule/listImg";
+//import { testAuth } from './utils/test-google-auth.js';
 
 // Definir __dirname para ES modules
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -102,6 +101,7 @@ export const processUserMessage = async (
     try {
         const body = ctx.body && ctx.body.trim();
 
+
         // Comando para encender el bot
         if (body === "#ON#") {
             if (!botEnabled) {
@@ -120,6 +120,17 @@ export const processUserMessage = async (
                 await flowDynamic([{ body: "🛑 Bot desactivado. No responderé a más mensajes hasta recibir #ON#." }]);
             } else {
                 await flowDynamic([{ body: "🛑 El bot ya está desactivado." }]);
+            }
+            return state;
+        }
+
+        // Comando para actualizar datos desde sheets
+        if (body === "#ACTUALIZAR#") {
+            try {
+                await updateMain();
+                await flowDynamic([{ body: "🔄 Datos actualizados desde Google Sheets." }]);
+            } catch (err) {
+                await flowDynamic([{ body: "❌ Error al actualizar datos desde Google Sheets." }]);
             }
             return state;
         }
@@ -246,8 +257,11 @@ const main = async () => {
     // Actualizar listado de imágenes en vector store
     //await listImg();
 
-    // Paso 1: Inicializar datos desde Google Sheets
-    // ...existing code...
+    // // Paso 1: Inicializar datos desde Google Sheets
+     console.log("📌 Inicializando datos desde Google Sheets...");
+
+    // Cargar todas las hojas principales con una sola función reutilizable
+    await updateMain();
 
 
                 // ...existing code...

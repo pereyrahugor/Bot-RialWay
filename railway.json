@@ -20,6 +20,13 @@
     { "key": "GOOGLE_CLIENT_EMAIL", "name": "Google Client Email", "required": true },
     { "key": "GOOGLE_PRIVATE_KEY", "name": "Google Private Key", "required": true },
     { "key": "SHEET_ID_RESUMEN", "name": "ID de la hoja de resumen", "required": true },
-    { "key": "GOOGLE_MAPS_API_KEY", "name": "Clave API Google Maps", "required": true }
+  { "key": "GOOGLE_MAPS_API_KEY", "name": "Clave API Google Maps", "required": true },
+  { "key": "SHEET_ID_UPDATE_1", "name": "ID de la hoja Update 1", "required": false },
+  { "key": "SHEET_NAME_UPDATE_1", "name": "Nombre/rango hoja Update 1", "required": false },
+  { "key": "SHEET_ID_UPDATE_2", "name": "ID de la hoja Update 2", "required": false },
+  { "key": "SHEET_NAME_UPDATE_2", "name": "Nombre/rango hoja Update 2", "required": false },
+  { "key": "SHEET_ID_UPDATE_3", "name": "ID de la hoja Update 3", "required": false },
+  { "key": "SHEET_NAME_UPDATE_3", "name": "Nombre/rango hoja Update 3", "required": false },
+  { "key": "VECTOR_STORE_ID", "name": "ID del Vector Store OpenAI", "required": false }
   ]
 }
