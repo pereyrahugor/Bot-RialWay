@@ -9,7 +9,7 @@ dotenv.config();
 
 // Variables de entorno para la hoja de cálculo y el vector store
 const SHEET_ID = process.env.SHEET_ID_UPDATE_3 ?? "";
-let SHEET_NAME_RAW = process.env.SHEET_NAME_UPDATE_3 ?? "";
+const SHEET_NAME_RAW = process.env.SHEET_NAME_UPDATE_3 ?? "";
 const VECTOR_STORE_ID = process.env.VECTOR_STORE_ID ?? "";
 // Si SHEET_NAME_RAW no contiene '!', agregar '!A1' para el range
 const SHEET_RANGE = SHEET_NAME_RAW && !SHEET_NAME_RAW.includes('!') ? `${SHEET_NAME_RAW}!A1` : SHEET_NAME_RAW;
@@ -42,28 +42,79 @@ export async function updateSheet3() {
     try {
         console.log("📌 Obteniendo datos de Google Sheets...");
 
-        // Obtener los datos de la hoja de cálculo
+
+        // Paso 1: Obtener un rango grande para detectar la última fila y columna con datos
+        const initialRange = `${SHEET_NAME}!A1:ZZ10000`;
         const response = await sheets.spreadsheets.values.get({
             spreadsheetId: SHEET_ID,
-            range: SHEET_RANGE,
+            range: initialRange,
         });
 
         const rows = response.data.values;
+        console.log("[DEBUG] rows:", JSON.stringify(rows));
         if (!rows || rows.length === 0) {
             console.warn("⚠️ No se encontraron datos en la hoja de cálculo.");
             return [];
         }
 
-        // Formatear los datos obtenidos de forma flexible
-        const headers = rows[0].map((h: string) => (h || "").trim());
-        const formattedData = rows.slice(1).map((row) => {
-            const obj: Record<string, string> = {};
-            headers.forEach((header, idx) => {
-                obj[header] = (row[idx] || "").trim();
-            });
-            return obj;
-        });
+        // Calcular última fila y columna con datos reales
+        let lastRow = rows.length;
+        let lastCol = 0;
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            // Si la fila está completamente vacía, no la contamos como parte del rango
+            if (!row || row.every(cell => (cell === undefined || cell === null || String(cell).trim() === ""))) {
+                lastRow = i;
+                break;
+            }
+            if (row.length > lastCol) lastCol = row.length;
+        }
+        if (lastCol === 0) lastCol = 1;
+        // Convertir número de columna a letra
+        const colToLetter = (col: number) => {
+            let temp = "";
+            let n = col;
+            while (n > 0) {
+                const rem = (n - 1) % 26;
+                temp = String.fromCharCode(65 + rem) + temp;
+                n = Math.floor((n - 1) / 26);
+            }
+            return temp;
+        };
+        const lastColLetter = colToLetter(lastCol);
+        const dynamicRange = `${SHEET_NAME}!A1:${lastColLetter}${lastRow}`;
+        console.log(`[DEBUG] dynamicRange: ${dynamicRange}`);
 
+        // Volver a pedir los datos usando el rango exacto
+        const fullResponse = await sheets.spreadsheets.values.get({
+            spreadsheetId: SHEET_ID,
+            range: dynamicRange,
+        });
+        const fullRows = fullResponse.data.values;
+        if (!fullRows || fullRows.length === 0) {
+            console.warn("⚠️ No se encontraron datos en el rango calculado.");
+            return [];
+        }
+        // Validar headers
+        const headers = fullRows[0].map((h: string) => (h || "").trim());
+        console.log("[DEBUG] headers:", headers);
+        const validHeaders = headers.filter(h => h.length > 0);
+        if (validHeaders.length === 0) {
+            console.warn("⚠️ La primera fila no contiene encabezados válidos.");
+            return [];
+        }
+        // Formatear los datos obtenidos de forma flexible
+        const formattedData = fullRows.slice(1)
+            .filter(row => row && row.length > 0 && row.some(cell => (cell || "").trim() !== ""))
+            .map((row) => {
+                const obj: Record<string, string> = {};
+                headers.forEach((header, idx) => {
+                    obj[header] = (row[idx] || "").trim();
+                });
+                return obj;
+            });
+
+        console.log("[DEBUG] formattedData:", formattedData);
         console.log("✅ Datos obtenidos.");
 
         // Verificar que la carpeta "temp/data" exista
