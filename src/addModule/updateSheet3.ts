@@ -9,13 +9,13 @@ dotenv.config();
 
 // Variables de entorno para la hoja de cálculo y el vector store
 const SHEET_ID = process.env.SHEET_ID_UPDATE_3 ?? "";
-let SHEET_NAME = process.env.SHEET_NAME_UPDATE_3 ?? "";
+let SHEET_NAME_RAW = process.env.SHEET_NAME_UPDATE_3 ?? "";
 const VECTOR_STORE_ID = process.env.VECTOR_STORE_ID ?? "";
-// Si SHEET_NAME no contiene '!', agregar '!A1' por defecto
-if (SHEET_NAME && !SHEET_NAME.includes('!')) {
-    SHEET_NAME = `${SHEET_NAME}!A1`;
-}
-const TXT_PATH = path.join("temp", `${SHEET_NAME.replace(/!.*/, "")}.json`);
+// Si SHEET_NAME_RAW no contiene '!', agregar '!A1' para el range
+const SHEET_RANGE = SHEET_NAME_RAW && !SHEET_NAME_RAW.includes('!') ? `${SHEET_NAME_RAW}!A1` : SHEET_NAME_RAW;
+// Para archivos, solo usar el nombre de la hoja (sin !A1)
+const SHEET_NAME = SHEET_NAME_RAW.replace(/!.*/, "");
+const TXT_PATH = path.join("temp", `${SHEET_NAME}.json`);
 let currentFileId: string | null = null;
 
 // Verificar que las variables de entorno estén definidas
@@ -45,7 +45,7 @@ export async function updateSheet3() {
         // Obtener los datos de la hoja de cálculo
         const response = await sheets.spreadsheets.values.get({
             spreadsheetId: SHEET_ID,
-            range: SHEET_NAME,
+            range: SHEET_RANGE,
         });
 
         const rows = response.data.values;
@@ -162,14 +162,13 @@ async function attachFileToVectorStore(fileId: string) {
 async function deleteOldFiles() {
     try {
     console.log(`🗑️ Eliminando archivo anterior del vector store relacionado con ${SHEET_NAME}.json...`);
-
-        const files = await openai.files.list();
-        for (const file of files.data) {
-            if (file.filename === `${SHEET_NAME}.json`) {
-                await openai.files.del(file.id);
-                console.log(`🗑️ Archivo eliminado: ${file.id}`);
-            }
+    const files = await openai.files.list();
+    for (const file of files.data) {
+        if (file.filename === `${SHEET_NAME}.json`) {
+            await openai.files.del(file.id);
+            console.log(`🗑️ Archivo eliminado: ${file.id}`);
         }
+    }
     } catch (error) {
         console.error("❌ Error al eliminar archivo anterior del vector store:", error.message);
     }
@@ -181,10 +180,10 @@ function deleteTemporaryFiles() {
         console.log("🗑️ Eliminando archivos temporales...");
 
     const files = glob.sync(path.join("temp", `${SHEET_NAME}.json`));
-        for (const file of files) {
-            fs.unlinkSync(file);
-            console.log(`🗑️ Archivo temporal eliminado: ${file}`);
-        }
+    for (const file of files) {
+        fs.unlinkSync(file);
+        console.log(`🗑️ Archivo temporal eliminado: ${file}`);
+    }
     } catch (error) {
         console.error("❌ Error al eliminar archivos temporales:", error.message);
     }
