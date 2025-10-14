@@ -140,8 +140,8 @@ export const processUserMessage = async (
             return;
         }
 
-        // Ignorar mensajes de listas de difusión (ID termina en @broadcast)
-        if (ctx.from && /@broadcast$/.test(ctx.from)) {
+        // Ignorar mensajes de listas de difusión o newsletters (ID termina en @broadcast o @newsletter)
+        if ((ctx.from && /@broadcast$/.test(ctx.from)) || (ctx.from && /@newsletter$/.test(ctx.from)) ) {
             console.log('Mensaje de difusión ignorado:', ctx.from);
             return;
         }
