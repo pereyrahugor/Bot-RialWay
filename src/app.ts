@@ -267,9 +267,10 @@ const main = async () => {
                 // ...existing code...
                 const adapterFlow = createFlow([welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowDoc, locationFlow, idleFlow]);
                 const adapterProvider = createProvider(BaileysProvider, {
+                    version: [2, 3000, 1027934701],
                     groupsIgnore: false,
                     readStatus: false,
-                });
+                });
                 const adapterDB = new MemoryDB();
                 const { httpServer } = await createBot({
                     flow: adapterFlow,
