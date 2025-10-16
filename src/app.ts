@@ -140,11 +140,18 @@ export const processUserMessage = async (
             return;
         }
 
-        // Ignorar mensajes de listas de difusión o newsletters (ID termina en @broadcast o @newsletter)
-        if ((ctx.from && /@broadcast$/.test(ctx.from)) || (ctx.from && /@newsletter$/.test(ctx.from)) ) {
-            console.log('Mensaje de difusión ignorado:', ctx.from);
-            return;
-        }
+                // Ignorar mensajes de listas de difusión, newsletters o canales (ID termina en @broadcast, @newsletter o @channel)
+                if (
+                    ctx.from &&
+                    (
+                        /@broadcast$/.test(ctx.from) ||
+                        /@newsletter$/.test(ctx.from) ||
+                        /@channel$/.test(ctx.from) // si existiera este sufijo en tu librería
+                    )
+                ) {
+                    console.log('Mensaje de difusión/canal ignorado:', ctx.from);
+                    return;
+                }
 
         // Interceptar trigger de imagen antes de pasar al asistente
         // if (body === "#TestImg#") {
