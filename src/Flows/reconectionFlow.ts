@@ -114,11 +114,10 @@ export class ReconectionFlow {
             // Espera el timeout o la respuesta del usuario, lo que ocurra primero
             const userResponded = await this.waitForUserResponse(jid, timeout);
             if (userResponded) {
-                // Limpiar el estado de reconexión al éxito
+                // Limpiar el estado de reconexión y delegar la navegación al callback onSuccess
                 if (this.state) delete this.state.reconectionFlow;
-                const resumen = await toAsk(this.ASSISTANT_ID, "GET_RESUMEN", this.state);
-                const data: GenericResumenData = extraerDatosResumen(resumen);
-                await this.onSuccess(data);
+                // Llama al callback onSuccess, que debe encargarse de la navegación
+                await this.onSuccess({});
                 return;
             }
 
@@ -135,7 +134,11 @@ export class ReconectionFlow {
                 // No hacer nada más, terminar el ciclo
                 await this.onFail();
                 return;
-            } // Si es NO_REPORTAR_SEGUIR, continúa el ciclo normalmente
+            } else if (tipo === "NO_REPORTAR_SEGUIR") {
+                // No relanzar idleFlow ni nueva instancia, continuar el ciclo en esta misma instancia
+                // Simplemente continuar el while para el siguiente intento de seguimiento
+                continue;
+            }
         }
         // Limpiar el estado de reconexión al fallar
         if (this.state) delete this.state.reconectionFlow;
