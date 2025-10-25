@@ -277,7 +277,7 @@ const main = async () => {
                     version: [2, 3000, 1027934701],
                     groupsIgnore: false,
                     readStatus: false,
-                });
+                });
                 const adapterDB = new MemoryDB();
                 const { httpServer } = await createBot({
                     flow: adapterFlow,

@@ -7,8 +7,8 @@ import * as glob from "glob";
 
 dotenv.config();
 
-const VECTOR_STORE_ID = process.env.VECTOR_STORE ?? "";
-const DOCX_FILE_ID = process.env.DOCX_FILE_ID ?? "";
+const VECTOR_STORE_ID = process.env.VECTOR_STORE_ID ?? "";
+const DOCX_FILE_ID = process.env.DOCX_ID_UPDATE_1 ?? "";
 let currentFileId: string | null = null;
 
 // Construir credenciales desde variables de entorno
@@ -66,7 +66,7 @@ export async function downloadDocxFromDrive(): Promise<{ localPath: string, file
 /**
  * Sube el archivo .docx al vector store de OpenAI, elimina la versión anterior y limpia el temp
  */
-export async function uploadDocxToVector(stateId?: string) {
+export async function updateDocx1(stateId?: string) {
     try {
         // Descarga el archivo desde Google Drive usando el fileId del .env y obtiene el nombre real
         const { localPath, fileName } = await downloadDocxFromDrive();

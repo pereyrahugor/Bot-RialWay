@@ -1,6 +1,7 @@
 import { updateSheet1 } from "./updateSheet1";
 import { updateSheet2 } from "./updateSheet2";
 import { updateSheet3 } from "./updateSheet3";
+import { updateDocx1 } from "./updateDoc1";
 
 /**
  * Carga los datos de las tres hojas principales si las variables de entorno están definidas.
@@ -12,7 +13,8 @@ export const updateMain = async () => {
     if (
         process.env.SHEET_ID_UPDATE_1 &&
         process.env.SHEET_NAME_UPDATE_1 &&
-        process.env.VECTOR_STORE_ID
+        process.env.VECTOR_STORE_ID &&
+        process.env.DOCX_ID_UPDATE_1
     ) {
         sheet1 = await updateSheet1();
         if (!sheet1 || sheet1.length === 0) {
@@ -56,5 +58,14 @@ export const updateMain = async () => {
         }
     } else {
         console.warn("⚠️ Variables de entorno faltantes para la hoja de sheet 3. No se cargó la hoja 3.");
+    }
+    // Paso 5: Cargar datos desde el documento .docx 1
+    // Paso 5: Subir el documento .docx 1 al vector store
+    let docx1UploadResult = null;
+    try {
+        docx1UploadResult = await updateDocx1();
+        console.log("✅ Documento .docx subido y actualizado en el vector store.");
+    } catch (error) {
+        console.error("❌ Error al subir el documento .docx:", error);
     }
 };
