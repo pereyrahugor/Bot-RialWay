@@ -128,9 +128,9 @@ export const processUserMessage = async (
         if (body === "#ACTUALIZAR#") {
             try {
                 await updateMain();
-                await flowDynamic([{ body: "🔄 Datos actualizados desde Google Sheets." }]);
+                await flowDynamic([{ body: "🔄 Datos actualizados desde Google." }]);
             } catch (err) {
-                await flowDynamic([{ body: "❌ Error al actualizar datos desde Google Sheets." }]);
+                await flowDynamic([{ body: "❌ Error al actualizar datos desde Google." }]);
             }
             return state;
         }

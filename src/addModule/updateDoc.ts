@@ -7,8 +7,12 @@ import * as glob from "glob";
 
 dotenv.config();
 
+// Permitir múltiples IDs separados por coma y espacios
+const DOCX_FILE_IDS = (process.env.DOCX_FILE_ID || "")
+    .split(",")
+    .map(id => id.trim())
+    .filter(Boolean);
 const VECTOR_STORE_ID = process.env.VECTOR_STORE_ID ?? "";
-const DOCX_FILE_ID = process.env.DOCX_ID_UPDATE_1 ?? "";
 let currentFileId: string | null = null;
 
 // Construir credenciales desde variables de entorno
@@ -24,93 +28,95 @@ const auth = new google.auth.GoogleAuth({
 const drive = google.drive({ version: "v3", auth });
 const openai = new OpenAI();
 
-/**
- * Descarga un archivo .docx desde Google Drive usando el fileId del .env y obtiene el nombre real del archivo
- * @returns {Promise<{ localPath: string, fileName: string }>}
- */
-export async function downloadDocxFromDrive(): Promise<{ localPath: string, fileName: string }> {
+// Función principal para procesar todos los docs
+export async function updateAllDocs() {
+    for (const DOCX_FILE_ID of DOCX_FILE_IDS) {
+        await processDocById(DOCX_FILE_ID);
+    }
+}
+
+// Procesa un docx por ID, obtiene el nombre real y ejecuta la lógica
+async function processDocById(DOCX_FILE_ID: string) {
     try {
         if (!DOCX_FILE_ID) throw new Error("No se definió DOCX_FILE_ID en el .env");
-
         // Obtener el nombre real del archivo desde Google Drive
-        const meta = await drive.files.get({ fileId: DOCX_FILE_ID, fields: "name" });
+        const meta = await drive.files.get({ fileId: DOCX_FILE_ID, fields: "name, mimeType" });
         const fileName = meta.data.name || `archivo_${Date.now()}.docx`;
-
+        const mimeType = meta.data.mimeType || "";
         // Verifica que la carpeta temp exista
         if (!fs.existsSync("temp")) {
             fs.mkdirSync("temp", { recursive: true });
         }
-
-        const tempDocxPath = path.join("temp", fileName);
-        const dest = fs.createWriteStream(tempDocxPath);
-        const res = await drive.files.get(
-            { fileId: DOCX_FILE_ID, alt: "media" },
-            { responseType: "stream" }
-        );
-
-        await new Promise((resolve, reject) => {
-            res.data
-                .on("end", resolve)
-                .on("error", reject)
-                .pipe(dest);
-        });
-
-        console.log(`✅ Archivo descargado: ${tempDocxPath}`);
-        return { localPath: tempDocxPath, fileName };
-    } catch (error: any) {
-        console.error("❌ Error al descargar el archivo .docx:", error.message);
-        throw error;
-    }
-}
-
-/**
- * Sube el archivo .docx al vector store de OpenAI, elimina la versión anterior y limpia el temp
- */
-export async function updateDocx1(stateId?: string) {
-    try {
-        // Descarga el archivo desde Google Drive usando el fileId del .env y obtiene el nombre real
-        const { localPath, fileName } = await downloadDocxFromDrive();
-
+        const tempDocxPath = path.join("temp", fileName.endsWith('.docx') ? fileName : fileName + '.docx');
+        let downloaded = false;
+        // Intentar descarga binaria directa (para archivos subidos)
+        try {
+            const dest = fs.createWriteStream(tempDocxPath);
+            const res = await drive.files.get(
+                { fileId: DOCX_FILE_ID, alt: "media" },
+                { responseType: "stream" }
+            );
+            await new Promise((resolve, reject) => {
+                res.data
+                    .on("end", resolve)
+                    .on("error", reject)
+                    .pipe(dest);
+            });
+            downloaded = true;
+            console.log(`✅ Archivo descargado: ${tempDocxPath}`);
+        } catch (err: any) {
+            // Si es un Google Doc nativo, usar export
+            if (err?.response?.data?.error?.reason === "fileNotDownloadable" || /fileNotDownloadable/.test(err?.message || "")) {
+                console.log("Archivo es un Google Doc nativo, exportando como .docx...");
+                const dest = fs.createWriteStream(tempDocxPath);
+                const exportRes = await drive.files.export(
+                    { fileId: DOCX_FILE_ID, mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" },
+                    { responseType: "stream" }
+                );
+                await new Promise((resolve, reject) => {
+                    exportRes.data
+                        .on("end", resolve)
+                        .on("error", reject)
+                        .pipe(dest);
+                });
+                downloaded = true;
+                console.log(`✅ Google Doc exportado como .docx: ${tempDocxPath}`);
+            } else {
+                throw err;
+            }
+        }
+        if (!downloaded) throw new Error("No se pudo descargar ni exportar el documento.");
         // Elimina archivos anteriores en OpenAI usando el nombre real
-        await deleteOldDocxFiles(fileName);
-
+        await deleteOldDocxFiles(path.basename(tempDocxPath));
         // Sube el archivo a OpenAI
-        const fileStream = fs.createReadStream(localPath);
+        const fileStream = fs.createReadStream(tempDocxPath);
         const response = await openai.files.create({
             file: fileStream,
             purpose: "assistants"
         });
-
         currentFileId = response.id;
         console.log(`📂 Archivo .docx subido con ID: ${currentFileId}`);
-
         // Adjunta el archivo al vector store
         const attachSuccess = await attachFileToVectorStore(currentFileId);
         if (!attachSuccess) {
             throw new Error("No se pudo adjuntar el archivo al vector store.");
         }
-
         // Elimina el archivo temporal
-        deleteTemporaryDocx(localPath);
-
+        deleteTemporaryDocx(tempDocxPath);
         console.log("✅ Archivo .docx actualizado en el vector store.");
         return true;
     } catch (error: any) {
-        console.error("❌ Error al subir el archivo .docx:", error.message);
-        throw error;
+        console.error("❌ Error al procesar el documento:", error?.message || error);
+        return false;
     }
 }
 
-/**
- * Adjunta un archivo al vector store de OpenAI
- */
 async function attachFileToVectorStore(fileId: string) {
     try {
         console.log(`📡 Adjuntando archivo al vector store: ${fileId}`);
         const response = await openai.vectorStores.fileBatches.createAndPoll(VECTOR_STORE_ID, {
             file_ids: [fileId]
         });
-
         if (response && response.status === "completed") {
             console.log("✅ Archivo adjuntado correctamente al vector store.");
             return true;
@@ -118,16 +124,12 @@ async function attachFileToVectorStore(fileId: string) {
             console.warn("⚠️ No se recibió una confirmación clara de OpenAI.");
             return false;
         }
-    } catch (error: any) {
+    } catch (error) {
         console.error("❌ Error al adjuntar el archivo al vector store:", error.message);
         return false;
     }
 }
 
-/**
- * Elimina archivos .docx anteriores del vector store de OpenAI que tengan el mismo nombre
- * @param fileName El nombre real del archivo .docx a eliminar
- */
 async function deleteOldDocxFiles(fileName: string) {
     try {
         console.log("🗑️ Eliminando archivos .docx anteriores del vector store...");
@@ -143,10 +145,6 @@ async function deleteOldDocxFiles(fileName: string) {
     }
 }
 
-/**
- * Elimina el archivo .docx temporal
- * @param tempPath Ruta al archivo temporal a eliminar
- */
 function deleteTemporaryDocx(tempPath: string) {
     try {
         if (fs.existsSync(tempPath)) {
