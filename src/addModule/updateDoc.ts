@@ -8,7 +8,7 @@ import * as glob from "glob";
 dotenv.config();
 
 // Permitir múltiples IDs separados por coma y espacios
-const DOCX_FILE_IDS = (process.env.DOCX_FILE_ID || "")
+const DOCX_FILE_IDS = (process.env.DOCX_ID_UPDATE || "")
     .split(",")
     .map(id => id.trim())
     .filter(Boolean);
