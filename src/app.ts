@@ -306,7 +306,7 @@ const main = async () => {
   // Agregar ruta para webreset
   polkaApp.get("/webreset", (req, res) => {
     res.setHeader("Content-Type", "text/html");
-    res.end(fs.readFileSync(path.join(__dirname, "./webreset.html")));
+    res.end(fs.readFileSync(path.join(__dirname, "../webreset.html")));
   });
 
   // Endpoint para reiniciar el bot vía Railway
