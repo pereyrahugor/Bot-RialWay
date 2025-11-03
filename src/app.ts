@@ -299,15 +299,15 @@ const main = async () => {
                     res.end(JSON.stringify({ name: assistantName }));
                 });
                   // Agregar ruta personalizada para el webchat
-  polkaApp.get("/webchat", (req, res) => {
-    res.setHeader("Content-Type", "text/html");
-    res.end(fs.readFileSync(path.join(__dirname, "../webchat.html")));
-  });
-  // Agregar ruta para webreset
-    polkaApp.get("/webreset", (req, res) => {
-        res.setHeader("Content-Type", "text/html");
-        res.end(fs.readFileSync(path.join(__dirname, "webreset.html")));
-    });
+                polkaApp.get("/webchat", (req, res) => {
+                    res.setHeader("Content-Type", "text/html");
+                    res.end(fs.readFileSync(path.join(__dirname, "../webchat.html")));
+                });
+                // Agregar ruta para webreset
+                polkaApp.get("/webreset", (req, res) => {
+                    res.setHeader("Content-Type", "text/html");
+                    res.end(fs.readFileSync(path.join(__dirname, "../webreset.html")));
+                });
 
   // Endpoint para reiniciar el bot vía Railway
   polkaApp.post("/api/restart-bot", async (req, res) => {
