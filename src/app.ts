@@ -23,6 +23,7 @@ import { AssistantBridge } from './utils-web/AssistantBridge';
 import { WebChatManager } from './utils-web/WebChatManager';
 import { WebChatSession } from './utils-web/WebChatSession';
 import { fileURLToPath } from 'url';
+import { RailwayApi } from "./Api-RailWay/Railway";
 //import { imgResponseFlow } from "./Flows/imgResponse";
 //import { listImg } from "./addModule/listImg";
 //import { testAuth } from './utils/test-google-auth.js';
@@ -268,7 +269,7 @@ const main = async () => {
      console.log("📌 Inicializando datos desde Google Sheets...");
 
     // Cargar todas las hojas principales con una sola función reutilizable
-    await updateMain();
+    //await updateMain();
 
 
                 // ...existing code...
@@ -297,11 +298,39 @@ const main = async () => {
                     res.setHeader('Content-Type', 'application/json');
                     res.end(JSON.stringify({ name: assistantName }));
                 });
-                // Agregar ruta personalizada para el webchat
-                polkaApp.get('/webchat', (req, res) => {
-                    res.setHeader('Content-Type', 'text/html');
-                    res.end(fs.readFileSync(path.join(__dirname, '../webchat.html')));
-                });
+                  // Agregar ruta personalizada para el webchat
+  polkaApp.get("/webchat", (req, res) => {
+    res.setHeader("Content-Type", "text/html");
+    res.end(fs.readFileSync(path.join(__dirname, "../webchat.html")));
+  });
+  // Agregar ruta para webreset
+  polkaApp.get("/webreset", (req, res) => {
+    res.setHeader("Content-Type", "text/html");
+    res.end(fs.readFileSync(path.join(__dirname, "./webreset.html")));
+  });
+
+  // Endpoint para reiniciar el bot vía Railway
+  polkaApp.post("/api/restart-bot", async (req, res) => {
+  console.log('POST /api/restart-bot recibido');
+  try {
+    const result = await RailwayApi.restartActiveDeployment();
+    console.log('Resultado de restartRailwayDeployment:', result);
+    if (result.success) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        success: true,
+        message: "Reinicio solicitado correctamente."
+      }));
+    } else {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: result.error || "Error desconocido" }));
+    }
+  } catch (err: any) {
+    console.error('Error en /api/restart-bot:', err);
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: false, error: err.message }));
+  }
+});
 
                 // Obtener el servidor HTTP real de BuilderBot después de httpInject
                 const realHttpServer = adapterProvider.server.server;
