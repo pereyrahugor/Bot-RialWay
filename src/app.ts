@@ -269,7 +269,7 @@ const main = async () => {
      console.log("📌 Inicializando datos desde Google Sheets...");
 
     // Cargar todas las hojas principales con una sola función reutilizable
-    //await updateMain();
+    await updateMain();
 
 
                 // ...existing code...
