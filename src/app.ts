@@ -292,22 +292,24 @@ const main = async () => {
                 polkaApp.use("/js", serve("src/js"));
                 polkaApp.use("/style", serve("src/style"));
                 polkaApp.use("/assets", serve("src/assets"));
-                // Endpoint para obtener el nombre del asistente de forma dinámica
-                polkaApp.get('/api/assistant-name', (req, res) => {
-                    const assistantName = process.env.ASSISTANT_NAME || 'Asistente demo';
-                    res.setHeader('Content-Type', 'application/json');
-                    res.end(JSON.stringify({ name: assistantName }));
-                });
-                  // Agregar ruta personalizada para el webchat
-                polkaApp.get("/webchat", (req, res) => {
-                    res.setHeader("Content-Type", "text/html");
-                    res.end(fs.readFileSync(path.join(__dirname, "../webchat.html")));
-                });
-                // Agregar ruta para webreset
-                polkaApp.get("/webreset", (req, res) => {
-                    res.setHeader("Content-Type", "text/html");
-                    res.end(fs.readFileSync(path.join(__dirname, "../webreset.html")));
-                });
+                                // Endpoint para obtener el nombre del asistente de forma dinámica
+                                polkaApp.get('/api/assistant-name', (req, res) => {
+                                        const assistantName = process.env.ASSISTANT_NAME || 'Asistente demo';
+                                        res.setHeader('Content-Type', 'application/json');
+                                        res.end(JSON.stringify({ name: assistantName }));
+                                });
+
+                                // Utilidad para servir páginas HTML estáticas
+                                function serveHtmlPage(route, filename) {
+                                    polkaApp.get(route, (req, res) => {
+                                        res.setHeader("Content-Type", "text/html");
+                                        res.end(fs.readFileSync(path.join(__dirname, filename)));
+                                    });
+                                }
+
+                                // Registrar páginas HTML
+                                serveHtmlPage("/webchat", "webchat.html");
+                                serveHtmlPage("/webreset", "webreset.html");
 
   // Endpoint para reiniciar el bot vía Railway
   polkaApp.post("/api/restart-bot", async (req, res) => {
