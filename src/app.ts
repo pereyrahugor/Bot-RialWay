@@ -269,7 +269,7 @@ const main = async () => {
      console.log("📌 Inicializando datos desde Google Sheets...");
 
     // Cargar todas las hojas principales con una sola función reutilizable
-    await updateMain();
+    //await updateMain();
 
 
                 // ...existing code...
@@ -303,7 +303,18 @@ const main = async () => {
                                 function serveHtmlPage(route, filename) {
                                     polkaApp.get(route, (req, res) => {
                                         res.setHeader("Content-Type", "text/html");
-                                        res.end(fs.readFileSync(path.join(__dirname, filename)));
+                                        // Buscar primero en src/ (local), luego en /app/src/ (deploy)
+                                        let htmlPath = path.join(__dirname, filename);
+                                        if (!fs.existsSync(htmlPath)) {
+                                            // Buscar en /app/src/ (deploy)
+                                            htmlPath = path.join(process.cwd(), 'src', filename);
+                                        }
+                                        try {
+                                            res.end(fs.readFileSync(htmlPath));
+                                        } catch (err) {
+                                            res.statusCode = 404;
+                                            res.end('HTML no encontrado');
+                                        }
                                     });
                                 }
 
