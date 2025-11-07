@@ -1,0 +1,98 @@
+[
+  {
+    "CODIGO": 1,
+    "PRODUCTO": "Servicos",
+    "DESCRIPCION": "Alineación camioneta (por vehiculo)",
+    "TIPO DE VEHICULO": "camioneta",
+    "CONTADO/EFECTIVO": 35000,
+    "PRECIO TARJETA": 45000
+  },
+  {
+    "CODIGO": 2,
+    "PRODUCTO": "Servicos",
+    "DESCRIPCION": "Balanceo camioneta (por neumatico)",
+    "TIPO DE VEHICULO": "camioneta",
+    "CONTADO/EFECTIVO": 9500,
+    "PRECIO TARJETA": 12100
+  },
+  {
+    "CODIGO": 3,
+    "PRODUCTO": "Servicos",
+    "DESCRIPCION": "Alineación Auto (por vehiculo)",
+    "TIPO DE VEHICULO": "auto",
+    "CONTADO/EFECTIVO": 30000,
+    "PRECIO TARJETA": 38100
+  },
+  {
+    "CODIGO": 4,
+    "PRODUCTO": "Servicos",
+    "DESCRIPCION": "Balanceo auto (por neumatico)",
+    "TIPO DE VEHICULO": "auto",
+    "CONTADO/EFECTIVO": 7500,
+    "PRECIO TARJETA": 9600
+  },
+  {
+    "CODIGO": 5,
+    "PRODUCTO": "Servicos",
+    "DESCRIPCION": "Valvula Camioneta (por neumatico)",
+    "TIPO DE VEHICULO": "camioneta",
+    "CONTADO/EFECTIVO": 1500,
+    "PRECIO TARJETA": 1900
+  },
+  {
+    "CODIGO": 6,
+    "PRODUCTO": "Servicos",
+    "DESCRIPCION": "valvula auto (por neumatico)",
+    "TIPO DE VEHICULO": "auto",
+    "CONTADO/EFECTIVO": 1500,
+    "PRECIO TARJETA": 1900
+  },
+  {
+    "CODIGO": 7,
+    "PRODUCTO": "Servicos",
+    "DESCRIPCION": "Combo Servicios Camioneta x 4 neumaticos",
+    "TIPO DE VEHICULO": "camioneta",
+    "CONTADO/EFECTIVO": 79000,
+    "PRECIO TARJETA": 101000
+  },
+  {
+    "CODIGO": 8,
+    "PRODUCTO": "Servicos",
+    "DESCRIPCION": "Combo Servicios Auto x 4 neumaticos",
+    "TIPO DE VEHICULO": "auto",
+    "CONTADO/EFECTIVO": 66000,
+    "PRECIO TARJETA": 84100
+  },
+  {
+    "CODIGO": 9,
+    "PRODUCTO": "Servicos",
+    "DESCRIPCION": "Combo Servicios Camioneta x 2 neumaticos",
+    "TIPO DE VEHICULO": "camioneta",
+    "CONTADO/EFECTIVO": 57000,
+    "PRECIO TARJETA": 73000
+  },
+  {
+    "CODIGO": 10,
+    "PRODUCTO": "Servicos",
+    "DESCRIPCION": "Combo Servicios Auto x 2 neumaticos",
+    "TIPO DE VEHICULO": "auto",
+    "CONTADO/EFECTIVO": 48000,
+    "PRECIO TARJETA": 61100
+  },
+  {
+    "CODIGO": 11,
+    "PRODUCTO": "Servicos",
+    "DESCRIPCION": "Servicios x 1 neumatico",
+    "TIPO DE VEHICULO": "auto",
+    "CONTADO/EFECTIVO": 9000,
+    "PRECIO TARJETA": 11500
+  },
+  {
+    "CODIGO": 12,
+    "PRODUCTO": "Servicos",
+    "DESCRIPCION": "Servicios x 1 neumatico",
+    "TIPO DE VEHICULO": "camioneta",
+    "CONTADO/EFECTIVO": 11000,
+    "PRECIO TARJETA": 14000
+  }
+]

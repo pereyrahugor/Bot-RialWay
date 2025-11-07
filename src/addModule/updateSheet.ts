@@ -105,13 +105,28 @@ async function processSheetById(SHEET_ID: string) {
             return [];
         }
 
-        // Formatear los datos obtenidos de forma flexible
+        // Formatear los datos obtenidos de forma flexible, convirtiendo valores numéricos
         const formattedData = fullRows.slice(1)
             .filter(row => row && row.length > 0 && row.some(cell => (cell || "").trim() !== ""))
             .map((row) => {
-                const obj: Record<string, string> = {};
+                const obj: Record<string, any> = {};
                 headers.forEach((header, idx) => {
-                    obj[header] = (row[idx] || "").trim();
+                    let value = (row[idx] || "").trim();
+                    // Si el valor parece un número (con o sin formato de moneda), convertir a number
+                    if (/^\$?\s*[\d.,]+$/.test(value)) {
+                        // Eliminar símbolos de moneda, espacios, puntos de mil y comas decimales
+                        value = value.replace(/[^\d,]/g, "");
+                        // Si tiene coma decimal, reemplazar por punto
+                        if (value.includes(",")) {
+                            value = value.replace(/\./g, ""); // quitar puntos de mil
+                            value = value.replace(/,/, "."); // convertir coma decimal a punto
+                        }
+                        // Convertir a número
+                        const num = Number(value);
+                        obj[header] = isNaN(num) ? value : num;
+                    } else {
+                        obj[header] = value;
+                    }
                 });
                 return obj;
             });
