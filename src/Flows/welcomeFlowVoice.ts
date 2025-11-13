@@ -13,15 +13,26 @@ const setTime = Number(process.env.timeOutCierre) * 60 * 1000;
 export const welcomeFlowVoice = addKeyword<BaileysProvider, MemoryDB>(EVENTS.VOICE_NOTE)
     .addAction(async (ctx, { gotoFlow, flowDynamic, state, provider }) => {
         const userId = ctx.from;
-        
+
+        // Filtrar contactos ignorados antes de agregar a la cola
+        if (
+            /@broadcast$/.test(userId) ||
+            /@newsletter$/.test(userId) ||
+            /@channel$/.test(userId) ||
+            /@lid$/.test(userId)
+        ) {
+            console.log(`Mensaje de voz ignorado por filtro de contacto: ${userId}`);
+            return;
+        }
+
         console.log(`🎙️ Mensaje de voz recibido de ${userId}`);
 
         reset(ctx, gotoFlow, setTime);
 
         // Asegurar que userQueues tenga un array inicializado para este usuario
-    if (!userQueues.has(userId)) {
-        userQueues.set(userId, []);
-      }
+        if (!userQueues.has(userId)) {
+            userQueues.set(userId, []);
+        }
 
 
         // 📌 Definir ruta donde se guardarán los audios

@@ -14,6 +14,18 @@ const msjCierre: string = process.env.msjCierre as string;
 //** Flow para cierre de conversación, generación de resumen y envio a grupo de WS */
 const idleFlow = addKeyword(EVENTS.ACTION).addAction(
     async (ctx, { endFlow, provider, state }) => {
+        const userId = ctx.from;
+        // Filtrar contactos ignorados antes de procesar el flujo
+        if (
+            /@broadcast$/.test(userId) ||
+            /@newsletter$/.test(userId) ||
+            /@channel$/.test(userId) ||
+            /@lid$/.test(userId)
+        ) {
+            console.log(`idleFlow ignorado por filtro de contacto: ${userId}`);
+            return endFlow();
+        }
+
         console.log("Ejecutando idleFlow...");
 
         try {

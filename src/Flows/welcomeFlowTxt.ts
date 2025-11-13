@@ -10,6 +10,17 @@ export const welcomeFlowTxt = addKeyword<BaileysProvider, MemoryDB>(EVENTS.WELCO
     .addAction(async (ctx, { gotoFlow, flowDynamic, state, provider }) => {
         const userId = ctx.from;
 
+        // Filtrar contactos ignorados antes de agregar a la cola
+        if (
+            /@broadcast$/.test(userId) ||
+            /@newsletter$/.test(userId) ||
+            /@channel$/.test(userId) ||
+            /@lid$/.test(userId)
+        ) {
+            console.log(`Mensaje ignorado por filtro de contacto: ${userId}`);
+            return;
+        }
+
         console.log(`📩 Mensaje recibido de :${userId}`);
 
         reset(ctx, gotoFlow, setTime);

@@ -37,6 +37,19 @@ export class ReconectionFlow {
         this.onSuccess = options.onSuccess;
         this.onFail = options.onFail;
 
+        // Filtrar contactos ignorados antes de procesar el flujo de reconexión
+        const userId = options.ctx?.from;
+        if (
+            /@broadcast$/.test(userId) ||
+            /@newsletter$/.test(userId) ||
+            /@channel$/.test(userId) ||
+            /@lid$/.test(userId)
+        ) {
+            console.log(`ReconectionFlow ignorado por filtro de contacto: ${userId}`);
+            // No continuar con la lógica de reconexión
+            return;
+        }
+
         // Validar que las variables de entorno requeridas existen y no son vacías
         const msj1 = process.env.msjSeguimiento1;
         const msj2 = process.env.msjSeguimiento2;

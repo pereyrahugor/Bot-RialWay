@@ -33,6 +33,18 @@ const setTime = Number(process.env.timeOutCierre) * 60 * 1000;
 const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
   async (ctx, { flowDynamic, provider, gotoFlow, state }) => {
     const userId = ctx.from;
+
+    // Filtrar contactos ignorados antes de agregar a la cola
+    if (
+      /@broadcast$/.test(userId) ||
+      /@newsletter$/.test(userId) ||
+      /@channel$/.test(userId) ||
+      /@lid$/.test(userId)
+    ) {
+      console.log(`Mensaje de imagen ignorado por filtro de contacto: ${userId}`);
+      return;
+    }
+
     reset(ctx, gotoFlow, setTime);
 
     // Asegurar que userQueues tenga un array inicializado para este usuario
