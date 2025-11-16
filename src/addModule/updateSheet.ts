@@ -114,18 +114,25 @@ async function processSheetById(SHEET_ID: string) {
                     let value = (row[idx] || "").trim();
                     // Si el valor parece un número (con o sin formato de moneda), convertir a number
                     if (/^\$?\s*[\d.,]+$/.test(value)) {
-                        // Eliminar símbolos de moneda, espacios, puntos de mil y comas decimales
                         value = value.replace(/[^\d,]/g, "");
-                        // Si tiene coma decimal, reemplazar por punto
                         if (value.includes(",")) {
-                            value = value.replace(/\./g, ""); // quitar puntos de mil
-                            value = value.replace(/,/, "."); // convertir coma decimal a punto
+                            value = value.replace(/\./g, "");
+                            value = value.replace(/,/, ".");
                         }
-                        // Convertir a número
                         const num = Number(value);
                         obj[header] = isNaN(num) ? value : num;
                     } else {
-                        obj[header] = value;
+                        // Si el valor contiene comas y al menos dos elementos, convertir a array
+                        if (typeof value === "string" && value.includes(",")) {
+                            const arr = value.split(",").map(v => v.trim()).filter(v => v.length > 0);
+                            if (arr.length > 1) {
+                                obj[header] = arr;
+                            } else {
+                                obj[header] = value;
+                            }
+                        } else {
+                            obj[header] = value;
+                        }
                     }
                 });
                 return obj;
