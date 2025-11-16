@@ -204,8 +204,10 @@ export const processUserMessage = async (
             if (imgMatch) {
                 continue;
             }
-            if (/un momento/i.test(chunk.trim())) {
-                allChunks.push(chunk.trim());
+            // Elimina referencias de archivos tipo 【n:m†archivo.json】
+            const cleanedChunk = chunk.replace(/【\d+:\d+†[^】]+】/g, '').trim();
+            if (/un momento/i.test(cleanedChunk)) {
+                allChunks.push(cleanedChunk);
                 await new Promise(res => setTimeout(res, 10000));
                 // Usar el wrapper también para followup
                 const followup = await getAssistantResponse(ASSISTANT_ID, ctx.body, state, undefined, ctx.from, ctx.thread_id);
@@ -217,11 +219,13 @@ export const processUserMessage = async (
                     (followup as { text: string }).text &&
                     !/un momento/i.test((followup as { text: string }).text)
                 ) {
-                    allChunks.push(String((followup as { text: string }).text).trim());
+                    // Limpiar también la referencia en el followup
+                    const cleanedFollowup = String((followup as { text: string }).text).replace(/【\d+:\d+†[^】]+】/g, '').trim();
+                    allChunks.push(cleanedFollowup);
                 }
                 continue;
             }
-            allChunks.push(chunk.trim());
+            allChunks.push(cleanedChunk);
         }
         await flowDynamic([{ body: allChunks.join('\n\n') }]);
         return state;
