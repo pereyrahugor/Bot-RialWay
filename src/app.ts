@@ -287,9 +287,8 @@ const main = async () => {
                 // ...existing code...
                 const adapterFlow = createFlow([welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowDoc, locationFlow, idleFlow]);
                 const adapterProvider = createProvider(BaileysProvider, {
-                    //version: [2, 3000, 1027934701],
-                    //version: [2, 3000, 1025190524],1033834674
-                    version: [2, 3000, 1033834674],
+                    version: [2, 3000, 1033834674], // Actual funcional, algunos dispositivos no funcionan (falla la conexión)
+                    //version: [2, 3000, 1030220586], // Version actual, test para comprobar conexion en dispositivos con problemas
                     groupsIgnore: false,
                     readStatus: false,
                 });

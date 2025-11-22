@@ -9,6 +9,7 @@ import { ReconectionFlow } from './reconectionFlow';
 //** Variables de entorno para el envio de msj de resumen a grupo de WS */
 const ASSISTANT_ID = process.env.ASSISTANT_ID ?? '';
 const ID_GRUPO_RESUMEN = process.env.ID_GRUPO_RESUMEN ?? '';
+const ID_GRUPO_RESUMEN_2 = process.env.ID_GRUPO_RESUMEN_2 ?? '';
 const msjCierre: string = process.env.msjCierre as string;
 
 //** Flow para cierre de conversación, generación de resumen y envio a grupo de WS */
@@ -94,6 +95,21 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                             console.log(`✅ SI_RESUMEN: Resumen enviado a ${ID_GRUPO_RESUMEN} con enlace de WhatsApp`);
                         } catch (err) {
                             console.error(`❌ SI_RESUMEN: No se pudo enviar el resumen al grupo ${ID_GRUPO_RESUMEN}:`, err?.message || err);
+                        }
+                    }
+                    await addToSheet(data);
+                    return; // No enviar mensaje de cierre
+                } else if (tipo === 'SI_RESUMEN_G2') {
+                    // Solo envía resumen al grupo ws y sheets, no envia msj de cierre
+                    console.log('SI_RESUMEN_G2: Solo se envía resumen al grupo y sheets.');
+                    data.linkWS = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
+                    {
+                        const resumenConLink = `${resumen}\n\n🔗 [Chat del usuario](${data.linkWS})`;
+                        try {
+                            await provider.sendText(ID_GRUPO_RESUMEN_2, resumenConLink);
+                            console.log(`✅ SI_RESUMEN_G2: Resumen enviado a ${ID_GRUPO_RESUMEN_2} con enlace de WhatsApp`);
+                        } catch (err) {
+                            console.error(`❌ SI_RESUMEN_G2: No se pudo enviar el resumen al grupo ${ID_GRUPO_RESUMEN_2}:`, err?.message || err);
                         }
                     }
                     await addToSheet(data);
