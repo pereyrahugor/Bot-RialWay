@@ -19,7 +19,7 @@
     "@googlemaps/google-maps-services-js": "^3.4.2",
     "@types/express": "^5.0.3",
     "@types/fs-extra": "^11.0.4",
-    "@whiskeysockets/baileys": "6.7.21",
+    "@whiskeysockets/baileys": "6.6.0",
     "axios": "^1.11.0",
     "builderbot-provider-sherpa": "^0.1.0",
     "docker": "^0.2.14",
