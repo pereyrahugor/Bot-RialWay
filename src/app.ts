@@ -21,9 +21,11 @@ import { updateMain } from "./addModule/updateMain";
 import { ErrorReporter } from "./utils/errorReporter";
 import { AssistantBridge } from './utils-web/AssistantBridge';
 import { WebChatManager } from './utils-web/WebChatManager';
-import { WebChatSession } from './utils-web/WebChatSession';
 import { fileURLToPath } from 'url';
+import { AssistantResponseProcessor } from "./utils/AssistantResponseProcessor";
+import { getArgentinaDatetimeString } from "./utils/ArgentinaTime";
 import { RailwayApi } from "./Api-RailWay/Railway";
+
 //import { imgResponseFlow } from "./Flows/imgResponse";
 //import { listImg } from "./addModule/listImg";
 //import { testAuth } from './utils/test-google-auth.js';
@@ -56,42 +58,44 @@ const TIMEOUT_MS = 30000;
 const userTimeouts = new Map();
 
 export const getAssistantResponse = async (assistantId, message, state, fallbackMessage, userId, thread_id = null) => {
-    // Solo enviar la fecha/hora si es realmente un hilo nuevo (no existe thread_id ni en el argumento ni en el state)
-    let effectiveThreadId = thread_id;
-    if (!effectiveThreadId && state && typeof state.get === 'function') {
-        effectiveThreadId = state.get('thread_id');
-    }
-  // Si hay un timeout previo, lo limpiamos
-  if (userTimeouts.has(userId)) {
-    clearTimeout(userTimeouts.get(userId));
-    userTimeouts.delete(userId);
-  }
+        // Solo enviar la fecha/hora si es realmente un hilo nuevo (no existe thread_id ni en el argumento ni en el state)
+        let effectiveThreadId = thread_id;
+        if (!effectiveThreadId && state && typeof state.get === 'function') {
+                effectiveThreadId = state.get('thread_id');
+        }
+        let systemPrompt = "";
+        if (!effectiveThreadId) {
+                systemPrompt += `Fecha y hora actual: ${getArgentinaDatetimeString()}\n`;
+        }
+        const finalMessage = systemPrompt + message;
+        // Si hay un timeout previo, lo limpiamos
+        if (userTimeouts.has(userId)) {
+                clearTimeout(userTimeouts.get(userId));
+                userTimeouts.delete(userId);
+        }
 
-  let timeoutResolve;
-  const timeoutPromise = new Promise((resolve) => {
-    timeoutResolve = resolve;
-    const timeoutId = setTimeout(() => {
-      console.warn("⏱ Timeout alcanzado. Reintentando con mensaje de control...");
-      resolve(toAsk(assistantId, fallbackMessage ?? message, state));
-      userTimeouts.delete(userId);
-    }, TIMEOUT_MS);
-    userTimeouts.set(userId, timeoutId);
-  });
+        let timeoutResolve;
+        const timeoutPromise = new Promise((resolve) => {
+                timeoutResolve = resolve;
+                const timeoutId = setTimeout(() => {
+                        console.warn("⏱ Timeout alcanzado. Reintentando con mensaje de control...");
+                        resolve(toAsk(assistantId, fallbackMessage ?? finalMessage, state));
+                        userTimeouts.delete(userId);
+                }, TIMEOUT_MS);
+                userTimeouts.set(userId, timeoutId);
+        });
 
-    // Lanzamos la petición a OpenAI, pasando thread_id si existe
-    const askPromise = toAsk(assistantId, message, state).then((result) => {
-    // Si responde antes del timeout, limpiamos el timeout
-    if (userTimeouts.has(userId)) {
-      clearTimeout(userTimeouts.get(userId));
-      userTimeouts.delete(userId);
-    }
-    // Resolvemos el timeout para evitar que quede pendiente
-    timeoutResolve(result);
-    return result;
-  });
+        // Lanzamos la petición a OpenAI, pasando thread_id si existe
+        const askPromise = toAsk(assistantId, finalMessage, state).then((result) => {
+                if (userTimeouts.has(userId)) {
+                        clearTimeout(userTimeouts.get(userId));
+                        userTimeouts.delete(userId);
+                }
+                timeoutResolve(result);
+                return result;
+        });
 
-  // El primero que responda (OpenAI o timeout) gana
-  return Promise.race([askPromise, timeoutPromise]);
+        return Promise.race([askPromise, timeoutPromise]);
 };
 
 export const processUserMessage = async (
@@ -169,66 +173,21 @@ export const processUserMessage = async (
         // }
 
         // Usar el nuevo wrapper para obtener respuesta y thread_id
-        const response = await getAssistantResponse(ASSISTANT_ID, ctx.body, state, "Por favor, responde aunque sea brevemente.", ctx.from, ctx.thread_id);
+        const response = await getAssistantResponse(ASSISTANT_ID, ctx.body, state, "Por favor, reenvia el msj anterior ya que no llego al usuario.", ctx.from, ctx.thread_id);
 
-        if (
-            !response ||
-            (typeof response === 'object' && response !== null && !('text' in response))
-        ) {
-            await errorReporter.reportError(
-                new Error("No se recibió respuesta del asistente."),
-                ctx.from,
-                `https://wa.me/${ctx.from}`
-            );
-        }
-
-        // Guardar thread_id en el contexto si lo retorna la respuesta
-        if (
-            response &&
-            typeof response === 'object' &&
-            response !== null &&
-            'thread_id' in response
-        ) {
-            ctx.lastThreadId = (response as { thread_id: string }).thread_id;
-        }
-
-        const textResponse =
-            response && typeof response === 'object' && response !== null && 'text' in response
-                ? (response as { text: string }).text
-                : String(response);
-        const chunks = textResponse.split(/\n\n+/);
-    const allChunks = [];
-        for (const chunk of chunks) {
-            // Detecta trigger de imagen en la respuesta del asistente
-            const imgMatch = chunk.trim().match(/\[IMG\]\s*(.+)/i);
-            if (imgMatch) {
-                continue;
-            }
-            // Elimina referencias de archivos tipo 【n:m†archivo.json】
-            const cleanedChunk = chunk.replace(/【\d+:\d+†[^】]+】/g, '').trim();
-            if (/un momento/i.test(cleanedChunk)) {
-                allChunks.push(cleanedChunk);
-                await new Promise(res => setTimeout(res, 10000));
-                // Usar el wrapper también para followup
-                const followup = await getAssistantResponse(ASSISTANT_ID, ctx.body, state, undefined, ctx.from, ctx.thread_id);
-                if (
-                    followup &&
-                    typeof followup === 'object' &&
-                    followup !== null &&
-                    'text' in followup &&
-                    (followup as { text: string }).text &&
-                    !/un momento/i.test((followup as { text: string }).text)
-                ) {
-                    // Limpiar también la referencia en el followup
-                    const cleanedFollowup = String((followup as { text: string }).text).replace(/【\d+:\d+†[^】]+】/g, '').trim();
-                    allChunks.push(cleanedFollowup);
-                }
-                continue;
-            }
-            allChunks.push(cleanedChunk);
-        }
-        await flowDynamic([{ body: allChunks.join('\n\n') }]);
+        // Procesar la respuesta del asistente y etiquetas [API]
+        await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
+            response,
+            ctx,
+            flowDynamic,
+            state,
+            provider,
+            gotoFlow,
+            getAssistantResponse,
+            ASSISTANT_ID
+        );
         return state;
+        
     } catch (error) {
         console.error("Error al procesar el mensaje del usuario:", error);
 
@@ -287,7 +246,7 @@ const main = async () => {
                 // ...existing code...
                 const adapterFlow = createFlow([welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowDoc, locationFlow, idleFlow]);
                 const adapterProvider = createProvider(BaileysProvider, {
-                    version: [2, 3000, 1033834674], // Actual funcional, algunos dispositivos no funcionan (falla la conexión)
+                    version: [2, 3000, 1027934701], // Actual funcional, algunos dispositivos no funcionan (falla la conexión)
                     //version: [2, 3000, 1027934701], // Version actual, test para comprobar conexion en dispositivos con problemas
                     groupsIgnore: false,
                     readStatus: false,
@@ -416,7 +375,12 @@ const main = async () => {
                                 await state.clear();
                                 replyText = "🔄 El chat ha sido reiniciado. Puedes comenzar una nueva conversación.";
                             } else {
-                                await processUserMessage({ from: ip, body: msg, type: 'webchat' }, { flowDynamic, state, provider, gotoFlow });
+                                let threadId = state.get && state.get('thread_id');
+                                let finalMessage = msg;
+                                if (!threadId) {
+                                    finalMessage = `Fecha y hora actual: ${getArgentinaDatetimeString()}\n` + msg;
+                                }
+                                await processUserMessage({ from: ip, body: finalMessage, type: 'webchat' }, { flowDynamic, state, provider, gotoFlow });
                             }
                             socket.emit('reply', replyText);
                         } catch (err) {
@@ -474,9 +438,14 @@ const main = async () => {
                                                     session.clear();
                                                     replyText = "🔄 El chat ha sido reiniciado. Puedes comenzar una nueva conversación.";
                                                 } else {
-                                                    session.addUserMessage(message);
-                                                    const threadId = await getOrCreateThreadId(session);
-                                                    const reply = await sendMessageToThread(threadId, message, ASSISTANT_ID);
+                                                    let threadId = await getOrCreateThreadId(session);
+                                                    let finalMessage = message;
+                                                    if (!threadId) {
+                                                        finalMessage = `Fecha y hora actual: ${getArgentinaDatetimeString()}\n` + message;
+                                                    }
+                                                    session.addUserMessage(finalMessage);
+                                                    threadId = await getOrCreateThreadId(session);
+                                                    const reply = await sendMessageToThread(threadId, finalMessage, ASSISTANT_ID);
                                                     session.addAssistantMessage(reply);
                                                     replyText = reply;
                                             }

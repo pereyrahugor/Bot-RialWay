@@ -54,4 +54,18 @@ export class CalendarEvents {
         // Devuelve los periodos ocupados en ese rango
         return res.data.calendars[CALENDAR_ID]?.busy || [];
     }
+
+    static async testCalendarAccess() {
+        try {
+            const res = await calendar.events.list({
+                calendarId: CALENDAR_ID,
+                maxResults: 1,
+            });
+            console.log("[TEST CALENDAR] Eventos encontrados:", res.data.items);
+            return res.data.items;
+        } catch (err) {
+            console.error("[TEST CALENDAR] Error accediendo al calendario:", err);
+            return null;
+        }
+    }
 }
