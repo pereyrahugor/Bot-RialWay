@@ -17,6 +17,7 @@ import { JsonBlockFinder } from "../Api-Google/JsonBlockFinder";
 import { CalendarEvents } from "../Api-Google/calendarEvents";
 import fs from 'fs';
 import moment from 'moment';
+import { handleToolFunctionCall } from '../Api-BotAsistente/handleToolFunctionCall.js';
 
 // Mapa global para bloquear usuarios de WhatsApp durante operaciones API
 const userApiBlockMap = new Map();
@@ -68,6 +69,14 @@ export class AssistantResponseProcessor {
         getAssistantResponse: Function,
         ASSISTANT_ID: string
     ) {
+        // Soporte para tool/function call genérico
+        if (response && typeof response === 'object' && response.tool_call) {
+            // Espera que response.tool_call tenga { name, parameters }
+            const toolResponse = handleToolFunctionCall(response.tool_call);
+            // Enviar la respuesta al asistente (como tool response)
+            await flowDynamic([{ body: JSON.stringify(toolResponse, null, 2) }]);
+            return;
+        }
         // Log de mensaje entrante del asistente (antes de cualquier filtro)
         if (ctx && ctx.type === 'webchat') {
             console.log('[Webchat Debug] Mensaje entrante del asistente:', response);

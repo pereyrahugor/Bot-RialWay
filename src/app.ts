@@ -173,7 +173,9 @@ export const processUserMessage = async (
         // }
 
         // Usar el nuevo wrapper para obtener respuesta y thread_id
-        const response = await getAssistantResponse(ASSISTANT_ID, ctx.body, state, "Por favor, reenvia el msj anterior ya que no llego al usuario.", ctx.from, ctx.thread_id);
+            const response = await getAssistantResponse(ASSISTANT_ID, ctx.body, state, "Por favor, reenvia el msj anterior ya que no llego al usuario.", ctx.from, ctx.thread_id);
+            // LOG: Mostrar respuesta cruda del asistente
+            console.log('Respuesta cruda del asistente:', JSON.stringify(response, null, 2));
 
         // Procesar la respuesta del asistente y etiquetas [API]
         await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
@@ -246,7 +248,7 @@ const main = async () => {
                 // ...existing code...
                 const adapterFlow = createFlow([welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowDoc, locationFlow, idleFlow]);
                 const adapterProvider = createProvider(BaileysProvider, {
-                    version: [2, 3000, 1027934701], // Actual funcional, algunos dispositivos no funcionan (falla la conexión)
+                    version: [2, 3000, 1030817285], // Actual funcional, algunos dispositivos no funcionan (falla la conexión)
                     //version: [2, 3000, 1027934701], // Version actual, test para comprobar conexion en dispositivos con problemas
                     groupsIgnore: false,
                     readStatus: false,
@@ -375,7 +377,7 @@ const main = async () => {
                                 await state.clear();
                                 replyText = "🔄 El chat ha sido reiniciado. Puedes comenzar una nueva conversación.";
                             } else {
-                                let threadId = state.get && state.get('thread_id');
+                                const threadId = state.get && state.get('thread_id');
                                 let finalMessage = msg;
                                 if (!threadId) {
                                     finalMessage = `Fecha y hora actual: ${getArgentinaDatetimeString()}\n` + msg;
