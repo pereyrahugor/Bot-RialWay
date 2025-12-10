@@ -1,0 +1,1330 @@
+[
+  {
+    "codigo": 1021006,
+    "medida": "165/70 R13",
+    "marca": "AUSTONE",
+    "modelo": "ATHENA SP-801",
+    "contado/efectivo": 73200,
+    "lista_base": 100400
+  },
+  {
+    "codigo": 1040383,
+    "medida": "215/60 R17",
+    "marca": "BRIDGESTONE",
+    "modelo": "ALENZA 001",
+    "contado/efectivo": 348300,
+    "lista_base": 477700
+  },
+  {
+    "codigo": 1020849,
+    "medida": "225/55 R18",
+    "marca": "BRIDGESTONE",
+    "modelo": "ALENZA 001",
+    "contado/efectivo": 455800,
+    "lista_base": 625100
+  },
+  {
+    "codigo": 1040268,
+    "medida": "225/60 R18",
+    "marca": "BRIDGESTONE",
+    "modelo": "ALENZA H/L 33",
+    "contado/efectivo": 433200,
+    "lista_base": 594000
+  },
+  {
+    "codigo": 1040057,
+    "medida": "205/70 R15",
+    "marca": "BRIDGESTONE",
+    "modelo": "DUELER AT 693",
+    "contado/efectivo": 367400,
+    "lista_base": 503900
+  },
+  {
+    "codigo": 1040061,
+    "medida": "255/70 R16",
+    "marca": "BRIDGESTONE",
+    "modelo": "DUELER AT 693",
+    "contado/efectivo": 402600,
+    "lista_base": 552100
+  },
+  {
+    "codigo": 1040433,
+    "medida": "255/70 R17",
+    "marca": "BRIDGESTONE",
+    "modelo": "DUELER AT 693",
+    "contado/efectivo": 395100,
+    "lista_base": 541900
+  },
+  {
+    "codigo": 1040062,
+    "medida": "265/65 R17",
+    "marca": "BRIDGESTONE",
+    "modelo": "DUELER AT 693",
+    "contado/efectivo": 324400,
+    "lista_base": 444800
+  },
+  {
+    "codigo": 1040065,
+    "medida": "265/70 R15",
+    "marca": "BRIDGESTONE",
+    "modelo": "DUELER AT REVO 2",
+    "contado/efectivo": 419300,
+    "lista_base": 575100
+  },
+  {
+    "codigo": 1040068,
+    "medida": "235/70 R16",
+    "marca": "BRIDGESTONE",
+    "modelo": "DUELER AT REVO 2",
+    "contado/efectivo": 349400,
+    "lista_base": 479200
+  },
+  {
+    "codigo": 1040069,
+    "medida": "245/70 R16",
+    "marca": "BRIDGESTONE",
+    "modelo": "DUELER AT REVO 2",
+    "contado/efectivo": 338700,
+    "lista_base": 464500
+  },
+  {
+    "codigo": 1040071,
+    "medida": "265/70 R16",
+    "marca": "BRIDGESTONE",
+    "modelo": "DUELER AT REVO 2",
+    "contado/efectivo": 387100,
+    "lista_base": 530800
+  },
+  {
+    "codigo": 1040072,
+    "medida": "225/65 R17",
+    "marca": "BRIDGESTONE",
+    "modelo": "DUELER AT REVO 2",
+    "contado/efectivo": 306800,
+    "lista_base": 420700
+  },
+  {
+    "codigo": 1040300,
+    "medida": "225/70 R17",
+    "marca": "BRIDGESTONE",
+    "modelo": "DUELER AT REVO 2",
+    "contado/efectivo": 328300,
+    "lista_base": 450300
+  },
+  {
+    "codigo": 1040073,
+    "medida": "245/65 R17",
+    "marca": "BRIDGESTONE",
+    "modelo": "DUELER AT REVO 2",
+    "contado/efectivo": 316500,
+    "lista_base": 434100
+  },
+  {
+    "codigo": 1040475,
+    "medida": "265/60 R18",
+    "marca": "BRIDGESTONE",
+    "modelo": "DUELER AT REVO 2",
+    "contado/efectivo": 350600,
+    "lista_base": 480900
+  },
+  {
+    "codigo": 1040165,
+    "medida": "235/55 R19",
+    "marca": "BRIDGESTONE",
+    "modelo": "DUELER H/P SPORT AS",
+    "contado/efectivo": 558700,
+    "lista_base": 766200
+  },
+  {
+    "codigo": 1040039,
+    "medida": "225/70 R16",
+    "marca": "BRIDGESTONE",
+    "modelo": "DUELER H/T 684 III",
+    "contado/efectivo": 423800,
+    "lista_base": 581200
+  },
+  {
+    "codigo": 1040040,
+    "medida": "245/70 R16",
+    "marca": "BRIDGESTONE",
+    "modelo": "DUELER H/T 684 III",
+    "contado/efectivo": 353000,
+    "lista_base": 484200
+  },
+  {
+    "codigo": 1040041,
+    "medida": "255/70 R16",
+    "marca": "BRIDGESTONE",
+    "modelo": "DUELER H/T 684 III",
+    "contado/efectivo": 404000,
+    "lista_base": 554100
+  },
+  {
+    "codigo": 1040042,
+    "medida": "245/65 R17",
+    "marca": "BRIDGESTONE",
+    "modelo": "DUELER H/T 684 III",
+    "contado/efectivo": 285700,
+    "lista_base": 391800
+  },
+  {
+    "codigo": 1040043,
+    "medida": "255/65 R17",
+    "marca": "BRIDGESTONE",
+    "modelo": "DUELER H/T 684 III",
+    "contado/efectivo": 404200,
+    "lista_base": 554300
+  },
+  {
+    "codigo": 1040044,
+    "medida": "265/65 R17",
+    "marca": "BRIDGESTONE",
+    "modelo": "DUELER H/T 684 III",
+    "contado/efectivo": 299900,
+    "lista_base": 411300
+  },
+  {
+    "codigo": 1040427,
+    "medida": "265/60 R18",
+    "marca": "BRIDGESTONE",
+    "modelo": "DUELER H/T 684 III",
+    "contado/efectivo": 327800,
+    "lista_base": 449600
+  },
+  {
+    "codigo": 1040438,
+    "medida": "255/70 R17",
+    "marca": "BRIDGESTONE",
+    "modelo": "DUELER H/T 685",
+    "contado/efectivo": 395100,
+    "lista_base": 541900
+  },
+  {
+    "codigo": 1040452,
+    "medida": "215/65 R16",
+    "marca": "BRIDGESTONE",
+    "modelo": "DUELER HT 684-II",
+    "contado/efectivo": 338000,
+    "lista_base": 463500
+  },
+  {
+    "codigo": 1040045,
+    "medida": "255/60 R18",
+    "marca": "BRIDGESTONE",
+    "modelo": "DUELER HT 684-II",
+    "contado/efectivo": 398700,
+    "lista_base": 546700
+  },
+  {
+    "codigo": 1040458,
+    "medida": "215/65 R16",
+    "marca": "BRIDGESTONE",
+    "modelo": "DUELER HT 687",
+    "contado/efectivo": 398900,
+    "lista_base": 547100
+  },
+  {
+    "codigo": 1040051,
+    "medida": "265/70 R16",
+    "marca": "BRIDGESTONE",
+    "modelo": "DUELER HT 840",
+    "contado/efectivo": 376200,
+    "lista_base": 516000
+  },
+  {
+    "codigo": 1020531,
+    "medida": "245/70 R16",
+    "marca": "BRIDGESTONE",
+    "modelo": "DUELER M/T 674",
+    "contado/efectivo": 394200,
+    "lista_base": 540700
+  },
+  {
+    "codigo": 1040334,
+    "medida": "195/60 R16",
+    "marca": "BRIDGESTONE",
+    "modelo": "DURAVIS R660",
+    "contado/efectivo": 313000,
+    "lista_base": 429300
+  },
+  {
+    "codigo": 1020074,
+    "medida": "185/60 R15",
+    "marca": "BRIDGESTONE",
+    "modelo": "EP150 ECOPIA",
+    "contado/efectivo": 148800,
+    "lista_base": 204100
+  },
+  {
+    "codigo": 1020075,
+    "medida": "185/65 R15",
+    "marca": "BRIDGESTONE",
+    "modelo": "EP150 ECOPIA",
+    "contado/efectivo": 192500,
+    "lista_base": 264000
+  },
+  {
+    "codigo": 1020077,
+    "medida": "195/60 R15",
+    "marca": "BRIDGESTONE",
+    "modelo": "EP150 ECOPIA",
+    "contado/efectivo": 197700,
+    "lista_base": 271200
+  },
+  {
+    "codigo": 1020078,
+    "medida": "195/65 R15",
+    "marca": "BRIDGESTONE",
+    "modelo": "EP150 ECOPIA",
+    "contado/efectivo": 197600,
+    "lista_base": 271000
+  },
+  {
+    "codigo": 1020079,
+    "medida": "195/50 R16",
+    "marca": "BRIDGESTONE",
+    "modelo": "EP150 ECOPIA",
+    "contado/efectivo": 269500,
+    "lista_base": 369600
+  },
+  {
+    "codigo": 1020080,
+    "medida": "195/55 R16",
+    "marca": "BRIDGESTONE",
+    "modelo": "EP150 ECOPIA",
+    "contado/efectivo": 228800,
+    "lista_base": 313700
+  },
+  {
+    "codigo": 1020563,
+    "medida": "195/60 R16",
+    "marca": "BRIDGESTONE",
+    "modelo": "EP150 ECOPIA",
+    "contado/efectivo": 213000,
+    "lista_base": 292100
+  },
+  {
+    "codigo": 1020081,
+    "medida": "205/55 R16",
+    "marca": "BRIDGESTONE",
+    "modelo": "EP150 ECOPIA",
+    "contado/efectivo": 229200,
+    "lista_base": 314400
+  },
+  {
+    "codigo": 1020464,
+    "medida": "215/60 R16",
+    "marca": "BRIDGESTONE",
+    "modelo": "EP150 ECOPIA",
+    "contado/efectivo": 273800,
+    "lista_base": 375500
+  },
+  {
+    "codigo": 1090039,
+    "medida": "6.50 -10",
+    "marca": "BRIDGESTONE",
+    "modelo": "J-LUG (SET COMPLETO)",
+    "contado/efectivo": 461700,
+    "lista_base": 633200
+  },
+  {
+    "codigo": 1020781,
+    "medida": "245/40 R17",
+    "marca": "BRIDGESTONE",
+    "modelo": "POTENZA S001 RFT",
+    "contado/efectivo": 454200,
+    "lista_base": 622900
+  },
+  {
+    "codigo": 1020052,
+    "medida": "195/55 R15",
+    "marca": "BRIDGESTONE",
+    "modelo": "TURANZA ER30",
+    "contado/efectivo": 173600,
+    "lista_base": 238100
+  },
+  {
+    "codigo": 1040451,
+    "medida": "255/50 R19",
+    "marca": "BRIDGESTONE",
+    "modelo": "TURANZA ER30",
+    "contado/efectivo": 359600,
+    "lista_base": 493200
+  },
+  {
+    "codigo": 1020059,
+    "medida": "185/55 R16",
+    "marca": "BRIDGESTONE",
+    "modelo": "TURANZA ER300",
+    "contado/efectivo": 274300,
+    "lista_base": 376300
+  },
+  {
+    "codigo": 1020060,
+    "medida": "195/60 R16",
+    "marca": "BRIDGESTONE",
+    "modelo": "TURANZA ER300",
+    "contado/efectivo": 256200,
+    "lista_base": 351400
+  },
+  {
+    "codigo": 1020061,
+    "medida": "205/55 R16",
+    "marca": "BRIDGESTONE",
+    "modelo": "TURANZA ER300",
+    "contado/efectivo": 199300,
+    "lista_base": 273300
+  },
+  {
+    "codigo": 1020062,
+    "medida": "205/60 R16",
+    "marca": "BRIDGESTONE",
+    "modelo": "TURANZA ER300",
+    "contado/efectivo": 265600,
+    "lista_base": 364300
+  },
+  {
+    "codigo": 1020736,
+    "medida": "225/45 R17",
+    "marca": "BRIDGESTONE",
+    "modelo": "TURANZA ER300",
+    "contado/efectivo": 235900,
+    "lista_base": 323600
+  },
+  {
+    "codigo": 1020067,
+    "medida": "215/55 R17",
+    "marca": "BRIDGESTONE",
+    "modelo": "TURANZA ER370",
+    "contado/efectivo": 271800,
+    "lista_base": 372800
+  },
+  {
+    "codigo": 1020068,
+    "medida": "215/50 R17",
+    "marca": "BRIDGESTONE",
+    "modelo": "TURANZA T001",
+    "contado/efectivo": 220900,
+    "lista_base": 303000
+  },
+  {
+    "codigo": 1020807,
+    "medida": "215/65 R16",
+    "marca": "BRIDGESTONE",
+    "modelo": "TURANZA T-005",
+    "contado/efectivo": 350600,
+    "lista_base": 480800
+  },
+  {
+    "codigo": 1020798,
+    "medida": "205/55 R17",
+    "marca": "BRIDGESTONE",
+    "modelo": "TURANZA T-005",
+    "contado/efectivo": 319800,
+    "lista_base": 438600
+  },
+  {
+    "codigo": 1020417,
+    "medida": "235/55 R17",
+    "marca": "BRIDGESTONE",
+    "modelo": "TURANZA T-005",
+    "contado/efectivo": 474800,
+    "lista_base": 651200
+  },
+  {
+    "codigo": 1020372,
+    "medida": "235/45 R18",
+    "marca": "BRIDGESTONE",
+    "modelo": "TURANZA T-005",
+    "contado/efectivo": 603300,
+    "lista_base": 827400
+  },
+  {
+    "codigo": 1040008,
+    "medida": "215/65 R16",
+    "marca": "FIRESTONE",
+    "modelo": "ALL SEASON",
+    "contado/efectivo": 247600,
+    "lista_base": 339600
+  },
+  {
+    "codigo": 1020709,
+    "medida": "215/65 R17",
+    "marca": "FIRESTONE",
+    "modelo": "ALL SEASON",
+    "contado/efectivo": 372100,
+    "lista_base": 510300
+  },
+  {
+    "codigo": 1040142,
+    "medida": "185 R14",
+    "marca": "FIRESTONE",
+    "modelo": "CV5000",
+    "contado/efectivo": 222000,
+    "lista_base": 304400
+  },
+  {
+    "codigo": 1040143,
+    "medida": "195/70 R15",
+    "marca": "FIRESTONE",
+    "modelo": "CV5000",
+    "contado/efectivo": 278700,
+    "lista_base": 382200
+  },
+  {
+    "codigo": 1040005,
+    "medida": "195/75 R16",
+    "marca": "FIRESTONE",
+    "modelo": "CV5000",
+    "contado/efectivo": 256500,
+    "lista_base": 351800
+  },
+  {
+    "codigo": 1040006,
+    "medida": "205/75 R16",
+    "marca": "FIRESTONE",
+    "modelo": "CV5000",
+    "contado/efectivo": 271500,
+    "lista_base": 372300
+  },
+  {
+    "codigo": 1040144,
+    "medida": "225/75 R16",
+    "marca": "FIRESTONE",
+    "modelo": "CV5000",
+    "contado/efectivo": 361600,
+    "lista_base": 495900
+  },
+  {
+    "codigo": 1040009,
+    "medida": "205/65 R15",
+    "marca": "FIRESTONE",
+    "modelo": "DESTINATION AT",
+    "contado/efectivo": 177300,
+    "lista_base": 243100
+  },
+  {
+    "codigo": 1040012,
+    "medida": "235/75 R15",
+    "marca": "FIRESTONE",
+    "modelo": "DESTINATION AT",
+    "contado/efectivo": 253200,
+    "lista_base": 347200
+  },
+  {
+    "codigo": 1040315,
+    "medida": "235/60 R16",
+    "marca": "FIRESTONE",
+    "modelo": "DESTINATION AT",
+    "contado/efectivo": 267500,
+    "lista_base": 366800
+  },
+  {
+    "codigo": 1040017,
+    "medida": "235/70 R16",
+    "marca": "FIRESTONE",
+    "modelo": "DESTINATION AT",
+    "contado/efectivo": 282800,
+    "lista_base": 387900
+  },
+  {
+    "codigo": 1040018,
+    "medida": "245/70 R16",
+    "marca": "FIRESTONE",
+    "modelo": "DESTINATION AT",
+    "contado/efectivo": 298600,
+    "lista_base": 409600
+  },
+  {
+    "codigo": 1040565,
+    "medida": "205/65 R15",
+    "marca": "FIRESTONE",
+    "modelo": "DESTINATION ATX",
+    "contado/efectivo": 170200,
+    "lista_base": 233400
+  },
+  {
+    "codigo": 1040391,
+    "medida": "5 R15",
+    "marca": "FIRESTONE",
+    "modelo": "DESTINATION ATX",
+    "contado/efectivo": 290000,
+    "lista_base": 397800
+  },
+  {
+    "codigo": 1040488,
+    "medida": "215/80 R16",
+    "marca": "FIRESTONE",
+    "modelo": "DESTINATION ATX",
+    "contado/efectivo": 246200,
+    "lista_base": 337700
+  },
+  {
+    "codigo": 1040560,
+    "medida": "255/70 R16",
+    "marca": "FIRESTONE",
+    "modelo": "DESTINATION ATX",
+    "contado/efectivo": 302800,
+    "lista_base": 415200
+  },
+  {
+    "codigo": 1040467,
+    "medida": "265/70 R16",
+    "marca": "FIRESTONE",
+    "modelo": "DESTINATION ATX",
+    "contado/efectivo": 311100,
+    "lista_base": 426700
+  },
+  {
+    "codigo": 1040390,
+    "medida": "265/75 R16",
+    "marca": "FIRESTONE",
+    "modelo": "DESTINATION ATX",
+    "contado/efectivo": 362300,
+    "lista_base": 496900
+  },
+  {
+    "codigo": 1040402,
+    "medida": "265/65 R17",
+    "marca": "FIRESTONE",
+    "modelo": "DESTINATION ATX",
+    "contado/efectivo": 239800,
+    "lista_base": 328800
+  },
+  {
+    "codigo": 1040489,
+    "medida": "255/60 R18",
+    "marca": "FIRESTONE",
+    "modelo": "DESTINATION ATX",
+    "contado/efectivo": 260800,
+    "lista_base": 357600
+  },
+  {
+    "codigo": 1040536,
+    "medida": "215/65 R16",
+    "marca": "FIRESTONE",
+    "modelo": "DESTINATION LE3",
+    "contado/efectivo": 243400,
+    "lista_base": 333900
+  },
+  {
+    "codigo": 1040533,
+    "medida": "235/60 R16",
+    "marca": "FIRESTONE",
+    "modelo": "DESTINATION LE3",
+    "contado/efectivo": 225800,
+    "lista_base": 309700
+  },
+  {
+    "codigo": 1040532,
+    "medida": "225/65 R17",
+    "marca": "FIRESTONE",
+    "modelo": "DESTINATION LE3",
+    "contado/efectivo": 226600,
+    "lista_base": 310800
+  },
+  {
+    "codigo": 1040559,
+    "medida": "215/55 R18",
+    "marca": "FIRESTONE",
+    "modelo": "DESTINATION LE3",
+    "contado/efectivo": 265100,
+    "lista_base": 363500
+  },
+  {
+    "codigo": 1020011,
+    "medida": "175/65 R14",
+    "marca": "FIRESTONE",
+    "modelo": "F-600",
+    "contado/efectivo": 110700,
+    "lista_base": 151800
+  },
+  {
+    "codigo": 1020012,
+    "medida": "175/70 R14",
+    "marca": "FIRESTONE",
+    "modelo": "F-600",
+    "contado/efectivo": 114000,
+    "lista_base": 156400
+  },
+  {
+    "codigo": 1020013,
+    "medida": "185/60 R14",
+    "marca": "FIRESTONE",
+    "modelo": "F-600",
+    "contado/efectivo": 136000,
+    "lista_base": 186500
+  },
+  {
+    "codigo": 1020014,
+    "medida": "185/65 R14",
+    "marca": "FIRESTONE",
+    "modelo": "F-600",
+    "contado/efectivo": 135600,
+    "lista_base": 186000
+  },
+  {
+    "codigo": 1020015,
+    "medida": "185/70 R14",
+    "marca": "FIRESTONE",
+    "modelo": "F-600",
+    "contado/efectivo": 138500,
+    "lista_base": 189900
+  },
+  {
+    "codigo": 1020607,
+    "medida": "185/60 R15",
+    "marca": "FIRESTONE",
+    "modelo": "F-600",
+    "contado/efectivo": 132400,
+    "lista_base": 181500
+  },
+  {
+    "codigo": 1020017,
+    "medida": "195/55 R15",
+    "marca": "FIRESTONE",
+    "modelo": "F-600",
+    "contado/efectivo": 135900,
+    "lista_base": 186400
+  },
+  {
+    "codigo": 1020018,
+    "medida": "195/60 R15",
+    "marca": "FIRESTONE",
+    "modelo": "F-600",
+    "contado/efectivo": 162700,
+    "lista_base": 223100
+  },
+  {
+    "codigo": 1020418,
+    "medida": "195/65 R15",
+    "marca": "FIRESTONE",
+    "modelo": "F-600",
+    "contado/efectivo": 163300,
+    "lista_base": 224000
+  },
+  {
+    "codigo": 1020019,
+    "medida": "205/65 R15",
+    "marca": "FIRESTONE",
+    "modelo": "F-600",
+    "contado/efectivo": 176700,
+    "lista_base": 242400
+  },
+  {
+    "codigo": 1020020,
+    "medida": "205/55 R16",
+    "marca": "FIRESTONE",
+    "modelo": "F-600",
+    "contado/efectivo": 175200,
+    "lista_base": 240200
+  },
+  {
+    "codigo": 1020249,
+    "medida": "175/65 R14",
+    "marca": "FIRESTONE",
+    "modelo": "F-700",
+    "contado/efectivo": 105400,
+    "lista_base": 144600
+  },
+  {
+    "codigo": 1020258,
+    "medida": "175/70 R14",
+    "marca": "FIRESTONE",
+    "modelo": "F-700",
+    "contado/efectivo": 108600,
+    "lista_base": 148900
+  },
+  {
+    "codigo": 1020257,
+    "medida": "185/60 R14",
+    "marca": "FIRESTONE",
+    "modelo": "F-700",
+    "contado/efectivo": 129500,
+    "lista_base": 177600
+  },
+  {
+    "codigo": 1020255,
+    "medida": "185/65 R14",
+    "marca": "FIRESTONE",
+    "modelo": "F-700",
+    "contado/efectivo": 149400,
+    "lista_base": 204900
+  },
+  {
+    "codigo": 1020254,
+    "medida": "185/70 R14",
+    "marca": "FIRESTONE",
+    "modelo": "F-700",
+    "contado/efectivo": 131900,
+    "lista_base": 180900
+  },
+  {
+    "codigo": 1020767,
+    "medida": "185/60 R15",
+    "marca": "FIRESTONE",
+    "modelo": "F-700",
+    "contado/efectivo": 126100,
+    "lista_base": 172900
+  },
+  {
+    "codigo": 1020765,
+    "medida": "185/65 R15",
+    "marca": "FIRESTONE",
+    "modelo": "F-700",
+    "contado/efectivo": 149400,
+    "lista_base": 204900
+  },
+  {
+    "codigo": 1020827,
+    "medida": "195/55 R15",
+    "marca": "FIRESTONE",
+    "modelo": "F-700",
+    "contado/efectivo": 129500,
+    "lista_base": 177500
+  },
+  {
+    "codigo": 1020750,
+    "medida": "195/60 R15",
+    "marca": "FIRESTONE",
+    "modelo": "F-700",
+    "contado/efectivo": 154900,
+    "lista_base": 212500
+  },
+  {
+    "codigo": 1020760,
+    "medida": "195/65 R15",
+    "marca": "FIRESTONE",
+    "modelo": "F-700",
+    "contado/efectivo": 155500,
+    "lista_base": 213300
+  },
+  {
+    "codigo": 1020748,
+    "medida": "195/50 R16",
+    "marca": "FIRESTONE",
+    "modelo": "F-700",
+    "contado/efectivo": 255500,
+    "lista_base": 350400
+  },
+  {
+    "codigo": 1020810,
+    "medida": "195/55 R16",
+    "marca": "FIRESTONE",
+    "modelo": "F-700",
+    "contado/efectivo": 228900,
+    "lista_base": 314000
+  },
+  {
+    "codigo": 1020841,
+    "medida": "205/55 R16",
+    "marca": "FIRESTONE",
+    "modelo": "F-700",
+    "contado/efectivo": 166800,
+    "lista_base": 228800
+  },
+  {
+    "codigo": 1020764,
+    "medida": "205/60 R16",
+    "marca": "FIRESTONE",
+    "modelo": "F-700",
+    "contado/efectivo": 231400,
+    "lista_base": 317400
+  },
+  {
+    "codigo": 1020775,
+    "medida": "205/50 R17",
+    "marca": "FIRESTONE",
+    "modelo": "F-700 +",
+    "contado/efectivo": 285600,
+    "lista_base": 391700
+  },
+  {
+    "codigo": 1020779,
+    "medida": "215/45 R17",
+    "marca": "FIRESTONE",
+    "modelo": "F-700 +",
+    "contado/efectivo": 315900,
+    "lista_base": 433200
+  },
+  {
+    "codigo": 1020777,
+    "medida": "215/50 R17",
+    "marca": "FIRESTONE",
+    "modelo": "F-700 +",
+    "contado/efectivo": 208300,
+    "lista_base": 285600
+  },
+  {
+    "codigo": 1020776,
+    "medida": "225/45 R17",
+    "marca": "FIRESTONE",
+    "modelo": "F-700 +",
+    "contado/efectivo": 217200,
+    "lista_base": 297800
+  },
+  {
+    "codigo": 1020778,
+    "medida": "225/50 R17",
+    "marca": "FIRESTONE",
+    "modelo": "F-700 +",
+    "contado/efectivo": 340400,
+    "lista_base": 466900
+  },
+  {
+    "codigo": 1020780,
+    "medida": "225/45 R18",
+    "marca": "FIRESTONE",
+    "modelo": "F-700 +",
+    "contado/efectivo": 396100,
+    "lista_base": 543200
+  },
+  {
+    "codigo": 1020033,
+    "medida": "205/60 R15",
+    "marca": "FIRESTONE",
+    "modelo": "FIREHAWK 900",
+    "contado/efectivo": 276000,
+    "lista_base": 378500
+  },
+  {
+    "codigo": 1020021,
+    "medida": "185/55 R15",
+    "marca": "FIRESTONE",
+    "modelo": "FIREHAWK GT",
+    "contado/efectivo": 260600,
+    "lista_base": 357500
+  },
+  {
+    "codigo": 1060095,
+    "medida": "215/75 R17",
+    "marca": "FIRESTONE",
+    "modelo": "FS538 CLASSIC (LINEAL )",
+    "contado/efectivo": 350800,
+    "lista_base": 481000
+  },
+  {
+    "codigo": 1020859,
+    "medida": "185/65 R14",
+    "marca": "FIRESTONE",
+    "modelo": "FUZION TOURING",
+    "contado/efectivo": 125700,
+    "lista_base": 172400
+  },
+  {
+    "codigo": 1020022,
+    "medida": "175/65 R14",
+    "marca": "FIRESTONE",
+    "modelo": "MULTIHAWK",
+    "contado/efectivo": 154400,
+    "lista_base": 211800
+  },
+  {
+    "codigo": 1060090,
+    "medida": "295/80 R22",
+    "marca": "KETER",
+    "modelo": "KTHS5 ( LINEAL )",
+    "contado/efectivo": 596000,
+    "lista_base": 817400
+  },
+  {
+    "codigo": 1020964,
+    "medida": "215/50 R17",
+    "marca": "LING LONG",
+    "modelo": "COMFORT MASTER",
+    "contado/efectivo": 103000,
+    "lista_base": 141300
+  },
+  {
+    "codigo": 1010058,
+    "medida": "175/70 R13",
+    "marca": "LING LONG",
+    "modelo": "GREENMAX ET",
+    "contado/efectivo": 73000,
+    "lista_base": 100100
+  },
+  {
+    "codigo": 1020967,
+    "medida": "185/60 R14",
+    "marca": "LING LONG",
+    "modelo": "GREENMAX HP010",
+    "contado/efectivo": 74400,
+    "lista_base": 102000
+  },
+  {
+    "codigo": 1040550,
+    "medida": "245/70 R16",
+    "marca": "MILEKING",
+    "modelo": "HT MK837",
+    "contado/efectivo": 181500,
+    "lista_base": 248900
+  },
+  {
+    "codigo": 1040527,
+    "medida": "265/70 R16",
+    "marca": "MILEKING",
+    "modelo": "AT MK828",
+    "contado/efectivo": 237600,
+    "lista_base": 325900
+  },
+  {
+    "codigo": 1040545,
+    "medida": "265/65 R17",
+    "marca": "MILEKING",
+    "modelo": "AT MK828",
+    "contado/efectivo": 275200,
+    "lista_base": 377400
+  },
+  {
+    "codigo": 1020863,
+    "medida": "175/70 R13",
+    "marca": "MILEKING",
+    "modelo": "EX-COMFORT",
+    "contado/efectivo": 89900,
+    "lista_base": 123300
+  },
+  {
+    "codigo": 1020862,
+    "medida": "175/65 R14",
+    "marca": "MILEKING",
+    "modelo": "EX-COMFORT",
+    "contado/efectivo": 73300,
+    "lista_base": 100600
+  },
+  {
+    "codigo": 1020864,
+    "medida": "185/60 R15",
+    "marca": "MILEKING",
+    "modelo": "EX-COMFORT",
+    "contado/efectivo": 100200,
+    "lista_base": 137300
+  },
+  {
+    "codigo": 1020865,
+    "medida": "185/65 R15",
+    "marca": "MILEKING",
+    "modelo": "EX-COMFORT",
+    "contado/efectivo": 129600,
+    "lista_base": 177700
+  },
+  {
+    "codigo": 1020866,
+    "medida": "195/55 R15",
+    "marca": "MILEKING",
+    "modelo": "EX-COMFORT",
+    "contado/efectivo": 102900,
+    "lista_base": 141200
+  },
+  {
+    "codigo": 1020869,
+    "medida": "205/55 R16",
+    "marca": "MILEKING",
+    "modelo": "EX-COMFORT",
+    "contado/efectivo": 104000,
+    "lista_base": 142700
+  },
+  {
+    "codigo": 1020948,
+    "medida": "205/60 R16",
+    "marca": "MILEKING",
+    "modelo": "EX-COMFORT",
+    "contado/efectivo": 139400,
+    "lista_base": 191200
+  },
+  {
+    "codigo": 1020950,
+    "medida": "175/70 R14",
+    "marca": "MILEKING",
+    "modelo": "MK665",
+    "contado/efectivo": 93800,
+    "lista_base": 128600
+  },
+  {
+    "codigo": 1020835,
+    "medida": "165/70 R13",
+    "marca": "MILEKING",
+    "modelo": "MK667",
+    "contado/efectivo": 72600,
+    "lista_base": 99600
+  },
+  {
+    "codigo": 1020836,
+    "medida": "175/70 R13",
+    "marca": "MILEKING",
+    "modelo": "MK667",
+    "contado/efectivo": 78200,
+    "lista_base": 107200
+  },
+  {
+    "codigo": 1020973,
+    "medida": "175/65 R14",
+    "marca": "MILEKING",
+    "modelo": "MK667",
+    "contado/efectivo": 73300,
+    "lista_base": 100600
+  },
+  {
+    "codigo": 1020872,
+    "medida": "185/60 R14",
+    "marca": "MILEKING",
+    "modelo": "MK667",
+    "contado/efectivo": 85700,
+    "lista_base": 117500
+  },
+  {
+    "codigo": 1020980,
+    "medida": "185/65 R14",
+    "marca": "MILEKING",
+    "modelo": "MK667",
+    "contado/efectivo": 87800,
+    "lista_base": 120500
+  },
+  {
+    "codigo": 1020873,
+    "medida": "185/70 R14",
+    "marca": "MILEKING",
+    "modelo": "MK667",
+    "contado/efectivo": 90700,
+    "lista_base": 124400
+  },
+  {
+    "codigo": 1020981,
+    "medida": "185/60 R15",
+    "marca": "MILEKING",
+    "modelo": "MK667",
+    "contado/efectivo": 95700,
+    "lista_base": 131200
+  },
+  {
+    "codigo": 1020974,
+    "medida": "185/65 R15",
+    "marca": "MILEKING",
+    "modelo": "MK667",
+    "contado/efectivo": 93500,
+    "lista_base": 128200
+  },
+  {
+    "codigo": 1020982,
+    "medida": "195/65 R15",
+    "marca": "MILEKING",
+    "modelo": "MK667",
+    "contado/efectivo": 111400,
+    "lista_base": 152800
+  },
+  {
+    "codigo": 1020837,
+    "medida": "205/55 R16",
+    "marca": "MILEKING",
+    "modelo": "MK667",
+    "contado/efectivo": 104000,
+    "lista_base": 142700
+  },
+  {
+    "codigo": 1020976,
+    "medida": "195/55 R15",
+    "marca": "MILEKING",
+    "modelo": "MK668",
+    "contado/efectivo": 102900,
+    "lista_base": 141200
+  },
+  {
+    "codigo": 1020978,
+    "medida": "195/60 R15",
+    "marca": "MILEKING",
+    "modelo": "MK668",
+    "contado/efectivo": 109900,
+    "lista_base": 150700
+  },
+  {
+    "codigo": 1021021,
+    "medida": "205/60 R15",
+    "marca": "MILEKING",
+    "modelo": "MK668",
+    "contado/efectivo": 118600,
+    "lista_base": 162700
+  },
+  {
+    "codigo": 1020979,
+    "medida": "205/65 R15",
+    "marca": "MILEKING",
+    "modelo": "MK668",
+    "contado/efectivo": 117900,
+    "lista_base": 161700
+  },
+  {
+    "codigo": 1020886,
+    "medida": "195/50 R16",
+    "marca": "MILEKING",
+    "modelo": "MK668",
+    "contado/efectivo": 103200,
+    "lista_base": 141500
+  },
+  {
+    "codigo": 1020876,
+    "medida": "195/55 R16",
+    "marca": "MILEKING",
+    "modelo": "MK668",
+    "contado/efectivo": 104800,
+    "lista_base": 143700
+  },
+  {
+    "codigo": 1040499,
+    "medida": "215/65 R16",
+    "marca": "MILEKING",
+    "modelo": "MK668",
+    "contado/efectivo": 137500,
+    "lista_base": 188600
+  },
+  {
+    "codigo": 1020877,
+    "medida": "205/55 R17",
+    "marca": "MILEKING",
+    "modelo": "MK668",
+    "contado/efectivo": 116400,
+    "lista_base": 159600
+  },
+  {
+    "codigo": 1040500,
+    "medida": "225/65 R17",
+    "marca": "MILEKING",
+    "modelo": "MK668",
+    "contado/efectivo": 132200,
+    "lista_base": 181300
+  },
+  {
+    "codigo": 1040543,
+    "medida": "205/75 R16",
+    "marca": "MILEKING",
+    "modelo": "MK737",
+    "contado/efectivo": 162400,
+    "lista_base": 222700
+  },
+  {
+    "codigo": 1020884,
+    "medida": "205/45 R17",
+    "marca": "MILEKING",
+    "modelo": "MK921",
+    "contado/efectivo": 119800,
+    "lista_base": 164300
+  },
+  {
+    "codigo": 1021017,
+    "medida": "215/50 R17",
+    "marca": "MILEKING",
+    "modelo": "MK927",
+    "contado/efectivo": 129300,
+    "lista_base": 177400
+  },
+  {
+    "codigo": 1021016,
+    "medida": "225/45 R17",
+    "marca": "MILEKING",
+    "modelo": "MK927",
+    "contado/efectivo": 119100,
+    "lista_base": 163300
+  },
+  {
+    "codigo": 1020203,
+    "medida": "195/55 R16",
+    "marca": "NEXEN",
+    "modelo": "N BLUE",
+    "contado/efectivo": 175000,
+    "lista_base": 240000
+  },
+  {
+    "codigo": 1020193,
+    "medida": "205/60 R15",
+    "marca": "PACE",
+    "modelo": "PC-20",
+    "contado/efectivo": 174900,
+    "lista_base": 239900
+  },
+  {
+    "codigo": 1030023,
+    "medida": "265/70 R16",
+    "marca": "PACE",
+    "modelo": "TOLEDO",
+    "contado/efectivo": 286200,
+    "lista_base": 392600
+  },
+  {
+    "codigo": 1040103,
+    "medida": "195/75 R16",
+    "marca": "PIRELLI",
+    "modelo": "CHRONO",
+    "contado/efectivo": 311000,
+    "lista_base": 426500
+  },
+  {
+    "codigo": 1100002,
+    "medida": "120/80 -18",
+    "marca": "PIRELLI",
+    "modelo": "MT 60",
+    "contado/efectivo": 206200,
+    "lista_base": 282900
+  },
+  {
+    "codigo": 1021013,
+    "medida": "165/70 R13",
+    "marca": "SPEEDMAX",
+    "modelo": "COMFORT HARMONIC",
+    "contado/efectivo": 61600,
+    "lista_base": 84400
+  },
+  {
+    "codigo": 1021037,
+    "medida": "175/70 R14",
+    "marca": "SUNFULL",
+    "modelo": "SF-688",
+    "contado/efectivo": 70000,
+    "lista_base": 96000
+  },
+  {
+    "codigo": 1021042,
+    "medida": "195/60 R15",
+    "marca": "SUNFULL",
+    "modelo": "SF-688",
+    "contado/efectivo": 81700,
+    "lista_base": 112000
+  },
+  {
+    "codigo": 1021020,
+    "medida": "175/65 R14",
+    "marca": "TIANFU",
+    "modelo": "REFZ RD-103",
+    "contado/efectivo": 88000,
+    "lista_base": 120700
+  },
+  {
+    "codigo": 1020916,
+    "medida": "225/45 R18",
+    "marca": "TORQUE",
+    "modelo": "TQ 901",
+    "contado/efectivo": 167000,
+    "lista_base": 229000
+  },
+  {
+    "codigo": 1040506,
+    "medida": "195/65 R16",
+    "marca": "TORQUE",
+    "modelo": "TQ-05 REFORZADO",
+    "contado/efectivo": 181700,
+    "lista_base": 249100
+  },
+  {
+    "codigo": 1040223,
+    "medida": "255/50 R20",
+    "marca": "TORQUE",
+    "modelo": "TQA 660",
+    "contado/efectivo": 314800,
+    "lista_base": 431700
+  },
+  {
+    "codigo": 1040508,
+    "medida": "225/60 R18",
+    "marca": "TORQUE",
+    "modelo": "TQHT701",
+    "contado/efectivo": 164400,
+    "lista_base": 225500
+  }
+]

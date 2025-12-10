@@ -13,11 +13,12 @@ function toArgentinaTime(fechaReservaStr: string): string {
     const mmm = String(date.getMinutes()).padStart(2, '0');
     return `${yyyy}-${mm}-${dd} ${hhh}:${mmm}`;
 }
+import { executeDbQuery } from '../utils/dbHandler';
 import { JsonBlockFinder } from "../Api-Google/JsonBlockFinder";
 import { CalendarEvents } from "../Api-Google/calendarEvents";
 import fs from 'fs';
 import moment from 'moment';
-import { handleToolFunctionCall } from '../Api-BotAsistente/handleToolFunctionCall.js';
+//import { handleToolFunctionCall } from '../Api-BotAsistente/handleToolFunctionCall.js';
 
 // Mapa global para bloquear usuarios de WhatsApp durante operaciones API
 const userApiBlockMap = new Map();
@@ -70,18 +71,18 @@ export class AssistantResponseProcessor {
         ASSISTANT_ID: string
     ) {
         // Soporte para tool/function call genérico
-        if (response && typeof response === 'object' && response.tool_call) {
-            // Espera que response.tool_call tenga { name, parameters }
-            const toolResponse = handleToolFunctionCall(response.tool_call);
-            // Enviar la respuesta al asistente (como tool response)
-            await flowDynamic([{ body: JSON.stringify(toolResponse, null, 2) }]);
-            return;
-        }
+        // if (response && typeof response === 'object' && response.tool_call) {
+        //     // Espera que response.tool_call tenga { name, parameters }
+        //     const toolResponse = handleToolFunctionCall(response.tool_call);
+        //     // Enviar la respuesta al asistente (como tool response)
+        //     await flowDynamic([{ body: JSON.stringify(toolResponse, null, 2) }]);
+        //     return;
+        // }
         // Log de mensaje entrante del asistente (antes de cualquier filtro)
         if (ctx && ctx.type === 'webchat') {
-            console.log('[Webchat Debug] Mensaje entrante del asistente:', response);
+            // console.log('[Webchat Debug] Mensaje entrante del asistente:', response);
         } else {
-            console.log('[WhatsApp Debug] Mensaje entrante del asistente:', response);
+            // console.log('[WhatsApp Debug] Mensaje entrante del asistente:', response);
             // Si el usuario está bloqueado por una operación API, evitar procesar nuevos mensajes
             if (userApiBlockMap.has(ctx.from)) {
                 console.log(`[API Block] Mensaje ignorado de usuario bloqueado: ${ctx.from}`);
@@ -93,10 +94,44 @@ export class AssistantResponseProcessor {
 
         // Log de mensaje saliente al usuario (antes de cualquier filtro)
         if (ctx && ctx.type === 'webchat') {
-            console.log('[Webchat Debug] Mensaje saliente al usuario (sin filtrar):', textResponse);
+            // console.log('[Webchat Debug] Mensaje saliente al usuario (sin filtrar):', textResponse);
         } else {
-            console.log('[WhatsApp Debug] Mensaje saliente al usuario (sin filtrar):', textResponse);
+            // console.log('[WhatsApp Debug] Mensaje saliente al usuario (sin filtrar):', textResponse);
         }
+        // 0) Detectar y procesar DB QUERY [DB_QUERY: ...]
+        const dbQueryRegex = /\[DB_QUERY\s*:\s*([\s\S]*?)\]/i;
+        const dbMatch = textResponse.match(dbQueryRegex);
+        if (dbMatch) {
+            const sqlQuery = dbMatch[1].trim();
+            if (ctx && ctx.type === 'webchat') console.log(`[Webchat Debug] 🔄 Detectada solicitud de DB Query: ${sqlQuery}`);
+            else console.log(`[WhatsApp Debug] 🔄 Detectada solicitud de DB Query: ${sqlQuery}`);
+            
+            // Ejecutar Query
+            const queryResult = await executeDbQuery(sqlQuery);
+            console.log(`[AssistantResponseProcessor] 📝 Resultado DB RAW:`, queryResult.substring(0, 500) + (queryResult.length > 500 ? "..." : "")); // Loguear primeros 500 chars
+            const feedbackMsg = `[SYSTEM_DB_RESULT]: ${queryResult}`;
+            
+            // console.log(`[AssistantResponseProcessor] 📤 Enviando resultado DB al asistente...`);
+
+            // Esperar 5 segundos para asegurar que el Run anterior haya finalizado en OpenAI
+            await new Promise(resolve => setTimeout(resolve, 5000));
+
+            // Obtener nueva respuesta del asistente
+            let newResponse: any;
+            try {
+                 newResponse = await getAssistantResponse(ASSISTANT_ID, feedbackMsg, state, "Error procesando resultado DB.", ctx ? ctx.from : null, ctx && ctx.thread_id ? ctx.thread_id : null);
+            } catch (err) {
+                console.error("Error al obtener respuesta recursiva:", err);
+                return;
+            }
+            
+            // Recursión: procesar la nueva respuesta
+            await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
+                newResponse, ctx, flowDynamic, state, provider, gotoFlow, getAssistantResponse, ASSISTANT_ID
+            );
+            return; // Terminar ejecución actual
+        }
+
         // 1) Extraer bloque [API] ... [/API]
         const apiBlockRegex = /\[API\](.*?)\[\/API\]/is;
         const match = textResponse.match(apiBlockRegex);
@@ -241,7 +276,7 @@ export class AssistantResponseProcessor {
                 try {
                     await flowDynamic([{ body: limpiarBloquesJSON(String(assistantApiResponse)).trim() }]);
                     if (ctx && ctx.type !== 'webchat') {
-                        console.log('[WhatsApp Debug] flowDynamic ejecutado correctamente');
+                        // console.log('[WhatsApp Debug] flowDynamic ejecutado correctamente');
                     }
                 } catch (err) {
                     console.error('[WhatsApp Debug] Error en flowDynamic:', err);
@@ -254,7 +289,7 @@ export class AssistantResponseProcessor {
                     try {
                         await flowDynamic([{ body: chunk.trim() }]);
                         if (ctx && ctx.type !== 'webchat') {
-                            console.log('[WhatsApp Debug] flowDynamic ejecutado correctamente');
+                            // console.log('[WhatsApp Debug] flowDynamic ejecutado correctamente');
                         }
                     } catch (err) {
                         console.error('[WhatsApp Debug] Error en flowDynamic:', err);

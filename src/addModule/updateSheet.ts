@@ -4,6 +4,7 @@ import path from "path";
 import dotenv from "dotenv";
 import OpenAI from "openai";
 import * as glob from "glob";
+import { createClient } from "@supabase/supabase-js";
 
 dotenv.config();
 
@@ -14,6 +15,10 @@ const SHEET_IDS = (process.env.SHEET_ID_UPDATE || "")
     .filter(Boolean);
 const VECTOR_STORE_ID = process.env.VECTOR_STORE_ID ?? "";
 let currentFileId: string | null = null;
+
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_KEY;
+const supabase = (supabaseUrl && supabaseKey) ? createClient(supabaseUrl, supabaseKey) : null;
 
 // Construir credenciales desde variables de entorno
 const credentials = {
@@ -34,6 +39,45 @@ export async function updateAllSheets() {
     for (const SHEET_ID of SHEET_IDS) {
         await processSheetById(SHEET_ID);
     }
+}
+
+// Helper function to sanitize valid table name
+const sanitizeTableName = (name: string) => {
+    return name.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '');
+};
+
+// Helper function to sanitize column names
+const sanitizeColumnName = (name: string) => {
+    return name.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '');
+};
+
+async function ensureTableExists(tableName: string, headers: string[]) {
+    if (!supabase) return;
+    
+    // Check if table exists by selecting 1 row
+    const check = await supabase.from(tableName).select('*').limit(1);
+    
+    if (check.error && (check.error.code === '42P01' || check.error.code === 'PGRST205')) { // undefined_table or cache miss (table likely missing)
+        console.log(`⚠️ La tabla '${tableName}' no existe. Intentando crearla via RPC...`);
+        
+        // Construct Create Table SQL
+        const columnsSql = headers.map(h => `${sanitizeColumnName(h)} TEXT`).join(', ');
+        const createSql = `CREATE TABLE IF NOT EXISTS ${tableName} (id uuid DEFAULT gen_random_uuid() PRIMARY KEY, ${columnsSql}, created_at TIMESTAMPTZ DEFAULT NOW());`;
+        
+        const rpc = await supabase.rpc('exec_sql', { query: createSql });
+        if (rpc.error) {
+            console.error(`❌ Error al intentar crear la tabla '${tableName}'. Asegúrate de tener una función RPC 'exec_sql' en Supabase.`);
+            console.error("RPC Error Details:", JSON.stringify(rpc.error, null, 2));
+            console.error("Query intentada:", createSql);
+            return false;
+        }
+        console.log(`✅ Tabla '${tableName}' creada exitosamente.`);
+        return true;
+    } else if (check.error) {
+        console.error("Error verificando tabla:", check.error);
+        return false;
+    }
+    return true; // Table exists
 }
 
 // Procesa un sheet por ID, obtiene el nombre real y ejecuta la lógica
@@ -148,6 +192,36 @@ async function processSheetById(SHEET_ID: string) {
         const jsonData = JSON.stringify(formattedData, null, 2);
         fs.writeFileSync(TXT_PATH, jsonData, "utf8");
         console.log(`📂 Datos guardados en archivo de texto: ${TXT_PATH}`);
+
+        // --- SUPABASE INTEGRATION START ---
+        if (supabase) {
+            const tableName = sanitizeTableName(SHEET_NAME);
+            const headersSanitized = headers.map(h => sanitizeColumnName(h));
+            
+            // Ensure table exists
+            const tableReady = await ensureTableExists(tableName, headersSanitized);
+            
+            if (tableReady) {
+                // Map data to sanitized keys
+                const supabaseData = formattedData.map(row => {
+                    const newRow: any = {};
+                    Object.keys(row).forEach(key => {
+                        newRow[sanitizeColumnName(key)] = row[key];
+                    });
+                    return newRow;
+                });
+                
+                const { error } = await supabase.from(tableName).upsert(supabaseData);
+                if (error) {
+                    console.error(`❌ Error uploading to Supabase table '${tableName}':`, error.message);
+                } else {
+                    console.log(`✅ Datos cargados exitosamente en Supabase tabla '${tableName}'.`);
+                }
+            }
+        } else {
+             console.warn("⚠️ No se encontraron credenciales de Supabase (SUPABASE_URL, SUPABASE_KEY). Saltando integración.");
+        }
+        // --- SUPABASE INTEGRATION END ---
 
         // Enviar el archivo de texto al vector store
         const success = await uploadDataToAssistant(TXT_PATH, SHEET_ID);

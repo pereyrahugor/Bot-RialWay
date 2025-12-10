@@ -1,3 +1,4 @@
+import { executeDbQuery } from "./utils/dbHandler";
 // ...existing imports y lógica del bot...
 import "dotenv/config";
 import path from 'path';
@@ -17,12 +18,12 @@ import { welcomeFlowVoice } from "./Flows/welcomeFlowVoice";
 import { welcomeFlowImg } from "./Flows/welcomeFlowImg";
 import { welcomeFlowDoc } from "./Flows/welcomeFlowDoc";
 import { locationFlow } from "./Flows/locationFlow";
+import { AssistantResponseProcessor } from "./utils/AssistantResponseProcessor";
 import { updateMain } from "./addModule/updateMain";
 import { ErrorReporter } from "./utils/errorReporter";
 import { AssistantBridge } from './utils-web/AssistantBridge';
 import { WebChatManager } from './utils-web/WebChatManager';
 import { fileURLToPath } from 'url';
-import { AssistantResponseProcessor } from "./utils/AssistantResponseProcessor";
 import { getArgentinaDatetimeString } from "./utils/ArgentinaTime";
 import { RailwayApi } from "./Api-RailWay/Railway";
 
@@ -172,22 +173,25 @@ export const processUserMessage = async (
         //     return gotoFlow(imgResponseFlow);
         // }
 
-        // Usar el nuevo wrapper para obtener respuesta y thread_id
-            const response = await getAssistantResponse(ASSISTANT_ID, ctx.body, state, "Por favor, reenvia el msj anterior ya que no llego al usuario.", ctx.from, ctx.thread_id);
-            // LOG: Mostrar respuesta cruda del asistente
-            console.log('Respuesta cruda del asistente:', JSON.stringify(response, null, 2));
+            // Usar el nuevo wrapper para obtener respuesta y thread_id
+            const response = (await getAssistantResponse(ASSISTANT_ID, ctx.body, state, "Por favor, reenvia el msj anterior ya que no llego al usuario.", ctx.from, ctx.thread_id)) as string;
+            console.log('🔍 DEBUG RAW ASSISTANT MSG (WhatsApp):', JSON.stringify(response));
 
-        // Procesar la respuesta del asistente y etiquetas [API]
-        await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
-            response,
-            ctx,
-            flowDynamic,
-            state,
-            provider,
-            gotoFlow,
-            getAssistantResponse,
-            ASSISTANT_ID
-        );
+            // Delegar procesamiento al AssistantResponseProcessor (Maneja DB_QUERY y envios)
+            await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
+                response,
+                ctx,
+                flowDynamic,
+                state,
+                provider,
+                gotoFlow,
+                getAssistantResponse,
+                ASSISTANT_ID
+            );
+
+        // Si es un contacto con nombre, intentamos guardar el nombre (si no lo tenemos)
+        // en algún lugar, o manejarlo como variable de sesión.
+        // Aquí podrías agregar lógica para actualizar nombre en sheet si el asistente lo extrajo.
         return state;
         
     } catch (error) {
@@ -248,8 +252,7 @@ const main = async () => {
                 // ...existing code...
                 const adapterFlow = createFlow([welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowDoc, locationFlow, idleFlow]);
                 const adapterProvider = createProvider(BaileysProvider, {
-                    version: [2, 3000, 1030817285], // Actual funcional, algunos dispositivos no funcionan (falla la conexión)
-                    //version: [2, 3000, 1027934701], // Version actual, test para comprobar conexion en dispositivos con problemas
+                    version: [2, 3000, 1030817285],
                     groupsIgnore: false,
                     readStatus: false,
                 });
@@ -424,13 +427,16 @@ const main = async () => {
                                             };
                                             // Usar la lógica principal del bot (processUserMessage)
                                             let replyText = '';
-                                            // Simular flowDynamic para capturar la respuesta
+                                            // Simular flowDynamic para capturar la respuesta (acumulativo)
                                             const flowDynamic = async (arr) => {
+                                                let textToAdd = "";
                                                 if (Array.isArray(arr)) {
-                                                    replyText = arr.map(a => a.body).join('\n');
+                                                   textToAdd = arr.map(a => a.body).join('\n');
                                                 } else if (typeof arr === 'string') {
-                                                    replyText = arr;
+                                                   textToAdd = arr;
                                                 }
+                                                if (replyText) replyText += "\n\n" + textToAdd;
+                                                else replyText = textToAdd;
                                             };
                                                 // Usar WebChatManager y WebChatSession para gestionar la sesión webchat
                                                 const { getOrCreateThreadId, sendMessageToThread, deleteThread } = await import('./utils-web/openaiThreadBridge');
@@ -447,9 +453,43 @@ const main = async () => {
                                                     }
                                                     session.addUserMessage(finalMessage);
                                                     threadId = await getOrCreateThreadId(session);
-                                                    const reply = await sendMessageToThread(threadId, finalMessage, ASSISTANT_ID);
-                                                    session.addAssistantMessage(reply);
-                                                    replyText = reply;
+                                                    
+                                                    // Mock state para compatibilidad con AssistantResponseProcessor
+                                                    const state = {
+                                                        get: (key) => key === 'thread_id' ? session.thread_id : undefined,
+                                                        update: async () => {}, // No necesitamos historial aqui, lo maneja session
+                                                        clear: async () => session.clear(),
+                                                    };
+
+                                                     // Adaptador para getAssistantResponse usando sendMessageToThread
+                                                    const webChatAdapterFn = async (assistantId, message, state, fallback, userId, threadId) => {
+                                                        try {
+                                                            return await sendMessageToThread(threadId, message, assistantId);
+                                                        } catch (e) {
+                                                            console.error("Error en webChatAdapterFn:", e);
+                                                            return fallback || "";
+                                                        }
+                                                    };
+
+                                                    // Obtener primera respuesta
+                                                    const reply = await webChatAdapterFn(ASSISTANT_ID, finalMessage, state, "", ip, threadId);
+                                                    console.log('🔍 DEBUG RAW ASSISTANT MSG (WebChat):', JSON.stringify(reply));
+
+                                                    // Usar AssistantResponseProcessor
+                                                    const ctxMock = { type: 'webchat', from: ip, thread_id: threadId, body: finalMessage };
+                                                    
+                                                    await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
+                                                        reply,
+                                                        ctxMock,
+                                                        flowDynamic,
+                                                        state,
+                                                        undefined,
+                                                        () => {},
+                                                        webChatAdapterFn,
+                                                        ASSISTANT_ID
+                                                    );
+
+                                                    session.addAssistantMessage(replyText);
                                             }
                                             res.setHeader('Content-Type', 'application/json');
                                             res.end(JSON.stringify({ reply: replyText }));
