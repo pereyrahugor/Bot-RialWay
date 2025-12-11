@@ -75,6 +75,18 @@ async function ensureTableExists(tableName: string, headers: string[]) {
             return false;
         }
         console.log(`✅ Tabla '${tableName}' creada exitosamente.`);
+        
+        // Esperar a que el caché del esquema se actualice (PostgREST puede tardar unos segundos)
+        console.log(`⏳ Esperando a que Supabase refresque el caché del esquema para '${tableName}'...`);
+        for (let i = 0; i < 10; i++) {
+            await new Promise(r => setTimeout(r, 2000));
+            const recheck = await supabase.from(tableName).select('*').limit(1);
+            if (!recheck.error) {
+                console.log(`✅ Tabla '${tableName}' verificada y visible para la API.`);
+                return true;
+            }
+        }
+        console.warn(`⚠️ La tabla '${tableName}' fue creada pero la API aún no la reconoce. La inserción podría fallar.`);
         return true;
     } else if (check.error) {
         console.error("Error verificando tabla:", check.error);
