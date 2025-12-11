@@ -327,6 +327,8 @@ export class AssistantResponseProcessor {
                 if (chunk.trim().length > 0) {
                     try {
                         await flowDynamic([{ body: chunk.trim() }]);
+                        // Pequeña pausa para evitar que WhatsApp ignore mensajes muy rápidos
+                        await new Promise(r => setTimeout(r, 600)); 
                         if (ctx && ctx.type !== 'webchat') {
                             // console.log('[WhatsApp Debug] flowDynamic ejecutado correctamente');
                         }
