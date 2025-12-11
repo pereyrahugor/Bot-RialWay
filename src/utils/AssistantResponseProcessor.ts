@@ -58,7 +58,10 @@ const userApiBlockMap = new Map();
 const API_BLOCK_TIMEOUT_MS = 1000; // 5 segundos
 
 function limpiarBloquesJSON(texto: string): string {
-    return texto.replace(/\[API\][\s\S]*?\[\/API\]/g, "");
+    let limpio = texto.replace(/\[API\][\s\S]*?\[\/API\]/g, "");
+    // Eliminar referencias de OpenAI tipo 【4:0†archivo.pdf】 o variantes
+    limpio = limpio.replace(/【.*?】/g, "");
+    return limpio;
 }
 
 function corregirFechaAnioVigente(fechaReservaStr: string): string {
