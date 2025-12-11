@@ -170,28 +170,19 @@ async function processSheetById(SHEET_ID: string) {
             .map((row) => {
                 const obj: Record<string, any> = {};
                 headers.forEach((header, idx) => {
-                    let value = (row[idx] || "").trim();
-                    // Si el valor parece un número (con o sin formato de moneda), convertir a number
-                    if (/^\$?\s*[\d.,]+$/.test(value)) {
-                        value = value.replace(/[^\d,]/g, "");
-                        if (value.includes(",")) {
-                            value = value.replace(/\./g, "");
-                            value = value.replace(/,/, ".");
-                        }
-                        const num = Number(value);
-                        obj[header] = isNaN(num) ? value : num;
+                    // Obtener valor crudo. Google Sheets ya devuelve números como números si el formato de celda es automático.
+                    let cellValue = row[idx];
+                    
+                    if (cellValue === undefined || cellValue === null) {
+                        cellValue = "";
+                    }
+
+                    // Si es string, solo hacemos trim.
+                    if (typeof cellValue === "string") {
+                         obj[header] = cellValue.trim();
                     } else {
-                        // Si el valor contiene comas y al menos dos elementos, convertir a array
-                        if (typeof value === "string" && value.includes(",")) {
-                            const arr = value.split(",").map(v => v.trim()).filter(v => v.length > 0);
-                            if (arr.length > 1) {
-                                obj[header] = arr;
-                            } else {
-                                obj[header] = value;
-                            }
-                        } else {
-                            obj[header] = value;
-                        }
+                         // Si es número u otro tipo, lo guardamos tal cual
+                         obj[header] = cellValue;
                     }
                 });
                 return obj;
