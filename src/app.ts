@@ -10,6 +10,7 @@ let botEnabled = true;
 import { createBot, createProvider, createFlow, addKeyword, EVENTS } from "@builderbot/bot";
 import { MemoryDB } from "@builderbot/bot";
 import { BaileysProvider } from "builderbot-provider-sherpa";
+import { restoreSessionFromDb, startSessionSync } from "./utils/sessionSync";
 import { toAsk, httpInject } from "@builderbot-plugins/openai-assistants";
 import { typing } from "./utils/presence";
 import { idleFlow } from "./Flows/idleFlow";
@@ -47,6 +48,7 @@ const userQueues = new Map();
 const userLocks = new Map();
 
 const adapterProvider = createProvider(BaileysProvider, {
+    version: [2, 3000, 1030817285],
     groupsIgnore: false,
     readStatus: false,
 });
@@ -245,23 +247,26 @@ const main = async () => {
     // // Paso 1: Inicializar datos desde Google Sheets
      console.log("📌 Inicializando datos desde Google Sheets...");
 
+    // Restaurar sesión de WhatsApp desde Supabase si existe
+    await restoreSessionFromDb();
+
     // Cargar todas las hojas principales con una sola función reutilizable
     await updateMain();
 
 
                 // ...existing code...
                 const adapterFlow = createFlow([welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowDoc, locationFlow, idleFlow]);
-                const adapterProvider = createProvider(BaileysProvider, {
-                    version: [2, 3000, 1030817285],
-                    groupsIgnore: false,
-                    readStatus: false,
-                });
+
                 const adapterDB = new MemoryDB();
                 const { httpServer } = await createBot({
                     flow: adapterFlow,
                     provider: adapterProvider,
                     database: adapterDB,
                 });
+
+                // Iniciar sincronización periódica de sesión hacia Supabase
+                startSessionSync();
+
                 httpInject(adapterProvider.server);
 
                 // Usar la instancia Polka (adapterProvider.server) para rutas

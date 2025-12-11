@@ -211,7 +211,20 @@ async function processSheetById(SHEET_ID: string) {
                     return newRow;
                 });
                 
-                const { error } = await supabase.from(tableName).upsert(supabaseData);
+                // Limpieza previa: Truncar para reemplazo total
+                const truncateRes = await supabase.rpc('exec_sql', { query: `TRUNCATE TABLE ${tableName}` });
+                
+                if (truncateRes.error) {
+                     // Fallback a DELETE estándar si RPC falla (o no existe)
+                     // console.warn(`[Supabase] Script exec_sql falló, usando DELETE ALL convencional...`);
+                     const { error: delErr } = await supabase.from(tableName).delete().not('id', 'is', null);
+                     if (delErr) console.error(`[Supabase] Error limpiando tabla:`, delErr.message);
+                } else {
+                     console.log(`[Supabase] 🧹 Tabla '${tableName}' truncada correctamente.`);
+                }
+
+                // Insertar nuevos datos (Insert es más rápido que Upsert en tabla vacía)
+                const { error } = await supabase.from(tableName).insert(supabaseData);
                 if (error) {
                     console.error(`❌ Error uploading to Supabase table '${tableName}':`, error.message);
                 } else {
