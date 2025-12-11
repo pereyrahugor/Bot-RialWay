@@ -18,7 +18,40 @@ import { JsonBlockFinder } from "../Api-Google/JsonBlockFinder";
 import { CalendarEvents } from "../Api-Google/calendarEvents";
 import fs from 'fs';
 import moment from 'moment';
+import OpenAI from "openai";
 //import { handleToolFunctionCall } from '../Api-BotAsistente/handleToolFunctionCall.js';
+
+const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+});
+
+async function waitForActiveRuns(threadId: string) {
+    if (!threadId) return;
+    try {
+        console.log(`[AssistantResponseProcessor] Verificando runs activos en thread ${threadId}...`);
+        let attempt = 0;
+        while (attempt < 30) { // Max 60 seconds wait
+            const runs = await openai.beta.threads.runs.list(threadId, { limit: 1 });
+            const activeRun = runs.data.find(run => 
+                ["queued", "in_progress", "cancelling"].includes(run.status)
+            );
+            
+            if (activeRun) {
+                if (attempt % 5 === 0) console.log(`[AssistantResponseProcessor] Run activo detectado (${activeRun.id}, estado: ${activeRun.status}). Esperando...`);
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                attempt++;
+            } else {
+                console.log(`[AssistantResponseProcessor] No hay runs activos. Procediendo.`);
+                return;
+            }
+        }
+        console.warn(`[AssistantResponseProcessor] Timeout esperando liberación del thread ${threadId}. Intentando proceder de todos modos.`);
+    } catch (error) {
+        console.error(`[AssistantResponseProcessor] Error verificando runs:`, error);
+        // Fallback to simple wait if API fails
+        await new Promise(resolve => setTimeout(resolve, 3000));
+    }
+}
 
 // Mapa global para bloquear usuarios de WhatsApp durante operaciones API
 const userApiBlockMap = new Map();
@@ -113,8 +146,14 @@ export class AssistantResponseProcessor {
             
             // console.log(`[AssistantResponseProcessor] 📤 Enviando resultado DB al asistente...`);
 
-            // Esperar 5 segundos para asegurar que el Run anterior haya finalizado en OpenAI
-            await new Promise(resolve => setTimeout(resolve, 5000));
+            // Esperar a que el Run anterior haya finalizado realmente en OpenAI
+            const threadId = (ctx && ctx.thread_id) || (state && typeof state.get === 'function' && state.get('thread_id'));
+            if (threadId) {
+                await waitForActiveRuns(threadId);
+            } else {
+                 // Fallback si no tenemos threadId
+                 await new Promise(resolve => setTimeout(resolve, 5000));
+            }
 
             // Obtener nueva respuesta del asistente
             let newResponse: any;
