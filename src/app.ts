@@ -55,30 +55,42 @@ const adapterProvider = createProvider(BaileysProvider, {
     version: [2, 3000, 1030817285],
     groupsIgnore: false,
     readStatus: false,
-    // SIEMPRE deshabilitar el servidor HTTP de Sherpa para evitar reinicios
-    // El QR se mostrará en los logs de Railway (Deployments > Logs)
-    disableHttpServer: true,
+    // Habilitamos el servidor interno en un puerto secundario para asegurar que la lógica de QR se active
+    disableHttpServer: false,
+    port: 3030, 
 });
 
 // Listener para generar el archivo QR manualmente cuando se solicite
 adapterProvider.on('require_action', async (payload: any) => {
-    console.log('⚡ [Provider] require_action received');
-    if (payload.instructions && payload.instructions.length > 0) {
-        console.log('⚡ [Provider] Instructions:', payload.instructions);
-    }
-    // En algunas versiones de BuilderBot/Baileys, el QR string viene en payload.qr o payload.code
-    // Vamos a intentar detectar el string del QR
-    const qrString = payload.qr || payload.code || payload;
+    console.log('⚡ [Provider] require_action received. Payload type:', typeof payload);
     
-    if (typeof qrString === 'string' && qrString.length > 20) {
-        console.log('⚡ [Provider] QR Code detected. Generating image...');
+    // Intentar extraer el string del QR de varias formas posibles
+    let qrString = null;
+    
+    if (typeof payload === 'string') {
+        qrString = payload;
+    } else if (payload && typeof payload === 'object') {
+        if (payload.qr) qrString = payload.qr;
+        else if (payload.code) qrString = payload.code;
+    }
+
+    if (qrString && typeof qrString === 'string' && qrString.length > 10) {
+        console.log('⚡ [Provider] QR Code detected (length: ' + qrString.length + '). Generating image...');
         try {
             const qrPath = path.join(process.cwd(), 'bot.qr.png');
-            await QRCode.toFile(qrPath, qrString);
+            await QRCode.toFile(qrPath, qrString, {
+                color: {
+                    dark: '#000000',
+                    light: '#ffffff'
+                },
+                scale: 4
+            });
             console.log(`✅ [Provider] QR Image saved to ${qrPath}`);
         } catch (err) {
             console.error('❌ [Provider] Error generating QR image:', err);
         }
+    } else {
+        console.log('⚠️ [Provider] require_action received but could not extract QR string. Payload:', JSON.stringify(payload));
     }
 });
 
@@ -351,10 +363,17 @@ const main = async () => {
                 // Endpoint para servir la imagen del QR
                 app.get('/qr.png', (req, res) => {
                     const qrPath = path.join(process.cwd(), 'bot.qr.png');
+                    // Desactivar caché para asegurar que siempre se vea el QR nuevo
+                    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+                    res.setHeader('Pragma', 'no-cache');
+                    res.setHeader('Expires', '0');
+
                     if (fs.existsSync(qrPath)) {
                         res.setHeader('Content-Type', 'image/png');
                         fs.createReadStream(qrPath).pipe(res);
                     } else {
+                        // Si no hay QR, devolver 404 pero loguearlo
+                        console.log('[DEBUG] Solicitud de QR fallida: Archivo no encontrado en', qrPath);
                         res.status(404).send('QR no encontrado');
                     }
                 });
