@@ -77,6 +77,18 @@ export const getAssistantResponse = async (assistantId, message, state, fallback
                 userTimeouts.delete(userId);
         }
 
+        // CRÍTICO: Esperar a que no haya runs activos ANTES de llamar a toAsk
+        if (effectiveThreadId) {
+                try {
+                        const { waitForActiveRuns } = await import('./utils/AssistantResponseProcessor.js');
+                        await waitForActiveRuns(effectiveThreadId);
+                } catch (err) {
+                        console.error('[getAssistantResponse] Error esperando runs activos:', err);
+                        // Fallback: esperar 3 segundos
+                        await new Promise(r => setTimeout(r, 3000));
+                }
+        }
+
         let timeoutResolve;
         const timeoutPromise = new Promise((resolve) => {
                 timeoutResolve = resolve;
@@ -267,7 +279,7 @@ const main = async () => {
                 // Iniciar sincronización periódica de sesión hacia Supabase
                 startSessionSync();
 
-                httpInject(adapterProvider.server);
+                // httpInject(adapterProvider.server); // DESHABILITADO: Causa reinicios al acceder a rutas del QR
 
                 // Usar la instancia Polka (adapterProvider.server) para rutas
                 const polkaApp = adapterProvider.server;

@@ -25,7 +25,7 @@ const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
 
-async function waitForActiveRuns(threadId: string) {
+export async function waitForActiveRuns(threadId: string) {
     if (!threadId) return;
     try {
         console.log(`[AssistantResponseProcessor] Verificando runs activos en thread ${threadId}...`);
