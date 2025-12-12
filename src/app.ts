@@ -12,7 +12,7 @@ let botEnabled = true;
 import { createBot, createProvider, createFlow, addKeyword, EVENTS } from "@builderbot/bot";
 import { MemoryDB } from "@builderbot/bot";
 import { BaileysProvider } from "builderbot-provider-sherpa";
-import { restoreSessionFromDb, startSessionSync } from "./utils/sessionSync";
+import { restoreSessionFromDb, startSessionSync, deleteSessionFromDb } from "./utils/sessionSync";
 import { toAsk, httpInject } from "@builderbot-plugins/openai-assistants";
 import { typing } from "./utils/presence";
 import { idleFlow } from "./Flows/idleFlow";
@@ -402,22 +402,26 @@ const main = async () => {
                 });
 
                 // Endpoint para borrar sesión y reiniciar
-                app.post('/api/reset-session', (req, res) => {
+                app.post('/api/reset-session', async (req, res) => {
                     try {
                         const sessionsDir = path.join(process.cwd(), 'bot_sessions');
                         console.log('[RESET] Solicitud de eliminación de sesión recibida.');
                         
+                        // 1. Eliminar sesión local
                         if (fs.existsSync(sessionsDir)) {
-                            console.log('[RESET] Eliminando directorio:', sessionsDir);
+                            console.log('[RESET] Eliminando directorio local:', sessionsDir);
                             fs.rmSync(sessionsDir, { recursive: true, force: true });
                         } else {
-                            console.log('[RESET] El directorio no existía.');
+                            console.log('[RESET] El directorio local no existía.');
                         }
+
+                        // 2. Eliminar sesión remota (Supabase)
+                        await deleteSessionFromDb();
 
                         res.send(`
                             <html>
                                 <body style="font-family: sans-serif; text-align: center; padding: 50px;">
-                                    <h1 style="color: green;">✅ Sesión Eliminada</h1>
+                                    <h1 style="color: green;">✅ Sesión Eliminada (Local y Remota)</h1>
                                     <p>El bot se está reiniciando. Por favor espera unos 30 segundos y recarga la página principal para escanear el nuevo QR.</p>
                                     <script>
                                         setTimeout(() => { window.location.href = "/"; }, 15000);

@@ -79,6 +79,27 @@ export async function restoreSessionFromDb(sessionId: string = 'default') {
 }
 
 /**
+ * Elimina la sesión remota en Supabase.
+ */
+export async function deleteSessionFromDb(sessionId: string = 'default') {
+    console.log(`[SessionSync] 🗑️ Eliminando sesión remota '${sessionId}' para proyecto '${projectId}'...`);
+    try {
+        const { error } = await supabase.rpc('delete_whatsapp_session', {
+            p_project_id: projectId,
+            p_session_id: sessionId
+        });
+
+        if (error) {
+            console.error('[SessionSync] ❌ Error eliminando sesión remota:', error);
+        } else {
+            console.log('[SessionSync] ✅ Sesión remota eliminada correctamente.');
+        }
+    } catch (error) {
+        console.error('[SessionSync] ❌ Error crítico eliminando sesión remota:', error);
+    }
+}
+
+/**
  * Inicia la sincronización UNIFICADA.
  * Estrategia: Sincronizar al inicio, a los 2 minutos (para capturar QR reciente), y luego cada 1 hora.
  */
