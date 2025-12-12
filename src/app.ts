@@ -363,83 +363,83 @@ const main = async () => {
 });
 
 
-                // Obtener el servidor HTTP real de BuilderBot después de httpInject
-                const realHttpServer = adapterProvider.server?.server || (httpServer as any)?.server;
-                console.log('🔍 [DEBUG] realHttpServer exists:', !!realHttpServer);
-
                 // Integrar Socket.IO sobre el servidor HTTP real de BuilderBot
-                if (realHttpServer) {
-                    const io = new Server(realHttpServer, { cors: { origin: '*' } });
-                    io.on('connection', (socket) => {
-                        console.log('💬 Cliente web conectado');
-                        socket.on('message', async (msg) => {
-                            // Procesar el mensaje usando la lógica principal del bot
-                            try {
-                                let ip = '';
-                                const xff = socket.handshake.headers['x-forwarded-for'];
-                                if (typeof xff === 'string') {
-                                    ip = xff.split(',')[0];
-                                } else if (Array.isArray(xff)) {
-                                    ip = xff[0];
-                                } else {
-                                    ip = socket.handshake.address || '';
-                                }
-                                // Centralizar historial y estado igual que WhatsApp
-                                if (!global.webchatHistories) global.webchatHistories = {};
-                                const historyKey = `webchat_${ip}`;
-                                if (!global.webchatHistories[historyKey]) global.webchatHistories[historyKey] = [];
-                                const _history = global.webchatHistories[historyKey];
-                                const state = {
-                                    get: function (key) {
-                                        if (key === 'history') return _history;
-                                        return undefined;
-                                    },
-                                    update: async function (msg, role = 'user') {
-                                        if (_history.length > 0) {
-                                            const last = _history[_history.length - 1];
-                                            if (last.role === role && last.content === msg) return;
-                                        }
-                                        _history.push({ role, content: msg });
-                                        if (_history.length >= 6) {
-                                            const last3 = _history.slice(-3);
-                                            if (last3.every(h => h.role === 'user' && h.content === msg)) {
-                                                _history.length = 0;
+                // Se inicializa DESPUÉS de iniciar el servidor para asegurar que la instancia exista
+                const initSocketIO = (serverInstance) => {
+                    if (serverInstance) {
+                        console.log('✅ [DEBUG] Inicializando Socket.IO...');
+                        const io = new Server(serverInstance, { cors: { origin: '*' } });
+                        io.on('connection', (socket) => {
+                            console.log('💬 Cliente web conectado');
+                            socket.on('message', async (msg) => {
+                                // Procesar el mensaje usando la lógica principal del bot
+                                try {
+                                    let ip = '';
+                                    const xff = socket.handshake.headers['x-forwarded-for'];
+                                    if (typeof xff === 'string') {
+                                        ip = xff.split(',')[0];
+                                    } else if (Array.isArray(xff)) {
+                                        ip = xff[0];
+                                    } else {
+                                        ip = socket.handshake.address || '';
+                                    }
+                                    // Centralizar historial y estado igual que WhatsApp
+                                    if (!global.webchatHistories) global.webchatHistories = {};
+                                    const historyKey = `webchat_${ip}`;
+                                    if (!global.webchatHistories[historyKey]) global.webchatHistories[historyKey] = [];
+                                    const _history = global.webchatHistories[historyKey];
+                                    const state = {
+                                        get: function (key) {
+                                            if (key === 'history') return _history;
+                                            return undefined;
+                                        },
+                                        update: async function (msg, role = 'user') {
+                                            if (_history.length > 0) {
+                                                const last = _history[_history.length - 1];
+                                                if (last.role === role && last.content === msg) return;
                                             }
+                                            _history.push({ role, content: msg });
+                                            if (_history.length >= 6) {
+                                                const last3 = _history.slice(-3);
+                                                if (last3.every(h => h.role === 'user' && h.content === msg)) {
+                                                    _history.length = 0;
+                                                }
+                                            }
+                                        },
+                                        clear: async function () { _history.length = 0; }
+                                    };
+                                    const provider = undefined;
+                                    const gotoFlow = () => {};
+                                    let replyText = '';
+                                    const flowDynamic = async (arr) => {
+                                        if (Array.isArray(arr)) {
+                                            replyText = arr.map(a => a.body).join('\n');
+                                        } else if (typeof arr === 'string') {
+                                            replyText = arr;
                                         }
-                                    },
-                                    clear: async function () { _history.length = 0; }
-                                };
-                                const provider = undefined;
-                                const gotoFlow = () => {};
-                                let replyText = '';
-                                const flowDynamic = async (arr) => {
-                                    if (Array.isArray(arr)) {
-                                        replyText = arr.map(a => a.body).join('\n');
-                                    } else if (typeof arr === 'string') {
-                                        replyText = arr;
+                                    };
+                                    if (msg.trim().toLowerCase() === "#reset" || msg.trim().toLowerCase() === "#cerrar") {
+                                        await state.clear();
+                                        replyText = "🔄 El chat ha sido reiniciado. Puedes comenzar una nueva conversación.";
+                                    } else {
+                                        const threadId = state.get && state.get('thread_id');
+                                        let finalMessage = msg;
+                                        if (!threadId) {
+                                            finalMessage = `Fecha y hora actual: ${getArgentinaDatetimeString()}\n` + msg;
+                                        }
+                                        await processUserMessage({ from: ip, body: finalMessage, type: 'webchat' }, { flowDynamic, state, provider, gotoFlow });
                                     }
-                                };
-                                if (msg.trim().toLowerCase() === "#reset" || msg.trim().toLowerCase() === "#cerrar") {
-                                    await state.clear();
-                                    replyText = "🔄 El chat ha sido reiniciado. Puedes comenzar una nueva conversación.";
-                                } else {
-                                    const threadId = state.get && state.get('thread_id');
-                                    let finalMessage = msg;
-                                    if (!threadId) {
-                                        finalMessage = `Fecha y hora actual: ${getArgentinaDatetimeString()}\n` + msg;
-                                    }
-                                    await processUserMessage({ from: ip, body: finalMessage, type: 'webchat' }, { flowDynamic, state, provider, gotoFlow });
+                                    socket.emit('reply', replyText);
+                                } catch (err) {
+                                    console.error('Error procesando mensaje webchat:', err);
+                                    socket.emit('reply', 'Hubo un error procesando tu mensaje.');
                                 }
-                                socket.emit('reply', replyText);
-                            } catch (err) {
-                                console.error('Error procesando mensaje webchat:', err);
-                                socket.emit('reply', 'Hubo un error procesando tu mensaje.');
-                            }
+                            });
                         });
-                    });
-                } else {
-                    console.error('❌ [ERROR] No se pudo obtener realHttpServer para Socket.IO');
-                }
+                    } else {
+                        console.error('❌ [ERROR] No se pudo obtener realHttpServer para Socket.IO');
+                    }
+                };
 
 
 
@@ -623,7 +623,21 @@ const main = async () => {
             // No llamar a listen, BuilderBot ya inicia el servidor
 
     // ...existing code...
-    httpServer(+PORT);
+    const serverInstance = httpServer(+PORT) as any;
+    
+    // Intentar inicializar Socket.IO con la instancia devuelta
+    if (serverInstance) {
+        initSocketIO(serverInstance);
+    } else {
+        // Fallback: intentar buscar en adapterProvider.server.server si httpServer no devolvió nada
+        const fallbackServer = (adapterProvider.server as any)?.server;
+        if (fallbackServer) {
+            console.log('⚠️ [WARN] Usando fallbackServer para Socket.IO');
+            initSocketIO(fallbackServer);
+        } else {
+             console.error('❌ [ERROR] No se pudo obtener ninguna instancia de servidor para Socket.IO');
+        }
+    }
 };
 
 process.on('unhandledRejection', (reason, promise) => {
