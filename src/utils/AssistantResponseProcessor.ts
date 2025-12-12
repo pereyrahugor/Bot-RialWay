@@ -42,6 +42,8 @@ export async function waitForActiveRuns(threadId: string) {
                 attempt++;
             } else {
                 console.log(`[AssistantResponseProcessor] No hay runs activos. Procediendo.`);
+                // Delay adicional para evitar condición de carrera
+                await new Promise(resolve => setTimeout(resolve, 2000));
                 return;
             }
         }

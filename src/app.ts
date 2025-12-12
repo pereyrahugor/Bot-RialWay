@@ -101,6 +101,21 @@ const TIMEOUT_MS = 30000;
 // Control de timeout por usuario para evitar ejecuciones automáticas superpuestas
 const userTimeouts = new Map();
 
+// Wrapper seguro para toAsk que SIEMPRE verifica runs activos
+export const safeToAsk = async (assistantId: string, message: string, state: any) => {
+        const threadId = state && typeof state.get === 'function' && state.get('thread_id');
+        if (threadId) {
+                try {
+                        const { waitForActiveRuns } = await import('./utils/AssistantResponseProcessor.js');
+                        await waitForActiveRuns(threadId);
+                } catch (err) {
+                        console.error('[safeToAsk] Error esperando runs activos:', err);
+                        await new Promise(r => setTimeout(r, 3000));
+                }
+        }
+        return toAsk(assistantId, message, state);
+};
+
 export const getAssistantResponse = async (assistantId, message, state, fallbackMessage, userId, thread_id = null) => {
         // Solo enviar la fecha/hora si es realmente un hilo nuevo (no existe thread_id ni en el argumento ni en el state)
         let effectiveThreadId = thread_id;
@@ -117,21 +132,6 @@ export const getAssistantResponse = async (assistantId, message, state, fallback
                 clearTimeout(userTimeouts.get(userId));
                 userTimeouts.delete(userId);
         }
-
-        // Wrapper seguro para toAsk que SIEMPRE verifica runs activos
-        const safeToAsk = async (assistantId: string, message: string, state: any) => {
-                const threadId = effectiveThreadId || (state && typeof state.get === 'function' && state.get('thread_id'));
-                if (threadId) {
-                        try {
-                                const { waitForActiveRuns } = await import('./utils/AssistantResponseProcessor.js');
-                                await waitForActiveRuns(threadId);
-                        } catch (err) {
-                                console.error('[safeToAsk] Error esperando runs activos:', err);
-                                await new Promise(r => setTimeout(r, 3000));
-                        }
-                }
-                return toAsk(assistantId, message, state);
-        };
 
         let timeoutResolve;
         const timeoutPromise = new Promise((resolve) => {

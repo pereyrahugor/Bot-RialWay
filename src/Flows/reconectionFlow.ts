@@ -1,5 +1,5 @@
 // Clase para manejar la lógica de reconexión cuando el campo nombre está vacío
-import { toAsk } from '@builderbot-plugins/openai-assistants';
+import { safeToAsk } from '../app';
 import { extraerDatosResumen, GenericResumenData } from '~/utils/extractJsonData';
 
 // Opciones para configurar el flujo de reconexión
@@ -135,7 +135,7 @@ export class ReconectionFlow {
             }
 
             // Si no respondió, intentar obtener el resumen nuevamente desde el asistente
-            const resumen = await toAsk(this.ASSISTANT_ID, "GET_RESUMEN", this.state);
+            const resumen = await safeToAsk(this.ASSISTANT_ID, "GET_RESUMEN", this.state);
             const data: GenericResumenData = extraerDatosResumen(resumen);
             const tipo = data.tipo || "SI_RESUMEN";
             if (tipo === "SI_RESUMEN") {
@@ -184,7 +184,7 @@ export class ReconectionFlow {
                 const userMsg = msg.body;
                 const prompt = `hola, ${userMsg}`;
                 try {
-                    await toAsk(this.ASSISTANT_ID, prompt, this.state);
+                    await safeToAsk(this.ASSISTANT_ID, prompt, this.state);
                 } catch (err) {
                     console.error('[ReconectionFlow] Error enviando mensaje al asistente:', err);
                 }
