@@ -326,8 +326,6 @@ const main = async () => {
                 app.use("/assets", express.static("src/assets"));
 
                 // Endpoint para servir la imagen del QR
-                try {
-                // Endpoint para servir la imagen del QR
                 app.get('/qr.png', (req, res) => {
                     const qrPath = path.join(process.cwd(), 'bot.qr.png');
                     if (fs.existsSync(qrPath)) {
