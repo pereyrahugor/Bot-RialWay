@@ -306,11 +306,16 @@ const main = async () => {
                 // httpInject(adapterProvider.server); // DESHABILITADO: Causa reinicios al acceder a rutas del QR
 
                 // Usar la instancia Polka (httpServer de createBot es la más confiable)
-                const polkaApp = (httpServer || adapterProvider.server) as any;
+                let polkaApp = (httpServer || adapterProvider.server) as any;
                 
                 if (!polkaApp || typeof polkaApp.get !== 'function' || typeof polkaApp.use !== 'function') {
-                    console.error('❌ [ERROR] No se pudo obtener una instancia válida de Polka (httpServer).');
-                    return;
+                    console.error('❌ [ERROR] No se pudo obtener una instancia válida de Polka (httpServer). Usando dummy app para evitar crash.');
+                    polkaApp = {
+                        use: (...args) => console.log('⚠️ [DUMMY] use called', args[0]),
+                        get: (...args) => console.log('⚠️ [DUMMY] get called', args[0]),
+                        post: (...args) => console.log('⚠️ [DUMMY] post called', args[0]),
+                        listen: (...args) => console.log('⚠️ [DUMMY] listen called')
+                    };
                 }
 
                 // Middleware de logging para debug
@@ -746,6 +751,7 @@ const main = async () => {
              console.error('❌ [ERROR] No se pudo obtener ninguna instancia de servidor para Socket.IO');
         }
     }
+    console.log('✅ [INFO] Main function completed');
 };
 
 process.on('unhandledRejection', (reason, promise) => {
