@@ -63,7 +63,7 @@ export async function sendMessageToThread(threadId: string, userMessage: string,
     { assistant_id: assistantId }
   );
   
-  // Esperar a que el run genere al menos una respuesta
+  // Esperar a que el run genere al menos una respuesta CON CONTENIDO
   let runStatus = run.status;
   const runId = run.id;
   let attempts = 0;
@@ -78,20 +78,23 @@ export async function sendMessageToThread(threadId: string, userMessage: string,
       throw new Error('Run fallido o cancelado');
     }
     
-    // Si el run completó o está en un estado que permite leer mensajes
-    if (runStatus === 'completed' || runStatus === 'requires_action') {
+    // Si el run completó, salir del bucle
+    if (runStatus === 'completed') {
       break;
     }
     
-    // Verificar si ya hay un nuevo mensaje del asistente
+    // Verificar si ya hay un nuevo mensaje del asistente CON CONTENIDO
     const messages = await openai.beta.threads.messages.list(threadId, { limit: 5 });
     const newAssistantMsg = messages.data.find(m => 
       m.role === 'assistant' && 
-      m.run_id === runId
+      m.run_id === runId &&
+      m.content.length > 0 &&
+      m.content[0].type === 'text' &&
+      (m.content[0] as any).text?.value?.trim().length > 0
     );
     
     if (newAssistantMsg) {
-      console.log('[sendMessageToThread] Mensaje del asistente detectado antes de completar run');
+      console.log('[sendMessageToThread] Mensaje del asistente con contenido detectado');
       break;
     }
     
@@ -106,7 +109,10 @@ export async function sendMessageToThread(threadId: string, userMessage: string,
   const messages = await openai.beta.threads.messages.list(threadId);
   const assistantMessages = messages.data.filter(m => m.role === 'assistant' && m.run_id === runId);
   
-  if (!assistantMessages.length) return '';
+  if (!assistantMessages.length) {
+    console.warn('[sendMessageToThread] No se encontraron mensajes del asistente para este run');
+    return '';
+  }
   
   const lastMsg = assistantMessages[0]; // El primero es el más reciente
   const textBlock = lastMsg.content.find(block => block.type === 'text' && typeof (block as any).text?.value === 'string');
@@ -119,6 +125,10 @@ export async function sendMessageToThread(threadId: string, userMessage: string,
   
   // Log de debug para webchat
   console.log('[sendMessageToThread] Respuesta del asistente:', response.substring(0, 200));
+  
+  if (!response || response.trim().length === 0) {
+    console.warn('[sendMessageToThread] ⚠️ Respuesta vacía del asistente');
+  }
   
   return response;
 }
