@@ -27,6 +27,7 @@ import { WebChatManager } from './utils-web/WebChatManager';
 import { fileURLToPath } from 'url';
 import { getArgentinaDatetimeString } from "./utils/ArgentinaTime";
 import { RailwayApi } from "./Api-RailWay/Railway";
+import QRCode from 'qrcode';
 
 //import { imgResponseFlow } from "./Flows/imgResponse";
 //import { listImg } from "./addModule/listImg";
@@ -391,7 +392,6 @@ const main = async () => {
       `);
     } else if (currentQR) {
       // Generar QR usando biblioteca qrcode
-      const QRCode = require('qrcode');
       QRCode.toDataURL(currentQR, { width: 400 }, (err: any, url: string) => {
         if (err) {
           res.end(`

@@ -30,7 +30,7 @@ export async function waitForActiveRuns(threadId: string) {
     try {
         console.log(`[AssistantResponseProcessor] Verificando runs activos en thread ${threadId}...`);
         let attempt = 0;
-        while (attempt < 30) { // Max 60 seconds wait
+        while (attempt < 10) { // Max 60 seconds wait
             const runs = await openai.beta.threads.runs.list(threadId, { limit: 1 });
             const activeRun = runs.data.find(run => 
                 ["queued", "in_progress", "cancelling"].includes(run.status)
@@ -51,7 +51,7 @@ export async function waitForActiveRuns(threadId: string) {
     } catch (error) {
         console.error(`[AssistantResponseProcessor] Error verificando runs:`, error);
         // Fallback to simple wait if API fails
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        await new Promise(resolve => setTimeout(resolve, 500));
     }
 }
 
