@@ -22,6 +22,34 @@ export async function getOrCreateThreadId(store: { thread_id?: string | null }) 
  * @returns respuesta del asistente
  */
 export async function sendMessageToThread(threadId: string, userMessage: string, assistantId: string) {
+  // CRÍTICO: Esperar a que no haya runs activos antes de enviar mensaje
+  try {
+    console.log(`[sendMessageToThread] Verificando runs activos en thread ${threadId}...`);
+    let attempt = 0;
+    while (attempt < 30) { // Max 60 seconds wait
+      const runs = await openai.beta.threads.runs.list(threadId, { limit: 1 });
+      const activeRun = runs.data.find(run => 
+        ["queued", "in_progress", "cancelling"].includes(run.status)
+      );
+      
+      if (activeRun) {
+        if (attempt % 5 === 0) console.log(`[sendMessageToThread] Run activo detectado (${activeRun.id}, estado: ${activeRun.status}). Esperando...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        attempt++;
+      } else {
+        console.log(`[sendMessageToThread] No hay runs activos. Procediendo.`);
+        break;
+      }
+    }
+    if (attempt >= 30) {
+      console.warn(`[sendMessageToThread] Timeout esperando liberación del thread. Intentando proceder de todos modos.`);
+    }
+  } catch (error) {
+    console.error(`[sendMessageToThread] Error verificando runs:`, error);
+    // Fallback to simple wait if API fails
+    await new Promise(resolve => setTimeout(resolve, 3000));
+  }
+
   await openai.beta.threads.messages.create(
     threadId,
     {

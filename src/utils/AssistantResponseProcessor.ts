@@ -153,10 +153,14 @@ export class AssistantResponseProcessor {
 
         // Log de mensaje saliente al usuario (antes de cualquier filtro)
         if (ctx && ctx.type === 'webchat') {
-            // console.log('[Webchat Debug] Mensaje saliente al usuario (sin filtrar):', textResponse);
+            console.log('[Webchat Debug] Mensaje saliente al usuario (sin filtrar):', textResponse);
         } else {
-            // console.log('[WhatsApp Debug] Mensaje saliente al usuario (sin filtrar):', textResponse);
+            console.log('[WhatsApp Debug] Mensaje saliente al usuario (sin filtrar):', textResponse);
         }
+        
+        // Log específico para debug de DB_QUERY
+        console.log('[DEBUG] Buscando [DB_QUERY] en:', textResponse.substring(0, 200));
+        
         // 0) Detectar y procesar DB QUERY [DB_QUERY: ...]
         const dbQueryRegex = /\[DB_QUERY\s*:\s*([\s\S]*?)\]/i;
         const dbMatch = textResponse.match(dbQueryRegex);
