@@ -5,14 +5,15 @@ import path from 'path';
 import serve from 'serve-static';
 import { Server } from 'socket.io';
 import fs from 'fs';
-import express from 'express';
+import polka from 'polka';
+import bodyParser from 'body-parser';
 import { createServer } from 'http';
 import QRCode from 'qrcode';
 // Estado global para encender/apagar el bot
 let botEnabled = true;
 import { createBot, createProvider, createFlow, addKeyword, EVENTS } from "@builderbot/bot";
 import { MemoryDB } from "@builderbot/bot";
-import { BaileysProvider } from "@builderbot/provider-baileys";
+import { BaileysProvider } from "builderbot-provider-sherpa";
 import { restoreSessionFromDb, startSessionSync, deleteSessionFromDb } from "./utils/sessionSync";
 import { toAsk, httpInject } from "@builderbot-plugins/openai-assistants";
 import { typing } from "./utils/presence";
@@ -51,50 +52,9 @@ const userQueues = new Map();
 const userLocks = new Map();
 
 
-const adapterProvider = createProvider(BaileysProvider, {
-    version: [2, 3000, 1030817285],
-    groupsIgnore: false,
-    readStatus: false,
-    // Habilitamos el servidor interno en un puerto secundario para asegurar que la lógica de QR se active
-    disableHttpServer: false,
-    port: 3030, 
-});
-
 // Listener para generar el archivo QR manualmente cuando se solicite
-adapterProvider.on('require_action', async (payload: any) => {
-    console.log('⚡ [Provider] require_action received. Payload type:', typeof payload);
-    
-    // Intentar extraer el string del QR de varias formas posibles
-    let qrString = null;
-    
-    if (typeof payload === 'string') {
-        qrString = payload;
-    } else if (payload && typeof payload === 'object') {
-        if (payload.qr) qrString = payload.qr;
-        else if (payload.code) qrString = payload.code;
-    }
-
-    if (qrString && typeof qrString === 'string' && qrString.length > 10) {
-        console.log('⚡ [Provider] QR Code detected (length: ' + qrString.length + '). Generating image...');
-        try {
-            const qrPath = path.join(process.cwd(), 'bot.qr.png');
-            await QRCode.toFile(qrPath, qrString, {
-                color: {
-                    dark: '#000000',
-                    light: '#ffffff'
-                },
-                scale: 4
-            });
-            console.log(`✅ [Provider] QR Image saved to ${qrPath}`);
-        } catch (err) {
-            console.error('❌ [Provider] Error generating QR image:', err);
-        }
-    } else {
-        console.log('⚠️ [Provider] require_action received but could not extract QR string. Payload:', JSON.stringify(payload));
-    }
-});
-
-const errorReporter = new ErrorReporter(adapterProvider, ID_GRUPO_RESUMEN); // Reemplaza YOUR_GROUP_ID con el ID del grupo de WhatsApp
+export let adapterProvider;
+let errorReporter;
 
 const TIMEOUT_MS = 30000;
 
@@ -308,6 +268,62 @@ const hasActiveSession = () => {
 
 // Main function to initialize the bot and load Google Sheets data
 const main = async () => {
+    adapterProvider = createProvider(BaileysProvider, {
+        version: [2, 3000, 1030817285],
+        groupsIgnore: false,
+        readStatus: false,
+        disableHttpServer: true,
+    });
+
+    // Listener para generar el archivo QR manualmente cuando se solicite
+    adapterProvider.on('require_action', async (payload: any) => {
+        console.log('⚡ [Provider] require_action received. Payload:', payload);
+        
+        // Intentar extraer el string del QR de varias formas posibles
+        let qrString = null;
+        
+        if (typeof payload === 'string') {
+            qrString = payload;
+        } else if (payload && typeof payload === 'object') {
+            if (payload.qr) qrString = payload.qr;
+            else if (payload.code) qrString = payload.code;
+        }
+
+        if (qrString && typeof qrString === 'string') {
+            console.log('⚡ [Provider] QR Code detected (length: ' + qrString.length + '). Generating image...');
+            try {
+                const qrPath = path.join(process.cwd(), 'bot.qr.png');
+                await QRCode.toFile(qrPath, qrString, {
+                    color: {
+                        dark: '#000000',
+                        light: '#ffffff'
+                    },
+                    scale: 4,
+                    margin: 2
+                });
+                console.log(`✅ [Provider] QR Image saved to ${qrPath}`);
+            } catch (err) {
+                console.error('❌ [Provider] Error generating QR image:', err);
+            }
+        } else {
+            console.log('⚠️ [Provider] require_action received but could not extract QR string.');
+        }
+    });
+
+    adapterProvider.on('message', (payload) => {
+        console.log('⚡ [Provider] message received');
+    });
+
+    adapterProvider.on('ready', () => {
+        console.log('⚡ [Provider] ready received');
+    });
+
+    adapterProvider.on('auth_failure', (payload) => {
+        console.log('⚡ [Provider] auth_failure received', payload);
+    });
+
+    errorReporter = new ErrorReporter(adapterProvider, ID_GRUPO_RESUMEN);
+
     // Verificar credenciales de Google Sheets al iniciar
     //await testAuth();
 
@@ -328,6 +344,12 @@ const main = async () => {
                 const adapterFlow = createFlow([welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowDoc, locationFlow, idleFlow]);
 
                 const adapterDB = new MemoryDB();
+                adapterProvider = createProvider(BaileysProvider, {
+    version: [2, 3000, 1030817285],
+    groupsIgnore: false,
+    readStatus: false,
+    disableHttpServer: true,
+});
                 const { httpServer } = await createBot({
                     flow: adapterFlow,
                     provider: adapterProvider,
@@ -342,9 +364,36 @@ const main = async () => {
 
                 // httpInject(adapterProvider.server); // DESHABILITADO: Causa reinicios al acceder a rutas del QR
 
-                // Inicializar servidor Express propio para WebChat y QR
-                const app = express();
-                const server = createServer(app);
+                // Inicializar servidor Polka propio para WebChat y QR
+                const app = polka();
+
+                // Middleware de compatibilidad para Express -> Polka
+                app.use((req, res, next) => {
+                    res.status = (code) => { res.statusCode = code; return res; };
+                    res.send = (body) => { res.end(body); return res; };
+                    res.json = (data) => { 
+                        res.setHeader('Content-Type', 'application/json'); 
+                        res.end(JSON.stringify(data)); 
+                        return res; 
+                    };
+                    res.sendFile = (filepath) => {
+                        try {
+                            if (fs.existsSync(filepath)) {
+                                res.setHeader('Content-Type', 'text/html');
+                                fs.createReadStream(filepath).pipe(res);
+                            } else {
+                                res.statusCode = 404;
+                                res.end('Not Found');
+                            }
+                        } catch (e) {
+                            res.statusCode = 500;
+                            res.end('Internal Error');
+                        }
+                    };
+                    next();
+                });
+
+                const server = createServer(app.handler);
 
                 // Middleware de logging
                 app.use((req, res, next) => {
@@ -353,12 +402,12 @@ const main = async () => {
                 });
 
                 // Middleware para parsear JSON
-                app.use(express.json());
+                app.use(bodyParser.json());
 
                 // Servir archivos estáticos
-                app.use("/js", express.static("src/js"));
-                app.use("/style", express.static("src/style"));
-                app.use("/assets", express.static("src/assets"));
+                app.use("/js", serve("src/js"));
+                app.use("/style", serve("src/style"));
+                app.use("/assets", serve("src/assets"));
 
                 // Endpoint para servir la imagen del QR
                 app.get('/qr.png', (req, res) => {
@@ -625,7 +674,7 @@ const main = async () => {
                                         clear: async function () { _history.length = 0; }
                                     };
                                     const provider = undefined;
-                                    const gotoFlow = () => {};
+                                    const gotoFlow = () => { /* intentional */ };
                                     let replyText = '';
                                     const flowDynamic = async (arr) => {
                                         if (Array.isArray(arr)) {
@@ -701,7 +750,7 @@ const main = async () => {
                                 // Mock state
                                 const state = {
                                     get: (key) => key === 'thread_id' ? session.thread_id : undefined,
-                                    update: async () => {},
+                                    update: async () => { /* intentional */ },
                                     clear: async () => session.clear(),
                                 };
 
@@ -739,7 +788,7 @@ const main = async () => {
                                     flowDynamic,
                                     state,
                                     undefined,
-                                    () => {},
+                                    () => { /* intentional */ },
                                     webChatAdapterFn,
                                     ASSISTANT_ID
                                 );
@@ -758,7 +807,7 @@ const main = async () => {
 
     // Iniciar servidor propio
     server.listen(PORT, () => {
-        console.log(`✅ [INFO] Servidor Express escuchando en puerto ${PORT}`);
+        console.log(`✅ [INFO] Servidor Polka escuchando en puerto ${PORT}`);
     });
 
     // Inicializar Socket.IO
