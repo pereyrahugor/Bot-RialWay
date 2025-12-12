@@ -47,51 +47,33 @@ const ID_GRUPO_RESUMEN = process.env.ID_GRUPO_WS ?? "";
 const userQueues = new Map();
 const userLocks = new Map();
 
-// Función helper para verificar si existe una sesión guardada en Supabase
-const checkExistingSession = async (): Promise<boolean> => {
-    try {
-        const supabaseUrl = process.env.SUPABASE_URL;
-        const supabaseKey = process.env.SUPABASE_KEY;
-        const projectId = process.env.RAILWAY_PROJECT_ID || 'local-dev';
-        
-        if (!supabaseUrl || !supabaseKey) {
-            console.log('[SessionCheck] ⚠️ No hay credenciales de Supabase. Asumiendo sin sesión.');
-            return false;
-        }
-
-        const { createClient } = await import('@supabase/supabase-js');
-        const supabase = createClient(supabaseUrl, supabaseKey);
-        
-        const { data, error } = await supabase.rpc('get_whatsapp_session', {
-            p_project_id: projectId,
-            p_session_id: 'default'
-        });
-        
-        if (error) {
-            console.log('[SessionCheck] ⚠️ Error consultando sesión:', error.message);
-            return false;
-        }
-        
-        // Verificar si hay credenciales guardadas
-        const hasCreds = data && Array.isArray(data) && data.some((r: any) => r.key_id === 'creds');
-        console.log(`[SessionCheck] ${hasCreds ? '✅' : '❌'} Sesión ${hasCreds ? 'encontrada' : 'no encontrada'} en Supabase`);
-        return hasCreds;
-    } catch (error) {
-        console.error('[SessionCheck] Error verificando sesión:', error);
-        return false;
-    }
-};
-
-// Verificar sesión antes de crear el provider
-const hasExistingSession = await checkExistingSession();
+// Variable global para almacenar el QR actual
+let currentQR: string | null = null;
+let isConnected = false;
 
 const adapterProvider = createProvider(BaileysProvider, {
     version: [2, 3000, 1030817285],
     groupsIgnore: false,
     readStatus: false,
-    // Solo deshabilitar el servidor HTTP si YA hay una sesión guardada
-    // Si no hay sesión, permitir que Sherpa muestre el QR en la web
-    disableHttpServer: hasExistingSession,
+    // SIEMPRE deshabilitar el servidor HTTP de Sherpa para evitar reinicios
+    // Usaremos nuestra propia ruta para mostrar el QR
+    disableHttpServer: true,
+});
+
+// Capturar el QR cuando se genera
+adapterProvider.on('require_action', (payload: any) => {
+    if (payload && payload.payload && payload.payload.qr) {
+        currentQR = payload.payload.qr;
+        isConnected = false;
+        console.log('[QR] Nuevo QR generado y almacenado');
+    }
+});
+
+// Detectar cuando se conecta
+adapterProvider.on('ready', () => {
+    isConnected = true;
+    currentQR = null;
+    console.log('[QR] Bot conectado, QR limpiado');
 });
 
 const errorReporter = new ErrorReporter(adapterProvider, ID_GRUPO_RESUMEN); // Reemplaza YOUR_GROUP_ID con el ID del grupo de WhatsApp
@@ -382,6 +364,112 @@ const main = async () => {
     res.end(JSON.stringify({ success: false, error: err.message }));
   }
 });
+
+  // Ruta raíz para mostrar QR o estado de conexión
+  polkaApp.get("/", (req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    
+    if (isConnected) {
+      res.end(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>WhatsApp Bot - Conectado</title>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial; text-align: center; padding: 50px; background: #128C7E; color: white; }
+            .status { font-size: 24px; margin: 20px 0; }
+            .icon { font-size: 80px; }
+          </style>
+        </head>
+        <body>
+          <div class="icon">✅</div>
+          <div class="status">Bot Conectado</div>
+          <p>El bot de WhatsApp está funcionando correctamente</p>
+        </body>
+        </html>
+      `);
+    } else if (currentQR) {
+      // Generar QR usando biblioteca qrcode
+      const QRCode = require('qrcode');
+      QRCode.toDataURL(currentQR, { width: 400 }, (err: any, url: string) => {
+        if (err) {
+          res.end(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <title>WhatsApp Bot - QR Code</title>
+              <meta charset="utf-8">
+              <meta http-equiv="refresh" content="5">
+              <style>
+                body { font-family: Arial; text-align: center; padding: 50px; }
+                pre { background: #f4f4f4; padding: 20px; display: inline-block; }
+              </style>
+            </head>
+            <body>
+              <h1>Escanea el código QR</h1>
+              <p>Error generando QR visual. Código en texto:</p>
+              <pre>${currentQR}</pre>
+              <p><small>Esta página se actualiza automáticamente cada 5 segundos</small></p>
+            </body>
+            </html>
+          `);
+        } else {
+          res.end(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <title>WhatsApp Bot - QR Code</title>
+              <meta charset="utf-8">
+              <meta http-equiv="refresh" content="30">
+              <style>
+                body { font-family: Arial; text-align: center; padding: 50px; background: #f0f0f0; }
+                .container { background: white; padding: 40px; border-radius: 10px; display: inline-block; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                h1 { color: #128C7E; }
+                img { border: 2px solid #128C7E; border-radius: 10px; }
+                .instructions { margin-top: 20px; color: #666; }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <h1>📱 Escanea el código QR</h1>
+                <img src="${url}" alt="QR Code" />
+                <div class="instructions">
+                  <p>1. Abre WhatsApp en tu teléfono</p>
+                  <p>2. Ve a Configuración → Dispositivos vinculados</p>
+                  <p>3. Escanea este código QR</p>
+                  <p><small>El código expira en 60 segundos y se actualiza automáticamente</small></p>
+                </div>
+              </div>
+            </body>
+            </html>
+          `);
+        }
+      });
+    } else {
+      res.end(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>WhatsApp Bot - Iniciando</title>
+          <meta charset="utf-8">
+          <meta http-equiv="refresh" content="3">
+          <style>
+            body { font-family: Arial; text-align: center; padding: 50px; }
+            .loader { border: 5px solid #f3f3f3; border-top: 5px solid #128C7E; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 20px auto; }
+            @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+          </style>
+        </head>
+        <body>
+          <h1>Iniciando Bot...</h1>
+          <div class="loader"></div>
+          <p>Esperando código QR...</p>
+          <p><small>Esta página se actualiza automáticamente</small></p>
+        </body>
+        </html>
+      `);
+    }
+  });
 
                 // Obtener el servidor HTTP real de BuilderBot después de httpInject
                 const realHttpServer = adapterProvider.server.server;
