@@ -72,10 +72,10 @@ const checkExistingSession = async (): Promise<boolean> => {
             return false;
         }
         
-        // Verificar si hay credenciales guardadas
-        const hasCreds = data && Array.isArray(data) && data.some((r: any) => r.key_id === 'creds');
-        console.log(`[SessionCheck] ${hasCreds ? '✅' : '❌'} Sesión ${hasCreds ? 'encontrada' : 'no encontrada'} en Supabase`);
-        return hasCreds;
+        // Verificar si hay respaldo unificado guardado
+        const hasBackup = data && Array.isArray(data) && data.some((r: any) => r.key_id === 'full_backup');
+        console.log(`[SessionCheck] ${hasBackup ? '✅' : '❌'} Sesión ${hasBackup ? 'encontrada' : 'no encontrada'} en Supabase`);
+        return hasBackup;
     } catch (error) {
         console.error('[SessionCheck] Error verificando sesión:', error);
         return false;
