@@ -7,6 +7,7 @@ import { Server } from 'socket.io';
 import fs from 'fs';
 import express from 'express';
 import { createServer } from 'http';
+import QRCode from 'qrcode';
 // Estado global para encender/apagar el bot
 let botEnabled = true;
 import { createBot, createProvider, createFlow, addKeyword, EVENTS } from "@builderbot/bot";
@@ -57,6 +58,28 @@ const adapterProvider = createProvider(BaileysProvider, {
     // SIEMPRE deshabilitar el servidor HTTP de Sherpa para evitar reinicios
     // El QR se mostrará en los logs de Railway (Deployments > Logs)
     disableHttpServer: true,
+});
+
+// Listener para generar el archivo QR manualmente cuando se solicite
+adapterProvider.on('require_action', async (payload: any) => {
+    console.log('⚡ [Provider] require_action received');
+    if (payload.instructions && payload.instructions.length > 0) {
+        console.log('⚡ [Provider] Instructions:', payload.instructions);
+    }
+    // En algunas versiones de BuilderBot/Baileys, el QR string viene en payload.qr o payload.code
+    // Vamos a intentar detectar el string del QR
+    const qrString = payload.qr || payload.code || payload;
+    
+    if (typeof qrString === 'string' && qrString.length > 20) {
+        console.log('⚡ [Provider] QR Code detected. Generating image...');
+        try {
+            const qrPath = path.join(process.cwd(), 'bot.qr.png');
+            await QRCode.toFile(qrPath, qrString);
+            console.log(`✅ [Provider] QR Image saved to ${qrPath}`);
+        } catch (err) {
+            console.error('❌ [Provider] Error generating QR image:', err);
+        }
+    }
 });
 
 const errorReporter = new ErrorReporter(adapterProvider, ID_GRUPO_RESUMEN); // Reemplaza YOUR_GROUP_ID con el ID del grupo de WhatsApp
