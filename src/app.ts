@@ -22,7 +22,7 @@ import { locationFlow } from "./Flows/locationFlow";
 import { AssistantResponseProcessor } from "./utils/AssistantResponseProcessor";
 import { updateMain } from "./addModule/updateMain";
 import { ErrorReporter } from "./utils/errorReporter";
-import { AssistantBridge } from './utils-web/AssistantBridge';
+// import { AssistantBridge } from './utils-web/AssistantBridge';
 import { WebChatManager } from './utils-web/WebChatManager';
 import { fileURLToPath } from 'url';
 import { getArgentinaDatetimeString } from "./utils/ArgentinaTime";
@@ -423,8 +423,8 @@ const main = async () => {
 
 
                 // Integrar AssistantBridge si es necesario
-                const assistantBridge = new AssistantBridge();
-                assistantBridge.setupWebChat(polkaApp, realHttpServer);
+                // const assistantBridge = new AssistantBridge();
+                // assistantBridge.setupWebChat(polkaApp, realHttpServer);
 
                                 polkaApp.post('/webchat-api', async (req, res) => {
                                     console.log('Llamada a /webchat-api'); // log para debug
