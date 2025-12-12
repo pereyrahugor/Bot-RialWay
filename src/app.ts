@@ -293,6 +293,13 @@ const main = async () => {
                 polkaApp.use("/js", serve("src/js"));
                 polkaApp.use("/style", serve("src/style"));
                 polkaApp.use("/assets", serve("src/assets"));
+
+                // Redireccionar raíz a /webchat
+                polkaApp.get('/', (req, res) => {
+                    res.writeHead(302, { 'Location': '/webchat' });
+                    res.end();
+                });
+
                                 // Endpoint para obtener el nombre del asistente de forma dinámica
                                 polkaApp.get('/api/assistant-name', (req, res) => {
                                         const assistantName = process.env.ASSISTANT_NAME || 'Asistente demo';

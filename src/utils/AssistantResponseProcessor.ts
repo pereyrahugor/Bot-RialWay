@@ -90,21 +90,6 @@ function limpiarBloquesJSON(texto: string): string {
 }
 
 function corregirFechaAnioVigente(fechaReservaStr: string): string {
-function toArgentinaTime(fechaReservaStr: string): string {
-    // Recibe 'YYYY-MM-DD HH:mm' y ajusta a GMT-3
-    const [fecha, hora] = fechaReservaStr.split(' ');
-    const [anio, mes, dia] = fecha.split('-').map(Number);
-    const [hh, min] = hora.split(':').map(Number);
-    // Construir fecha en UTC y restar 3 horas
-    const date = new Date(Date.UTC(anio, mes - 1, dia, hh, min));
-    date.setHours(date.getHours() - 3);
-    const yyyy = date.getFullYear();
-    const mm = String(date.getMonth() + 1).padStart(2, '0');
-    const dd = String(date.getDate()).padStart(2, '0');
-    const hhh = String(date.getHours()).padStart(2, '0');
-    const mmm = String(date.getMinutes()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd} ${hhh}:${mmm}`;
-}
     const ahora = new Date();
     const vigente = ahora.getFullYear();
     const [fecha, hora] = fechaReservaStr.split(" ");
@@ -166,6 +151,7 @@ export class AssistantResponseProcessor {
         // 0) Detectar y procesar DB QUERY [DB_QUERY: ...]
         const dbQueryRegex = /\[DB_QUERY\s*:\s*([\s\S]*?)\]/i;
         const dbMatch = textResponse.match(dbQueryRegex);
+        console.log('[DEBUG] DB Match result:', dbMatch ? 'FOUND' : 'NULL');
         if (dbMatch) {
             const sqlQuery = dbMatch[1].trim();
             if (ctx && ctx.type === 'webchat') console.log(`[Webchat Debug] 🔄 Detectada solicitud de DB Query: ${sqlQuery}`);
