@@ -308,9 +308,25 @@ const main = async () => {
                 // Usar la instancia Polka (httpServer de createBot es la más confiable)
                 let polkaApp = (httpServer || adapterProvider.server) as any;
                 
-                if (!polkaApp || typeof polkaApp.get !== 'function' || typeof polkaApp.use !== 'function') {
-                    console.error('❌ [ERROR] No se pudo obtener una instancia válida de Polka (httpServer). Usando dummy app para evitar crash.');
-                    polkaApp = {
+                console.log('🔍 [DEBUG] Inspecting polkaApp/httpServer:');
+                console.log('Type:', typeof polkaApp);
+                if (polkaApp) {
+                    console.log('Keys:', Object.keys(polkaApp));
+                    console.log('Has .get:', typeof polkaApp.get);
+                    console.log('Has .use:', typeof polkaApp.use);
+                }
+
+                if (!polkaApp) {
+                    console.error('❌ [ERROR] polkaApp is null/undefined.');
+                } else if (typeof polkaApp.get !== 'function' || typeof polkaApp.use !== 'function') {
+                    console.error('⚠️ [WARN] polkaApp missing .get or .use methods. Trying to use it anyway to see what happens, or falling back to dummy if it crashes.');
+                    // No forzamos dummy todavía, dejamos que intente o falle controladamente
+                }
+
+                // Si realmente no es funcional, definimos un dummy PERO intentamos usar el original si tiene algo
+                if (!polkaApp) {
+                     console.error('❌ [ERROR] Fatal: No app available. Using dummy.');
+                     polkaApp = {
                         use: (...args) => console.log('⚠️ [DUMMY] use called', args[0]),
                         get: (...args) => console.log('⚠️ [DUMMY] get called', args[0]),
                         post: (...args) => console.log('⚠️ [DUMMY] post called', args[0]),
@@ -319,67 +335,77 @@ const main = async () => {
                 }
 
                 // Middleware de logging para debug
-                polkaApp.use((req, res, next) => {
-                    console.log(`[REQUEST] ${req.method} ${req.url}`);
-                    next();
-                });
+                try {
+                    polkaApp.use((req, res, next) => {
+                        console.log(`[REQUEST] ${req.method} ${req.url}`);
+                        next();
+                    });
+                } catch (e) {
+                    console.error('❌ [ERROR] Failed to register middleware:', e);
+                }
 
-                polkaApp.use("/js", serve("src/js"));
-                polkaApp.use("/style", serve("src/style"));
-                polkaApp.use("/assets", serve("src/assets"));
+                try {
+                    polkaApp.use("/js", serve("src/js"));
+                    polkaApp.use("/style", serve("src/style"));
+                    polkaApp.use("/assets", serve("src/assets"));
+                } catch (e) { console.error('❌ [ERROR] Failed to register static assets:', e); }
 
                 // Endpoint para servir la imagen del QR
-                polkaApp.get('/qr.png', (req, res) => {
-                    const qrPath = path.join(process.cwd(), 'bot.qr.png');
-                    if (fs.existsSync(qrPath)) {
-                        res.setHeader('Content-Type', 'image/png');
-                        fs.createReadStream(qrPath).pipe(res);
-                    } else {
-                        res.writeHead(404);
-                        res.end('QR no encontrado');
-                    }
-                });
+                try {
+                    polkaApp.get('/qr.png', (req, res) => {
+                        const qrPath = path.join(process.cwd(), 'bot.qr.png');
+                        if (fs.existsSync(qrPath)) {
+                            res.setHeader('Content-Type', 'image/png');
+                            fs.createReadStream(qrPath).pipe(res);
+                        } else {
+                            res.writeHead(404);
+                            res.end('QR no encontrado');
+                        }
+                    });
+                } catch (e) { console.error('❌ [ERROR] Failed to register /qr.png:', e); }
 
                 // Redireccionar raíz a /webchat SOLO si hay sesión activa
-                polkaApp.get('/', (req, res) => {
-                    console.log('[DEBUG] Handling root request');
-                    try {
-                        if (hasActiveSession()) {
-                            console.log('[DEBUG] Session active, redirecting to /webchat');
-                            res.writeHead(302, { 'Location': '/webchat' });
-                            res.end();
-                        } else {
-                            console.log('[DEBUG] No session, showing QR page');
-                            res.writeHead(200, { 'Content-Type': 'text/html' });
-                            res.end(`
-                            <html>
-                                <head>
-                                    <title>Bot QR</title>
-                                    <meta http-equiv="refresh" content="5">
-                                    <style>
-                                        body { display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f0f2f5; font-family: sans-serif; }
-                                        .container { text-align: center; background: white; padding: 2rem; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-                                        img { max-width: 300px; margin-bottom: 1rem; }
-                                        p { color: #54656f; }
-                                    </style>
-                                </head>
-                                <body>
-                                    <div class="container">
-                                        <h1>Escanea el código QR</h1>
-                                        <img src="/qr.png" alt="Cargando QR..." onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
-                                        <p style="display:none">Esperando generación del QR...</p>
-                                        <p>La página se actualizará automáticamente.</p>
-                                    </div>
-                                </body>
-                            </html>
-                        `);
+                try {
+                    polkaApp.get('/', (req, res) => {
+                        console.log('[DEBUG] Handling root request');
+                        try {
+                            if (hasActiveSession()) {
+                                console.log('[DEBUG] Session active, redirecting to /webchat');
+                                res.writeHead(302, { 'Location': '/webchat' });
+                                res.end();
+                            } else {
+                                console.log('[DEBUG] No session, showing QR page');
+                                res.writeHead(200, { 'Content-Type': 'text/html' });
+                                res.end(`
+                                <html>
+                                    <head>
+                                        <title>Bot QR</title>
+                                        <meta http-equiv="refresh" content="5">
+                                        <style>
+                                            body { display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f0f2f5; font-family: sans-serif; }
+                                            .container { text-align: center; background: white; padding: 2rem; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                                            img { max-width: 300px; margin-bottom: 1rem; }
+                                            p { color: #54656f; }
+                                        </style>
+                                    </head>
+                                    <body>
+                                        <div class="container">
+                                            <h1>Escanea el código QR</h1>
+                                            <img src="/qr.png" alt="Cargando QR..." onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+                                            <p style="display:none">Esperando generación del QR...</p>
+                                            <p>La página se actualizará automáticamente.</p>
+                                        </div>
+                                    </body>
+                                </html>
+                            `);
+                            }
+                        } catch (e) {
+                            console.error('[ERROR] Root handler failed:', e);
+                            res.statusCode = 500;
+                            res.end('Internal Server Error');
                         }
-                    } catch (e) {
-                        console.error('[ERROR] Root handler failed:', e);
-                        res.statusCode = 500;
-                        res.end('Internal Server Error');
-                    }
-                });
+                    });
+                } catch (e) { console.error('❌ [ERROR] Failed to register root route:', e); }
 
                                 // Endpoint para obtener el nombre del asistente de forma dinámica
                                 polkaApp.get('/api/assistant-name', (req, res) => {
@@ -738,6 +764,11 @@ const main = async () => {
     // ...existing code...
     const serverInstance = httpServer(+PORT) as any;
     
+    console.log('🔍 [DEBUG] httpServer(+PORT) returned:', typeof serverInstance);
+    if (serverInstance) {
+        console.log('🔍 [DEBUG] serverInstance keys:', Object.keys(serverInstance));
+    }
+
     // Intentar inicializar Socket.IO con la instancia devuelta
     if (serverInstance) {
         initSocketIO(serverInstance);
