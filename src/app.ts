@@ -12,7 +12,7 @@ import QRCode from 'qrcode';
 let botEnabled = true;
 import { createBot, createProvider, createFlow, addKeyword, EVENTS } from "@builderbot/bot";
 import { MemoryDB } from "@builderbot/bot";
-import { BaileysProvider } from "builderbot-provider-sherpa";
+import { BaileysProvider } from "@builderbot/provider-baileys";
 import { restoreSessionFromDb, startSessionSync, deleteSessionFromDb } from "./utils/sessionSync";
 import { toAsk, httpInject } from "@builderbot-plugins/openai-assistants";
 import { typing } from "./utils/presence";
@@ -449,9 +449,9 @@ const main = async () => {
                                 <html>
                                     <body style="font-family: sans-serif; text-align: center; padding: 50px;">
                                         <h1 style="color: green;">✅ Sesión Eliminada (Local y Remota)</h1>
-                                        <p>El bot se está reiniciando. Por favor espera unos 30 segundos y recarga la página principal para escanear el nuevo QR.</p>
+                                        <p>El bot se está reiniciando. Por favor espera unos 60 segundos y recarga la página principal para escanear el nuevo QR.</p>
                                         <script>
-                                            setTimeout(() => { window.location.href = "/"; }, 15000);
+                                            setTimeout(() => { window.location.href = "/"; }, 45000);
                                         </script>
                                     </body>
                                 </html>
@@ -462,7 +462,7 @@ const main = async () => {
                         console.log('[RESET] Saliendo del proceso para reiniciar...');
                         setTimeout(() => {
                             process.exit(0); 
-                        }, 1000);
+                        }, 2000);
                     } catch (error) {
                         console.error('[RESET] Error:', error);
                         if (req.headers['content-type'] === 'application/json') {
