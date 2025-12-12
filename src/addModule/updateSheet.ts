@@ -35,9 +35,9 @@ const sheets = google.sheets({ version: "v4", auth });
 const openai = new OpenAI();
 
 // Función principal para procesar todos los sheets
-export async function updateAllSheets() {
+export async function updateAllSheets(options: { forceRecreate?: boolean } = {}) {
     for (const SHEET_ID of SHEET_IDS) {
-        await processSheetById(SHEET_ID);
+        await processSheetById(SHEET_ID, options);
     }
 }
 
@@ -96,7 +96,7 @@ async function ensureTableExists(tableName: string, headers: string[]) {
 }
 
 // Procesa un sheet por ID, obtiene el nombre real y ejecuta la lógica
-async function processSheetById(SHEET_ID: string) {
+async function processSheetById(SHEET_ID: string, options: { forceRecreate?: boolean } = {}) {
     try {
         // Obtener metadatos para el nombre real de la hoja principal
         const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
@@ -204,6 +204,16 @@ async function processSheetById(SHEET_ID: string) {
             const tableName = sanitizeTableName(SHEET_NAME);
             const headersSanitized = headers.map(h => sanitizeColumnName(h));
             
+            if (options.forceRecreate) {
+                console.log(`⚠️ Forzando recreación de tabla '${tableName}' (DROP TABLE)...`);
+                const dropRes = await supabase.rpc('exec_sql', { query: `DROP TABLE IF EXISTS ${tableName}` });
+                if (dropRes.error) {
+                    console.error(`❌ Error al eliminar tabla '${tableName}':`, dropRes.error);
+                } else {
+                    console.log(`✅ Tabla '${tableName}' eliminada para recreación.`);
+                }
+            }
+
             // Ensure table exists
             const tableReady = await ensureTableExists(tableName, headersSanitized);
             
