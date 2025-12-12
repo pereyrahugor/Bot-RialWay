@@ -385,32 +385,63 @@ const main = async () => {
 
                                 // Utilidad para servir páginas HTML estáticas
                                 function serveHtmlPage(route, filename) {
-                                    polkaApp.get(route, (req, res) => {
-                                        console.log(`[DEBUG] Serving HTML for ${route}`);
+                                    const handler = (req, res) => {
+                                        console.log(`[DEBUG] Serving HTML for ${req.url} -> ${filename}`);
                                         try {
                                             res.setHeader("Content-Type", "text/html");
-                                            // Buscar primero en src/ (local), luego en /app/src/ (deploy)
-                                            let htmlPath = path.join(__dirname, filename);
-                                            if (!fs.existsSync(htmlPath)) {
-                                                // Buscar en /app/src/ (deploy)
-                                                htmlPath = path.join(process.cwd(), 'src', filename);
+                                            
+                                            // Intentar múltiples rutas posibles
+                                            const possiblePaths = [
+                                                path.join(process.cwd(), 'src', filename),
+                                                path.join(__dirname, filename),
+                                                path.join(process.cwd(), filename),
+                                                path.join(__dirname, '..', 'src', filename)
+                                            ];
+
+                                            let htmlPath = null;
+                                            for (const p of possiblePaths) {
+                                                if (fs.existsSync(p)) {
+                                                    htmlPath = p;
+                                                    break;
+                                                }
                                             }
-                                            console.log(`[DEBUG] Reading file: ${htmlPath}`);
-                                            if (fs.existsSync(htmlPath)) {
+
+                                            if (htmlPath) {
+                                                console.log(`[DEBUG] Found file at: ${htmlPath}`);
                                                 const content = fs.readFileSync(htmlPath);
                                                 res.end(content);
                                             } else {
-                                                console.error(`[ERROR] File not found: ${htmlPath}`);
+                                                console.error(`[ERROR] File not found. Searched in: ${possiblePaths.join(', ')}`);
                                                 res.statusCode = 404;
-                                                res.end('HTML no encontrado');
+                                                res.end('HTML no encontrado en el servidor');
                                             }
                                         } catch (err) {
                                             console.error(`[ERROR] Failed to serve ${filename}:`, err);
                                             res.statusCode = 500;
                                             res.end('Error interno al servir HTML');
                                         }
-                                    });
+                                    };
+                                    
+                                    polkaApp.get(route, handler);
+                                    // También registrar con slash final por si acaso
+                                    polkaApp.get(route + '/', handler);
                                 }
+
+                                // Endpoint de debug para verificar sistema de archivos
+                                polkaApp.get('/debug-info', (req, res) => {
+                                    try {
+                                        res.setHeader('Content-Type', 'application/json');
+                                        res.end(JSON.stringify({
+                                            cwd: process.cwd(),
+                                            dirname: __dirname,
+                                            filesInSrc: fs.existsSync(path.join(process.cwd(), 'src')) ? fs.readdirSync(path.join(process.cwd(), 'src')) : 'src not found',
+                                            filesInCwd: fs.readdirSync(process.cwd())
+                                        }, null, 2));
+                                    } catch (e) {
+                                        res.statusCode = 500;
+                                        res.end(JSON.stringify({ error: e.message }));
+                                    }
+                                });
 
                                 // Registrar páginas HTML
                                 serveHtmlPage("/webchat", "webchat.html");
