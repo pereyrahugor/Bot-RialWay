@@ -68,6 +68,7 @@ export async function sendMessageToThread(threadId: string, userMessage: string,
   const runId = run.id;
   let attempts = 0;
   const maxAttempts = 60; // 60 segundos máximo
+  let foundMessage: any = null;
   
   while (attempts < maxAttempts) {
     await new Promise(res => setTimeout(res, 1000));
@@ -95,32 +96,37 @@ export async function sendMessageToThread(threadId: string, userMessage: string,
     
     if (newAssistantMsg) {
       console.log('[sendMessageToThread] Mensaje del asistente con contenido detectado');
+      foundMessage = newAssistantMsg;
       break;
     }
     
     attempts++;
   }
   
-  if (attempts >= maxAttempts) {
+  if (attempts >= maxAttempts && !foundMessage) {
     throw new Error('Timeout esperando respuesta del asistente');
   }
   
-  // Obtener el último mensaje del asistente de ESTE run
-  const messages = await openai.beta.threads.messages.list(threadId);
-  const assistantMessages = messages.data.filter(m => m.role === 'assistant' && m.run_id === runId);
-  
-  if (!assistantMessages.length) {
-    console.warn('[sendMessageToThread] No se encontraron mensajes del asistente para este run');
-    return '';
+  // Si no encontramos el mensaje en el bucle, buscarlo ahora
+  if (!foundMessage) {
+    const messages = await openai.beta.threads.messages.list(threadId);
+    const assistantMessages = messages.data.filter(m => m.role === 'assistant' && m.run_id === runId);
+    
+    if (!assistantMessages.length) {
+      console.warn('[sendMessageToThread] No se encontraron mensajes del asistente para este run');
+      return '';
+    }
+    
+    foundMessage = assistantMessages[0];
   }
   
-  const lastMsg = assistantMessages[0]; // El primero es el más reciente
-  const textBlock = lastMsg.content.find(block => block.type === 'text' && typeof (block as any).text?.value === 'string');
+  // Extraer el texto del mensaje encontrado
+  const textBlock = foundMessage.content.find((block: any) => block.type === 'text' && typeof block.text?.value === 'string');
   let response = '';
   if (textBlock && textBlock.type === 'text') {
     response = (textBlock as { type: 'text'; text: { value: string } }).text.value;
   } else {
-    response = lastMsg.content.length ? JSON.stringify(lastMsg.content[0]) : '';
+    response = foundMessage.content.length ? JSON.stringify(foundMessage.content[0]) : '';
   }
   
   // Log de debug para webchat
