@@ -47,10 +47,51 @@ const ID_GRUPO_RESUMEN = process.env.ID_GRUPO_WS ?? "";
 const userQueues = new Map();
 const userLocks = new Map();
 
+// Función helper para verificar si existe una sesión guardada en Supabase
+const checkExistingSession = async (): Promise<boolean> => {
+    try {
+        const supabaseUrl = process.env.SUPABASE_URL;
+        const supabaseKey = process.env.SUPABASE_KEY;
+        const projectId = process.env.RAILWAY_PROJECT_ID || 'local-dev';
+        
+        if (!supabaseUrl || !supabaseKey) {
+            console.log('[SessionCheck] ⚠️ No hay credenciales de Supabase. Asumiendo sin sesión.');
+            return false;
+        }
+
+        const { createClient } = await import('@supabase/supabase-js');
+        const supabase = createClient(supabaseUrl, supabaseKey);
+        
+        const { data, error } = await supabase.rpc('get_whatsapp_session', {
+            p_project_id: projectId,
+            p_session_id: 'default'
+        });
+        
+        if (error) {
+            console.log('[SessionCheck] ⚠️ Error consultando sesión:', error.message);
+            return false;
+        }
+        
+        // Verificar si hay credenciales guardadas
+        const hasCreds = data && Array.isArray(data) && data.some((r: any) => r.key_id === 'creds');
+        console.log(`[SessionCheck] ${hasCreds ? '✅' : '❌'} Sesión ${hasCreds ? 'encontrada' : 'no encontrada'} en Supabase`);
+        return hasCreds;
+    } catch (error) {
+        console.error('[SessionCheck] Error verificando sesión:', error);
+        return false;
+    }
+};
+
+// Verificar sesión antes de crear el provider
+const hasExistingSession = await checkExistingSession();
+
 const adapterProvider = createProvider(BaileysProvider, {
     version: [2, 3000, 1030817285],
     groupsIgnore: false,
     readStatus: false,
+    // Solo deshabilitar el servidor HTTP si YA hay una sesión guardada
+    // Si no hay sesión, permitir que Sherpa muestre el QR en la web
+    disableHttpServer: hasExistingSession,
 });
 
 const errorReporter = new ErrorReporter(adapterProvider, ID_GRUPO_RESUMEN); // Reemplaza YOUR_GROUP_ID con el ID del grupo de WhatsApp
