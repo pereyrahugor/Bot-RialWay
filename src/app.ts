@@ -13,7 +13,7 @@ import QRCode from 'qrcode';
 let botEnabled = true;
 import { createBot, createProvider, createFlow, addKeyword, EVENTS } from "@builderbot/bot";
 import { MemoryDB } from "@builderbot/bot";
-import { BaileysProvider } from "@builderbot/provider-baileys";
+import { BaileysProvider } from "builderbot-provider-sherpa";
 import { restoreSessionFromDb, startSessionSync, deleteSessionFromDb } from "./utils/sessionSync";
 import { toAsk, httpInject } from "@builderbot-plugins/openai-assistants";
 import { typing } from "./utils/presence";
@@ -268,6 +268,9 @@ const hasActiveSession = () => {
 
 // Main function to initialize the bot and load Google Sheets data
 const main = async () => {
+    // Restaurar sesión de WhatsApp desde Supabase si existe (ANTES de crear el provider)
+    await restoreSessionFromDb();
+
     // Limpiar QR antiguo al inicio
     const qrPath = path.join(process.cwd(), 'bot.qr.png');
     if (fs.existsSync(qrPath)) {
@@ -343,9 +346,6 @@ const main = async () => {
     // // Paso 1: Inicializar datos desde Google Sheets
      console.log("📌 Inicializando datos desde Google Sheets...");
 
-    // Restaurar sesión de WhatsApp desde Supabase si existe
-    await restoreSessionFromDb();
-
     // Cargar todas las hojas principales con una sola función reutilizable
     await updateMain();
 
@@ -372,8 +372,6 @@ const main = async () => {
 
                 // Iniciar sincronización periódica de sesión hacia Supabase
                 startSessionSync();
-
-                httpInject(adapterProvider.server);
 
                 // Inicializar servidor Polka propio para WebChat y QR
                 const app = adapterProvider.server;
@@ -502,6 +500,9 @@ const main = async () => {
                         res.status(500).send('Internal Server Error');
                     }
                 });
+
+                // Inyectar rutas del plugin después de las nuestras para evitar conflictos
+                httpInject(app);
 
                 // Endpoint para borrar sesión y reiniciar
                 app.post('/api/reset-session', async (req, res) => {

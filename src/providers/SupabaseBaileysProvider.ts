@@ -1,5 +1,5 @@
 
-import { BaileysProvider } from '@builderbot/provider-baileys';
+import { BaileysProvider } from 'builderbot-provider-sherpa';
 import makeWASocket, { 
     DisconnectReason, 
     makeCacheableSignalKeyStore,
