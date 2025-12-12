@@ -305,13 +305,19 @@ const main = async () => {
 
                 // httpInject(adapterProvider.server); // DESHABILITADO: Causa reinicios al acceder a rutas del QR
 
-                // Usar la instancia Polka (adapterProvider.server) para rutas
-                const polkaApp = (adapterProvider.server || httpServer) as any;
+                // Usar la instancia Polka (httpServer de createBot es la más confiable)
+                const polkaApp = (httpServer || adapterProvider.server) as any;
                 
-                if (!polkaApp) {
-                    console.error('❌ [ERROR] No se pudo obtener la instancia de Polka (httpServer).');
+                if (!polkaApp || typeof polkaApp.get !== 'function' || typeof polkaApp.use !== 'function') {
+                    console.error('❌ [ERROR] No se pudo obtener una instancia válida de Polka (httpServer).');
                     return;
                 }
+
+                // Middleware de logging para debug
+                polkaApp.use((req, res, next) => {
+                    console.log(`[REQUEST] ${req.method} ${req.url}`);
+                    next();
+                });
 
                 polkaApp.use("/js", serve("src/js"));
                 polkaApp.use("/style", serve("src/style"));
@@ -331,12 +337,16 @@ const main = async () => {
 
                 // Redireccionar raíz a /webchat SOLO si hay sesión activa
                 polkaApp.get('/', (req, res) => {
-                    if (hasActiveSession()) {
-                        res.writeHead(302, { 'Location': '/webchat' });
-                        res.end();
-                    } else {
-                        res.writeHead(200, { 'Content-Type': 'text/html' });
-                        res.end(`
+                    console.log('[DEBUG] Handling root request');
+                    try {
+                        if (hasActiveSession()) {
+                            console.log('[DEBUG] Session active, redirecting to /webchat');
+                            res.writeHead(302, { 'Location': '/webchat' });
+                            res.end();
+                        } else {
+                            console.log('[DEBUG] No session, showing QR page');
+                            res.writeHead(200, { 'Content-Type': 'text/html' });
+                            res.end(`
                             <html>
                                 <head>
                                     <title>Bot QR</title>
@@ -358,6 +368,11 @@ const main = async () => {
                                 </body>
                             </html>
                         `);
+                        }
+                    } catch (e) {
+                        console.error('[ERROR] Root handler failed:', e);
+                        res.statusCode = 500;
+                        res.end('Internal Server Error');
                     }
                 });
 
@@ -371,18 +386,28 @@ const main = async () => {
                                 // Utilidad para servir páginas HTML estáticas
                                 function serveHtmlPage(route, filename) {
                                     polkaApp.get(route, (req, res) => {
-                                        res.setHeader("Content-Type", "text/html");
-                                        // Buscar primero en src/ (local), luego en /app/src/ (deploy)
-                                        let htmlPath = path.join(__dirname, filename);
-                                        if (!fs.existsSync(htmlPath)) {
-                                            // Buscar en /app/src/ (deploy)
-                                            htmlPath = path.join(process.cwd(), 'src', filename);
-                                        }
+                                        console.log(`[DEBUG] Serving HTML for ${route}`);
                                         try {
-                                            res.end(fs.readFileSync(htmlPath));
+                                            res.setHeader("Content-Type", "text/html");
+                                            // Buscar primero en src/ (local), luego en /app/src/ (deploy)
+                                            let htmlPath = path.join(__dirname, filename);
+                                            if (!fs.existsSync(htmlPath)) {
+                                                // Buscar en /app/src/ (deploy)
+                                                htmlPath = path.join(process.cwd(), 'src', filename);
+                                            }
+                                            console.log(`[DEBUG] Reading file: ${htmlPath}`);
+                                            if (fs.existsSync(htmlPath)) {
+                                                const content = fs.readFileSync(htmlPath);
+                                                res.end(content);
+                                            } else {
+                                                console.error(`[ERROR] File not found: ${htmlPath}`);
+                                                res.statusCode = 404;
+                                                res.end('HTML no encontrado');
+                                            }
                                         } catch (err) {
-                                            res.statusCode = 404;
-                                            res.end('HTML no encontrado');
+                                            console.error(`[ERROR] Failed to serve ${filename}:`, err);
+                                            res.statusCode = 500;
+                                            res.end('Error interno al servir HTML');
                                         }
                                     });
                                 }
