@@ -5,6 +5,8 @@ import path from 'path';
 import serve from 'serve-static';
 import { Server } from 'socket.io';
 import fs from 'fs';
+import express from 'express';
+import { createServer } from 'http';
 // Estado global para encender/apagar el bot
 let botEnabled = true;
 import { createBot, createProvider, createFlow, addKeyword, EVENTS } from "@builderbot/bot";
@@ -305,122 +307,86 @@ const main = async () => {
 
                 // httpInject(adapterProvider.server); // DESHABILITADO: Causa reinicios al acceder a rutas del QR
 
-                // Usar la instancia Polka (httpServer de createBot es la más confiable)
-                let polkaApp = (httpServer || adapterProvider.server) as any;
-                
-                console.log('🔍 [DEBUG] Inspecting polkaApp/httpServer:');
-                console.log('Type:', typeof polkaApp);
-                if (polkaApp) {
-                    console.log('Keys:', Object.keys(polkaApp));
-                    console.log('Has .get:', typeof polkaApp.get);
-                    console.log('Has .use:', typeof polkaApp.use);
-                }
+                // Inicializar servidor Express propio para WebChat y QR
+                const app = express();
+                const server = createServer(app);
 
-                if (!polkaApp) {
-                    console.error('❌ [ERROR] polkaApp is null/undefined.');
-                } else if (typeof polkaApp.get !== 'function' || typeof polkaApp.use !== 'function') {
-                    console.error('⚠️ [WARN] polkaApp missing .get or .use methods. Trying to use it anyway to see what happens, or falling back to dummy if it crashes.');
-                    // No forzamos dummy todavía, dejamos que intente o falle controladamente
-                }
+                // Middleware de logging
+                app.use((req, res, next) => {
+                    console.log(`[REQUEST] ${req.method} ${req.url}`);
+                    next();
+                });
 
-                // Si realmente no es funcional, definimos un dummy PERO intentamos usar el original si tiene algo
-                if (!polkaApp) {
-                     console.error('❌ [ERROR] Fatal: No app available. Using dummy.');
-                     polkaApp = {
-                        use: (...args) => console.log('⚠️ [DUMMY] use called', args[0]),
-                        get: (...args) => console.log('⚠️ [DUMMY] get called', args[0]),
-                        post: (...args) => console.log('⚠️ [DUMMY] post called', args[0]),
-                        listen: (...args) => console.log('⚠️ [DUMMY] listen called')
-                    };
-                }
+                // Middleware para parsear JSON
+                app.use(express.json());
 
-                // Middleware de logging para debug
-                try {
-                    polkaApp.use((req, res, next) => {
-                        console.log(`[REQUEST] ${req.method} ${req.url}`);
-                        next();
-                    });
-                } catch (e) {
-                    console.error('❌ [ERROR] Failed to register middleware:', e);
-                }
-
-                try {
-                    polkaApp.use("/js", serve("src/js"));
-                    polkaApp.use("/style", serve("src/style"));
-                    polkaApp.use("/assets", serve("src/assets"));
-                } catch (e) { console.error('❌ [ERROR] Failed to register static assets:', e); }
+                // Servir archivos estáticos
+                app.use("/js", express.static("src/js"));
+                app.use("/style", express.static("src/style"));
+                app.use("/assets", express.static("src/assets"));
 
                 // Endpoint para servir la imagen del QR
                 try {
-                    polkaApp.get('/qr.png', (req, res) => {
-                        const qrPath = path.join(process.cwd(), 'bot.qr.png');
-                        if (fs.existsSync(qrPath)) {
-                            res.setHeader('Content-Type', 'image/png');
-                            fs.createReadStream(qrPath).pipe(res);
-                        } else {
-                            res.writeHead(404);
-                            res.end('QR no encontrado');
-                        }
-                    });
-                } catch (e) { console.error('❌ [ERROR] Failed to register /qr.png:', e); }
+                // Endpoint para servir la imagen del QR
+                app.get('/qr.png', (req, res) => {
+                    const qrPath = path.join(process.cwd(), 'bot.qr.png');
+                    if (fs.existsSync(qrPath)) {
+                        res.setHeader('Content-Type', 'image/png');
+                        fs.createReadStream(qrPath).pipe(res);
+                    } else {
+                        res.status(404).send('QR no encontrado');
+                    }
+                });
 
                 // Redireccionar raíz a /webchat SOLO si hay sesión activa
-                try {
-                    polkaApp.get('/', (req, res) => {
-                        console.log('[DEBUG] Handling root request');
-                        try {
-                            if (hasActiveSession()) {
-                                console.log('[DEBUG] Session active, redirecting to /webchat');
-                                res.writeHead(302, { 'Location': '/webchat' });
-                                res.end();
-                            } else {
-                                console.log('[DEBUG] No session, showing QR page');
-                                res.writeHead(200, { 'Content-Type': 'text/html' });
-                                res.end(`
-                                <html>
-                                    <head>
-                                        <title>Bot QR</title>
-                                        <meta http-equiv="refresh" content="5">
-                                        <style>
-                                            body { display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f0f2f5; font-family: sans-serif; }
-                                            .container { text-align: center; background: white; padding: 2rem; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-                                            img { max-width: 300px; margin-bottom: 1rem; }
-                                            p { color: #54656f; }
-                                        </style>
-                                    </head>
-                                    <body>
-                                        <div class="container">
-                                            <h1>Escanea el código QR</h1>
-                                            <img src="/qr.png" alt="Cargando QR..." onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
-                                            <p style="display:none">Esperando generación del QR...</p>
-                                            <p>La página se actualizará automáticamente.</p>
-                                        </div>
-                                    </body>
-                                </html>
-                            `);
-                            }
-                        } catch (e) {
-                            console.error('[ERROR] Root handler failed:', e);
-                            res.statusCode = 500;
-                            res.end('Internal Server Error');
+                app.get('/', (req, res) => {
+                    console.log('[DEBUG] Handling root request');
+                    try {
+                        if (hasActiveSession()) {
+                            console.log('[DEBUG] Session active, redirecting to /webchat');
+                            res.redirect('/webchat');
+                        } else {
+                            console.log('[DEBUG] No session, showing QR page');
+                            res.status(200).send(`
+                            <html>
+                                <head>
+                                    <title>Bot QR</title>
+                                    <meta http-equiv="refresh" content="5">
+                                    <style>
+                                        body { display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f0f2f5; font-family: sans-serif; }
+                                        .container { text-align: center; background: white; padding: 2rem; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                                        img { max-width: 300px; margin-bottom: 1rem; }
+                                        p { color: #54656f; }
+                                    </style>
+                                </head>
+                                <body>
+                                    <div class="container">
+                                        <h1>Escanea el código QR</h1>
+                                        <img src="/qr.png" alt="Cargando QR..." onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+                                        <p style="display:none">Esperando generación del QR...</p>
+                                        <p>La página se actualizará automáticamente.</p>
+                                    </div>
+                                </body>
+                            </html>
+                        `);
                         }
-                    });
-                } catch (e) { console.error('❌ [ERROR] Failed to register root route:', e); }
+                    } catch (e) {
+                        console.error('[ERROR] Root handler failed:', e);
+                        res.status(500).send('Internal Server Error');
+                    }
+                });
 
-                                // Endpoint para obtener el nombre del asistente de forma dinámica
-                                polkaApp.get('/api/assistant-name', (req, res) => {
-                                        const assistantName = process.env.ASSISTANT_NAME || 'Asistente demo';
-                                        res.setHeader('Content-Type', 'application/json');
-                                        res.end(JSON.stringify({ name: assistantName }));
-                                });
+                // Endpoint para obtener el nombre del asistente de forma dinámica
+                app.get('/api/assistant-name', (req, res) => {
+                        const assistantName = process.env.ASSISTANT_NAME || 'Asistente demo';
+                        res.json({ name: assistantName });
+                });
 
                                 // Utilidad para servir páginas HTML estáticas
                                 function serveHtmlPage(route, filename) {
                                     const handler = (req, res) => {
                                         console.log(`[DEBUG] Serving HTML for ${req.url} -> ${filename}`);
                                         try {
-                                            res.setHeader("Content-Type", "text/html");
-                                            
                                             // Intentar múltiples rutas posibles
                                             const possiblePaths = [
                                                 path.join(process.cwd(), 'src', filename),
@@ -439,38 +405,33 @@ const main = async () => {
 
                                             if (htmlPath) {
                                                 console.log(`[DEBUG] Found file at: ${htmlPath}`);
-                                                const content = fs.readFileSync(htmlPath);
-                                                res.end(content);
+                                                res.sendFile(htmlPath);
                                             } else {
                                                 console.error(`[ERROR] File not found. Searched in: ${possiblePaths.join(', ')}`);
-                                                res.statusCode = 404;
-                                                res.end('HTML no encontrado en el servidor');
+                                                res.status(404).send('HTML no encontrado en el servidor');
                                             }
                                         } catch (err) {
                                             console.error(`[ERROR] Failed to serve ${filename}:`, err);
-                                            res.statusCode = 500;
-                                            res.end('Error interno al servir HTML');
+                                            res.status(500).send('Error interno al servir HTML');
                                         }
                                     };
                                     
-                                    polkaApp.get(route, handler);
+                                    app.get(route, handler);
                                     // También registrar con slash final por si acaso
-                                    polkaApp.get(route + '/', handler);
+                                    app.get(route + '/', handler);
                                 }
 
                                 // Endpoint de debug para verificar sistema de archivos
-                                polkaApp.get('/debug-info', (req, res) => {
+                                app.get('/debug-info', (req, res) => {
                                     try {
-                                        res.setHeader('Content-Type', 'application/json');
-                                        res.end(JSON.stringify({
+                                        res.json({
                                             cwd: process.cwd(),
                                             dirname: __dirname,
                                             filesInSrc: fs.existsSync(path.join(process.cwd(), 'src')) ? fs.readdirSync(path.join(process.cwd(), 'src')) : 'src not found',
                                             filesInCwd: fs.readdirSync(process.cwd())
-                                        }, null, 2));
+                                        });
                                     } catch (e) {
-                                        res.statusCode = 500;
-                                        res.end(JSON.stringify({ error: e.message }));
+                                        res.status(500).json({ error: e.message });
                                     }
                                 });
 
@@ -479,7 +440,7 @@ const main = async () => {
                                 serveHtmlPage("/webreset", "webreset.html");
 
   // Endpoint para reiniciar el bot vía Railway
-  polkaApp.post("/api/restart-bot", async (req, res) => {
+  app.post("/api/restart-bot", async (req, res) => {
   console.log('POST /api/restart-bot recibido');
   try {
     const result = await RailwayApi.restartActiveDeployment();
@@ -586,202 +547,107 @@ const main = async () => {
                 // const assistantBridge = new AssistantBridge();
                 // assistantBridge.setupWebChat(polkaApp, realHttpServer);
 
-                                polkaApp.post('/webchat-api', async (req, res) => {
-                                    console.log('Llamada a /webchat-api'); // log para debug
-                                    // Si el body ya está disponible (por ejemplo, con body-parser), úsalo directamente
-                                    if (req.body && req.body.message) {
-                                        console.log('Body recibido por body-parser:', req.body); // debug
-                                        try {
-                                            const message = req.body.message;
-                                            console.log('Mensaje recibido en webchat:', message); // debug
-                                            let ip = '';
-                                            const xff = req.headers['x-forwarded-for'];
-                                            if (typeof xff === 'string') {
-                                                ip = xff.split(',')[0];
-                                            } else if (Array.isArray(xff)) {
-                                                ip = xff[0];
-                                            } else {
-                                                ip = req.socket.remoteAddress || '';
-                                            }
-                                            // Crear un ctx similar al de WhatsApp, usando el IP como 'from'
-                                            const ctx = {
-                                                from: ip,
-                                                body: message,
-                                                type: 'webchat',
-                                                // Puedes agregar más propiedades si tu lógica lo requiere
-                                            };
-                                            // Usar la lógica principal del bot (processUserMessage)
-                                            let replyText = '';
-                                            // Simular flowDynamic para capturar la respuesta (acumulativo)
-                                            const flowDynamic = async (arr) => {
-                                                let textToAdd = "";
-                                                if (Array.isArray(arr)) {
-                                                   textToAdd = arr.map(a => a.body).join('\n');
-                                                } else if (typeof arr === 'string') {
-                                                   textToAdd = arr;
-                                                }
-                                                if (replyText) replyText += "\n\n" + textToAdd;
-                                                else replyText = textToAdd;
-                                            };
-                                                // Usar WebChatManager y WebChatSession para gestionar la sesión webchat
-                                                const { getOrCreateThreadId, sendMessageToThread, deleteThread } = await import('./utils-web/openaiThreadBridge');
-                                                const session = webChatManager.getSession(ip);
-                                                if (message.trim().toLowerCase() === "#reset" || message.trim().toLowerCase() === "#cerrar") {
-                                                    await deleteThread(session);
-                                                    session.clear();
-                                                    replyText = "🔄 El chat ha sido reiniciado. Puedes comenzar una nueva conversación.";
-                                                } else {
-                                                    let threadId = await getOrCreateThreadId(session);
-                                                    let finalMessage = message;
-                                                    if (!threadId) {
-                                                        finalMessage = `Fecha y hora actual: ${getArgentinaDatetimeString()}\n` + message;
-                                                    }
-                                                    session.addUserMessage(finalMessage);
-                                                    threadId = await getOrCreateThreadId(session);
-                                                    
-                                                    // Mock state para compatibilidad con AssistantResponseProcessor
-                                                    const state = {
-                                                        get: (key) => key === 'thread_id' ? session.thread_id : undefined,
-                                                        update: async () => {}, // No necesitamos historial aqui, lo maneja session
-                                                        clear: async () => session.clear(),
-                                                    };
+                app.post('/webchat-api', async (req, res) => {
+                    console.log('Llamada a /webchat-api');
+                    if (req.body && req.body.message) {
+                        try {
+                            const message = req.body.message;
+                            console.log('Mensaje recibido en webchat:', message);
+                            let ip = '';
+                            const xff = req.headers['x-forwarded-for'];
+                            if (typeof xff === 'string') {
+                                ip = xff.split(',')[0];
+                            } else if (Array.isArray(xff)) {
+                                ip = xff[0];
+                            } else {
+                                ip = req.ip || '';
+                            }
 
-                                                     // Adaptador para getAssistantResponse usando sendMessageToThread
-                                                    const webChatAdapterFn = async (assistantId, message, state, fallback, userId, threadId) => {
-                                                        try {
-                                                            return await sendMessageToThread(threadId, message, assistantId);
-                                                        } catch (e) {
-                                                            console.error("Error en webChatAdapterFn:", e);
-                                                            return fallback || "";
-                                                        }
-                                                    };
+                            // Usar WebChatManager
+                            const { getOrCreateThreadId, sendMessageToThread, deleteThread } = await import('./utils-web/openaiThreadBridge');
+                            const session = webChatManager.getSession(ip);
+                            
+                            let replyText = '';
+                            
+                            if (message.trim().toLowerCase() === "#reset" || message.trim().toLowerCase() === "#cerrar") {
+                                await deleteThread(session);
+                                session.clear();
+                                replyText = "🔄 El chat ha sido reiniciado. Puedes comenzar una nueva conversación.";
+                            } else {
+                                let threadId = await getOrCreateThreadId(session);
+                                let finalMessage = message;
+                                if (!threadId) {
+                                    finalMessage = `Fecha y hora actual: ${getArgentinaDatetimeString()}\n` + message;
+                                }
+                                session.addUserMessage(finalMessage);
+                                threadId = await getOrCreateThreadId(session);
+                                
+                                // Mock state
+                                const state = {
+                                    get: (key) => key === 'thread_id' ? session.thread_id : undefined,
+                                    update: async () => {},
+                                    clear: async () => session.clear(),
+                                };
 
-                                                    // Obtener primera respuesta
-                                                    const reply = await webChatAdapterFn(ASSISTANT_ID, finalMessage, state, "", ip, threadId);
-                                                    console.log('🔍 DEBUG RAW ASSISTANT MSG (WebChat):', JSON.stringify(reply));
-
-                                                    // Usar AssistantResponseProcessor
-                                                    const ctxMock = { type: 'webchat', from: ip, thread_id: threadId, body: finalMessage };
-                                                    
-                                                    await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
-                                                        reply,
-                                                        ctxMock,
-                                                        flowDynamic,
-                                                        state,
-                                                        undefined,
-                                                        () => {},
-                                                        webChatAdapterFn,
-                                                        ASSISTANT_ID
-                                                    );
-
-                                                    session.addAssistantMessage(replyText);
-                                            }
-                                            res.setHeader('Content-Type', 'application/json');
-                                            res.end(JSON.stringify({ reply: replyText }));
-                                        } catch (err) {
-                                            console.error('Error en /webchat-api:', err); // debug
-                                            res.statusCode = 500;
-                                            res.end(JSON.stringify({ reply: 'Hubo un error procesando tu mensaje.' }));
-                                        }
-                                    } else {
-                                        // Fallback manual si req.body no está disponible
-                                        let body = '';
-                                        req.on('data', chunk => { body += chunk; });
-                                        req.on('end', async () => {
-                                            console.log('Body recibido en /webchat-api:', body); // log para debug
-                                            try {
-                                                const { message } = JSON.parse(body);
-                                                console.log('Mensaje recibido en webchat:', message); // debug
-                                                let ip = '';
-                                                const xff = req.headers['x-forwarded-for'];
-                                                if (typeof xff === 'string') {
-                                                    ip = xff.split(',')[0];
-                                                } else if (Array.isArray(xff)) {
-                                                    ip = xff[0];
-                                                } else {
-                                                    ip = req.socket.remoteAddress || '';
-                                                }
-                                                // Centralizar historial y estado igual que WhatsApp
-                                                if (!global.webchatHistories) global.webchatHistories = {};
-                                                const historyKey = `webchat_${ip}`;
-                                                if (!global.webchatHistories[historyKey]) global.webchatHistories[historyKey] = { history: [], thread_id: null };
-                                                const _store = global.webchatHistories[historyKey];
-                                                const _history = _store.history;
-                                                const state = {
-                                                    get: function (key) {
-                                                        if (key === 'history') return _history;
-                                                        if (key === 'thread_id') return _store.thread_id;
-                                                        return undefined;
-                                                    },
-                                                    setThreadId: function (id) {
-                                                        _store.thread_id = id;
-                                                    },
-                                                    update: async function (msg, role = 'user') {
-                                                        if (_history.length > 0) {
-                                                            const last = _history[_history.length - 1];
-                                                            if (last.role === role && last.content === msg) return;
-                                                        }
-                                                        _history.push({ role, content: msg });
-                                                        if (_history.length >= 6) {
-                                                            const last3 = _history.slice(-3);
-                                                            if (last3.every(h => h.role === 'user' && h.content === msg)) {
-                                                                _history.length = 0;
-                                                                _store.thread_id = null;
-                                                            }
-                                                        }
-                                                    },
-                                                    clear: async function () { _history.length = 0; _store.thread_id = null; }
-                                                };
-                                                const provider = undefined;
-                                                const gotoFlow = () => {};
-                                                let replyText = '';
-                                                const flowDynamic = async (arr) => {
-                                                    if (Array.isArray(arr)) {
-                                                        replyText = arr.map(a => a.body).join('\n');
-                                                    } else if (typeof arr === 'string') {
-                                                        replyText = arr;
-                                                    }
-                                                };
-                                                if (message.trim().toLowerCase() === "#reset" || message.trim().toLowerCase() === "#cerrar") {
-                                                    await state.clear();
-                                                    replyText = "🔄 El chat ha sido reiniciado. Puedes comenzar una nueva conversación.";
-                                                } else {
-                                                    // ...thread_id gestionado por openaiThreadBridge, no es necesario actualizar aquí...
-                                                }
-                                                res.setHeader('Content-Type', 'application/json');
-                                                res.end(JSON.stringify({ reply: replyText }));
-                                            } catch (err) {
-                                                console.error('Error en /webchat-api:', err); // debug
-                                                res.statusCode = 500;
-                                                res.end(JSON.stringify({ reply: 'Hubo un error procesando tu mensaje.' }));
-                                            }
-                                        });
+                                // Adaptador
+                                const webChatAdapterFn = async (assistantId, message, state, fallback, userId, threadId) => {
+                                    try {
+                                        return await sendMessageToThread(threadId, message, assistantId);
+                                    } catch (e) {
+                                        console.error("Error en webChatAdapterFn:", e);
+                                        return fallback || "";
                                     }
-                                });
+                                };
 
-            // No llamar a listen, BuilderBot ya inicia el servidor
+                                // Obtener respuesta
+                                const reply = await webChatAdapterFn(ASSISTANT_ID, finalMessage, state, "", ip, threadId);
+                                console.log('🔍 DEBUG RAW ASSISTANT MSG (WebChat):', JSON.stringify(reply));
 
-    // ...existing code...
-    const serverInstance = httpServer(+PORT) as any;
-    
-    console.log('🔍 [DEBUG] httpServer(+PORT) returned:', typeof serverInstance);
-    if (serverInstance) {
-        console.log('🔍 [DEBUG] serverInstance keys:', Object.keys(serverInstance));
-    }
+                                // FlowDynamic simulado
+                                const flowDynamic = async (arr) => {
+                                    let textToAdd = "";
+                                    if (Array.isArray(arr)) {
+                                        textToAdd = arr.map(a => a.body).join('\n');
+                                    } else if (typeof arr === 'string') {
+                                        textToAdd = arr;
+                                    }
+                                    if (replyText) replyText += "\n\n" + textToAdd;
+                                    else replyText = textToAdd;
+                                };
 
-    // Intentar inicializar Socket.IO con la instancia devuelta
-    if (serverInstance) {
-        initSocketIO(serverInstance);
-    } else {
-        // Fallback: intentar buscar en adapterProvider.server.server si httpServer no devolvió nada
-        const fallbackServer = (adapterProvider.server as any)?.server;
-        if (fallbackServer) {
-            console.log('⚠️ [WARN] Usando fallbackServer para Socket.IO');
-            initSocketIO(fallbackServer);
-        } else {
-             console.error('❌ [ERROR] No se pudo obtener ninguna instancia de servidor para Socket.IO');
-        }
-    }
+                                // Procesar respuesta
+                                const ctxMock = { type: 'webchat', from: ip, thread_id: threadId, body: finalMessage };
+                                await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
+                                    reply,
+                                    ctxMock,
+                                    flowDynamic,
+                                    state,
+                                    undefined,
+                                    () => {},
+                                    webChatAdapterFn,
+                                    ASSISTANT_ID
+                                );
+
+                                session.addAssistantMessage(replyText);
+                            }
+                            res.json({ reply: replyText });
+                        } catch (err) {
+                            console.error('Error en /webchat-api:', err);
+                            res.status(500).json({ reply: 'Hubo un error procesando tu mensaje.' });
+                        }
+                    } else {
+                        res.status(400).json({ error: "Falta 'message' en el body" });
+                    }
+                });
+
+    // Iniciar servidor propio
+    server.listen(PORT, () => {
+        console.log(`✅ [INFO] Servidor Express escuchando en puerto ${PORT}`);
+    });
+
+    // Inicializar Socket.IO
+    initSocketIO(server);
+
     console.log('✅ [INFO] Main function completed');
 };
 
