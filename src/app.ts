@@ -13,7 +13,7 @@ import QRCode from 'qrcode';
 let botEnabled = true;
 import { createBot, createProvider, createFlow, addKeyword, EVENTS } from "@builderbot/bot";
 import { MemoryDB } from "@builderbot/bot";
-import { BaileysProvider } from "builderbot-provider-sherpa";
+import { BaileysProvider } from "@builderbot/provider-baileys";
 import { restoreSessionFromDb, startSessionSync, deleteSessionFromDb } from "./utils/sessionSync";
 import { toAsk, httpInject } from "@builderbot-plugins/openai-assistants";
 import { typing } from "./utils/presence";
@@ -268,11 +268,21 @@ const hasActiveSession = () => {
 
 // Main function to initialize the bot and load Google Sheets data
 const main = async () => {
+    // Limpiar QR antiguo al inicio
+    const qrPath = path.join(process.cwd(), 'bot.qr.png');
+    if (fs.existsSync(qrPath)) {
+        try {
+            fs.unlinkSync(qrPath);
+            console.log('🗑️ [Init] QR antiguo eliminado.');
+        } catch (e) {
+            console.error('⚠️ [Init] No se pudo eliminar QR antiguo:', e);
+        }
+    }
+
     adapterProvider = createProvider(BaileysProvider, {
-        version: [2, 3000, 1030817285],
+        // version: [2, 3000, 1030817285],
         groupsIgnore: false,
         readStatus: false,
-        disableHttpServer: true,
     });
 
     // Listener para generar el archivo QR manualmente cuando se solicite
@@ -339,17 +349,18 @@ const main = async () => {
     // Cargar todas las hojas principales con una sola función reutilizable
     await updateMain();
 
+    console.log('🚀 [Init] Iniciando createBot...');
 
                 // ...existing code...
                 const adapterFlow = createFlow([welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowDoc, locationFlow, idleFlow]);
 
                 const adapterDB = new MemoryDB();
                 adapterProvider = createProvider(BaileysProvider, {
-    version: [2, 3000, 1030817285],
-    groupsIgnore: false,
-    readStatus: false,
-    disableHttpServer: true,
-});
+                    version: [2, 3000, 1030817285],
+                    groupsIgnore: false,
+                    readStatus: false,
+                    disableHttpServer: true,
+                });
                 const { httpServer } = await createBot({
                     flow: adapterFlow,
                     provider: adapterProvider,
@@ -362,10 +373,10 @@ const main = async () => {
                 // Iniciar sincronización periódica de sesión hacia Supabase
                 startSessionSync();
 
-                // httpInject(adapterProvider.server); // DESHABILITADO: Causa reinicios al acceder a rutas del QR
+                httpInject(adapterProvider.server);
 
                 // Inicializar servidor Polka propio para WebChat y QR
-                const app = polka();
+                const app = adapterProvider.server;
 
                 // Middleware de compatibilidad para Express -> Polka
                 app.use((req, res, next) => {
@@ -393,7 +404,7 @@ const main = async () => {
                     next();
                 });
 
-                const server = createServer(app.handler);
+                const server = app.server;
 
                 // Middleware de logging
                 app.use((req, res, next) => {
@@ -504,6 +515,13 @@ const main = async () => {
                             fs.rmSync(sessionsDir, { recursive: true, force: true });
                         } else {
                             console.log('[RESET] El directorio local no existía.');
+                        }
+
+                        // 1.1 Eliminar QR antiguo
+                        const qrPath = path.join(process.cwd(), 'bot.qr.png');
+                        if (fs.existsSync(qrPath)) {
+                            fs.unlinkSync(qrPath);
+                            console.log('[RESET] QR antiguo eliminado.');
                         }
 
                         // 2. Eliminar sesión remota (Supabase)
@@ -806,9 +824,7 @@ const main = async () => {
                 });
 
     // Iniciar servidor propio
-    server.listen(PORT, () => {
-        console.log(`✅ [INFO] Servidor Polka escuchando en puerto ${PORT}`);
-    });
+    httpServer(+PORT);
 
     // Inicializar Socket.IO
     initSocketIO(server);
