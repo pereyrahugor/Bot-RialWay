@@ -57,25 +57,57 @@ export async function sendMessageToThread(threadId: string, userMessage: string,
       content: [{ type: "text", text: userMessage }],
     }
   );
+  
   const run = await openai.beta.threads.runs.create(
     threadId,
     { assistant_id: assistantId }
   );
-  // Esperar la finalización del run
+  
+  // Esperar a que el run genere al menos una respuesta
   let runStatus = run.status;
   const runId = run.id;
-  while (runStatus !== 'completed') {
+  let attempts = 0;
+  const maxAttempts = 60; // 60 segundos máximo
+  
+  while (attempts < maxAttempts) {
     await new Promise(res => setTimeout(res, 1000));
     const runInfo = await openai.beta.threads.runs.retrieve(threadId, runId);
     runStatus = runInfo.status;
+    
     if (runStatus === 'failed' || runStatus === 'cancelled') {
       throw new Error('Run fallido o cancelado');
     }
+    
+    // Si el run completó o está en un estado que permite leer mensajes
+    if (runStatus === 'completed' || runStatus === 'requires_action') {
+      break;
+    }
+    
+    // Verificar si ya hay un nuevo mensaje del asistente
+    const messages = await openai.beta.threads.messages.list(threadId, { limit: 5 });
+    const newAssistantMsg = messages.data.find(m => 
+      m.role === 'assistant' && 
+      m.run_id === runId
+    );
+    
+    if (newAssistantMsg) {
+      console.log('[sendMessageToThread] Mensaje del asistente detectado antes de completar run');
+      break;
+    }
+    
+    attempts++;
   }
-  // Obtener el último mensaje del asistente (más reciente)
+  
+  if (attempts >= maxAttempts) {
+    throw new Error('Timeout esperando respuesta del asistente');
+  }
+  
+  // Obtener el último mensaje del asistente de ESTE run
   const messages = await openai.beta.threads.messages.list(threadId);
-  const assistantMessages = messages.data.filter(m => m.role === 'assistant');
+  const assistantMessages = messages.data.filter(m => m.role === 'assistant' && m.run_id === runId);
+  
   if (!assistantMessages.length) return '';
+  
   const lastMsg = assistantMessages[0]; // El primero es el más reciente
   const textBlock = lastMsg.content.find(block => block.type === 'text' && typeof (block as any).text?.value === 'string');
   let response = '';
