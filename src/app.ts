@@ -418,17 +418,22 @@ const main = async () => {
                         // 2. Eliminar sesión remota (Supabase)
                         await deleteSessionFromDb();
 
-                        res.send(`
-                            <html>
-                                <body style="font-family: sans-serif; text-align: center; padding: 50px;">
-                                    <h1 style="color: green;">✅ Sesión Eliminada (Local y Remota)</h1>
-                                    <p>El bot se está reiniciando. Por favor espera unos 30 segundos y recarga la página principal para escanear el nuevo QR.</p>
-                                    <script>
-                                        setTimeout(() => { window.location.href = "/"; }, 15000);
-                                    </script>
-                                </body>
-                            </html>
-                        `);
+                        // Respuesta adaptativa (JSON para fetch, HTML para form)
+                        if (req.headers['content-type'] === 'application/json') {
+                            res.json({ success: true, message: "Sesión eliminada. Reiniciando..." });
+                        } else {
+                            res.send(`
+                                <html>
+                                    <body style="font-family: sans-serif; text-align: center; padding: 50px;">
+                                        <h1 style="color: green;">✅ Sesión Eliminada (Local y Remota)</h1>
+                                        <p>El bot se está reiniciando. Por favor espera unos 30 segundos y recarga la página principal para escanear el nuevo QR.</p>
+                                        <script>
+                                            setTimeout(() => { window.location.href = "/"; }, 15000);
+                                        </script>
+                                    </body>
+                                </html>
+                            `);
+                        }
                         
                         // Forzar salida del proceso para que Railway/Docker lo reinicie
                         console.log('[RESET] Saliendo del proceso para reiniciar...');
@@ -437,7 +442,11 @@ const main = async () => {
                         }, 1000);
                     } catch (error) {
                         console.error('[RESET] Error:', error);
-                        res.status(500).send('Error al reiniciar sesión: ' + error.message);
+                        if (req.headers['content-type'] === 'application/json') {
+                            res.status(500).json({ success: false, error: error.message });
+                        } else {
+                            res.status(500).send('Error al reiniciar sesión: ' + error.message);
+                        }
                     }
                 });
 

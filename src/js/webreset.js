@@ -17,13 +17,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   si.addEventListener('click', async () => {
     modal.classList.add('hidden');
-    console.log('Botón SI presionado, enviando fetch a /api/restart-bot');
+    console.log('Botón SI presionado, enviando fetch a /api/reset-session');
     try {
-      const res = await fetch('/api/restart-bot', {
+      const res = await fetch('/api/reset-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
-      console.log('Respuesta recibida de /api/restart-bot:', res);
+      console.log('Respuesta recibida de /api/reset-session:', res);
       const data = await res.json();
       console.log('Body de respuesta:', data);
       if (data.success) {
