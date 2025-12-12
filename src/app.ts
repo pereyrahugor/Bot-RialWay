@@ -255,6 +255,20 @@ const handleQueue = async (userId) => {
     userQueues.delete(userId);
 };
 
+// Función auxiliar para verificar si existe sesión activa
+const hasActiveSession = () => {
+    try {
+        const sessionsDir = path.join(process.cwd(), 'bot_sessions');
+        if (!fs.existsSync(sessionsDir)) return false;
+        const files = fs.readdirSync(sessionsDir);
+        // Verificar si hay archivos que no sean ocultos (opcional, pero length > 0 suele bastar)
+        return files.length > 0;
+    } catch (error) {
+        console.error('Error verificando sesión:', error);
+        return false;
+    }
+};
+
 // Main function to initialize the bot and load Google Sheets data
 const main = async () => {
     // Verificar credenciales de Google Sheets al iniciar
@@ -303,10 +317,48 @@ const main = async () => {
                 polkaApp.use("/style", serve("src/style"));
                 polkaApp.use("/assets", serve("src/assets"));
 
-                // Redireccionar raíz a /webchat
+                // Endpoint para servir la imagen del QR
+                polkaApp.get('/qr.png', (req, res) => {
+                    const qrPath = path.join(process.cwd(), 'bot.qr.png');
+                    if (fs.existsSync(qrPath)) {
+                        res.setHeader('Content-Type', 'image/png');
+                        fs.createReadStream(qrPath).pipe(res);
+                    } else {
+                        res.writeHead(404);
+                        res.end('QR no encontrado');
+                    }
+                });
+
+                // Redireccionar raíz a /webchat SOLO si hay sesión activa
                 polkaApp.get('/', (req, res) => {
-                    res.writeHead(302, { 'Location': '/webchat' });
-                    res.end();
+                    if (hasActiveSession()) {
+                        res.writeHead(302, { 'Location': '/webchat' });
+                        res.end();
+                    } else {
+                        res.writeHead(200, { 'Content-Type': 'text/html' });
+                        res.end(`
+                            <html>
+                                <head>
+                                    <title>Bot QR</title>
+                                    <meta http-equiv="refresh" content="5">
+                                    <style>
+                                        body { display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f0f2f5; font-family: sans-serif; }
+                                        .container { text-align: center; background: white; padding: 2rem; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                                        img { max-width: 300px; margin-bottom: 1rem; }
+                                        p { color: #54656f; }
+                                    </style>
+                                </head>
+                                <body>
+                                    <div class="container">
+                                        <h1>Escanea el código QR</h1>
+                                        <img src="/qr.png" alt="Cargando QR..." onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+                                        <p style="display:none">Esperando generación del QR...</p>
+                                        <p>La página se actualizará automáticamente.</p>
+                                    </div>
+                                </body>
+                            </html>
+                        `);
+                    }
                 });
 
                                 // Endpoint para obtener el nombre del asistente de forma dinámica
