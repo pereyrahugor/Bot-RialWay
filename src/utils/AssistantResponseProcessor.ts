@@ -58,9 +58,32 @@ const userApiBlockMap = new Map();
 const API_BLOCK_TIMEOUT_MS = 1000; // 5 segundos
 
 function limpiarBloquesJSON(texto: string): string {
-    let limpio = texto.replace(/\[API\][\s\S]*?\[\/API\]/g, "");
-    // Eliminar referencias de OpenAI tipo 【4:0†archivo.pdf】 o variantes
-    limpio = limpio.replace(/【.*?】/g, "");
+    // 1. Preservar bloques especiales temporalmente
+    const specialBlocks: string[] = [];
+    let textoConMarcadores = texto;
+    
+    // Preservar [DB_QUERY: ...]
+    textoConMarcadores = textoConMarcadores.replace(/\[DB_QUERY\s*:[\s\S]*?\]/gi, (match) => {
+        const index = specialBlocks.length;
+        specialBlocks.push(match);
+        return `___SPECIAL_BLOCK_${index}___`;
+    });
+    
+    // Preservar [API]...[/API]
+    textoConMarcadores = textoConMarcadores.replace(/\[API\][\s\S]*?\[\/API\]/g, (match) => {
+        const index = specialBlocks.length;
+        specialBlocks.push(match);
+        return `___SPECIAL_BLOCK_${index}___`;
+    });
+    
+    // 2. Limpiar referencias de OpenAI tipo 【4:0†archivo.pdf】
+    let limpio = textoConMarcadores.replace(/【.*?】/g, "");
+    
+    // 3. Restaurar bloques especiales
+    specialBlocks.forEach((block, index) => {
+        limpio = limpio.replace(`___SPECIAL_BLOCK_${index}___`, block);
+    });
+    
     return limpio;
 }
 
