@@ -78,10 +78,17 @@ export async function sendMessageToThread(threadId: string, userMessage: string,
   if (!assistantMessages.length) return '';
   const lastMsg = assistantMessages[0]; // El primero es el más reciente
   const textBlock = lastMsg.content.find(block => block.type === 'text' && typeof (block as any).text?.value === 'string');
+  let response = '';
   if (textBlock && textBlock.type === 'text') {
-    return (textBlock as { type: 'text'; text: { value: string } }).text.value;
+    response = (textBlock as { type: 'text'; text: { value: string } }).text.value;
+  } else {
+    response = lastMsg.content.length ? JSON.stringify(lastMsg.content[0]) : '';
   }
-  return lastMsg.content.length ? JSON.stringify(lastMsg.content[0]) : '';
+  
+  // Log de debug para webchat
+  console.log('[sendMessageToThread] Respuesta del asistente:', response.substring(0, 200));
+  
+  return response;
 }
 
 /**

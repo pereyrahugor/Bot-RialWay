@@ -118,31 +118,34 @@ export const getAssistantResponse = async (assistantId, message, state, fallback
                 userTimeouts.delete(userId);
         }
 
-        // CRÍTICO: Esperar a que no haya runs activos ANTES de llamar a toAsk
-        if (effectiveThreadId) {
-                try {
-                        const { waitForActiveRuns } = await import('./utils/AssistantResponseProcessor.js');
-                        await waitForActiveRuns(effectiveThreadId);
-                } catch (err) {
-                        console.error('[getAssistantResponse] Error esperando runs activos:', err);
-                        // Fallback: esperar 3 segundos
-                        await new Promise(r => setTimeout(r, 3000));
+        // Wrapper seguro para toAsk que SIEMPRE verifica runs activos
+        const safeToAsk = async (assistantId: string, message: string, state: any) => {
+                const threadId = effectiveThreadId || (state && typeof state.get === 'function' && state.get('thread_id'));
+                if (threadId) {
+                        try {
+                                const { waitForActiveRuns } = await import('./utils/AssistantResponseProcessor.js');
+                                await waitForActiveRuns(threadId);
+                        } catch (err) {
+                                console.error('[safeToAsk] Error esperando runs activos:', err);
+                                await new Promise(r => setTimeout(r, 3000));
+                        }
                 }
-        }
+                return toAsk(assistantId, message, state);
+        };
 
         let timeoutResolve;
         const timeoutPromise = new Promise((resolve) => {
                 timeoutResolve = resolve;
-                const timeoutId = setTimeout(() => {
+                const timeoutId = setTimeout(async () => {
                         console.warn("⏱ Timeout alcanzado. Reintentando con mensaje de control...");
-                        resolve(toAsk(assistantId, fallbackMessage ?? finalMessage, state));
+                        resolve(await safeToAsk(assistantId, fallbackMessage ?? finalMessage, state));
                         userTimeouts.delete(userId);
                 }, TIMEOUT_MS);
                 userTimeouts.set(userId, timeoutId);
         });
 
         // Lanzamos la petición a OpenAI, pasando thread_id si existe
-        const askPromise = toAsk(assistantId, finalMessage, state).then((result) => {
+        const askPromise = safeToAsk(assistantId, finalMessage, state).then((result) => {
                 if (userTimeouts.has(userId)) {
                         clearTimeout(userTimeouts.get(userId));
                         userTimeouts.delete(userId);
