@@ -16,7 +16,18 @@ const supabase = (supabaseUrl && supabaseKey) ? createClient(supabaseUrl, supaba
 export async function executeDbQuery(sqlQuery: string): Promise<string> {
     if (!supabase) return "Error: Base de datos no configurada.";
 
-    console.log(`📡 Ejecutando Query SQL: ${sqlQuery}`);
+    // Sanitización genérica de la query para evitar errores de sintaxis comunes (42601)
+    let cleanQuery = sqlQuery
+        .replace(/```sql/gi, '') // Quitar inicio de bloque de código
+        .replace(/```/g, '')     // Quitar fin de bloque de código
+        .trim();
+
+    // Eliminar punto y coma final si existe, ya que algunos RPCs o drivers lo interpretan mal si se duplica
+    if (cleanQuery.endsWith(';')) {
+        cleanQuery = cleanQuery.slice(0, -1).trim();
+    }
+
+    console.log(`📡 Ejecutando Query SQL: ${cleanQuery}`);
 
     let attempts = 0;
     const maxAttempts = 2;
@@ -24,7 +35,7 @@ export async function executeDbQuery(sqlQuery: string): Promise<string> {
     while (attempts < maxAttempts) {
         attempts++;
         try {
-            const { data, error } = await supabase.rpc('exec_sql_read', { query: sqlQuery });
+            const { data, error } = await supabase.rpc('exec_sql_read', { query: cleanQuery });
             console.log(`🐛 [dbHandler] RPC Response (Attempt ${attempts}):`, error ? "Error" : "Success");
 
             if (error) {
