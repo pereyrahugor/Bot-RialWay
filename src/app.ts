@@ -268,9 +268,6 @@ const hasActiveSession = () => {
 
 // Main function to initialize the bot and load Google Sheets data
 const main = async () => {
-    // Restaurar sesión de WhatsApp desde Supabase si existe (ANTES de crear el provider)
-    await restoreSessionFromDb();
-
     // Limpiar QR antiguo al inicio
     const qrPath = path.join(process.cwd(), 'bot.qr.png');
     if (fs.existsSync(qrPath)) {
@@ -291,17 +288,14 @@ const main = async () => {
     // Listener para generar el archivo QR manualmente cuando se solicite
     adapterProvider.on('require_action', async (payload: any) => {
         console.log('⚡ [Provider] require_action received. Payload:', payload);
-        
-        // Intentar extraer el string del QR de varias formas posibles
+        // ...existing code...
         let qrString = null;
-        
         if (typeof payload === 'string') {
             qrString = payload;
         } else if (payload && typeof payload === 'object') {
             if (payload.qr) qrString = payload.qr;
             else if (payload.code) qrString = payload.code;
         }
-
         if (qrString && typeof qrString === 'string') {
             console.log('⚡ [Provider] QR Code detected (length: ' + qrString.length + '). Generating image...');
             try {
@@ -337,6 +331,17 @@ const main = async () => {
 
     errorReporter = new ErrorReporter(adapterProvider, ID_GRUPO_RESUMEN);
 
+    // Iniciar el servidor HTTP y web antes de restaurar la sesión
+    // (esto permite que el dashboard y webchat estén disponibles aunque la restauración falle)
+    // El resto de la inicialización sigue igual
+
+    // --- MOVER RESTAURACIÓN DE SESIÓN AQUÍ ---
+    try {
+        await restoreSessionFromDb();
+    } catch (e) {
+        console.error('[Init] Error restaurando sesión desde DB:', e);
+    }
+
     // Verificar credenciales de Google Sheets al iniciar
     //await testAuth();
 
@@ -344,7 +349,7 @@ const main = async () => {
     //await listImg();
 
     // // Paso 1: Inicializar datos desde Google Sheets
-     console.log("📌 Inicializando datos desde Google Sheets...");
+    console.log("📌 Inicializando datos desde Google Sheets...");
 
     // Cargar todas las hojas principales con una sola función reutilizable
     await updateMain();
