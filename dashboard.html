@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Bot Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; background: #f0f2f5; color: #333; }
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        h1 { margin-top: 0; color: #1a1a1a; font-size: 24px; }
+        h2 { font-size: 18px; color: #444; margin-bottom: 10px; }
+        .btn { display: inline-block; padding: 12px 24px; background: #008069; color: white; text-decoration: none; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; transition: background 0.2s; }
+        .btn:hover { background: #006d59; }
+        .btn-danger { background: #dc3545; }
+        .btn-danger:hover { background: #c82333; }
+        .status { font-weight: bold; color: #008069; }
+        .qr-container { text-align: center; margin: 20px 0; }
+        img.qr { max-width: 280px; border: 1px solid #eee; border-radius: 8px; }
+        .info-text { color: #666; font-size: 14px; line-height: 1.5; }
+        .error-box { background: #ffeaea; color: #b30000; border: 1px solid #ffb3b3; padding: 12px; border-radius: 8px; margin-bottom: 18px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🤖 Estado del Bot</h1>
+        <p>Estado de Sesión: <span class="status" id="session-status">Cargando...</span></p>
+        <div id="session-error"></div>
+        <div id="qr-section" style="display:none">
+            <div class="qr-container">
+                <h3>Escanea el código QR con WhatsApp</h3>
+                <img src="/qr.png" class="qr" alt="Cargando QR..." onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+                <p style="display:none; color:orange;">Generando QR... por favor espera.</p>
+                <p class="info-text">La página se actualizará automáticamente cuando aparezca el QR.</p>
+            </div>
+        </div>
+        <div id="session-info" class="info-text" style="display:none"></div>
+    </div>
+    <div class="card">
+        <h2>💬 WebChat</h2>
+        <p class="info-text">Accede a la interfaz de chat web para pruebas o soporte.</p>
+        <a href="/webchat" class="btn">Abrir WebChat</a>
+    </div>
+    <div class="card" style="border-left: 5px solid #dc3545;">
+        <h2>⚠️ Zona de Peligro</h2>
+        <p class="info-text">Si el bot no responde en WhatsApp, elimina la sesión para generar un nuevo QR.</p>
+        <button id="go-reset" class="btn btn-danger">🗑️ Borrar Sesión y Reiniciar</button>
+    </div>
+    <script>
+        async function fetchStatus() {
+            try {
+                const res = await fetch('/api/dashboard-status');
+                const data = await res.json();
+                document.getElementById('session-status').textContent = data.active ? '✅ Activa (Archivos encontrados)' : '⏳ Esperando Escaneo';
+                if (data.error) {
+                    document.getElementById('session-error').innerHTML = `<div class='error-box'>⚠️ Error al verificar sesión: ${data.error}</div>`;
+                }
+                if (!data.active) {
+                    document.getElementById('qr-section').style.display = '';
+                    document.getElementById('session-info').style.display = 'none';
+                    
+                    // Intentar recargar el QR si no se ha cargado
+                    const qrImg = document.querySelector('.qr');
+                    qrImg.src = '/qr.png?t=' + Date.now();
+                    qrImg.style.display = 'inline-block';
+                    qrImg.nextElementSibling.style.display = 'none';
+                } else {
+                    document.getElementById('qr-section').style.display = 'none';
+                    document.getElementById('session-info').style.display = '';
+                    document.getElementById('session-info').textContent = 'El bot ha detectado archivos de sesión. Si WhatsApp no responde, usa la opción de reinicio abajo.';
+                }
+            } catch (e) {
+                document.getElementById('session-status').textContent = 'Error';
+                document.getElementById('session-error').innerHTML = `<div class='error-box'>No se pudo obtener el estado del bot.</div>`;
+            }
+        }
+        fetchStatus();
+        setInterval(fetchStatus, 5000);
+
+        // Redirigir a /webreset al hacer click en el botón de reinicio
+        document.getElementById('go-reset').addEventListener('click', function() {
+            window.location.href = '/webreset';
+        });
+    </script>
+</body>
+</html>

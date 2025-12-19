@@ -267,7 +267,7 @@ const hasActiveSession = () => {
 
 // Main function to initialize the bot and load Google Sheets data
 const main = async () => {
-    // Limpiar QR antiguo al inicio
+    // 1. Limpiar QR antiguo al inicio
     const qrPath = path.join(process.cwd(), 'bot.qr.png');
     if (fs.existsSync(qrPath)) {
         try {
@@ -278,16 +278,29 @@ const main = async () => {
         }
     }
 
+    // 2. Restaurar sesión desde DB ANTES de inicializar el provider
+    // Esto asegura que Baileys encuentre los archivos al arrancar
+    try {
+        await restoreSessionFromDb();
+        // Pequeña espera para asegurar que el sistema de archivos se asiente
+        await new Promise(resolve => setTimeout(resolve, 2000));
+    } catch (e) {
+        console.error('[Init] Error restaurando sesión desde DB:', e);
+    }
+
+    // 3. Inicializar Provider ÚNICO
     adapterProvider = createProvider(BaileysProvider, {
-        // version: [2, 3000, 1030817285],
+        version: [2, 3000, 1030817285],
         groupsIgnore: false,
         readStatus: false,
+        disableHttpServer: true,
+        // Forzar el uso de la carpeta bot_sessions explícitamente si el provider lo permite
+        // o asegurar que no haya conflictos de caché
     });
 
-    // Listener para generar el archivo QR manualmente cuando se solicite
+    // 4. Listeners del Provider
     adapterProvider.on('require_action', async (payload: any) => {
         console.log('⚡ [Provider] require_action received. Payload:', payload);
-        // ...existing code...
         let qrString = null;
         if (typeof payload === 'string') {
             qrString = payload;
@@ -300,10 +313,7 @@ const main = async () => {
             try {
                 const qrPath = path.join(process.cwd(), 'bot.qr.png');
                 await QRCode.toFile(qrPath, qrString, {
-                    color: {
-                        dark: '#000000',
-                        light: '#ffffff'
-                    },
+                    color: { dark: '#000000', light: '#ffffff' },
                     scale: 4,
                     margin: 2
                 });
@@ -311,531 +321,347 @@ const main = async () => {
             } catch (err) {
                 console.error('❌ [Provider] Error generating QR image:', err);
             }
-        } else {
-            console.log('⚠️ [Provider] require_action received but could not extract QR string.');
         }
     });
 
-    adapterProvider.on('message', (payload) => {
-        console.log('⚡ [Provider] message received');
+    adapterProvider.on('message', (payload) => { console.log('⚡ [Provider] message received'); });
+    adapterProvider.on('ready', () => { 
+        console.log('✅ [Provider] READY: El bot está conectado y operativo.'); 
+    });
+    adapterProvider.on('auth_failure', (payload) => { 
+        console.log('❌ [Provider] AUTH_FAILURE: Error de autenticación.', payload); 
     });
 
-    adapterProvider.on('ready', () => {
-        console.log('⚡ [Provider] ready received');
-    });
-
-    adapterProvider.on('auth_failure', (payload) => {
-        console.log('⚡ [Provider] auth_failure received', payload);
+    // Evento adicional para detectar desconexiones
+    adapterProvider.on('host_failure', (payload) => {
+        console.log('⚠️ [Provider] HOST_FAILURE: Problema de conexión con WhatsApp.', payload);
     });
 
     errorReporter = new ErrorReporter(adapterProvider, ID_GRUPO_RESUMEN);
 
-    // Iniciar el servidor HTTP y web antes de restaurar la sesión
-    // (esto permite que el dashboard y webchat estén disponibles aunque la restauración falle)
-    // El resto de la inicialización sigue igual
-
-    // --- MOVER RESTAURACIÓN DE SESIÓN AQUÍ ---
-    try {
-        await restoreSessionFromDb();
-    } catch (e) {
-        console.error('[Init] Error restaurando sesión desde DB:', e);
-    }
-
-    // Verificar credenciales de Google Sheets al iniciar
-    //await testAuth();
-
-    // Actualizar listado de imágenes en vector store
-    //await listImg();
-
-    // // Paso 1: Inicializar datos desde Google Sheets
     console.log("📌 Inicializando datos desde Google Sheets...");
-
-    // Cargar todas las hojas principales con una sola función reutilizable
     await updateMain();
 
     console.log('🚀 [Init] Iniciando createBot...');
+    const adapterFlow = createFlow([welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowDoc, locationFlow, idleFlow]);
+    const adapterDB = new MemoryDB();
+    
+    const { httpServer } = await createBot({
+        flow: adapterFlow,
+        provider: adapterProvider,
+        database: adapterDB,
+    });
 
-                // ...existing code...
-                const adapterFlow = createFlow([welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowDoc, locationFlow, idleFlow]);
+    console.log('🔍 [DEBUG] createBot httpServer:', !!httpServer);
+    console.log('🔍 [DEBUG] adapterProvider.server:', !!adapterProvider.server);
 
-                const adapterDB = new MemoryDB();
-                adapterProvider = createProvider(BaileysProvider, {
-                    version: [2, 3000, 1030817285],
-                    groupsIgnore: false,
-                    readStatus: false,
-                    disableHttpServer: true,
-                });
-                const { httpServer } = await createBot({
-                    flow: adapterFlow,
-                    provider: adapterProvider,
-                    database: adapterDB,
-                });
+    // Iniciar sincronización periódica de sesión hacia Supabase
+    startSessionSync();
 
-                console.log('🔍 [DEBUG] createBot httpServer:', !!httpServer);
-                console.log('🔍 [DEBUG] adapterProvider.server:', !!adapterProvider.server);
+    // Inicializar servidor Polka propio para WebChat y QR
+    const app = adapterProvider.server;
 
-                // Iniciar sincronización periódica de sesión hacia Supabase
-                startSessionSync();
-
-                // Inicializar servidor Polka propio para WebChat y QR
-                const app = adapterProvider.server;
-
-                // Middleware de compatibilidad para Express -> Polka
-                app.use((req, res, next) => {
-                    res.status = (code) => { res.statusCode = code; return res; };
-                    res.send = (body) => { res.end(body); return res; };
-                    res.json = (data) => { 
-                        res.setHeader('Content-Type', 'application/json'); 
-                        res.end(JSON.stringify(data)); 
-                        return res; 
+    // 1. Middleware de compatibilidad (res.json, res.send, res.sendFile, etc)
+    app.use((req, res, next) => {
+        res.status = (code) => { res.statusCode = code; return res; };
+        res.send = (body) => { 
+            if (res.headersSent) return res;
+            if (typeof body === 'object') {
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify(body || null));
+            } else {
+                res.end(body || '');
+            }
+            return res; 
+        };
+        res.json = (data) => { 
+            if (res.headersSent) return res;
+            res.setHeader('Content-Type', 'application/json'); 
+            res.end(JSON.stringify(data || null)); 
+            return res; 
+        };
+        res.sendFile = (filepath) => {
+            if (res.headersSent) return;
+            try {
+                if (fs.existsSync(filepath)) {
+                    const ext = path.extname(filepath).toLowerCase();
+                    const mimeTypes = {
+                        '.html': 'text/html',
+                        '.js': 'application/javascript',
+                        '.css': 'text/css',
+                        '.png': 'image/png',
+                        '.jpg': 'image/jpeg',
+                        '.gif': 'image/gif',
+                        '.svg': 'image/svg+xml',
+                        '.json': 'application/json'
                     };
-                    res.sendFile = (filepath) => {
-                        try {
-                            if (fs.existsSync(filepath)) {
-                                res.setHeader('Content-Type', 'text/html');
-                                fs.createReadStream(filepath).pipe(res);
-                            } else {
-                                res.statusCode = 404;
-                                res.end('Not Found');
+                    res.setHeader('Content-Type', mimeTypes[ext] || 'application/octet-stream');
+                    fs.createReadStream(filepath)
+                        .on('error', (err) => {
+                            console.error(`[ERROR] Stream error in sendFile (${filepath}):`, err);
+                            if (!res.headersSent) {
+                                res.statusCode = 500;
+                                res.end('Internal Server Error');
                             }
-                        } catch (e) {
-                            res.statusCode = 500;
-                            res.end('Internal Error');
-                        }
-                    };
-                    next();
-                });
+                        })
+                        .pipe(res);
+                } else {
+                    console.error(`[ERROR] sendFile: File not found: ${filepath}`);
+                    res.statusCode = 404;
+                    res.end('Not Found');
+                }
+            } catch (e) {
+                console.error(`[ERROR] Error in sendFile (${filepath}):`, e);
+                if (!res.headersSent) {
+                    res.statusCode = 500;
+                    res.end('Internal Error');
+                }
+            }
+        };
+        next();
+    });
 
-                const server = app.server;
+    // 2. Middleware de logging y redirección de raíz
+    app.use((req, res, next) => {
+        console.log(`[REQUEST] ${req.method} ${req.url}`);
+        try {
+            if (req.url === "/" || req.url === "") {
+                console.log('[DEBUG] Redirigiendo raíz (/) a /dashboard via middleware');
+                res.writeHead(302, { 'Location': '/dashboard' });
+                return res.end();
+            }
+            next();
+        } catch (err) {
+            console.error('❌ [ERROR] Crash en cadena de middleware:', err);
+            if (!res.headersSent) {
+                res.statusCode = 500;
+                res.end('Internal Server Error');
+            }
+        }
+    });
 
-                // Middleware de logging
-                app.use((req, res, next) => {
-                    console.log(`[REQUEST] ${req.method} ${req.url}`);
-                    next();
-                });
+    // 3. Función para servir páginas HTML
+    function serveHtmlPage(route, filename) {
+        const handler = (req, res) => {
+            console.log(`[DEBUG] Serving HTML for ${req.url} -> ${filename}`);
+            try {
+                const possiblePaths = [
+                    path.join(process.cwd(), filename),
+                    path.join(process.cwd(), 'src', filename),
+                    path.join(__dirname, filename),
+                    path.join(__dirname, '..', filename),
+                    path.join(__dirname, '..', 'src', filename)
+                ];
 
-                // Middleware para parsear JSON
-                app.use(bodyParser.json());
-
-                // Servir archivos estáticos
-                app.use("/js", serve("src/js"));
-                app.use("/style", serve("src/style"));
-                app.use("/assets", serve("src/assets"));
-
-                // Endpoint para servir la imagen del QR
-                app.get('/qr.png', (req, res) => {
-                    const qrPath = path.join(process.cwd(), 'bot.qr.png');
-                    // Desactivar caché para asegurar que siempre se vea el QR nuevo
-                    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-                    res.setHeader('Pragma', 'no-cache');
-                    res.setHeader('Expires', '0');
-
-                    if (fs.existsSync(qrPath)) {
-                        res.setHeader('Content-Type', 'image/png');
-                        fs.createReadStream(qrPath).pipe(res);
-                    } else {
-                        // Si no hay QR, devolver 404 pero loguearlo
-                        console.log('[DEBUG] Solicitud de QR fallida: Archivo no encontrado en', qrPath);
-                        res.status(404).send('QR no encontrado');
+                let htmlPath = null;
+                for (const p of possiblePaths) {
+                    if (fs.existsSync(p) && fs.lstatSync(p).isFile()) {
+                        htmlPath = p;
+                        break;
                     }
-                });
+                }
 
-                // Dashboard principal con estado y opciones de control
-                app.get('/', (req, res) => {
-                    console.log('[DEBUG] Handling root request');
-                    let sessionInfo;
-                    try {
-                        sessionInfo = hasActiveSession();
-                    } catch (e) {
-                        sessionInfo = { active: false, error: e instanceof Error ? e.message : String(e) };
-                    }
-                    const sessionExists = sessionInfo && sessionInfo.active;
-                    const sessionError = sessionInfo && sessionInfo.error;
-                    res.status(200).send(`
-                        <html>
-                            <head>
-                                <title>Bot Dashboard</title>
-                                <meta name="viewport" content="width=device-width, initial-scale=1">
-                                <style>
-                                    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; background: #f0f2f5; color: #333; }
-                                    .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
-                                    h1 { margin-top: 0; color: #1a1a1a; font-size: 24px; }
-                                    h2 { font-size: 18px; color: #444; margin-bottom: 10px; }
-                                    .btn { display: inline-block; padding: 12px 24px; background: #008069; color: white; text-decoration: none; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; transition: background 0.2s; }
-                                    .btn:hover { background: #006d59; }
-                                    .btn-danger { background: #dc3545; }
-                                    .btn-danger:hover { background: #c82333; }
-                                    .status { font-weight: bold; color: ${sessionExists ? '#008069' : '#d9534f'}; }
-                                    .qr-container { text-align: center; margin: 20px 0; }
-                                    img.qr { max-width: 280px; border: 1px solid #eee; border-radius: 8px; }
-                                    .info-text { color: #666; font-size: 14px; line-height: 1.5; }
-                                    .error-box { background: #ffeaea; color: #b30000; border: 1px solid #ffb3b3; padding: 12px; border-radius: 8px; margin-bottom: 18px; }
-                                </style>
-                                ${!sessionExists ? '<meta http-equiv="refresh" content="5">' : ''}
-                            </head>
-                            <body>
-                                <div class="card">
-                                    <h1>🤖 Estado del Bot</h1>
-                                    <p>Estado de Sesión: <span class="status">${sessionExists ? '✅ Activa (Archivos encontrados)' : '⏳ Esperando Escaneo'}</span></p>
-                                    ${sessionError ? `<div class="error-box">⚠️ Error al verificar sesión: ${sessionError}</div>` : ''}
-                                    ${!sessionExists ? `
-                                        <div class="qr-container">
-                                            <h3>Escanea el código QR con WhatsApp</h3>
-                                            <img src="/qr.png" class="qr" alt="Cargando QR..." onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
-                                            <p style="display:none; color:orange;">Generando QR... por favor espera.</p>
-                                            <p class="info-text">La página se actualizará automáticamente cuando aparezca el QR.</p>
-                                        </div>
-                                    ` : `
-                                        <p class="info-text">El bot ha detectado archivos de sesión. Si WhatsApp no responde, usa la opción de reinicio abajo.</p>
-                                    `}
-                                </div>
-
-                                <div class="card">
-                                    <h2>💬 WebChat</h2>
-                                    <p class="info-text">Accede a la interfaz de chat web para pruebas o soporte.</p>
-                                    <a href="/webchat" class="btn">Abrir WebChat</a>
-                                </div>
-
-                                <div class="card" style="border-left: 5px solid #dc3545;">
-                                    <h2>⚠️ Zona de Peligro</h2>
-                                    <p class="info-text">Si el bot no responde en WhatsApp, elimina la sesión para generar un nuevo QR.</p>
-                                    <form action="/api/reset-session" method="POST" onsubmit="return confirm('¿Estás seguro? Esto desconectará WhatsApp, borrará la sesión actual y reiniciará el bot.');">
-                                        <button type="submit" class="btn btn-danger">🗑️ Borrar Sesión y Reiniciar</button>
-                                    </form>
-                                </div>
-                            </body>
-                        </html>
-                    `);
-                });
-
-                // Inyectar rutas del plugin después de las nuestras para evitar conflictos
-                httpInject(app);
-
-                // Endpoint para borrar sesión y reiniciar
-                app.post('/api/reset-session', async (req, res) => {
-                    try {
-                        const sessionsDir = path.join(process.cwd(), 'bot_sessions');
-                        console.log('[RESET] Solicitud de eliminación de sesión recibida.');
-                        
-                        // 1. Eliminar sesión local
-                        if (fs.existsSync(sessionsDir)) {
-                            console.log('[RESET] Eliminando directorio local:', sessionsDir);
-                            fs.rmSync(sessionsDir, { recursive: true, force: true });
-                        } else {
-                            console.log('[RESET] El directorio local no existía.');
-                        }
-
-                        // 1.1 Eliminar QR antiguo
-                        const qrPath = path.join(process.cwd(), 'bot.qr.png');
-                        if (fs.existsSync(qrPath)) {
-                            fs.unlinkSync(qrPath);
-                            console.log('[RESET] QR antiguo eliminado.');
-                        }
-
-                        // 2. Eliminar sesión remota (Supabase)
-                        await deleteSessionFromDb();
-
-                        // Respuesta adaptativa (JSON para fetch, HTML para form)
-                        if (req.headers['content-type'] === 'application/json') {
-                            res.json({ success: true, message: "Sesión eliminada. Reiniciando..." });
-                        } else {
-                            res.send(`
-                                <html>
-                                    <body style="font-family: sans-serif; text-align: center; padding: 50px;">
-                                        <h1 style="color: green;">✅ Sesión Eliminada (Local y Remota)</h1>
-                                        <p>El bot se está reiniciando. Por favor espera unos 60 segundos y recarga la página principal para escanear el nuevo QR.</p>
-                                        <script>
-                                            setTimeout(() => { window.location.href = "/"; }, 45000);
-                                        </script>
-                                    </body>
-                                </html>
-                            `);
-                        }
-                        
-                        // Forzar salida del proceso para que Railway/Docker lo reinicie
-                        console.log('[RESET] Saliendo del proceso para reiniciar...');
-                        setTimeout(() => {
-                            process.exit(0); 
-                        }, 2000);
-                    } catch (error) {
-                        console.error('[RESET] Error:', error);
-                        if (req.headers['content-type'] === 'application/json') {
-                            res.status(500).json({ success: false, error: error.message });
-                        } else {
-                            res.status(500).send('Error al reiniciar sesión: ' + error.message);
-                        }
-                    }
-                });
-
-                // Endpoint para obtener el nombre del asistente de forma dinámica
-                app.get('/api/assistant-name', (req, res) => {
-                        const assistantName = process.env.ASSISTANT_NAME || 'Asistente demo';
-                        res.json({ name: assistantName });
-                });
-
-                                // Utilidad para servir páginas HTML estáticas
-                                function serveHtmlPage(route, filename) {
-                                    const handler = (req, res) => {
-                                        console.log(`[DEBUG] Serving HTML for ${req.url} -> ${filename}`);
-                                        try {
-                                            // Intentar múltiples rutas posibles
-                                            const possiblePaths = [
-                                                path.join(process.cwd(), 'src', filename),
-                                                path.join(__dirname, filename),
-                                                path.join(process.cwd(), filename),
-                                                path.join(__dirname, '..', 'src', filename)
-                                            ];
-
-                                            let htmlPath = null;
-                                            for (const p of possiblePaths) {
-                                                if (fs.existsSync(p)) {
-                                                    htmlPath = p;
-                                                    break;
-                                                }
-                                            }
-
-                                            if (htmlPath) {
-                                                console.log(`[DEBUG] Found file at: ${htmlPath}`);
-                                                res.sendFile(htmlPath);
-                                            } else {
-                                                console.error(`[ERROR] File not found. Searched in: ${possiblePaths.join(', ')}`);
-                                                res.status(404).send('HTML no encontrado en el servidor');
-                                            }
-                                        } catch (err) {
-                                            console.error(`[ERROR] Failed to serve ${filename}:`, err);
-                                            res.status(500).send('Error interno al servir HTML');
-                                        }
-                                    };
-                                    
-                                    app.get(route, handler);
-                                    // También registrar con slash final por si acaso
-                                    app.get(route + '/', handler);
-                                }
-
-                                // Endpoint de debug para verificar sistema de archivos
-                                app.get('/debug-info', (req, res) => {
-                                    try {
-                                        res.json({
-                                            cwd: process.cwd(),
-                                            dirname: __dirname,
-                                            filesInSrc: fs.existsSync(path.join(process.cwd(), 'src')) ? fs.readdirSync(path.join(process.cwd(), 'src')) : 'src not found',
-                                            filesInCwd: fs.readdirSync(process.cwd())
-                                        });
-                                    } catch (e) {
-                                        res.status(500).json({ error: e.message });
-                                    }
-                                });
-
-                                // Registrar páginas HTML
-                                serveHtmlPage("/webchat", "webchat.html");
-                                serveHtmlPage("/webreset", "webreset.html");
-
-  // Endpoint para reiniciar el bot vía Railway
-  app.post("/api/restart-bot", async (req, res) => {
-  console.log('POST /api/restart-bot recibido');
-  try {
-    const result = await RailwayApi.restartActiveDeployment();
-    console.log('Resultado de restartRailwayDeployment:', result);
-    if (result.success) {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({
-        success: true,
-        message: "Reinicio solicitado correctamente."
-      }));
-    } else {
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ success: false, error: result.error || "Error desconocido" }));
+                if (htmlPath) {
+                    res.sendFile(htmlPath);
+                } else {
+                    console.error(`[ERROR] File not found: ${filename}`);
+                    res.status(404).send('HTML no encontrado en el servidor');
+                }
+            } catch (err) {
+                console.error(`[ERROR] Failed to serve ${filename}:`, err);
+                res.status(500).send('Error interno al servir HTML');
+            }
+        };
+        app.get(route, handler);
+        if (route !== "/") {
+            app.get(route + '/', handler);
+        }
     }
-  } catch (err: any) {
-    console.error('Error en /api/restart-bot:', err);
-    res.writeHead(500, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ success: false, error: err.message }));
-  }
-});
 
+    // Inyectar rutas del plugin
+    httpInject(app);
 
-                // Integrar Socket.IO sobre el servidor HTTP real de BuilderBot
-                // Se inicializa DESPUÉS de iniciar el servidor para asegurar que la instancia exista
-                const initSocketIO = (serverInstance) => {
-                    if (serverInstance) {
-                        console.log('✅ [DEBUG] Inicializando Socket.IO...');
-                        const io = new Server(serverInstance, { cors: { origin: '*' } });
-                        io.on('connection', (socket) => {
-                            console.log('💬 Cliente web conectado');
-                            socket.on('message', async (msg) => {
-                                // Procesar el mensaje usando la lógica principal del bot
-                                try {
-                                    let ip = '';
-                                    const xff = socket.handshake.headers['x-forwarded-for'];
-                                    if (typeof xff === 'string') {
-                                        ip = xff.split(',')[0];
-                                    } else if (Array.isArray(xff)) {
-                                        ip = xff[0];
-                                    } else {
-                                        ip = socket.handshake.address || '';
-                                    }
-                                    // Centralizar historial y estado igual que WhatsApp
-                                    if (!global.webchatHistories) global.webchatHistories = {};
-                                    const historyKey = `webchat_${ip}`;
-                                    if (!global.webchatHistories[historyKey]) global.webchatHistories[historyKey] = [];
-                                    const _history = global.webchatHistories[historyKey];
-                                    const state = {
-                                        get: function (key) {
-                                            if (key === 'history') return _history;
-                                            return undefined;
-                                        },
-                                        update: async function (msg, role = 'user') {
-                                            if (_history.length > 0) {
-                                                const last = _history[_history.length - 1];
-                                                if (last.role === role && last.content === msg) return;
-                                            }
-                                            _history.push({ role, content: msg });
-                                            if (_history.length >= 6) {
-                                                const last3 = _history.slice(-3);
-                                                if (last3.every(h => h.role === 'user' && h.content === msg)) {
-                                                    _history.length = 0;
-                                                }
-                                            }
-                                        },
-                                        clear: async function () { _history.length = 0; }
-                                    };
-                                    const provider = undefined;
-                                    const gotoFlow = () => { /* intentional */ };
-                                    let replyText = '';
-                                    const flowDynamic = async (arr) => {
-                                        if (Array.isArray(arr)) {
-                                            replyText = arr.map(a => a.body).join('\n');
-                                        } else if (typeof arr === 'string') {
-                                            replyText = arr;
-                                        }
-                                    };
-                                    if (msg.trim().toLowerCase() === "#reset" || msg.trim().toLowerCase() === "#cerrar") {
-                                        await state.clear();
-                                        replyText = "🔄 El chat ha sido reiniciado. Puedes comenzar una nueva conversación.";
-                                    } else {
-                                        const threadId = state.get && state.get('thread_id');
-                                        let finalMessage = msg;
-                                        if (!threadId) {
-                                            finalMessage = `Fecha y hora actual: ${getArgentinaDatetimeString()}\n` + msg;
-                                        }
-                                        await processUserMessage({ from: ip, body: finalMessage, type: 'webchat' }, { flowDynamic, state, provider, gotoFlow });
-                                    }
-                                    socket.emit('reply', replyText);
-                                } catch (err) {
-                                    console.error('Error procesando mensaje webchat:', err);
-                                    socket.emit('reply', 'Hubo un error procesando tu mensaje.');
-                                }
-                            });
-                        });
+    // Registrar páginas HTML
+    serveHtmlPage("/dashboard", "dashboard.html");
+    serveHtmlPage("/webchat", "webchat.html");
+    serveHtmlPage("/webreset", "webreset.html");
+
+    // Servir archivos estáticos
+    app.use("/js", serve(path.join(process.cwd(), "src", "js")));
+    app.use("/style", serve(path.join(process.cwd(), "src", "style")));
+    app.use("/assets", serve(path.join(process.cwd(), "src", "assets")));
+
+    // Servir el código QR
+    app.get("/qr.png", (req, res) => {
+        const qrPath = path.join(process.cwd(), 'bot.qr.png');
+        if (fs.existsSync(qrPath)) {
+            res.setHeader('Content-Type', 'image/png');
+            fs.createReadStream(qrPath).pipe(res);
+        } else {
+            res.statusCode = 404;
+            res.end('QR not found');
+        }
+    });
+
+    // API Endpoints
+    app.get('/api/assistant-name', (req, res) => {
+        const assistantName = process.env.ASSISTANT_NAME || 'Asistente demo';
+        res.json({ name: assistantName });
+    });
+
+    app.get('/api/dashboard-status', async (req, res) => {
+        const status = hasActiveSession();
+        res.json(status);
+    });
+
+    app.post('/api/delete-session', async (req, res) => {
+        try {
+            await deleteSessionFromDb();
+            res.json({ success: true });
+        } catch (err) {
+            console.error('Error en /api/delete-session:', err);
+            res.status(500).json({ success: false, error: err instanceof Error ? err.message : String(err) });
+        }
+    });
+
+    app.post("/api/restart-bot", async (req, res) => {
+        console.log('POST /api/restart-bot recibido');
+        try {
+            const result = await RailwayApi.restartActiveDeployment();
+            if (result.success) {
+                res.json({ success: true, message: "Reinicio solicitado correctamente." });
+            } else {
+                res.status(500).json({ success: false, error: result.error || "Error desconocido" });
+            }
+        } catch (err: any) {
+            console.error('Error en /api/restart-bot:', err);
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
+    // Socket.IO initialization function
+    const initSocketIO = (serverInstance) => {
+        if (!serverInstance) {
+            console.error('❌ [ERROR] No se pudo obtener serverInstance para Socket.IO');
+            return;
+        }
+        console.log('✅ [DEBUG] Inicializando Socket.IO...');
+        const io = new Server(serverInstance, { cors: { origin: '*' } });
+        io.on('connection', (socket) => {
+            console.log('💬 Cliente web conectado');
+            socket.on('message', async (msg) => {
+                try {
+                    let ip = '';
+                    const xff = socket.handshake.headers['x-forwarded-for'];
+                    if (typeof xff === 'string') ip = xff.split(',')[0];
+                    else if (Array.isArray(xff)) ip = xff[0];
+                    else ip = socket.handshake.address || '';
+
+                    if (!global.webchatHistories) global.webchatHistories = {};
+                    const historyKey = `webchat_${ip}`;
+                    if (!global.webchatHistories[historyKey]) global.webchatHistories[historyKey] = [];
+                    const _history = global.webchatHistories[historyKey];
+                    
+                    const state = {
+                        get: (key) => key === 'history' ? _history : undefined,
+                        update: async (msg, role = 'user') => {
+                            _history.push({ role, content: msg });
+                            if (_history.length > 10) _history.shift();
+                        },
+                        clear: async () => { _history.length = 0; }
+                    };
+
+                    let replyText = '';
+                    const flowDynamic = async (arr) => {
+                        if (Array.isArray(arr)) replyText = arr.map(a => a.body).join('\n');
+                        else if (typeof arr === 'string') replyText = arr;
+                    };
+
+                    if (msg.trim().toLowerCase() === "#reset") {
+                        await state.clear();
+                        replyText = "🔄 Chat reiniciado.";
                     } else {
-                        console.error('❌ [ERROR] No se pudo obtener realHttpServer para Socket.IO');
+                        await processUserMessage({ from: ip, body: msg, type: 'webchat' }, { flowDynamic, state, provider: undefined, gotoFlow: () => {} });
                     }
+                    socket.emit('reply', replyText);
+                } catch (err) {
+                    console.error('Error Socket.IO:', err);
+                    socket.emit('reply', 'Error procesando mensaje.');
+                }
+            });
+        });
+    };
+
+    app.post('/webchat-api', async (req, res) => {
+        if (!req.body || !req.body.message) {
+            return res.status(400).json({ error: "Falta 'message'" });
+        }
+        try {
+            const message = req.body.message;
+            let ip = '';
+            const xff = req.headers['x-forwarded-for'];
+            if (typeof xff === 'string') ip = xff.split(',')[0];
+            else ip = req.ip || '';
+
+            const { getOrCreateThreadId, sendMessageToThread, deleteThread } = await import('./utils-web/openaiThreadBridge');
+            const session = webChatManager.getSession(ip);
+            let replyText = '';
+
+            if (message.trim().toLowerCase() === "#reset") {
+                await deleteThread(session);
+                session.clear();
+                replyText = "🔄 Chat reiniciado.";
+            } else {
+                const threadId = await getOrCreateThreadId(session);
+                session.addUserMessage(message);
+                
+                const state = {
+                    get: (key) => key === 'thread_id' ? session.thread_id : undefined,
+                    update: async () => {},
+                    clear: async () => session.clear(),
                 };
 
+                const webChatAdapterFn = async (assistantId, message, state, fallback, userId, threadId) => {
+                    return await sendMessageToThread(threadId, message, assistantId);
+                };
 
+                const reply = await webChatAdapterFn(ASSISTANT_ID, message, state, "", ip, threadId);
+                
+                const flowDynamic = async (arr) => {
+                    const text = Array.isArray(arr) ? arr.map(a => a.body).join('\n') : arr;
+                    replyText = replyText ? replyText + "\n\n" + text : text;
+                };
 
-                // Integrar AssistantBridge si es necesario
-                // const assistantBridge = new AssistantBridge();
-                // assistantBridge.setupWebChat(polkaApp, realHttpServer);
+                await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
+                    reply,
+                    { type: 'webchat', from: ip, thread_id: threadId, body: message },
+                    flowDynamic,
+                    state,
+                    undefined,
+                    () => {},
+                    webChatAdapterFn,
+                    ASSISTANT_ID
+                );
+                session.addAssistantMessage(replyText);
+            }
+            res.json({ reply: replyText });
+        } catch (err) {
+            console.error('Error /webchat-api:', err);
+            res.status(500).json({ reply: 'Error interno.' });
+        }
+    });
 
-                app.post('/webchat-api', async (req, res) => {
-                    console.log('Llamada a /webchat-api');
-                    if (req.body && req.body.message) {
-                        try {
-                            const message = req.body.message;
-                            console.log('Mensaje recibido en webchat:', message);
-                            let ip = '';
-                            const xff = req.headers['x-forwarded-for'];
-                            if (typeof xff === 'string') {
-                                ip = xff.split(',')[0];
-                            } else if (Array.isArray(xff)) {
-                                ip = xff[0];
-                            } else {
-                                ip = req.ip || '';
-                            }
-
-                            // Usar WebChatManager
-                            const { getOrCreateThreadId, sendMessageToThread, deleteThread } = await import('./utils-web/openaiThreadBridge');
-                            const session = webChatManager.getSession(ip);
-                            
-                            let replyText = '';
-                            
-                            if (message.trim().toLowerCase() === "#reset" || message.trim().toLowerCase() === "#cerrar") {
-                                await deleteThread(session);
-                                session.clear();
-                                replyText = "🔄 El chat ha sido reiniciado. Puedes comenzar una nueva conversación.";
-                            } else {
-                                let threadId = await getOrCreateThreadId(session);
-                                let finalMessage = message;
-                                if (!threadId) {
-                                    finalMessage = `Fecha y hora actual: ${getArgentinaDatetimeString()}\n` + message;
-                                }
-                                session.addUserMessage(finalMessage);
-                                threadId = await getOrCreateThreadId(session);
-                                
-                                // Mock state
-                                const state = {
-                                    get: (key) => key === 'thread_id' ? session.thread_id : undefined,
-                                    update: async () => { /* intentional */ },
-                                    clear: async () => session.clear(),
-                                };
-
-                                // Adaptador
-                                const webChatAdapterFn = async (assistantId, message, state, fallback, userId, threadId) => {
-                                    try {
-                                        return await sendMessageToThread(threadId, message, assistantId);
-                                    } catch (e) {
-                                        console.error("Error en webChatAdapterFn:", e);
-                                        return fallback || "";
-                                    }
-                                };
-
-                                // Obtener respuesta
-                                const reply = await webChatAdapterFn(ASSISTANT_ID, finalMessage, state, "", ip, threadId);
-                                console.log('🔍 DEBUG RAW ASSISTANT MSG (WebChat):', JSON.stringify(reply));
-
-                                // FlowDynamic simulado
-                                const flowDynamic = async (arr) => {
-                                    let textToAdd = "";
-                                    if (Array.isArray(arr)) {
-                                        textToAdd = arr.map(a => a.body).join('\n');
-                                    } else if (typeof arr === 'string') {
-                                        textToAdd = arr;
-                                    }
-                                    if (replyText) replyText += "\n\n" + textToAdd;
-                                    else replyText = textToAdd;
-                                };
-
-                                // Procesar respuesta
-                                const ctxMock = { type: 'webchat', from: ip, thread_id: threadId, body: finalMessage };
-                                await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
-                                    reply,
-                                    ctxMock,
-                                    flowDynamic,
-                                    state,
-                                    undefined,
-                                    () => { /* intentional */ },
-                                    webChatAdapterFn,
-                                    ASSISTANT_ID
-                                );
-
-                                session.addAssistantMessage(replyText);
-                            }
-                            res.json({ reply: replyText });
-                        } catch (err) {
-                            console.error('Error en /webchat-api:', err);
-                            res.status(500).json({ reply: 'Hubo un error procesando tu mensaje.' });
-                        }
-                    } else {
-                        res.status(400).json({ error: "Falta 'message' en el body" });
-                    }
-                });
-
-    // Iniciar servidor propio
-    httpServer(+PORT);
-
-    // Inicializar Socket.IO
-    initSocketIO(server);
+    // Iniciar servidor
+    try {
+        console.log(`🚀 [INFO] Iniciando servidor en puerto ${PORT}...`);
+        httpServer(+PORT);
+        console.log(`✅ [INFO] Servidor escuchando en puerto ${PORT}`);
+        if (app.server) {
+            initSocketIO(app.server);
+        }
+    } catch (err) {
+        console.error('❌ [ERROR] Error al iniciar servidor:', err);
+    }
 
     console.log('✅ [INFO] Main function completed');
 };
@@ -854,7 +680,9 @@ export { welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowDoc, locat
         handleQueue, userQueues, userLocks,
  };
 
-main();
+main().catch(err => {
+    console.error('❌ [FATAL] Error en la función main:', err);
+});
 
 //ok
 //restored - Commit 210290e

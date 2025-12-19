@@ -24,7 +24,14 @@ export async function restoreSessionFromDb(sessionId: string = 'default') {
     console.log(`[SessionSync] 📥 Restaurando sesión '${sessionId}' para proyecto '${projectId}'...`);
     
     try {
-        if (!fs.existsSync(SESSION_DIR)) {
+        // Limpiar carpeta local antes de restaurar para evitar archivos huérfanos o corruptos
+        if (fs.existsSync(SESSION_DIR)) {
+            console.log(`[SessionSync] 🧹 Limpiando carpeta local '${SESSION_DIR}' antes de restaurar...`);
+            const files = fs.readdirSync(SESSION_DIR);
+            for (const file of files) {
+                fs.unlinkSync(path.join(SESSION_DIR, file));
+            }
+        } else {
             fs.mkdirSync(SESSION_DIR, { recursive: true });
         }
 
@@ -58,6 +65,10 @@ export async function restoreSessionFromDb(sessionId: string = 'default') {
                  fs.writeFileSync(filePath, JSON.stringify(fileContent, null, 2));
                  count++;
             }
+            
+            // IMPORTANTE: Si restauramos un full_backup, debemos asegurarnos de que NO existan
+            // archivos antiguos que puedan confundir a Baileys (como creds.json corruptos)
+            // que no estuvieran en el backup.
         } else {
             console.log('[SessionSync] ℹ️ Usando formato legacy (múltiples filas)...');
             for (const row of data) {
@@ -101,14 +112,17 @@ export async function deleteSessionFromDb(sessionId: string = 'default') {
 
 /**
  * Inicia la sincronización UNIFICADA.
- * Estrategia: Sincronizar al inicio, a los 2 minutos (para capturar QR reciente), y luego cada 1 hora.
+ * Estrategia: Sincronizar a los 30 segundos (estabilización), a los 2 minutos, y luego cada 1 hora.
  */
 export function startSessionSync(sessionId: string = 'default') {
     console.log(`[SessionSync] 🔄 Iniciando sincronización unificada.`);
-    console.log(`[SessionSync] Estrategia: Inicio -> 2 min -> Cada 1 Hora.`);
+    console.log(`[SessionSync] Estrategia: 30s (estabilización) -> 2 min -> Cada 1 Hora.`);
 
-    // 1. Ejecutar inmediatamente (por si ya hay datos restaurados o generados)
-    syncToDb(sessionId).catch(err => console.error('[SessionSync] Error inicio:', err));
+    // 1. Ejecutar tras 30 segundos para permitir que el bot se estabilice y no leer archivos mientras se abren
+    setTimeout(() => {
+        console.log('[SessionSync] ⏱️ Primer guardado (30s) ejecutándose...');
+        syncToDb(sessionId).catch(err => console.error('[SessionSync] Error primer guardado:', err));
+    }, 30 * 1000);
 
     // 2. Ejecutar a los 2 minutos (ventana típica para escanear QR y asegurar persistencia rápida)
     setTimeout(() => {
