@@ -30,6 +30,7 @@ COPY src/js/ ./src/js/
 COPY src/style/ ./src/style/
 COPY src/utils/ ./src/utils/
 COPY src/utils-web/ ./src/utils-web/
+COPY dashboard.html ./
 COPY README.md ./
 COPY nodemon.json ./
 COPY railway.json ./
@@ -60,6 +61,7 @@ COPY --from=builder /app/src/assets ./src/assets
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/*.json ./
 COPY --from=builder /app/*-lock.yaml ./
+COPY --from=builder /app/dashboard.html ./dashboard.html
 COPY --from=builder /app/src/webchat.html ./src/webchat.html
 COPY --from=builder /app/src/webreset.html ./src/webreset.html
 COPY --from=builder /app/README.md ./
