@@ -25,12 +25,6 @@ RUN pnpm install
 
 # Copiar el resto del código fuente y carpetas necesarias antes del build
 COPY src/ ./src/
-COPY src/assets/ ./src/assets/
-COPY src/js/ ./src/js/
-COPY src/style/ ./src/style/
-COPY src/utils/ ./src/utils/
-COPY src/utils-web/ ./src/utils-web/
-COPY dashboard.html ./
 COPY README.md ./
 COPY nodemon.json ./
 COPY railway.json ./

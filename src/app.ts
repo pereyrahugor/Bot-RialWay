@@ -446,11 +446,12 @@ const main = async () => {
             console.log(`[DEBUG] Serving HTML for ${req.url} -> ${filename}`);
             try {
                 const possiblePaths = [
+                    path.join(process.cwd(), 'src', 'html', filename),
                     path.join(process.cwd(), filename),
                     path.join(process.cwd(), 'src', filename),
+                    path.join(__dirname, 'html', filename),
                     path.join(__dirname, filename),
-                    path.join(__dirname, '..', filename),
-                    path.join(__dirname, '..', 'src', filename)
+                    path.join(__dirname, '..', 'src', 'html', filename)
                 ];
 
                 let htmlPath = null;
@@ -485,6 +486,7 @@ const main = async () => {
     serveHtmlPage("/dashboard", "dashboard.html");
     serveHtmlPage("/webchat", "webchat.html");
     serveHtmlPage("/webreset", "webreset.html");
+    serveHtmlPage("/variables", "variables.html");
 
     // Servir archivos estáticos
     app.use("/js", serve(path.join(process.cwd(), "src", "js")));

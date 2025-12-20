@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Editar Variables</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="/style/variables.css">
+</head>
+<body>
+    <div class="container">
+        <h1>⚙️ Editar Variables de Entorno</h1>
+        <p>Modifica los parámetros de configuración del bot. Estos cambios se aplicarán en Railway.</p>
+        
+        <form id="variables-form">
+            <div class="variables-grid">
+                <!-- Configuración del Asistente -->
+                <div class="variable-group">
+                    <h3>ASSISTANT_ID</h3>
+                    <p class="description">ID del asistente principal en OpenAI.</p>
+                    <input type="text" name="ASSISTANT_ID" id="ASSISTANT_ID">
+                </div>
+
+                <div class="variable-group">
+                    <h3>OPENAI_API_KEY</h3>
+                    <p class="description">Clave de API de OpenAI para el funcionamiento del bot.</p>
+                    <input type="password" name="OPENAI_API_KEY" id="OPENAI_API_KEY">
+                </div>
+
+                <div class="variable-group">
+                    <h3>ASSISTANT_NAME</h3>
+                    <p class="description">Nombre público que usará el asistente.</p>
+                    <input type="text" name="ASSISTANT_NAME" id="ASSISTANT_NAME">
+                </div>
+
+                <div class="variable-group">
+                    <h3>BOT_NAME</h3>
+                    <p class="description">Nombre interno para identificar la instancia del bot.</p>
+                    <input type="text" name="BOT_NAME" id="BOT_NAME">
+                </div>
+
+                <!-- Mensajes y Tiempos -->
+                <div class="variable-group">
+                    <h3>MSJCIERRE</h3>
+                    <p class="description">Mensaje de despedida por inactividad.</p>
+                    <textarea name="msjCierre" id="msjCierre"></textarea>
+                </div>
+
+                <div class="variable-group">
+                    <h3>MSJSEGUIMIENTO1</h3>
+                    <p class="description">Primer mensaje de seguimiento automático.</p>
+                    <textarea name="msjSeguimiento1" id="msjSeguimiento1"></textarea>
+                </div>
+
+                <div class="variable-group">
+                    <h3>TIMEOUTCIERRE</h3>
+                    <p class="description">Tiempo en minutos para cerrar la sesión por inactividad.</p>
+                    <input type="number" name="timeOutCierre" id="timeOutCierre">
+                </div>
+
+                <!-- WhatsApp y Grupos -->
+                <div class="variable-group">
+                    <h3>ID_GRUPO_WS</h3>
+                    <p class="description">ID del grupo principal de WhatsApp.</p>
+                    <input type="text" name="ID_GRUPO_WS" id="ID_GRUPO_WS">
+                </div>
+
+                <div class="variable-group">
+                    <h3>ID_GRUPO_RESUMEN</h3>
+                    <p class="description">ID del grupo para reportes de ventas.</p>
+                    <input type="text" name="ID_GRUPO_RESUMEN" id="ID_GRUPO_RESUMEN">
+                </div>
+
+                <!-- Google Services -->
+                <div class="variable-group">
+                    <h3>SHEET_ID_UPDATE</h3>
+                    <p class="description">IDs de Google Sheets (separados por coma).</p>
+                    <input type="text" name="SHEET_ID_UPDATE" id="SHEET_ID_UPDATE">
+                </div>
+
+                <div class="variable-group">
+                    <h3>GOOGLE_CALENDAR_ID</h3>
+                    <p class="description">ID del calendario de Google para agendamientos.</p>
+                    <input type="text" name="GOOGLE_CALENDAR_ID" id="GOOGLE_CALENDAR_ID">
+                </div>
+
+                <!-- Railway Config (Ocultas por defecto según pedido, pero con estructura) -->
+                <div class="variable-group" hidden>
+                    <h3>RAILWAY_TOKEN</h3>
+                    <p class="description">Token de API de Railway.</p>
+                    <input type="password" name="RAILWAY_TOKEN" id="RAILWAY_TOKEN">
+                </div>
+
+                <div class="variable-group" hidden>
+                    <h3>RAILWAY_PROJECT_ID</h3>
+                    <p class="description">ID del proyecto en Railway.</p>
+                    <input type="text" name="RAILWAY_PROJECT_ID" id="RAILWAY_PROJECT_ID">
+                </div>
+
+                <!-- Agrega aquí el resto de las variables siguiendo el mismo patrón -->
+            </div>
+
+            <div class="actions">
+                <button type="button" id="cancel-btn" class="btn btn-secondary">Cancelar</button>
+                <button type="submit" id="update-btn" class="btn">Actualizar y Reiniciar</button>
+            </div>
+        </form>
+    </div>
+    <script src="/js/variables.js"></script>
+</body>
+</html>
