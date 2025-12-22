@@ -69,6 +69,7 @@ const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
         await flowDynamic("No se pudo guardar la imagen recibida.");
         return;
       }
+      await state.update({ lastImage: localPath });
       const buffer = fs.default.readFileSync(localPath);
       const imgurRes = await axios.post(
         "https://api.imgur.com/3/image",
