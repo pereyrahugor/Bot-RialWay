@@ -55,12 +55,10 @@ COPY --from=builder /app/src/assets ./src/assets
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/*.json ./
 COPY --from=builder /app/*-lock.yaml ./
-COPY --from=builder /app/dashboard.html ./dashboard.html
-COPY --from=builder /app/src/webchat.html ./src/webchat.html
-COPY --from=builder /app/src/webreset.html ./src/webreset.html
 COPY --from=builder /app/README.md ./
 COPY --from=builder /app/nodemon.json ./
 COPY --from=builder /app/railway.json ./
+COPY --from=builder /app/src/html ./src/html
 COPY --from=builder /app/src/js ./src/js
 COPY --from=builder /app/src/style ./src/style
 
