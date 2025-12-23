@@ -145,8 +145,8 @@ export class RailwayApi {
 
     // Railway v2 variableUpsert es para UNA sola variable.
     // Construimos una mutación con múltiples llamadas usando alias para eficiencia.
-    let mutationParams = keys.map((_, i) => `$input${i}: VariableUpsertInput!`).join(', ');
-    let mutationBody = keys.map((_, i) => `  v${i}: variableUpsert(input: $input${i})`).join('\n');
+    const mutationParams = keys.map((_, i) => `$input${i}: VariableUpsertInput!`).join(', ');
+    const mutationBody = keys.map((_, i) => `  v${i}: variableUpsert(input: $input${i})`).join('\n');
     
     const mutation = `mutation(${mutationParams}) {\n${mutationBody}\n}`;
     
