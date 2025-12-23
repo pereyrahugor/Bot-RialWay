@@ -12,21 +12,29 @@ async function fetchStatus() {
             qrSection.style.display = 'none';
             sessionInfo.style.display = '';
             
-            if (data.source === 'database') {
-                statusEl.textContent = '⏳ Restaurando desde Nube...';
-                sessionInfo.textContent = data.message || 'Se encontró una sesión en la base de datos. El bot la está descargando, por favor espera...';
-                sessionInfo.style.color = '#ffc107'; // Amarillo/Naranja para indicar espera
+            if (data.source === 'connected') {
+                statusEl.textContent = '✅ Conectado y Operativo';
+                sessionInfo.textContent = 'El bot está vinculado a WhatsApp y funcionando correctamente.';
+                sessionInfo.style.color = '#28a745';
             } else {
-                statusEl.textContent = '✅ Activa (Archivos encontrados)';
-                sessionInfo.textContent = 'El bot está conectado y operativo. Si WhatsApp no responde, usa la opción de reinicio abajo.';
-                sessionInfo.style.color = ''; // Reset color
+                statusEl.textContent = '✅ Sesión Local Detectada';
+                sessionInfo.textContent = 'El bot tiene archivos de sesión. Si no responde en WhatsApp, intenta reiniciar.';
+                sessionInfo.style.color = ''; 
             }
         } else {
-            statusEl.textContent = '⏳ Esperando Escaneo';
             qrSection.style.display = '';
-            sessionInfo.style.display = 'none';
             
-            // Intentar recargar el QR si no se ha cargado
+            if (data.hasRemote) {
+                statusEl.textContent = '⏳ Restaurando...';
+                sessionInfo.style.display = '';
+                sessionInfo.textContent = data.message || 'Intentando recuperar sesión de la nube...';
+                sessionInfo.style.color = '#ffc107';
+            } else {
+                statusEl.textContent = '⏳ Esperando Escaneo';
+                sessionInfo.style.display = 'none';
+            }
+            
+            // Intentar recargar el QR
             const qrImg = document.querySelector('.qr');
             qrImg.src = '/qr.png?t=' + Date.now();
             qrImg.style.display = 'inline-block';

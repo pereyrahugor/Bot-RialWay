@@ -255,23 +255,36 @@ const handleQueue = async (userId) => {
 // Función auxiliar para verificar si existe sesión activa (Local o Remota)
 const hasActiveSession = async () => {
     try {
-        // 1. Verificar localmente
+        // 1. Verificar si el proveedor está realmente conectado
+        // En builderbot-provider-sherpa (Baileys), el socket suele estar en vendor
+        const isReady = !!(adapterProvider?.vendor?.user || adapterProvider?.globalVendorArgs?.sock?.user);
+        
+        // 2. Verificar localmente
         const sessionsDir = path.join(process.cwd(), 'bot_sessions');
         let localActive = false;
         if (fs.existsSync(sessionsDir)) {
-            const files = fs.readdirSync(sessionsDir);
-            localActive = files.length > 0;
+            const files = fs.readdirSync(sessionsDir).filter(f => f.endsWith('.json'));
+            // creds.json es el archivo crítico para Baileys
+            localActive = files.includes('creds.json');
         }
 
+        // Si está conectado, es la prioridad máxima
+        if (isReady) return { active: true, source: 'connected' };
+        
+        // Si tiene creds.json, es muy probable que se conecte pronto
         if (localActive) return { active: true, source: 'local' };
 
-        // 2. Si no hay local, verificar en DB (útil durante reinicios)
+        // 3. Si no hay nada local, verificar en DB
         const remoteActive = await isSessionInDb();
         if (remoteActive) {
-            return { active: true, source: 'database', message: 'Sesión encontrada en la nube, restaurando...' };
+            return { 
+                active: false, 
+                hasRemote: true, 
+                message: 'Sesión encontrada en la nube. El bot está intentando restaurarla. Si el QR aparece, puedes escanearlo para generar una nueva.' 
+            };
         }
 
-        return { active: false };
+        return { active: false, hasRemote: false };
     } catch (error) {
         console.error('Error verificando sesión:', error);
         return { active: false, error: error instanceof Error ? error.message : String(error) };
