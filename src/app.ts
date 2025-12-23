@@ -14,7 +14,7 @@ let botEnabled = true;
 import { createBot, createProvider, createFlow, addKeyword, EVENTS } from "@builderbot/bot";
 import { MemoryDB } from "@builderbot/bot";
 import { BaileysProvider } from "builderbot-provider-sherpa";
-import { restoreSessionFromDb, startSessionSync, deleteSessionFromDb } from "./utils/sessionSync";
+import { restoreSessionFromDb, startSessionSync, deleteSessionFromDb, isSessionInDb } from "./utils/sessionSync";
 import { toAsk, httpInject } from "@builderbot-plugins/openai-assistants";
 import { typing } from "./utils/presence";
 import { idleFlow } from "./Flows/idleFlow";
@@ -252,13 +252,26 @@ const handleQueue = async (userId) => {
     userQueues.delete(userId);
 };
 
-// Función auxiliar para verificar si existe sesión activa
-const hasActiveSession = () => {
+// Función auxiliar para verificar si existe sesión activa (Local o Remota)
+const hasActiveSession = async () => {
     try {
+        // 1. Verificar localmente
         const sessionsDir = path.join(process.cwd(), 'bot_sessions');
-        if (!fs.existsSync(sessionsDir)) return { active: false };
-        const files = fs.readdirSync(sessionsDir);
-        return { active: files.length > 0 };
+        let localActive = false;
+        if (fs.existsSync(sessionsDir)) {
+            const files = fs.readdirSync(sessionsDir);
+            localActive = files.length > 0;
+        }
+
+        if (localActive) return { active: true, source: 'local' };
+
+        // 2. Si no hay local, verificar en DB (útil durante reinicios)
+        const remoteActive = await isSessionInDb();
+        if (remoteActive) {
+            return { active: true, source: 'database', message: 'Sesión encontrada en la nube, restaurando...' };
+        }
+
+        return { active: false };
     } catch (error) {
         console.error('Error verificando sesión:', error);
         return { active: false, error: error instanceof Error ? error.message : String(error) };
@@ -515,7 +528,7 @@ const main = async () => {
     });
 
     app.get('/api/dashboard-status', async (req, res) => {
-        const status = hasActiveSession();
+        const status = await hasActiveSession();
         res.json(status);
     });
 

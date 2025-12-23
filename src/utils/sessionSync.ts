@@ -90,6 +90,28 @@ export async function restoreSessionFromDb(sessionId: string = 'default') {
 }
 
 /**
+ * Verifica si existe una sesión guardada en la base de datos.
+ */
+export async function isSessionInDb(sessionId: string = 'default'): Promise<boolean> {
+    try {
+        const { data, error } = await supabase.rpc('get_whatsapp_session', {
+            p_project_id: projectId,
+            p_session_id: sessionId
+        });
+
+        if (error) {
+            console.error('[SessionSync] Error verificando sesión en DB:', error);
+            return false;
+        }
+
+        return data && data.length > 0;
+    } catch (error) {
+        console.error('[SessionSync] Error crítico verificando sesión en DB:', error);
+        return false;
+    }
+}
+
+/**
  * Elimina la sesión remota en Supabase.
  */
 export async function deleteSessionFromDb(sessionId: string = 'default') {
