@@ -107,6 +107,8 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                                 const lastImage = state.get('lastImage');
                                 if (lastImage && typeof lastImage === 'string') {
                                     if (fs.existsSync(lastImage)) {
+                                        // Pequeña pausa para asegurar que el texto llegue primero
+                                        await new Promise(resolve => setTimeout(resolve, 2000));
                                         console.log(`📡 Intentando enviar imagen: ${lastImage}`);
                                         await provider.sendImage(ID_GRUPO_RESUMEN_2, lastImage, "");
                                         console.log(`✅ Imagen reenviada al grupo ${ID_GRUPO_RESUMEN_2}`);
@@ -141,6 +143,8 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                                 const lastImage = state.get('lastImage');
                                 if (lastImage && typeof lastImage === 'string') {
                                     if (fs.existsSync(lastImage)) {
+                                        // Pequeña pausa para asegurar que el texto llegue primero
+                                        await new Promise(resolve => setTimeout(resolve, 2000));
                                         console.log(`📡 Intentando enviar imagen: ${lastImage}`);
                                         await provider.sendImage(ID_GRUPO_RESUMEN, lastImage, "");
                                         console.log(`✅ Imagen reenviada al grupo ${ID_GRUPO_RESUMEN}`);
@@ -175,6 +179,8 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                                 const lastImage = state.get('lastImage');
                                 if (lastImage && typeof lastImage === 'string') {
                                     if (fs.existsSync(lastImage)) {
+                                        // Pequeña pausa para asegurar que el texto llegue primero
+                                        await new Promise(resolve => setTimeout(resolve, 2000));
                                         console.log(`📡 Intentando enviar imagen: ${lastImage}`);
                                         await provider.sendImage(ID_GRUPO_RESUMEN, lastImage, "");
                                         console.log(`✅ Imagen reenviada al grupo ${ID_GRUPO_RESUMEN}`);
