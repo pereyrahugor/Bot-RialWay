@@ -65,6 +65,11 @@ const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
         return;
       }
       
+      // Asegurar que la carpeta temp exista
+      if (!fs.default.existsSync("./temp/")) {
+        fs.default.mkdirSync("./temp/", { recursive: true });
+      }
+      
       // Usar ./temp/ en lugar de ./tmp/ para consistencia
       const localPath = await provider.saveFile(ctx, { path: "./temp/" });
       if (!localPath) {

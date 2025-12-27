@@ -42,15 +42,20 @@ export const welcomeFlowDoc = addKeyword<BaileysProvider, MemoryDB>(EVENTS.DOCUM
                 return;
             }
 
-            // Guardar el PDF en tmp
-            localPath = await provider.saveFile(ctx, { path: "./tmp/" });
+            // Asegurar que la carpeta temp exista
+            if (!fs.existsSync("./temp/")) {
+                fs.mkdirSync("./temp/", { recursive: true });
+            }
+
+            // Guardar el PDF en temp
+            localPath = await provider.saveFile(ctx, { path: "./temp/" });
             if (!localPath) {
                 await flowDynamic("No se pudo guardar el PDF recibido.");
                 return;
             }
 
             // Convertir cada página del PDF a imagen (png) usando pdftoppm (Poppler)
-            outputDir = path.join("./tmp", `pdf_${Date.now()}`);
+            outputDir = path.join("./temp", `pdf_${Date.now()}`);
             fs.mkdirSync(outputDir, { recursive: true });
             let imagenes = [];
             try {
