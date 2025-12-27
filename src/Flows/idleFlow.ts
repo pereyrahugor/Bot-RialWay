@@ -55,6 +55,14 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                     // No seguimiento, no enviar resumen al grupo ws, envia resumen a sheet, envia msj de cierre
                     console.log('NO_REPORTAR_BAJA: No se realiza seguimiento ni se envía resumen al grupo.');
                     data.linkWS = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
+                    
+                    // Limpieza de imagen si existe
+                    const lastImage = state.get('lastImage');
+                    if (lastImage && typeof lastImage === 'string' && fs.existsSync(lastImage)) {
+                        fs.unlinkSync(lastImage);
+                        await state.update({ lastImage: null });
+                    }
+
                     await addToSheet(data);
                     return endFlow(); //("BNI, cambiando la forma en que el mundo hace negocios\nGracias por su contacto.");
                 } else if (tipo === 'NO_REPORTAR_SEGUIR') {
@@ -97,9 +105,19 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                             // Forward image if "Foto o video" is "si"
                             if (data["Foto o video"]?.toLowerCase() === 'si') {
                                 const lastImage = state.get('lastImage');
-                                if (lastImage) {
-                                    await provider.sendFile(ID_GRUPO_RESUMEN_2, lastImage);
-                                    console.log(`✅ Imagen reenviada al grupo ${ID_GRUPO_RESUMEN_2}`);
+                                if (lastImage && typeof lastImage === 'string') {
+                                    if (fs.existsSync(lastImage)) {
+                                        console.log(`📡 Intentando enviar imagen: ${lastImage}`);
+                                        await provider.sendFile(ID_GRUPO_RESUMEN_2, lastImage);
+                                        console.log(`✅ Imagen reenviada al grupo ${ID_GRUPO_RESUMEN_2}`);
+                                        // Eliminar después de enviar
+                                        fs.unlinkSync(lastImage);
+                                        await state.update({ lastImage: null });
+                                    } else {
+                                        console.warn(`⚠️ La imagen no existe en la ruta: ${lastImage}`);
+                                    }
+                                } else {
+                                    console.log('ℹ️ No hay imagen guardada en el estado para reenviar.');
                                 }
                             }
                         } catch (err) {
@@ -121,9 +139,19 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                             // Forward image if "Foto o video" is "si"
                             if (data["Foto o video"]?.toLowerCase() === 'si') {
                                 const lastImage = state.get('lastImage');
-                                if (lastImage) {
-                                    await provider.sendFile(ID_GRUPO_RESUMEN, lastImage);
-                                    console.log(`✅ Imagen reenviada al grupo ${ID_GRUPO_RESUMEN}`);
+                                if (lastImage && typeof lastImage === 'string') {
+                                    if (fs.existsSync(lastImage)) {
+                                        console.log(`📡 Intentando enviar imagen: ${lastImage}`);
+                                        await provider.sendFile(ID_GRUPO_RESUMEN, lastImage);
+                                        console.log(`✅ Imagen reenviada al grupo ${ID_GRUPO_RESUMEN}`);
+                                        // Eliminar después de enviar
+                                        fs.unlinkSync(lastImage);
+                                        await state.update({ lastImage: null });
+                                    } else {
+                                        console.warn(`⚠️ La imagen no existe en la ruta: ${lastImage}`);
+                                    }
+                                } else {
+                                    console.log('ℹ️ No hay imagen guardada en el estado para reenviar.');
                                 }
                             }
                         } catch (err) {
@@ -145,9 +173,19 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                             // Forward image if "Foto o video" is "si"
                             if (data["Foto o video"]?.toLowerCase() === 'si') {
                                 const lastImage = state.get('lastImage');
-                                if (lastImage) {
-                                    await provider.sendFile(ID_GRUPO_RESUMEN, lastImage);
-                                    console.log(`✅ Imagen reenviada al grupo ${ID_GRUPO_RESUMEN}`);
+                                if (lastImage && typeof lastImage === 'string') {
+                                    if (fs.existsSync(lastImage)) {
+                                        console.log(`📡 Intentando enviar imagen: ${lastImage}`);
+                                        await provider.sendFile(ID_GRUPO_RESUMEN, lastImage);
+                                        console.log(`✅ Imagen reenviada al grupo ${ID_GRUPO_RESUMEN}`);
+                                        // Eliminar después de enviar
+                                        fs.unlinkSync(lastImage);
+                                        await state.update({ lastImage: null });
+                                    } else {
+                                        console.warn(`⚠️ La imagen no existe en la ruta: ${lastImage}`);
+                                    }
+                                } else {
+                                    console.log('ℹ️ No hay imagen guardada en el estado para reenviar.');
                                 }
                             }
                         } catch (err) {

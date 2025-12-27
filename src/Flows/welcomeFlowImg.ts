@@ -64,11 +64,25 @@ const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
         await flowDynamic("No se encontró el provider para descargar la imagen.");
         return;
       }
-      const localPath = await provider.saveFile(ctx, { path: "./tmp/" });
+      
+      // Usar ./temp/ en lugar de ./tmp/ para consistencia
+      const localPath = await provider.saveFile(ctx, { path: "./temp/" });
       if (!localPath) {
         await flowDynamic("No se pudo guardar la imagen recibida.");
         return;
       }
+
+      // Eliminar imagen anterior si existe para no acumular archivos
+      const oldImage = state.get('lastImage');
+      if (oldImage && typeof oldImage === 'string' && fs.default.existsSync(oldImage)) {
+        try {
+          fs.default.unlinkSync(oldImage);
+          console.log(`🗑️ Imagen anterior eliminada: ${oldImage}`);
+        } catch (e) {
+          console.error(`❌ Error eliminando imagen anterior: ${oldImage}`, e);
+        }
+      }
+
       await state.update({ lastImage: localPath });
       const buffer = fs.default.readFileSync(localPath);
       const imgurRes = await axios.post(
@@ -139,13 +153,8 @@ const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
       if (!userLocks.get(userId) && userQueues.get(userId).length === 1) {
         await handleQueue(userId);
       }
-      fs.default.unlink(localPath, (err) => {
-        if (err) {
-          console.error(`❌ Error al eliminar el archivo: ${localPath}`, err);
-        } else {
-          console.log(`🗑️ Archivo eliminado: ${localPath}`);
-        }
-      });
+      // Se elimina la eliminación inmediata para que idleFlow pueda reenviarla
+      console.log(`💾 Imagen guardada para resumen: ${localPath}`);
     } catch (err) {
       console.error("Error procesando imagen:", err);
       await flowDynamic("Ocurrió un error al analizar la imagen. Intenta más tarde.");
