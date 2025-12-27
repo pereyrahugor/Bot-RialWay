@@ -108,7 +108,7 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                                 if (lastImage && typeof lastImage === 'string') {
                                     if (fs.existsSync(lastImage)) {
                                         console.log(`📡 Intentando enviar imagen: ${lastImage}`);
-                                        await provider.sendFile(ID_GRUPO_RESUMEN_2, lastImage);
+                                        await provider.sendImage(ID_GRUPO_RESUMEN_2, lastImage, "");
                                         console.log(`✅ Imagen reenviada al grupo ${ID_GRUPO_RESUMEN_2}`);
                                         // Eliminar después de enviar
                                         fs.unlinkSync(lastImage);
@@ -142,7 +142,7 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                                 if (lastImage && typeof lastImage === 'string') {
                                     if (fs.existsSync(lastImage)) {
                                         console.log(`📡 Intentando enviar imagen: ${lastImage}`);
-                                        await provider.sendFile(ID_GRUPO_RESUMEN, lastImage);
+                                        await provider.sendImage(ID_GRUPO_RESUMEN, lastImage, "");
                                         console.log(`✅ Imagen reenviada al grupo ${ID_GRUPO_RESUMEN}`);
                                         // Eliminar después de enviar
                                         fs.unlinkSync(lastImage);
@@ -176,7 +176,7 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                                 if (lastImage && typeof lastImage === 'string') {
                                     if (fs.existsSync(lastImage)) {
                                         console.log(`📡 Intentando enviar imagen: ${lastImage}`);
-                                        await provider.sendFile(ID_GRUPO_RESUMEN, lastImage);
+                                        await provider.sendImage(ID_GRUPO_RESUMEN, lastImage, "");
                                         console.log(`✅ Imagen reenviada al grupo ${ID_GRUPO_RESUMEN}`);
                                         // Eliminar después de enviar
                                         fs.unlinkSync(lastImage);
