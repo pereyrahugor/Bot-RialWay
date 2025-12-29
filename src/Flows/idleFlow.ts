@@ -56,11 +56,16 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                     console.log('NO_REPORTAR_BAJA: No se realiza seguimiento ni se envía resumen al grupo.');
                     data.linkWS = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
                     
-                    // Limpieza de imagen si existe
+                    // Limpieza de imagen o video si existe
                     const lastImage = state.get('lastImage');
                     if (lastImage && typeof lastImage === 'string' && fs.existsSync(lastImage)) {
                         fs.unlinkSync(lastImage);
                         await state.update({ lastImage: null });
+                    }
+                    const lastVideo = state.get('lastVideo');
+                    if (lastVideo && typeof lastVideo === 'string' && fs.existsSync(lastVideo)) {
+                        fs.unlinkSync(lastVideo);
+                        await state.update({ lastVideo: null });
                     }
 
                     await addToSheet(data);
@@ -102,24 +107,37 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                             await provider.sendText(ID_GRUPO_RESUMEN_2, resumenConLink);
                             console.log(`✅ SI_RESUMEN_G2: Resumen enviado a ${ID_GRUPO_RESUMEN_2} con enlace de WhatsApp`);
                             
-                            // Forward image if "Foto o video" is "si"
-                            if (data["Foto o video"]?.toLowerCase() === 'si') {
+                            // Forward image or video if "Foto o video" is "si"
+                            const fotoOVideo = data["Foto o video"]?.toLowerCase();
+                            if (fotoOVideo === 'si' || fotoOVideo === 'sí') {
                                 const lastImage = state.get('lastImage');
+                                const lastVideo = state.get('lastVideo');
+
                                 if (lastImage && typeof lastImage === 'string') {
                                     if (fs.existsSync(lastImage)) {
-                                        // Pequeña pausa para asegurar que el texto llegue primero
                                         await new Promise(resolve => setTimeout(resolve, 2000));
                                         console.log(`📡 Intentando enviar imagen: ${lastImage}`);
                                         await provider.sendImage(ID_GRUPO_RESUMEN_2, lastImage, "");
                                         console.log(`✅ Imagen reenviada al grupo ${ID_GRUPO_RESUMEN_2}`);
-                                        // Eliminar después de enviar
                                         fs.unlinkSync(lastImage);
                                         await state.update({ lastImage: null });
-                                    } else {
-                                        console.warn(`⚠️ La imagen no existe en la ruta: ${lastImage}`);
                                     }
-                                } else {
-                                    console.log('ℹ️ No hay imagen guardada en el estado para reenviar.');
+                                }
+
+                                if (lastVideo && typeof lastVideo === 'string') {
+                                    if (fs.existsSync(lastVideo)) {
+                                        await new Promise(resolve => setTimeout(resolve, 2000));
+                                        console.log(`📡 Intentando enviar video: ${lastVideo}`);
+                                        // Usamos sendVideo si está disponible, sino sendImage (que a veces es genérico) o sendMedia
+                                        if (provider.sendVideo) {
+                                            await provider.sendVideo(ID_GRUPO_RESUMEN_2, lastVideo, "");
+                                        } else {
+                                            await provider.sendImage(ID_GRUPO_RESUMEN_2, lastVideo, "");
+                                        }
+                                        console.log(`✅ Video reenviado al grupo ${ID_GRUPO_RESUMEN_2}`);
+                                        fs.unlinkSync(lastVideo);
+                                        await state.update({ lastVideo: null });
+                                    }
                                 }
                             }
                         } catch (err) {
@@ -138,24 +156,36 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                             await provider.sendText(ID_GRUPO_RESUMEN, resumenConLink);
                             console.log(`✅ SI_RESUMEN: Resumen enviado a ${ID_GRUPO_RESUMEN} con enlace de WhatsApp`);
                             
-                            // Forward image if "Foto o video" is "si"
-                            if (data["Foto o video"]?.toLowerCase() === 'si') {
+                            // Forward image or video if "Foto o video" is "si"
+                            const fotoOVideo = data["Foto o video"]?.toLowerCase();
+                            if (fotoOVideo === 'si' || fotoOVideo === 'sí') {
                                 const lastImage = state.get('lastImage');
+                                const lastVideo = state.get('lastVideo');
+
                                 if (lastImage && typeof lastImage === 'string') {
                                     if (fs.existsSync(lastImage)) {
-                                        // Pequeña pausa para asegurar que el texto llegue primero
                                         await new Promise(resolve => setTimeout(resolve, 2000));
                                         console.log(`📡 Intentando enviar imagen: ${lastImage}`);
                                         await provider.sendImage(ID_GRUPO_RESUMEN, lastImage, "");
                                         console.log(`✅ Imagen reenviada al grupo ${ID_GRUPO_RESUMEN}`);
-                                        // Eliminar después de enviar
                                         fs.unlinkSync(lastImage);
                                         await state.update({ lastImage: null });
-                                    } else {
-                                        console.warn(`⚠️ La imagen no existe en la ruta: ${lastImage}`);
                                     }
-                                } else {
-                                    console.log('ℹ️ No hay imagen guardada en el estado para reenviar.');
+                                }
+
+                                if (lastVideo && typeof lastVideo === 'string') {
+                                    if (fs.existsSync(lastVideo)) {
+                                        await new Promise(resolve => setTimeout(resolve, 2000));
+                                        console.log(`📡 Intentando enviar video: ${lastVideo}`);
+                                        if (provider.sendVideo) {
+                                            await provider.sendVideo(ID_GRUPO_RESUMEN, lastVideo, "");
+                                        } else {
+                                            await provider.sendImage(ID_GRUPO_RESUMEN, lastVideo, "");
+                                        }
+                                        console.log(`✅ Video reenviado al grupo ${ID_GRUPO_RESUMEN}`);
+                                        fs.unlinkSync(lastVideo);
+                                        await state.update({ lastVideo: null });
+                                    }
                                 }
                             }
                         } catch (err) {
@@ -174,24 +204,36 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                             await provider.sendText(ID_GRUPO_RESUMEN, resumenConLink);
                             console.log(`✅ DEFAULT: Resumen enviado a ${ID_GRUPO_RESUMEN} con enlace de WhatsApp`);
                             
-                            // Forward image if "Foto o video" is "si"
-                            if (data["Foto o video"]?.toLowerCase() === 'si') {
+                            // Forward image or video if "Foto o video" is "si"
+                            const fotoOVideo = data["Foto o video"]?.toLowerCase();
+                            if (fotoOVideo === 'si' || fotoOVideo === 'sí') {
                                 const lastImage = state.get('lastImage');
+                                const lastVideo = state.get('lastVideo');
+
                                 if (lastImage && typeof lastImage === 'string') {
                                     if (fs.existsSync(lastImage)) {
-                                        // Pequeña pausa para asegurar que el texto llegue primero
                                         await new Promise(resolve => setTimeout(resolve, 2000));
                                         console.log(`📡 Intentando enviar imagen: ${lastImage}`);
                                         await provider.sendImage(ID_GRUPO_RESUMEN, lastImage, "");
                                         console.log(`✅ Imagen reenviada al grupo ${ID_GRUPO_RESUMEN}`);
-                                        // Eliminar después de enviar
                                         fs.unlinkSync(lastImage);
                                         await state.update({ lastImage: null });
-                                    } else {
-                                        console.warn(`⚠️ La imagen no existe en la ruta: ${lastImage}`);
                                     }
-                                } else {
-                                    console.log('ℹ️ No hay imagen guardada en el estado para reenviar.');
+                                }
+
+                                if (lastVideo && typeof lastVideo === 'string') {
+                                    if (fs.existsSync(lastVideo)) {
+                                        await new Promise(resolve => setTimeout(resolve, 2000));
+                                        console.log(`📡 Intentando enviar video: ${lastVideo}`);
+                                        if (provider.sendVideo) {
+                                            await provider.sendVideo(ID_GRUPO_RESUMEN, lastVideo, "");
+                                        } else {
+                                            await provider.sendImage(ID_GRUPO_RESUMEN, lastVideo, "");
+                                        }
+                                        console.log(`✅ Video reenviado al grupo ${ID_GRUPO_RESUMEN}`);
+                                        fs.unlinkSync(lastVideo);
+                                        await state.update({ lastVideo: null });
+                                    }
                                 }
                             }
                         } catch (err) {

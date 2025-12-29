@@ -20,6 +20,7 @@ import { addKeyword, EVENTS } from "@builderbot/bot";
 import { ErrorReporter } from "../utils/errorReporter";
 
 import { welcomeFlowTxt } from "./welcomeFlowTxt";
+import { welcomeFlowVideo } from "./welcomeFlowVideo";
 import axios from "axios";
 import { OpenAI } from "openai";
 import { reset } from "../utils/timeOut";
@@ -33,6 +34,12 @@ const setTime = Number(process.env.timeOutCierre) * 60 * 1000;
 const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
   async (ctx, { flowDynamic, provider, gotoFlow, state }) => {
     const userId = ctx.from;
+
+    // Verificar si es una imagen (y no un video)
+    const mimetype = ctx?.media?.mimetype || ctx?.message?.imageMessage?.mimetype || "";
+    if (mimetype.includes('video')) {
+        return gotoFlow(welcomeFlowVideo);
+    }
 
     // Filtrar contactos ignorados antes de agregar a la cola
     if (

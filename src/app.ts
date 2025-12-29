@@ -21,6 +21,7 @@ import { idleFlow } from "./Flows/idleFlow";
 import { welcomeFlowTxt } from "./Flows/welcomeFlowTxt";
 import { welcomeFlowVoice } from "./Flows/welcomeFlowVoice";
 import { welcomeFlowImg } from "./Flows/welcomeFlowImg";
+import { welcomeFlowVideo } from "./Flows/welcomeFlowVideo";
 import { welcomeFlowDoc } from "./Flows/welcomeFlowDoc";
 import { locationFlow } from "./Flows/locationFlow";
 import { AssistantResponseProcessor } from "./utils/AssistantResponseProcessor";
@@ -369,7 +370,7 @@ const main = async () => {
     await updateMain();
 
     console.log('🚀 [Init] Iniciando createBot...');
-    const adapterFlow = createFlow([welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowDoc, locationFlow, idleFlow]);
+    const adapterFlow = createFlow([welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowVideo, welcomeFlowDoc, locationFlow, idleFlow]);
     const adapterDB = new MemoryDB();
     
     const { httpServer } = await createBot({
@@ -749,7 +750,7 @@ process.on('uncaughtException', (error) => {
     // process.exit(1);
 });
 
-export { welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowDoc, locationFlow,
+export { welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowVideo, welcomeFlowDoc, locationFlow,
         handleQueue, userQueues, userLocks,
  };
 
