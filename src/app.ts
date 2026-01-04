@@ -701,9 +701,10 @@ const main = async () => {
 
                 const reply = await webChatAdapterFn(ASSISTANT_ID, message, state, "", ip, threadId);
                 
+                let accumulatedReply = '';
                 const flowDynamic = async (arr) => {
-                    const text = Array.isArray(arr) ? arr.map(a => a.body).join('\n') : arr;
-                    replyText = replyText ? replyText + "\n\n" + text : text;
+                    const text = Array.isArray(arr) ? arr.map(a => a.body).join('\n') : (typeof arr === 'string' ? arr : (arr.body || ''));
+                    accumulatedReply = accumulatedReply ? accumulatedReply + "\n\n" + text : text;
                 };
 
                 await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
@@ -716,6 +717,8 @@ const main = async () => {
                     webChatAdapterFn,
                     ASSISTANT_ID
                 );
+                
+                replyText = accumulatedReply || reply;
                 session.addAssistantMessage(replyText);
             }
             res.json({ reply: replyText });
