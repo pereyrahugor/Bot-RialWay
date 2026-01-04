@@ -64,8 +64,8 @@ function limpiarBloquesJSON(texto: string): string {
     const specialBlocks: string[] = [];
     let textoConMarcadores = texto;
     
-    // Preservar [DB_QUERY: ...]
-    textoConMarcadores = textoConMarcadores.replace(/\[DB_QUERY\s*:[\s\S]*?\]/gi, (match) => {
+    // Preservar [DB_QUERY: ...] (Permitiendo espacios opcionales tras el corchete y alrededor de los dos puntos)
+    textoConMarcadores = textoConMarcadores.replace(/\[\s*DB_QUERY\s*:\s*[\s\S]*?\]/gi, (match) => {
         const index = specialBlocks.length;
         specialBlocks.push(match);
         return `___SPECIAL_BLOCK_${index}___`;
@@ -148,8 +148,8 @@ export class AssistantResponseProcessor {
         // Log específico para debug de DB_QUERY
         console.log('[DEBUG] Buscando [DB_QUERY] en:', textResponse.substring(0, 200));
         
-        // 0) Detectar y procesar DB QUERY [DB_QUERY: ...]
-        const dbQueryRegex = /\[DB_QUERY\s*:\s*([\s\S]*?)\]/i;
+        // 0) Detectar y procesar DB QUERY [DB_QUERY: ...] (Permitiendo espacios opcionales tras el corchete)
+        const dbQueryRegex = /\[\s*DB_QUERY\s*:\s*([\s\S]*?)\]/i;
         const dbMatch = textResponse.match(dbQueryRegex);
         console.log('[DEBUG] DB Match result:', dbMatch ? 'FOUND' : 'NULL');
         if (dbMatch) {
