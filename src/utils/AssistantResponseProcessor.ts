@@ -148,7 +148,7 @@ export class AssistantResponseProcessor {
         // Log específico para debug de DB_QUERY
         console.log('[DEBUG] Buscando [DB_QUERY] en:', textResponse.substring(0, 200));
         
-        // 0) Detectar y procesar DB QUERY [DB_QUERY: ...] (Permitiendo espacios opcionales tras el corchete)
+        // 0) Detectar y procesar DB QUERY [DB_QUERY: ...] (Permitiendo espacios opcionales tras el corchete y alrededor de los dos puntos)
         const dbQueryRegex = /\[\s*DB_QUERY\s*:\s*([\s\S]*?)\]/i;
         const dbMatch = textResponse.match(dbQueryRegex);
         console.log('[DEBUG] DB Match result:', dbMatch ? 'FOUND' : 'NULL');
@@ -159,24 +159,26 @@ export class AssistantResponseProcessor {
             
             // Ejecutar Query
             const queryResult = await executeDbQuery(sqlQuery);
-            console.log(`[AssistantResponseProcessor] 📝 Resultado DB RAW:`, queryResult.substring(0, 500) + (queryResult.length > 500 ? "..." : "")); // Loguear primeros 500 chars
+            console.log(`[AssistantResponseProcessor] 📝 Resultado DB RAW:`, queryResult.substring(0, 500) + (queryResult.length > 500 ? "..." : "")); 
             const feedbackMsg = `[SYSTEM_DB_RESULT]: ${queryResult}`;
             
-            // console.log(`[AssistantResponseProcessor] 📤 Enviando resultado DB al asistente...`);
+            // Obtener threadId de forma segura
+            let threadId = ctx && ctx.thread_id;
+            if (!threadId && state && typeof state.get === 'function') {
+                threadId = state.get('thread_id');
+            }
 
             // Esperar a que el Run anterior haya finalizado realmente en OpenAI
-            const threadId = (ctx && ctx.thread_id) || (state && typeof state.get === 'function' && state.get('thread_id'));
             if (threadId) {
                 await waitForActiveRuns(threadId);
             } else {
-                 // Fallback si no tenemos threadId
-                 await new Promise(resolve => setTimeout(resolve, 5000));
+                 await new Promise(resolve => setTimeout(resolve, 2000));
             }
 
             // Obtener nueva respuesta del asistente
             let newResponse: any;
             try {
-                 newResponse = await getAssistantResponse(ASSISTANT_ID, feedbackMsg, state, "Error procesando resultado DB.", ctx ? ctx.from : null, ctx && ctx.thread_id ? ctx.thread_id : null);
+                 newResponse = await getAssistantResponse(ASSISTANT_ID, feedbackMsg, state, "Error procesando resultado DB.", ctx ? ctx.from : null, threadId);
             } catch (err) {
                 console.error("Error al obtener respuesta recursiva:", err);
                 return;
