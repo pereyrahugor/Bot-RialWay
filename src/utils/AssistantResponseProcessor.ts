@@ -71,8 +71,8 @@ function limpiarBloquesJSON(texto: string): string {
         return `___SPECIAL_BLOCK_${index}___`;
     });
     
-    // Preservar [API]...[/API]
-    textoConMarcadores = textoConMarcadores.replace(/\[API\][\s\S]*?\[\/API\]/g, (match) => {
+    // Preservar [API]...[/API] (Tolerante a espacios)
+    textoConMarcadores = textoConMarcadores.replace(/\[\s*API\s*\][\s\S]*?\[\/\s*API\s*\]/gi, (match) => {
         const index = specialBlocks.length;
         specialBlocks.push(match);
         return `___SPECIAL_BLOCK_${index}___`;
@@ -191,8 +191,8 @@ export class AssistantResponseProcessor {
             return; // Terminar ejecución actual
         }
 
-        // 1) Extraer bloque [API] ... [/API]
-        const apiBlockRegex = /\[API\](.*?)\[\/API\]/is;
+        // 1) Extraer bloque [API] ... [/API] (Tolerante a espacios)
+        const apiBlockRegex = /\[\s*API\s*\]([\s\S]*?)\[\/\s*API\s*\]/is;
         const match = textResponse.match(apiBlockRegex);
         if (match) {
             const jsonStr = match[1].trim();
@@ -200,121 +200,80 @@ export class AssistantResponseProcessor {
             try {
                 jsonData = JSON.parse(jsonStr);
             } catch (e) {
+                console.error('[AssistantResponseProcessor] Error al parsear bloque [API]:', e.message);
                 jsonData = null;
-                if (ctx && ctx.type === 'webchat') {
-                    console.log('[Webchat Debug] Error al parsear bloque [API]:', jsonStr);
-                }
-            }
-        }
-
-        // 2) Fallback heurístico (desactivado, solo [API])
-        // jsonData = null;
-        if (!jsonData) {
-            jsonData = JsonBlockFinder.buscarBloquesJSONEnTexto(textResponse) || (typeof response === "object" ? JsonBlockFinder.buscarBloquesJSONProfundo(response) : null);
-            if (!jsonData && ctx && ctx.type === 'webchat') {
-                console.log('[Webchat Debug] No JSON block detected in assistant response. Raw output:', textResponse);
             }
         }
 
         // 3) Procesar JSON si existe
         if (jsonData && typeof jsonData.type === "string") {
-            // Si es WhatsApp, bloquear usuario por 20 segundos o hasta finalizar la operación API
+            let apiResponse: any = null;
+
+            // Bloquear usuario temporalmente si es WhatsApp
             let unblockUser = null;
             if (ctx && ctx.type !== 'webchat' && ctx.from) {
                 userApiBlockMap.set(ctx.from, true);
-                // Desbloqueo automático tras timeout de seguridad
-                const timeoutId = setTimeout(() => {
-                    userApiBlockMap.delete(ctx.from);
-                }, API_BLOCK_TIMEOUT_MS);
-                unblockUser = () => {
-                    clearTimeout(timeoutId);
-                    userApiBlockMap.delete(ctx.from);
-                };
+                const timeoutId = setTimeout(() => { userApiBlockMap.delete(ctx.from); }, API_BLOCK_TIMEOUT_MS);
+                unblockUser = () => { clearTimeout(timeoutId); userApiBlockMap.delete(ctx.from); };
             }
-            // Log para detectar canal y datos antes de enviar
-            if (ctx && ctx.type !== 'webchat') {
-                console.log('[WhatsApp Debug] Antes de enviar con flowDynamic:', jsonData, ctx.from);
-            }
+
             const tipo = jsonData.type.trim();
 
-            if (tipo === "create_event") {
-                // 1. Extraer datos necesarios del jsonData
-                const { fecha, hora, titulo, descripcion, invitados } = jsonData;
-                // 2. Llamar a la API para crear el evento
-                let apiResponse;
-                try {
+            try {
+                if (tipo === "create_event") {
                     apiResponse = await CalendarEvents.createEvent({
-                        fecha,
-                        hora,
-                        titulo,
-                        descripcion,
-                        invitados
+                        fecha: jsonData.fecha,
+                        hora: jsonData.hora,
+                        titulo: jsonData.titulo,
+                        descripcion: jsonData.descripcion,
+                        invitados: jsonData.invitados
                     });
-                } catch (err) {
-                    apiResponse = { error: "Error al crear el evento: " + err.message };
-                }
-                // 3. Enviar la respuesta al asistente
-                await flowDynamic([{ body: JSON.stringify(apiResponse, null, 2) }]);
-                if (unblockUser) unblockUser();
-                return;
-            }
-
-            if (tipo === "available_event") {
-                // 1. Extraer datos necesarios del jsonData
-                const { fecha, hora } = jsonData;
-                // 2. Llamar a la API para consultar disponibilidad
-                let apiResponse;
-                try {
-                    // Construir start y end en formato ISO
-                    const start = `${fecha}T${hora}:00-03:00`;
-                    // Suponiendo duración de 1 hora para el evento
-                    const startMoment = moment(start);
-                    const endMoment = startMoment.clone().add(1, 'hour');
-                    const end = endMoment.format('YYYY-MM-DDTHH:mm:ssZ');
+                } else if (tipo === "available_event") {
+                    const start = `${jsonData.fecha}T${jsonData.hora}:00-03:00`;
+                    const end = moment(start).add(1, 'hour').format('YYYY-MM-DDTHH:mm:ssZ');
                     apiResponse = await CalendarEvents.checkAvailability(start, end);
-                } catch (err) {
-                    apiResponse = { error: "Error al consultar disponibilidad: " + err.message };
+                } else if (tipo === "modify_event") {
+                    apiResponse = await CalendarEvents.updateEvent(jsonData.id, {
+                        fecha: jsonData.fecha,
+                        hora: jsonData.hora,
+                        titulo: jsonData.titulo,
+                        descripcion: jsonData.descripcion
+                    });
+                } else if (tipo === "cancel_event") {
+                    apiResponse = await CalendarEvents.deleteEvent(jsonData.id);
                 }
-                // 3. Enviar la respuesta al asistente
-                await flowDynamic([{ body: JSON.stringify(apiResponse, null, 2) }]);
-                if (unblockUser) unblockUser();
-                return;
+            } catch (err) {
+                apiResponse = { error: "Error en operación API: " + err.message };
             }
 
-            if (tipo === "modify_event") {
-                // 1. Extraer datos necesarios del jsonData
-                const { id, fecha, hora, titulo, descripcion } = jsonData;
-                // 2. Llamar a la API para modificar el evento
-                let apiResponse;
-                try {
-                    apiResponse = await CalendarEvents.updateEvent(
-                        id,
-                        { fecha, hora, titulo, descripcion }
-                    );
-                } catch (err) {
-                    apiResponse = { error: "Error al modificar el evento: " + err.message };
-                }
-                // 3. Enviar la respuesta al asistente
-                await flowDynamic([{ body: JSON.stringify(apiResponse, null, 2) }]);
-                if (unblockUser) unblockUser();
-                return;
-            }
+            if (apiResponse) {
+                // En lugar de enviar el JSON al usuario, se lo devolvemos al asistente para que responda algo natural
+                const feedbackMsg = `[SYSTEM_API_RESULT]: ${JSON.stringify(apiResponse)}`;
+                
+                let threadId = ctx?.thread_id;
+                if (!threadId && state?.get) threadId = state.get('thread_id');
 
-            if (tipo === "cancel_event") {
-                // 1. Extraer datos necesarios del jsonData
-                const { id } = jsonData;
-                // 2. Llamar a la API para cancelar el evento
-                let apiResponse;
+                if (threadId) await waitForActiveRuns(threadId);
+                else await new Promise(resolve => setTimeout(resolve, 2000));
+
+                let newResponse: any;
                 try {
-                    apiResponse = await CalendarEvents.deleteEvent(id);
+                    newResponse = await getAssistantResponse(ASSISTANT_ID, feedbackMsg, state, "Error procesando resultado API.", ctx?.from, threadId);
                 } catch (err) {
-                    apiResponse = { error: "Error al cancelar el evento: " + err.message };
+                    console.error("Error al obtener respuesta recursiva tras API:", err);
+                    if (unblockUser) unblockUser();
+                    return;
                 }
-                // 3. Enviar la respuesta al asistente
-                await flowDynamic([{ body: JSON.stringify(apiResponse, null, 2) }]);
+
                 if (unblockUser) unblockUser();
+
+                // Recursión: procesar la respuesta final del asistente
+                await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
+                    newResponse, ctx, flowDynamic, state, provider, gotoFlow, getAssistantResponse, ASSISTANT_ID
+                );
                 return;
             }
+            if (unblockUser) unblockUser();
         }
 
         // Si no hubo bloque JSON válido, enviar el texto limpio
