@@ -256,10 +256,17 @@ const handleQueue = async (userId) => {
 // Función auxiliar para verificar si existe sesión activa (Local o Remota)
 const hasActiveSession = async () => {
     try {
-        // 1. Verificar si el proveedor está realmente conectado
+        // 1. Verificar si el provider ya tiene un usuario conectado
         // En builderbot-provider-sherpa (Baileys), el socket suele estar en vendor
-        const isReady = !!(adapterProvider?.vendor?.user || adapterProvider?.globalVendorArgs?.sock?.user);
+        const user = adapterProvider?.vendor?.user || adapterProvider?.globalVendorArgs?.sock?.user;
+        const isReady = !!user;
         
+        // Extraer el número si está conectado
+        let phoneNumber = null;
+        if (isReady && user?.id) {
+            phoneNumber = user.id.split('@')[0].split(':')[0]; // Manejar ids con :0
+        }
+
         // 2. Verificar localmente
         const sessionsDir = path.join(process.cwd(), 'bot_sessions');
         let localActive = false;
@@ -270,7 +277,7 @@ const hasActiveSession = async () => {
         }
 
         // Si está conectado, es la prioridad máxima
-        if (isReady) return { active: true, source: 'connected' };
+        if (isReady) return { active: true, source: 'connected', phoneNumber };
         
         // Si tiene creds.json, es muy probable que se conecte pronto
         if (localActive) return { active: true, source: 'local' };

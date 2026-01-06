@@ -7,6 +7,8 @@ async function fetchStatus() {
         const qrSection = document.getElementById('qr-section');
         const sessionInfo = document.getElementById('session-info');
         const sessionError = document.getElementById('session-error');
+        const wsLinkContainer = document.getElementById('whatsapp-link-container');
+        const wsLink = document.getElementById('whatsapp-link');
 
         if (data.active) {
             qrSection.style.display = 'none';
@@ -16,13 +18,23 @@ async function fetchStatus() {
                 statusEl.textContent = '✅ Conectado y Operativo';
                 sessionInfo.textContent = 'El bot está vinculado a WhatsApp y funcionando correctamente.';
                 sessionInfo.style.color = '#28a745';
+                
+                // Mostrar botón de WhatsApp si tenemos el número
+                if (data.phoneNumber) {
+                    wsLinkContainer.style.display = 'block';
+                    wsLink.href = `https://wa.me/${data.phoneNumber}`;
+                } else {
+                    wsLinkContainer.style.display = 'none';
+                }
             } else {
                 statusEl.textContent = '✅ Sesión Local Detectada';
                 sessionInfo.textContent = 'El bot tiene archivos de sesión. Si no responde en WhatsApp, intenta reiniciar.';
                 sessionInfo.style.color = ''; 
+                wsLinkContainer.style.display = 'none';
             }
         } else {
             qrSection.style.display = '';
+            wsLinkContainer.style.display = 'none';
             
             if (data.hasRemote) {
                 statusEl.textContent = '⏳ Restaurando...';
