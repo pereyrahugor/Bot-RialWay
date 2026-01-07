@@ -54,12 +54,6 @@ export async function waitForActiveRuns(threadId: string) {
         await new Promise(resolve => setTimeout(resolve, 2000));
     }
 }
-    } catch (error) {
-        console.error(`[AssistantResponseProcessor] Error verificando runs:`, error);
-        // Fallback to simple wait if API fails
-        await new Promise(resolve => setTimeout(resolve, 500));
-    }
-}
 
 // Mapa global para bloquear usuarios de WhatsApp durante operaciones API
 const userApiBlockMap = new Map();
