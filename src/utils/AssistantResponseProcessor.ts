@@ -30,24 +30,30 @@ export async function waitForActiveRuns(threadId: string) {
     try {
         console.log(`[AssistantResponseProcessor] Verificando runs activos en thread ${threadId}...`);
         let attempt = 0;
-        while (attempt < 10) { // Max 60 seconds wait
-            const runs = await openai.beta.threads.runs.list(threadId, { limit: 1 });
+        const maxAttempts = 20; // 40-60 segundos total
+        while (attempt < maxAttempts) {
+            const runs = await openai.beta.threads.runs.list(threadId, { limit: 5 });
             const activeRun = runs.data.find(run => 
-                ["queued", "in_progress", "cancelling"].includes(run.status)
+                ["queued", "in_progress", "cancelling", "requires_action"].includes(run.status)
             );
             
             if (activeRun) {
-                if (attempt % 5 === 0) console.log(`[AssistantResponseProcessor] Run activo detectado (${activeRun.id}, estado: ${activeRun.status}). Esperando...`);
+                console.log(`[AssistantResponseProcessor] [${attempt}/${maxAttempts}] Run activo detectado (${activeRun.id}, estado: ${activeRun.status}). Esperando 2s...`);
                 await new Promise(resolve => setTimeout(resolve, 2000));
                 attempt++;
             } else {
-                console.log(`[AssistantResponseProcessor] No hay runs activos. Procediendo.`);
-                // Delay adicional para evitar condición de carrera
-                await new Promise(resolve => setTimeout(resolve, 2000));
+                console.log(`[AssistantResponseProcessor] No hay runs activos. OK.`);
+                // Delay adicional reducido pero presente para asegurar sincronización de OpenAI
+                await new Promise(resolve => setTimeout(resolve, 1500));
                 return;
             }
         }
-        console.warn(`[AssistantResponseProcessor] Timeout esperando liberación del thread ${threadId}. Intentando proceder de todos modos.`);
+        console.warn(`[AssistantResponseProcessor] Timeout esperando liberación del thread ${threadId}.`);
+    } catch (error) {
+        console.error(`[AssistantResponseProcessor] Error verificando runs:`, error);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+}
     } catch (error) {
         console.error(`[AssistantResponseProcessor] Error verificando runs:`, error);
         // Fallback to simple wait if API fails
@@ -179,9 +185,16 @@ export class AssistantResponseProcessor {
             let newResponse: any;
             try {
                  newResponse = await getAssistantResponse(ASSISTANT_ID, feedbackMsg, state, "Error procesando resultado DB.", ctx ? ctx.from : null, threadId);
-            } catch (err) {
-                console.error("Error al obtener respuesta recursiva:", err);
-                return;
+            } catch (err: any) {
+                // Si aún así falla por run activo, intentamos una vez más tras una espera larga
+                if (err?.message?.includes('active')) {
+                    console.log("[AssistantResponseProcessor] Re-intentando tras detectar run activo residual (DB)...");
+                    await new Promise(resolve => setTimeout(resolve, 5000));
+                    newResponse = await getAssistantResponse(ASSISTANT_ID, feedbackMsg, state, "Error procesando resultado DB.", ctx ? ctx.from : null, threadId);
+                } else {
+                    console.error("Error al obtener respuesta recursiva (DB):", err);
+                    return;
+                }
             }
             
             // Recursión: procesar la nueva respuesta
@@ -259,10 +272,17 @@ export class AssistantResponseProcessor {
                 let newResponse: any;
                 try {
                     newResponse = await getAssistantResponse(ASSISTANT_ID, feedbackMsg, state, "Error procesando resultado API.", ctx?.from, threadId);
-                } catch (err) {
-                    console.error("Error al obtener respuesta recursiva tras API:", err);
-                    if (unblockUser) unblockUser();
-                    return;
+                } catch (err: any) {
+                    // Si falla por run activo, intentamos una vez más tras una espera larga
+                    if (err?.message?.includes('active')) {
+                        console.log("[AssistantResponseProcessor] Re-intentando tras detectar run activo residual (API)...");
+                        await new Promise(resolve => setTimeout(resolve, 5000));
+                        newResponse = await getAssistantResponse(ASSISTANT_ID, feedbackMsg, state, "Error procesando resultado API.", ctx?.from, threadId);
+                    } else {
+                        console.error("Error al obtener respuesta recursiva tras API:", err);
+                        if (unblockUser) unblockUser();
+                        return;
+                    }
                 }
 
                 if (unblockUser) unblockUser();
