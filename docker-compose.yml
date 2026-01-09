@@ -5,7 +5,7 @@ services:
     env_file:
       - .env
     ports:
-      - "3008:3008"
+      - "3008:8080"
     #volumes:
       #- credentialGK: /credentials
       # mongo: /data/db
