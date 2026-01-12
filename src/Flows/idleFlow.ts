@@ -12,6 +12,49 @@ const ID_GRUPO_RESUMEN = process.env.ID_GRUPO_RESUMEN ?? '';
 const ID_GRUPO_RESUMEN_2 = process.env.ID_GRUPO_RESUMEN_2 ?? '';
 const msjCierre: string = process.env.msjCierre as string;
 
+// Función auxiliar para reenviar media
+async function sendMediaToGroup(provider: any, state: any, targetGroup: string, data: any) {
+    // Detectar variaciones de "si" (si, sí, sii, si., Si, YES, etc - aunque el json suele ser español)
+    // Usamos regex flexible que busca "s" seguido de "i" o "í"
+    const fotoOVideoRaw = data["Foto o video"] || '';
+    const debeEnviar = /s[ií]+/i.test(fotoOVideoRaw);
+
+    if (debeEnviar) {
+        const lastImage = state.get('lastImage');
+        const lastVideo = state.get('lastVideo');
+
+        if (lastImage && typeof lastImage === 'string') {
+            if (fs.existsSync(lastImage)) {
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                console.log(`📡 Intentando enviar imagen: ${lastImage} a ${targetGroup}`);
+                await provider.sendImage(targetGroup, lastImage, "");
+                console.log(`✅ Imagen reenviada al grupo ${targetGroup}`);
+                try {
+                    fs.unlinkSync(lastImage);
+                    await state.update({ lastImage: null });
+                } catch (e) { console.error('Error borrando img:', e); }
+            }
+        }
+
+        if (lastVideo && typeof lastVideo === 'string') {
+            if (fs.existsSync(lastVideo)) {
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                console.log(`📡 Intentando enviar video: ${lastVideo} a ${targetGroup}`);
+                if (provider.sendVideo) {
+                    await provider.sendVideo(targetGroup, lastVideo, "");
+                } else {
+                    await provider.sendImage(targetGroup, lastVideo, "");
+                }
+                console.log(`✅ Video reenviado al grupo ${targetGroup}`);
+                try {
+                    fs.unlinkSync(lastVideo);
+                    await state.update({ lastVideo: null });
+                } catch (e) { console.error('Error borrando video:', e); }
+            }
+        }
+    }
+}
+
 //** Flow para cierre de conversación, generación de resumen y envio a grupo de WS */
 const idleFlow = addKeyword(EVENTS.ACTION).addAction(
     async (ctx, { endFlow, provider, state }) => {
@@ -43,211 +86,120 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                 data = JSON.parse(resumen);
             } catch (error) {
                 console.warn("⚠️ El resumen no es JSON. Se extraerán los datos manualmente.");
-                    data = extraerDatosResumen(resumen);
+                data = extraerDatosResumen(resumen);
+            }
+
+            // Log para depuración del valor real de tipo
+            console.log('Valor de tipo:', JSON.stringify(data.tipo), '| Longitud:', data.tipo?.length);
+            // Limpieza robusta de caracteres invisibles y espacios, preservando números y guiones bajos
+            const tipo = (data.tipo ?? '').replace(/[^A-Z0-9_]/gi, '').toUpperCase();
+
+            if (tipo === 'NO_REPORTAR_BAJA') {
+                // No seguimiento, no enviar resumen al grupo ws, envia resumen a sheet, envia msj de cierre
+                console.log('NO_REPORTAR_BAJA: No se realiza seguimiento ni se envía resumen al grupo.');
+                data.linkWS = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
+
+                // Limpieza de imagen o video si existe
+                const lastImage = state.get('lastImage');
+                if (lastImage && typeof lastImage === 'string' && fs.existsSync(lastImage)) {
+                    fs.unlinkSync(lastImage);
+                    await state.update({ lastImage: null });
+                }
+                const lastVideo = state.get('lastVideo');
+                if (lastVideo && typeof lastVideo === 'string' && fs.existsSync(lastVideo)) {
+                    fs.unlinkSync(lastVideo);
+                    await state.update({ lastVideo: null });
                 }
 
-                // Log para depuración del valor real de tipo
-                console.log('Valor de tipo:', JSON.stringify(data.tipo), '| Longitud:', data.tipo?.length);
-                // Limpieza robusta de caracteres invisibles y espacios, preservando números y guiones bajos
-                const tipo = (data.tipo ?? '').replace(/[^A-Z0-9_]/gi, '').toUpperCase();
-
-                if (tipo === 'NO_REPORTAR_BAJA') {
-                    // No seguimiento, no enviar resumen al grupo ws, envia resumen a sheet, envia msj de cierre
-                    console.log('NO_REPORTAR_BAJA: No se realiza seguimiento ni se envía resumen al grupo.');
-                    data.linkWS = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
-                    
-                    // Limpieza de imagen o video si existe
-                    const lastImage = state.get('lastImage');
-                    if (lastImage && typeof lastImage === 'string' && fs.existsSync(lastImage)) {
-                        fs.unlinkSync(lastImage);
-                        await state.update({ lastImage: null });
-                    }
-                    const lastVideo = state.get('lastVideo');
-                    if (lastVideo && typeof lastVideo === 'string' && fs.existsSync(lastVideo)) {
-                        fs.unlinkSync(lastVideo);
-                        await state.update({ lastVideo: null });
-                    }
-
-                    await addToSheet(data);
-                    return endFlow(); //("BNI, cambiando la forma en que el mundo hace negocios\nGracias por su contacto.");
-                } else if (tipo === 'NO_REPORTAR_SEGUIR') {
-                    // Solo este activa seguimiento
-                    console.log('NO_REPORTAR_SEGUIR: Se realiza seguimiento, pero no se envía resumen al grupo.');
-                    const reconFlow = new ReconectionFlow({
-                        ctx,
-                        state,
-                        provider,
-                        maxAttempts: 3,
-                        onSuccess: async (newData) => {
-                            // Derivar al flujo conversacional usando gotoFlow
-                            if (typeof ctx.gotoFlow === 'function') {
-                                if (ctx.type === 'voice_note' || ctx.type === 'VOICE_NOTE') {
-                                    const mod = await import('./welcomeFlowVoice');
-                                    await ctx.gotoFlow(mod.welcomeFlowVoice);
-                                } else {
-                                    const mod = await import('./welcomeFlowTxt');
-                                    await ctx.gotoFlow(mod.welcomeFlowTxt);
-                                }
+                await addToSheet(data);
+                return endFlow(); //("BNI, cambiando la forma en que el mundo hace negocios\nGracias por su contacto.");
+            } else if (tipo === 'NO_REPORTAR_SEGUIR') {
+                // Solo este activa seguimiento
+                console.log('NO_REPORTAR_SEGUIR: Se realiza seguimiento, pero no se envía resumen al grupo.');
+                const reconFlow = new ReconectionFlow({
+                    ctx,
+                    state,
+                    provider,
+                    maxAttempts: 3,
+                    onSuccess: async (newData) => {
+                        // Derivar al flujo conversacional usando gotoFlow
+                        if (typeof ctx.gotoFlow === 'function') {
+                            if (ctx.type === 'voice_note' || ctx.type === 'VOICE_NOTE') {
+                                const mod = await import('./welcomeFlowVoice');
+                                await ctx.gotoFlow(mod.welcomeFlowVoice);
+                            } else {
+                                const mod = await import('./welcomeFlowTxt');
+                                await ctx.gotoFlow(mod.welcomeFlowTxt);
                             }
-                        },
-                        onFail: async () => {
-                            data.linkWS = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
-                            await addToSheet(data);
                         }
-                    });
-                    return await reconFlow.start();
-                    // No cerrar el hilo aquí, dejar abierto para que el usuario pueda responder
-                } else if (tipo === 'SI_RESUMEN_G2') {
-                    // Solo envía resumen al grupo ws y sheets, no envia msj de cierre
-                    console.log('SI_RESUMEN_G2: Solo se envía resumen al grupo y sheets.');
-                    data.linkWS = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
-                    {
-                        const resumenConLink = `${resumen}\n\n🔗 [Chat del usuario](${data.linkWS})`;
-                        try {
-                            await provider.sendText(ID_GRUPO_RESUMEN_2, resumenConLink);
-                            console.log(`✅ SI_RESUMEN_G2: Resumen enviado a ${ID_GRUPO_RESUMEN_2} con enlace de WhatsApp`);
-                            
-                            // Forward image or video if "Foto o video" is "si"
-                            const fotoOVideo = data["Foto o video"]?.toLowerCase();
-                            if (fotoOVideo === 'si' || fotoOVideo === 'sí') {
-                                const lastImage = state.get('lastImage');
-                                const lastVideo = state.get('lastVideo');
-
-                                if (lastImage && typeof lastImage === 'string') {
-                                    if (fs.existsSync(lastImage)) {
-                                        await new Promise(resolve => setTimeout(resolve, 2000));
-                                        console.log(`📡 Intentando enviar imagen: ${lastImage}`);
-                                        await provider.sendImage(ID_GRUPO_RESUMEN_2, lastImage, "");
-                                        console.log(`✅ Imagen reenviada al grupo ${ID_GRUPO_RESUMEN_2}`);
-                                        fs.unlinkSync(lastImage);
-                                        await state.update({ lastImage: null });
-                                    }
-                                }
-
-                                if (lastVideo && typeof lastVideo === 'string') {
-                                    if (fs.existsSync(lastVideo)) {
-                                        await new Promise(resolve => setTimeout(resolve, 2000));
-                                        console.log(`📡 Intentando enviar video: ${lastVideo}`);
-                                        // Usamos sendVideo si está disponible, sino sendImage (que a veces es genérico) o sendMedia
-                                        if (provider.sendVideo) {
-                                            await provider.sendVideo(ID_GRUPO_RESUMEN_2, lastVideo, "");
-                                        } else {
-                                            await provider.sendImage(ID_GRUPO_RESUMEN_2, lastVideo, "");
-                                        }
-                                        console.log(`✅ Video reenviado al grupo ${ID_GRUPO_RESUMEN_2}`);
-                                        fs.unlinkSync(lastVideo);
-                                        await state.update({ lastVideo: null });
-                                    }
-                                }
-                            }
-                        } catch (err) {
-                            console.error(`❌ SI_RESUMEN_G2: No se pudo enviar el resumen al grupo ${ID_GRUPO_RESUMEN_2}:`, err?.message || err);
-                        }
+                    },
+                    onFail: async () => {
+                        data.linkWS = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
+                        await addToSheet(data);
                     }
-                    await addToSheet(data);
-                    return; // No enviar mensaje de cierre
-                } else if (tipo === 'SI_RESUMEN') {
-                    // Solo envía resumen al grupo ws y sheets, no envia msj de cierre
-                    console.log('SI_RESUMEN: Solo se envía resumen al grupo y sheets.');
-                    data.linkWS = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
-                    {
-                        const resumenConLink = `${resumen}\n\n🔗 [Chat del usuario](${data.linkWS})`;
-                        try {
-                            await provider.sendText(ID_GRUPO_RESUMEN, resumenConLink);
-                            console.log(`✅ SI_RESUMEN: Resumen enviado a ${ID_GRUPO_RESUMEN} con enlace de WhatsApp`);
-                            
-                            // Forward image or video if "Foto o video" is "si"
-                            const fotoOVideo = data["Foto o video"]?.toLowerCase();
-                            if (fotoOVideo === 'si' || fotoOVideo === 'sí') {
-                                const lastImage = state.get('lastImage');
-                                const lastVideo = state.get('lastVideo');
+                });
+                return await reconFlow.start();
+                // No cerrar el hilo aquí, dejar abierto para que el usuario pueda responder
+                // Bloque SI_RESUMEN_G2
+            } else if (tipo === 'SI_RESUMEN_G2') {
+                console.log('SI_RESUMEN_G2: Solo se envía resumen al grupo y sheets.');
+                data.linkWS = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
 
-                                if (lastImage && typeof lastImage === 'string') {
-                                    if (fs.existsSync(lastImage)) {
-                                        await new Promise(resolve => setTimeout(resolve, 2000));
-                                        console.log(`📡 Intentando enviar imagen: ${lastImage}`);
-                                        await provider.sendImage(ID_GRUPO_RESUMEN, lastImage, "");
-                                        console.log(`✅ Imagen reenviada al grupo ${ID_GRUPO_RESUMEN}`);
-                                        fs.unlinkSync(lastImage);
-                                        await state.update({ lastImage: null });
-                                    }
-                                }
+                const resumenConLink = `${resumen}\n\n🔗 [Chat del usuario](${data.linkWS})`;
+                try {
+                    await provider.sendText(ID_GRUPO_RESUMEN_2, resumenConLink);
+                    console.log(`✅ SI_RESUMEN_G2: Resumen enviado a ${ID_GRUPO_RESUMEN_2}`);
 
-                                if (lastVideo && typeof lastVideo === 'string') {
-                                    if (fs.existsSync(lastVideo)) {
-                                        await new Promise(resolve => setTimeout(resolve, 2000));
-                                        console.log(`📡 Intentando enviar video: ${lastVideo}`);
-                                        if (provider.sendVideo) {
-                                            await provider.sendVideo(ID_GRUPO_RESUMEN, lastVideo, "");
-                                        } else {
-                                            await provider.sendImage(ID_GRUPO_RESUMEN, lastVideo, "");
-                                        }
-                                        console.log(`✅ Video reenviado al grupo ${ID_GRUPO_RESUMEN}`);
-                                        fs.unlinkSync(lastVideo);
-                                        await state.update({ lastVideo: null });
-                                    }
-                                }
-                            }
-                        } catch (err) {
-                            console.error(`❌ SI_RESUMEN: No se pudo enviar el resumen al grupo ${ID_GRUPO_RESUMEN}:`, err?.message || err);
-                        }
-                    }
-                    await addToSheet(data);
-                    return; // No enviar mensaje de cierre
-                } else {
-                    // Si aparece otro tipo, se procede como SI_RESUMEN por defecto
-                    console.log('Tipo desconocido, procesando como SI_RESUMEN por defecto.');
-                    data.linkWS = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
-                    {
-                        const resumenConLink = `${resumen}\n\n🔗 [Chat del usuario](${data.linkWS})`;
-                        try {
-                            await provider.sendText(ID_GRUPO_RESUMEN, resumenConLink);
-                            console.log(`✅ DEFAULT: Resumen enviado a ${ID_GRUPO_RESUMEN} con enlace de WhatsApp`);
-                            
-                            // Forward image or video if "Foto o video" is "si"
-                            const fotoOVideo = data["Foto o video"]?.toLowerCase();
-                            if (fotoOVideo === 'si' || fotoOVideo === 'sí') {
-                                const lastImage = state.get('lastImage');
-                                const lastVideo = state.get('lastVideo');
+                    await sendMediaToGroup(provider, state, ID_GRUPO_RESUMEN_2, data);
 
-                                if (lastImage && typeof lastImage === 'string') {
-                                    if (fs.existsSync(lastImage)) {
-                                        await new Promise(resolve => setTimeout(resolve, 2000));
-                                        console.log(`📡 Intentando enviar imagen: ${lastImage}`);
-                                        await provider.sendImage(ID_GRUPO_RESUMEN, lastImage, "");
-                                        console.log(`✅ Imagen reenviada al grupo ${ID_GRUPO_RESUMEN}`);
-                                        fs.unlinkSync(lastImage);
-                                        await state.update({ lastImage: null });
-                                    }
-                                }
-
-                                if (lastVideo && typeof lastVideo === 'string') {
-                                    if (fs.existsSync(lastVideo)) {
-                                        await new Promise(resolve => setTimeout(resolve, 2000));
-                                        console.log(`📡 Intentando enviar video: ${lastVideo}`);
-                                        if (provider.sendVideo) {
-                                            await provider.sendVideo(ID_GRUPO_RESUMEN, lastVideo, "");
-                                        } else {
-                                            await provider.sendImage(ID_GRUPO_RESUMEN, lastVideo, "");
-                                        }
-                                        console.log(`✅ Video reenviado al grupo ${ID_GRUPO_RESUMEN}`);
-                                        fs.unlinkSync(lastVideo);
-                                        await state.update({ lastVideo: null });
-                                    }
-                                }
-                            }
-                        } catch (err) {
-                            console.error(`❌ DEFAULT: No se pudo enviar el resumen al grupo ${ID_GRUPO_RESUMEN}:`, err?.message || err);
-                        }
-                    }
-                    await addToSheet(data);
-                    return; // No enviar mensaje de cierre
+                } catch (err: any) {
+                    console.error(`❌ SI_RESUMEN_G2 Error:`, err?.message || err);
                 }
-            } catch (error) {
-                // Captura errores generales del flujo
-                console.error("Error al obtener el resumen de OpenAI:", error);
-        return endFlow(); //("BNI, cambiando la forma en que el mundo hace negocios\nGracias por su contacto.");
-    }
-});
+
+                await addToSheet(data);
+                return;
+
+            } else if (tipo === 'SI_RESUMEN') {
+                console.log('SI_RESUMEN: Solo se envía resumen al grupo y sheets.');
+                data.linkWS = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
+
+                const resumenConLink = `${resumen}\n\n🔗 [Chat del usuario](${data.linkWS})`;
+                try {
+                    await provider.sendText(ID_GRUPO_RESUMEN, resumenConLink);
+                    console.log(`✅ SI_RESUMEN: Resumen enviado a ${ID_GRUPO_RESUMEN}`);
+
+                    await sendMediaToGroup(provider, state, ID_GRUPO_RESUMEN, data);
+
+                } catch (err: any) {
+                    console.error(`❌ SI_RESUMEN Error:`, err?.message || err);
+                }
+
+                await addToSheet(data);
+                return;
+
+            } else {
+                // DEFAULT
+                console.log('Tipo desconocido, procesando como SI_RESUMEN por defecto.');
+                data.linkWS = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
+
+                const resumenConLink = `${resumen}\n\n🔗 [Chat del usuario](${data.linkWS})`;
+                try {
+                    await provider.sendText(ID_GRUPO_RESUMEN, resumenConLink);
+                    console.log(`✅ DEFAULT: Resumen enviado a ${ID_GRUPO_RESUMEN}`);
+
+                    await sendMediaToGroup(provider, state, ID_GRUPO_RESUMEN, data);
+
+                } catch (err: any) {
+                    console.error(`❌ DEFAULT Error:`, err?.message || err);
+                }
+
+                await addToSheet(data);
+                return;
+            }
+        } catch (error) {
+            console.error("Error al obtener el resumen de OpenAI:", error);
+            return endFlow();
+        }
+    });
 
 export { idleFlow };
