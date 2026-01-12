@@ -54,6 +54,7 @@ RUN mkdir -p /app/credentials
 # Copiar los artefactos necesarios desde builder
 COPY --from=builder /app/src/assets ./src/assets
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/dist/utils ./dist/utils
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/*.json ./
 COPY --from=builder /app/*-lock.yaml ./
