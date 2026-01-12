@@ -1,5 +1,6 @@
 import { executeDbQuery } from "./utils/dbHandler";
 // ...existing imports y lógica del bot...
+import { exec } from 'child_process';
 import "dotenv/config";
 import path from 'path';
 import serve from 'serve-static';
@@ -294,6 +295,24 @@ const hasActiveSession = async () => {
 
 // Main function to initialize the bot and load Google Sheets data
 const main = async () => {
+    // 0. Ejecutar script de inicialización de funciones (solo si no existen)
+    try {
+        console.log('🔄 [Init] Verificando funciones RPC en Supabase...');
+        await new Promise((resolve, reject) => {
+            exec('npx ts-node ./scripts/init_functions.ts', (error, stdout, stderr) => {
+                if (error) {
+                    console.error(`[Init] Error ejecutando init_functions.ts:`, stderr || error);
+                    reject(error);
+                } else {
+                    console.log(stdout);
+                    resolve(true);
+                }
+            });
+        });
+    } catch (e) {
+        console.error('[Init] Error en inicialización de funciones:', e);
+    }
+
     // 1. Limpiar QR antiguo al inicio
     const qrPath = path.join(process.cwd(), 'bot.qr.png');
     if (fs.existsSync(qrPath)) {
