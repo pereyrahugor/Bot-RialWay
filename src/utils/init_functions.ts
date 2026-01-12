@@ -2,69 +2,88 @@ import { Client } from 'pg';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
 
 dotenv.config();
 
-const { SUPABASE_URL, SUPABASE_KEY } = process.env;
+// Fix __dirname for ES modules if needed (though this file seems to be processed as CommonJS or TS)
+// If you are using "type": "module" in package.json, you might need the following lines.
+// If valid TS environment, __dirname usually works if config allows, but let's be safe or keep standard.
+// The original used __dirname, so we keep it or adapt if it's ESM.
+// Given the original file used `import`, but `__dirname` suggests CommonJS transpilation target or ts-node.
+// We will stick to the standard imports but use DATABASE_URL.
 
-if (!SUPABASE_URL || !SUPABASE_KEY) {
-  console.error('❌ Faltan credenciales de Supabase en .env');
+const { DATABASE_URL } = process.env;
+
+if (!DATABASE_URL) {
+  console.error('❌ Error: DATABASE_URL no encontrada en .env');
+  console.error('   Para que el script de inicialización funcione, necesitas la string de conexión directa a Hasura/Postgres.');
+  console.error('   En Supabase: Settings -> Database -> Connection String -> URI');
+  // En producción (Railway), asegúrate de tener la variable DATABASE_URL configurada.
   process.exit(1);
 }
 
-// Extraer datos de conexión de la URL de Supabase
-function parseSupabaseUrl(url: string) {
-  const match = url.match(/^https:\/\/(.+)\.(.+)\.supabase\.co/);
-  if (!match) throw new Error('URL de Supabase inválida');
-  return {
-    host: `${match[1]}.${match[2]}.supabase.co`,
-    database: 'postgres',
-    port: 5432,
-    user: 'postgres',
-    password: SUPABASE_KEY,
-  };
-}
-
-const config = parseSupabaseUrl(SUPABASE_URL);
-
 const client = new Client({
-  host: config.host,
-  database: config.database,
-  port: config.port,
-  user: config.user,
-  password: config.password,
-  ssl: { rejectUnauthorized: false },
+  connectionString: DATABASE_URL,
+  ssl: { rejectUnauthorized: false }, // Necesario para Supabase (esto ignora errores de certificado self-signed)
 });
 
 async function functionExists(functionName: string) {
-  const res = await client.query(
-    `SELECT proname FROM pg_proc WHERE proname = $1 AND pg_function_is_visible(oid)`,
-    [functionName]
-  );
-  return res.rows.length > 0;
+  try {
+    const res = await client.query(
+      `SELECT proname FROM pg_proc WHERE proname = $1`,
+      [functionName]
+    );
+    return res.rows.length > 0;
+  } catch (err) {
+    console.warn(`⚠️ Error al verificar función ${functionName}:`, err);
+    return false;
+  }
 }
 
 async function runSqlFromFile(filePath: string, functionName: string) {
+  console.log(`🔍 Verificando existencia de función: ${functionName}...`);
   if (await functionExists(functionName)) {
-    console.log(`✅ La función ${functionName} ya existe.`);
+    console.log(`✅ La función ${functionName} ya existe. Saltando creación.`);
     return;
   }
-  const sql = fs.readFileSync(filePath, 'utf8');
-  await client.query(sql);
-  console.log(`🚀 Función ${functionName} creada.`);
+
+  try {
+    console.log(`📝 Leyendo script SQL desde: ${filePath}`);
+    const sql = fs.readFileSync(filePath, 'utf8');
+
+    console.log(`🚀 Ejecutando SQL para crear ${functionName}...`);
+    await client.query(sql);
+    console.log(`✅ Función ${functionName} (y tablas relacionadas) creadas exitosamente.`);
+  } catch (error) {
+    console.error(`❌ Error ejecutando SQL de ${filePath}:`, error);
+    throw error;
+  }
 }
 
 async function main() {
   try {
+    console.log('🔌 Conectando a Base de Datos para inicialización...');
     await client.connect();
-    // Ajusta los paths y nombres según tus scripts
-    await runSqlFromFile(path.join(__dirname, '../../scripts/create_session_table.sql'), 'get_whatsapp_session');
-    await runSqlFromFile(path.join(__dirname, '../../scripts/create_session_table.sql'), 'exec_sql');
-    // Agrega más funciones si lo necesitas
+    console.log('✅ Conectado.');
+
+    const sqlFilePath = path.join(__dirname, '../../scripts/create_session_table.sql');
+
+    // Ejecutamos la verificación para las funciones principales
+    // El script tiene "CREATE OR REPLACE", por lo que correrlo no daña nada,
+    // pero verificamos para no hacer queries redundantes en cada inicio.
+    await runSqlFromFile(sqlFilePath, 'get_whatsapp_session');
+
+    // Verificamos exec_sql también por si acaso
+    await runSqlFromFile(sqlFilePath, 'exec_sql');
+
   } catch (err) {
-    console.error('❌ Error:', err);
+    console.error('❌ Error crítico en script de inicialización:', err);
+    // No hacemos exit(1) aquí para no tumbar la app entera si falla la DB momentáneamente,
+    // pero dependerá de qué tan crítico sea para ti.
   } finally {
     await client.end();
+    console.log('🔌 Conexión cerrada (Init Script).');
   }
 }
 
