@@ -62,3 +62,24 @@ BEGIN
   EXECUTE query;
 END;
 $$;
+
+-- Función RPC para leer data arbitraria (SELECT)
+CREATE OR REPLACE FUNCTION exec_sql_read(query text)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    result JSONB;
+BEGIN
+    -- Ejecutar la consulta y convertir el resultado a JSON
+    EXECUTE 'SELECT json_agg(t) FROM (' || query || ') t' INTO result;
+    
+    -- Si no hay resultados, devolver array vacío en lugar de null para evitar errores en cliente
+    IF result IS NULL THEN
+        RETURN '[]'::jsonb;
+    END IF;
+
+    RETURN result;
+END;
+$$;

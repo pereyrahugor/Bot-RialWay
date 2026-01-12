@@ -35,15 +35,20 @@ export async function executeDbQuery(sqlQuery: string): Promise<string> {
     while (attempts < maxAttempts) {
         attempts++;
         try {
-            const { data, error } = await supabase.rpc('exec_sql_read', { query: cleanQuery });
-            console.log(`🐛 [dbHandler] RPC Response (Attempt ${attempts}):`, error ? "Error" : "Success");
+            const isSelect = cleanQuery.trim().toUpperCase().startsWith('SELECT');
+            const rpcName = isSelect ? 'exec_sql_read' : 'exec_sql';
+
+            const { data, error } = await supabase.rpc(rpcName, { query: cleanQuery });
+
+            console.log(`🐛 [dbHandler] RPC (${rpcName}) Response (Attempt ${attempts}):`, error ? "Error" : "Success");
 
             if (error) {
+                // ... (manejo de errores existente)
                 // Detectar error de tabla faltante (42P01) o columna faltante (42703)
                 if ((error.code === '42P01' || error.code === '42703') && attempts === 1) {
                     const isMissingTable = error.code === '42P01';
                     console.warn(`⚠️ ${isMissingTable ? 'Tabla no encontrada' : 'Columna no encontrada'} (Error ${error.code}). Iniciando sincronización automática con Google Sheets...`);
-                    
+
                     try {
                         // Si falta columna (42703), forzamos recreación para actualizar esquema
                         await updateAllSheets({ forceRecreate: !isMissingTable });
