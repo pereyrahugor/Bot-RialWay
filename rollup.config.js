@@ -1,7 +1,7 @@
 import typescript from 'rollup-plugin-typescript2'
 
 export default {
-    input: ['src/app.ts', 'src/utils/init_functions.ts'],
+    input: ['src/app.ts'],
     output: {
         dir: 'dist',
         format: 'esm',

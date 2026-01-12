@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 
 // Configuración
-const SESSION_DIR = 'bot_sessions'; 
+const SESSION_DIR = 'bot_sessions';
 const SYNC_INTERVAL_MS = 60 * 60 * 1000; // 1 Hora
 
 const supabaseUrl = process.env.SUPABASE_URL!;
@@ -22,7 +22,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
  */
 export async function restoreSessionFromDb(sessionId: string = 'default') {
     console.log(`[SessionSync] 📥 Restaurando sesión '${sessionId}' para proyecto '${projectId}'...`);
-    
+
     try {
         // Limpiar carpeta local antes de restaurar para evitar archivos huérfanos o corruptos
         if (fs.existsSync(SESSION_DIR)) {
@@ -35,10 +35,15 @@ export async function restoreSessionFromDb(sessionId: string = 'default') {
             fs.mkdirSync(SESSION_DIR, { recursive: true });
         }
 
-        const { data, error } = await supabase.rpc('get_whatsapp_session', {
-            p_project_id: projectId,
-            p_session_id: sessionId
-        });
+        // const { data, error } = await supabase.rpc('get_whatsapp_session', {
+        //     p_project_id: projectId,
+        //     p_session_id: sessionId
+        // });
+        const { data, error } = await supabase
+            .from('whatsapp_sessions')
+            .select('key_id, data')
+            .eq('project_id', projectId)
+            .eq('session_id', sessionId);
 
         if (error) {
             console.error('[SessionSync] Error RPC get_whatsapp_session:', error);
@@ -51,21 +56,21 @@ export async function restoreSessionFromDb(sessionId: string = 'default') {
         }
 
         let count = 0;
-        
+
         // Buscar si existe un respaldo unificado
         const backupRow = data.find((r: any) => r.key_id === 'full_backup');
 
         if (backupRow) {
             console.log('[SessionSync] 📦 Encontrado respaldo unificado (full_backup). Extrayendo archivos...');
             const filesMap = backupRow.data; // { "file.json": content, ... }
-            
+
             for (const [fileName, fileContent] of Object.entries(filesMap)) {
-                 const filePath = path.join(SESSION_DIR, fileName);
-                 // Escribir contenido (stringify porque es objeto en memoria)
-                 fs.writeFileSync(filePath, JSON.stringify(fileContent, null, 2));
-                 count++;
+                const filePath = path.join(SESSION_DIR, fileName);
+                // Escribir contenido (stringify porque es objeto en memoria)
+                fs.writeFileSync(filePath, JSON.stringify(fileContent, null, 2));
+                count++;
             }
-            
+
             // IMPORTANTE: Si restauramos un full_backup, debemos asegurarnos de que NO existan
             // archivos antiguos que puedan confundir a Baileys (como creds.json corruptos)
             // que no estuvieran en el backup.
@@ -74,10 +79,10 @@ export async function restoreSessionFromDb(sessionId: string = 'default') {
             for (const row of data) {
                 // Ignorar si por casualidad hay un full_backup que no detectamos (defensive)
                 if (row.key_id === 'full_backup') continue;
-                
+
                 const fileName = `${row.key_id}.json`;
                 const filePath = path.join(SESSION_DIR, fileName);
-                const fileContent = JSON.stringify(row.data, null, 2); 
+                const fileContent = JSON.stringify(row.data, null, 2);
                 fs.writeFileSync(filePath, fileContent);
                 count++;
             }
@@ -94,10 +99,16 @@ export async function restoreSessionFromDb(sessionId: string = 'default') {
  */
 export async function isSessionInDb(sessionId: string = 'default'): Promise<boolean> {
     try {
-        const { data, error } = await supabase.rpc('get_whatsapp_session', {
-            p_project_id: projectId,
-            p_session_id: sessionId
-        });
+        // const { data, error } = await supabase.rpc('get_whatsapp_session', {
+        //     p_project_id: projectId,
+        //     p_session_id: sessionId
+        // });
+        const { data, error } = await supabase
+            .from('whatsapp_sessions')
+            .select('key_id')
+            .eq('project_id', projectId)
+            .eq('session_id', sessionId)
+            .limit(1);
 
         if (error) {
             console.error('[SessionSync] Error verificando sesión en DB:', error);
@@ -117,10 +128,15 @@ export async function isSessionInDb(sessionId: string = 'default'): Promise<bool
 export async function deleteSessionFromDb(sessionId: string = 'default') {
     console.log(`[SessionSync] 🗑️ Eliminando sesión remota '${sessionId}' para proyecto '${projectId}'...`);
     try {
-        const { error } = await supabase.rpc('delete_whatsapp_session', {
-            p_project_id: projectId,
-            p_session_id: sessionId
-        });
+        // const { error } = await supabase.rpc('delete_whatsapp_session', {
+        //     p_project_id: projectId,
+        //     p_session_id: sessionId
+        // });
+        const { error } = await supabase
+            .from('whatsapp_sessions')
+            .delete()
+            .eq('project_id', projectId)
+            .eq('session_id', sessionId);
 
         if (error) {
             console.error('[SessionSync] ❌ Error eliminando sesión remota:', error);
@@ -174,7 +190,7 @@ async function syncToDb(sessionId: string) {
             const filePath = path.join(SESSION_DIR, file);
             const content = fs.readFileSync(filePath, 'utf-8');
             let jsonContent;
-            
+
             try {
                 jsonContent = JSON.parse(content);
             } catch (e) {
@@ -186,11 +202,11 @@ async function syncToDb(sessionId: string) {
                         jsonContent = JSON.parse(fixedContent);
                     } else throw e;
                 } catch (e2) {
-                     corruptCount++;
-                     continue; // Ignorar archivo corrupto
+                    corruptCount++;
+                    continue; // Ignorar archivo corrupto
                 }
             }
-            
+
             // Guardar en el mapa: clave="nombre_archivo.json", valor=objeto_contenido
             sessionMap[file] = jsonContent;
         }
@@ -198,23 +214,32 @@ async function syncToDb(sessionId: string) {
         if (Object.keys(sessionMap).length === 0) return;
 
         // Subir TODO el mapa en una sola transacción/fila
-        const { error } = await supabase.rpc('save_whatsapp_session', {
-            p_project_id: projectId,
-            p_session_id: sessionId,
-            p_key_id: 'full_backup', // ID especial para respaldo completo
-            p_data: sessionMap,      // Objeto gigante
-            p_bot_name: botName
-        });
+        // const { error } = await supabase.rpc('save_whatsapp_session', {
+        //     p_project_id: projectId,
+        //     p_session_id: sessionId,
+        //     p_key_id: 'full_backup', // ID especial para respaldo completo
+        //     p_data: sessionMap,      // Objeto gigante
+        //     p_bot_name: botName
+        // });
+        const { error } = await supabase
+            .from('whatsapp_sessions')
+            .upsert({
+                project_id: projectId,
+                session_id: sessionId,
+                key_id: 'full_backup',
+                data: sessionMap,
+                updated_at: new Date().toISOString()
+            }, { onConflict: 'project_id,session_id,key_id' });
 
         if (error) {
             console.error(`[SessionSync] Error subiendo respaldo unificado:`, error.message);
         } else {
-             // NOTIFICAR solo si creds.json está presente (indicador de salud)
-             if (sessionMap['creds.json']) {
-                 console.log(`[SessionSync] ✅ Sesión respaldada en DB (Single Record). Nombre: ${botName}`);
-             }
+            // NOTIFICAR solo si creds.json está presente (indicador de salud)
+            if (sessionMap['creds.json']) {
+                console.log(`[SessionSync] ✅ Sesión respaldada en DB (Single Record). Nombre: ${botName}`);
+            }
         }
-        
+
     } catch (error) {
         console.error('[SessionSync] Error en ciclo de sincronización:', error);
     }
