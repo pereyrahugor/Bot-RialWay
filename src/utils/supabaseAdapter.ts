@@ -3,9 +3,9 @@ import { createClient } from '@supabase/supabase-js';
 import { AuthenticationCreds, AuthenticationState, SignalDataTypeMap, initAuthCreds, BufferJSON } from '@whiskeysockets/baileys';
 
 export const useSupabaseAuthState = async (
-    supabaseUrl: string, 
+    supabaseUrl: string,
     supabaseKey: string,
-    projectId: string, 
+    projectId: string,
     sessionId: string = 'default',
     botName: string | null = null
 ): Promise<{ state: AuthenticationState, saveCreds: () => Promise<void>, clearSession: () => Promise<void> }> => {
@@ -17,15 +17,24 @@ export const useSupabaseAuthState = async (
         try {
             // Si data es null, lo guardamos como null (si la DB lo permite) o como objeto vacío marcado
             // Nuestra tabla tiene NOT NULL en data, así que evitamos guardar nulls si no son creds.
-            if (data === null || data === undefined) return; 
+            if (data === null || data === undefined) return;
 
-            const { error } = await supabase.rpc('save_whatsapp_session', {
-                p_project_id: projectId,
-                p_session_id: sessionId,
-                p_key_id: key,
-                p_data: JSON.parse(JSON.stringify(data, BufferJSON.replacer)),
-                p_bot_name: botName
-            });
+            // const { error } = await supabase.rpc('save_whatsapp_session', {
+            //     p_project_id: projectId,
+            //     p_session_id: sessionId,
+            //     p_key_id: key,
+            //     p_data: JSON.parse(JSON.stringify(data, BufferJSON.replacer)),
+            //     p_bot_name: botName
+            // });
+            const { error } = await supabase
+                .from('whatsapp_sessions')
+                .upsert({
+                    project_id: projectId,
+                    session_id: sessionId,
+                    key_id: key,
+                    data: JSON.parse(JSON.stringify(data, BufferJSON.replacer)),
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'project_id,session_id,key_id' });
             if (error) throw error;
             console.log(`[SupabaseAdapter] ✅ Data saved for key: ${key}`);
         } catch (error) {
@@ -38,11 +47,16 @@ export const useSupabaseAuthState = async (
         try {
             // Leemos TODA la sesión y filtramos en memoria (dado que la RPC actual trae todo)
             // Esto no es óptimo para escalado masivo pero funcional para sesiones de WhatsApp estándar
-            const { data, error } = await supabase.rpc('get_whatsapp_session', {
-                p_project_id: projectId,
-                p_session_id: sessionId
-            });
-            
+            // const { data, error } = await supabase.rpc('get_whatsapp_session', {
+            //     p_project_id: projectId,
+            //     p_session_id: sessionId
+            // });
+            const { data, error } = await supabase
+                .from('whatsapp_sessions')
+                .select('key_id, data')
+                .eq('project_id', projectId)
+                .eq('session_id', sessionId);
+
             if (error) throw error;
             if (!data || !Array.isArray(data)) return null;
 
@@ -50,16 +64,21 @@ export const useSupabaseAuthState = async (
             return row ? JSON.parse(JSON.stringify(row.data), BufferJSON.reviver) : null;
         } catch (error) {
             console.error('[SupabaseAdapter] Error reading data:', key, error);
-            return null; 
+            return null;
         }
     };
 
     const clearSession = async () => {
-         try {
-            const { error } = await supabase.rpc('delete_whatsapp_session', {
-                p_project_id: projectId,
-                p_session_id: sessionId
-            });
+        try {
+            // const { error } = await supabase.rpc('delete_whatsapp_session', {
+            //     p_project_id: projectId,
+            //     p_session_id: sessionId
+            // });
+            const { error } = await supabase
+                .from('whatsapp_sessions')
+                .delete()
+                .eq('project_id', projectId)
+                .eq('session_id', sessionId);
             if (error) throw error;
             console.log(`[SupabaseAdapter] Session ${sessionId} cleared for project ${projectId}`);
         } catch (error) {
@@ -76,21 +95,26 @@ export const useSupabaseAuthState = async (
             keys: {
                 get: async (type, ids) => {
                     const data: { [key: string]: SignalDataTypeMap[typeof type] } = {};
-                    
+
                     try {
-                        const { data: allRows, error } = await supabase.rpc('get_whatsapp_session', {
-                            p_project_id: projectId,
-                            p_session_id: sessionId
-                        });
-                        
+                        // const { data: allRows, error } = await supabase.rpc('get_whatsapp_session', {
+                        //     p_project_id: projectId,
+                        //     p_session_id: sessionId
+                        // });
+                        const { data: allRows, error } = await supabase
+                            .from('whatsapp_sessions')
+                            .select('key_id, data')
+                            .eq('project_id', projectId)
+                            .eq('session_id', sessionId);
+
                         if (error) throw error;
-                        
+
                         // Mapear filas a objeto en memoria eficiente
                         const memoryMap = new Map();
                         if (allRows && Array.isArray(allRows)) {
-                             allRows.forEach((r: any) => {
-                                 memoryMap.set(r.key_id, JSON.parse(JSON.stringify(r.data), BufferJSON.reviver));
-                             });
+                            allRows.forEach((r: any) => {
+                                memoryMap.set(r.key_id, JSON.parse(JSON.stringify(r.data), BufferJSON.reviver));
+                            });
                         }
 
                         ids.forEach((id) => {
@@ -100,8 +124,8 @@ export const useSupabaseAuthState = async (
                                 data[id] = val;
                             }
                         });
-                    } catch(e) { 
-                        console.error('[SupabaseAdapter] Error in keys.get:', e); 
+                    } catch (e) {
+                        console.error('[SupabaseAdapter] Error in keys.get:', e);
                     }
 
                     return data;

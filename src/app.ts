@@ -1,5 +1,6 @@
 import { executeDbQuery } from "./utils/dbHandler";
 // ...existing imports y lógica del bot...
+// import { exec } from 'child_process';
 import "dotenv/config";
 import path from 'path';
 import serve from 'serve-static';
@@ -64,58 +65,58 @@ const userTimeouts = new Map();
 
 // Wrapper seguro para toAsk que SIEMPRE verifica runs activos
 export const safeToAsk = async (assistantId: string, message: string, state: any) => {
-        const threadId = state && typeof state.get === 'function' && state.get('thread_id');
-        if (threadId) {
-                try {
-                        const { waitForActiveRuns } = await import('./utils/AssistantResponseProcessor.js');
-                        await waitForActiveRuns(threadId);
-                } catch (err) {
-                        console.error('[safeToAsk] Error esperando runs activos:', err);
-                        await new Promise(r => setTimeout(r, 3000));
-                }
+    const threadId = state && typeof state.get === 'function' && state.get('thread_id');
+    if (threadId) {
+        try {
+            const { waitForActiveRuns } = await import('./utils/AssistantResponseProcessor.js');
+            await waitForActiveRuns(threadId);
+        } catch (err) {
+            console.error('[safeToAsk] Error esperando runs activos:', err);
+            await new Promise(r => setTimeout(r, 3000));
         }
-        return toAsk(assistantId, message, state);
+    }
+    return toAsk(assistantId, message, state);
 };
 
 export const getAssistantResponse = async (assistantId, message, state, fallbackMessage, userId, thread_id = null) => {
-        // Solo enviar la fecha/hora si es realmente un hilo nuevo (no existe thread_id ni en el argumento ni en el state)
-        let effectiveThreadId = thread_id;
-        if (!effectiveThreadId && state && typeof state.get === 'function') {
-                effectiveThreadId = state.get('thread_id');
-        }
-        let systemPrompt = "";
-        if (!effectiveThreadId) {
-                systemPrompt += `Fecha y hora actual: ${getArgentinaDatetimeString()}\n`;
-        }
-        const finalMessage = systemPrompt + message;
-        // Si hay un timeout previo, lo limpiamos
+    // Solo enviar la fecha/hora si es realmente un hilo nuevo (no existe thread_id ni en el argumento ni en el state)
+    let effectiveThreadId = thread_id;
+    if (!effectiveThreadId && state && typeof state.get === 'function') {
+        effectiveThreadId = state.get('thread_id');
+    }
+    let systemPrompt = "";
+    if (!effectiveThreadId) {
+        systemPrompt += `Fecha y hora actual: ${getArgentinaDatetimeString()}\n`;
+    }
+    const finalMessage = systemPrompt + message;
+    // Si hay un timeout previo, lo limpiamos
+    if (userTimeouts.has(userId)) {
+        clearTimeout(userTimeouts.get(userId));
+        userTimeouts.delete(userId);
+    }
+
+    let timeoutResolve;
+    const timeoutPromise = new Promise((resolve) => {
+        timeoutResolve = resolve;
+        const timeoutId = setTimeout(async () => {
+            console.warn("⏱ Timeout alcanzado. Reintentando con mensaje de control...");
+            resolve(await safeToAsk(assistantId, fallbackMessage ?? finalMessage, state));
+            userTimeouts.delete(userId);
+        }, TIMEOUT_MS);
+        userTimeouts.set(userId, timeoutId);
+    });
+
+    // Lanzamos la petición a OpenAI, pasando thread_id si existe
+    const askPromise = safeToAsk(assistantId, finalMessage, state).then((result) => {
         if (userTimeouts.has(userId)) {
-                clearTimeout(userTimeouts.get(userId));
-                userTimeouts.delete(userId);
+            clearTimeout(userTimeouts.get(userId));
+            userTimeouts.delete(userId);
         }
+        timeoutResolve(result);
+        return result;
+    });
 
-        let timeoutResolve;
-        const timeoutPromise = new Promise((resolve) => {
-                timeoutResolve = resolve;
-                const timeoutId = setTimeout(async () => {
-                        console.warn("⏱ Timeout alcanzado. Reintentando con mensaje de control...");
-                        resolve(await safeToAsk(assistantId, fallbackMessage ?? finalMessage, state));
-                        userTimeouts.delete(userId);
-                }, TIMEOUT_MS);
-                userTimeouts.set(userId, timeoutId);
-        });
-
-        // Lanzamos la petición a OpenAI, pasando thread_id si existe
-        const askPromise = safeToAsk(assistantId, finalMessage, state).then((result) => {
-                if (userTimeouts.has(userId)) {
-                        clearTimeout(userTimeouts.get(userId));
-                        userTimeouts.delete(userId);
-                }
-                timeoutResolve(result);
-                return result;
-        });
-
-        return Promise.race([askPromise, timeoutPromise]);
+    return Promise.race([askPromise, timeoutPromise]);
 };
 
 export const processUserMessage = async (
@@ -192,27 +193,27 @@ export const processUserMessage = async (
         //     return gotoFlow(imgResponseFlow);
         // }
 
-            // Usar el nuevo wrapper para obtener respuesta y thread_id
-            const response = (await getAssistantResponse(ASSISTANT_ID, ctx.body, state, "Por favor, reenvia el msj anterior ya que no llego al usuario.", ctx.from, ctx.thread_id)) as string;
-            console.log('🔍 DEBUG RAW ASSISTANT MSG (WhatsApp):', JSON.stringify(response));
+        // Usar el nuevo wrapper para obtener respuesta y thread_id
+        const response = (await getAssistantResponse(ASSISTANT_ID, ctx.body, state, "Por favor, reenvia el msj anterior ya que no llego al usuario.", ctx.from, ctx.thread_id)) as string;
+        console.log('🔍 DEBUG RAW ASSISTANT MSG (WhatsApp):', JSON.stringify(response));
 
-            // Delegar procesamiento al AssistantResponseProcessor (Maneja DB_QUERY y envios)
-            await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
-                response,
-                ctx,
-                flowDynamic,
-                state,
-                provider,
-                gotoFlow,
-                getAssistantResponse,
-                ASSISTANT_ID
-            );
+        // Delegar procesamiento al AssistantResponseProcessor (Maneja DB_QUERY y envios)
+        await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
+            response,
+            ctx,
+            flowDynamic,
+            state,
+            provider,
+            gotoFlow,
+            getAssistantResponse,
+            ASSISTANT_ID
+        );
 
         // Si es un contacto con nombre, intentamos guardar el nombre (si no lo tenemos)
         // en algún lugar, o manejarlo como variable de sesión.
         // Aquí podrías agregar lógica para actualizar nombre en sheet si el asistente lo extrajo.
         return state;
-        
+
     } catch (error) {
         console.error("Error al procesar el mensaje del usuario:", error);
 
@@ -260,7 +261,7 @@ const hasActiveSession = async () => {
         // En builderbot-provider-sherpa (Baileys), el socket suele estar en vendor
         const user = adapterProvider?.vendor?.user || adapterProvider?.globalVendorArgs?.sock?.user;
         const isReady = !!user;
-        
+
         // Extraer el número si está conectado
         let phoneNumber = null;
         if (isReady && user?.id) {
@@ -278,17 +279,18 @@ const hasActiveSession = async () => {
 
         // Si está conectado, es la prioridad máxima
         if (isReady) return { active: true, source: 'connected', phoneNumber };
-        
+
+
         // Si tiene creds.json, es muy probable que se conecte pronto
         if (localActive) return { active: true, source: 'local' };
 
         // 3. Si no hay nada local, verificar en DB
         const remoteActive = await isSessionInDb();
         if (remoteActive) {
-            return { 
-                active: false, 
-                hasRemote: true, 
-                message: 'Sesión encontrada en la nube. El bot está intentando restaurarla. Si el QR aparece, puedes escanearlo para generar una nueva.' 
+            return {
+                active: false,
+                hasRemote: true,
+                message: 'Sesión encontrada en la nube. El bot está intentando restaurarla. Si el QR aparece, puedes escanearlo para generar una nueva.'
             };
         }
 
@@ -301,6 +303,9 @@ const hasActiveSession = async () => {
 
 // Main function to initialize the bot and load Google Sheets data
 const main = async () => {
+    // 0. Ejecutar script de inicialización de funciones (solo si no existen)
+
+
     // 1. Limpiar QR antiguo al inicio
     const qrPath = path.join(process.cwd(), 'bot.qr.png');
     if (fs.existsSync(qrPath)) {
@@ -359,11 +364,11 @@ const main = async () => {
     });
 
     adapterProvider.on('message', (payload) => { console.log('⚡ [Provider] message received'); });
-    adapterProvider.on('ready', () => { 
-        console.log('✅ [Provider] READY: El bot está conectado y operativo.'); 
+    adapterProvider.on('ready', () => {
+        console.log('✅ [Provider] READY: El bot está conectado y operativo.');
     });
-    adapterProvider.on('auth_failure', (payload) => { 
-        console.log('❌ [Provider] AUTH_FAILURE: Error de autenticación.', payload); 
+    adapterProvider.on('auth_failure', (payload) => {
+        console.log('❌ [Provider] AUTH_FAILURE: Error de autenticación.', payload);
     });
 
     // Evento adicional para detectar desconexiones
@@ -379,7 +384,7 @@ const main = async () => {
     console.log('🚀 [Init] Iniciando createBot...');
     const adapterFlow = createFlow([welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowVideo, welcomeFlowDoc, locationFlow, idleFlow]);
     const adapterDB = new MemoryDB();
-    
+
     const { httpServer } = await createBot({
         flow: adapterFlow,
         provider: adapterProvider,
@@ -401,7 +406,7 @@ const main = async () => {
     // 1. Middleware de compatibilidad (res.json, res.send, res.sendFile, etc)
     app.use((req, res, next) => {
         res.status = (code) => { res.statusCode = code; return res; };
-        res.send = (body) => { 
+        res.send = (body) => {
             if (res.headersSent) return res;
             if (typeof body === 'object') {
                 res.setHeader('Content-Type', 'application/json');
@@ -409,13 +414,13 @@ const main = async () => {
             } else {
                 res.end(body || '');
             }
-            return res; 
+            return res;
         };
-        res.json = (data) => { 
+        res.json = (data) => {
             if (res.headersSent) return res;
-            res.setHeader('Content-Type', 'application/json'); 
-            res.end(JSON.stringify(data || null)); 
-            return res; 
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify(data || null));
+            return res;
         };
         res.sendFile = (filepath) => {
             if (res.headersSent) return;
@@ -601,7 +606,7 @@ const main = async () => {
 
             console.log("[API] Actualizando variables en Railway...");
             const updateResult = await RailwayApi.updateVariables(variables);
-            
+
             if (!updateResult.success) {
                 return res.status(500).json({ success: false, error: updateResult.error });
             }
@@ -642,7 +647,7 @@ const main = async () => {
                     const historyKey = `webchat_${ip}`;
                     if (!global.webchatHistories[historyKey]) global.webchatHistories[historyKey] = [];
                     const _history = global.webchatHistories[historyKey];
-                    
+
                     const state = {
                         get: (key) => key === 'history' ? _history : undefined,
                         update: async (msg, role = 'user') => {
@@ -662,7 +667,7 @@ const main = async () => {
                         await state.clear();
                         replyText = "🔄 Chat reiniciado.";
                     } else {
-                        await processUserMessage({ from: ip, body: msg, type: 'webchat' }, { flowDynamic, state, provider: undefined, gotoFlow: () => {} });
+                        await processUserMessage({ from: ip, body: msg, type: 'webchat' }, { flowDynamic, state, provider: undefined, gotoFlow: () => { } });
                     }
                     socket.emit('reply', replyText);
                 } catch (err) {
@@ -695,10 +700,10 @@ const main = async () => {
             } else {
                 const threadId = await getOrCreateThreadId(session);
                 session.addUserMessage(message);
-                
+
                 const state = {
                     get: (key) => key === 'thread_id' ? session.thread_id : undefined,
-                    update: async () => {},
+                    update: async () => { },
                     clear: async () => session.clear(),
                 };
 
@@ -707,7 +712,7 @@ const main = async () => {
                 };
 
                 const reply = await webChatAdapterFn(ASSISTANT_ID, message, state, "", ip, threadId);
-                
+
                 let accumulatedReply = '';
                 const flowDynamic = async (arr) => {
                     const text = Array.isArray(arr) ? arr.map(a => a.body).join('\n') : (typeof arr === 'string' ? arr : (arr.body || ''));
@@ -720,11 +725,11 @@ const main = async () => {
                     flowDynamic,
                     state,
                     undefined,
-                    () => {},
+                    () => { },
                     webChatAdapterFn,
                     ASSISTANT_ID
                 );
-                
+
                 replyText = accumulatedReply || reply;
                 session.addAssistantMessage(replyText);
             }
@@ -760,9 +765,10 @@ process.on('uncaughtException', (error) => {
     // process.exit(1);
 });
 
-export { welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowVideo, welcomeFlowDoc, locationFlow,
-        handleQueue, userQueues, userLocks,
- };
+export {
+    welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowVideo, welcomeFlowDoc, locationFlow,
+    handleQueue, userQueues, userLocks,
+};
 
 main().catch(err => {
     console.error('❌ [FATAL] Error en la función main:', err);
