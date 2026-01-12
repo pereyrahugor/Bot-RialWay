@@ -298,10 +298,13 @@ const main = async () => {
     // 0. Ejecutar script de inicialización de funciones (solo si no existen)
     try {
         console.log('🔄 [Init] Verificando funciones RPC en Supabase...');
+        const isProd = process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT_ID;
+        const scriptPath = isProd ? './scripts/init_functions.js' : './scripts/init_functions.ts';
+        const command = isProd ? `node ${scriptPath}` : `npx ts-node ${scriptPath}`;
         await new Promise((resolve, reject) => {
-            exec('npx ts-node ./scripts/init_functions.ts', (error, stdout, stderr) => {
+            exec(command, (error, stdout, stderr) => {
                 if (error) {
-                    console.error(`[Init] Error ejecutando init_functions.ts:`, stderr || error);
+                    console.error(`[Init] Error ejecutando ${scriptPath}:`, stderr || error);
                     reject(error);
                 } else {
                     console.log(stdout);
