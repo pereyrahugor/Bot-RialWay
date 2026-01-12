@@ -299,7 +299,7 @@ const main = async () => {
     try {
         console.log('🔄 [Init] Verificando funciones RPC en Supabase...');
         const isProd = process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT_ID;
-        const scriptPath = isProd ? './scripts/init_functions.js' : './scripts/init_functions.ts';
+        const scriptPath = isProd ? './dist/utils/init_functions.js' : './src/utils/init_functions.ts';
         const command = isProd ? `node ${scriptPath}` : `npx ts-node ${scriptPath}`;
         await new Promise((resolve, reject) => {
             exec(command, (error, stdout, stderr) => {
