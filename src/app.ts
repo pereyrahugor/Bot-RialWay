@@ -743,6 +743,7 @@ const main = async () => {
     // Iniciar servidor
     try {
         console.log(`🚀 [INFO] Iniciando servidor en puerto ${PORT}...`);
+        // Aseguramos que escuche en 0.0.0.0 para ser accesible desde el contenedor
         httpServer(+PORT);
         console.log(`✅ [INFO] Servidor escuchando en puerto ${PORT}`);
         if (app.server) {
