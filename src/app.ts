@@ -25,6 +25,7 @@ import { welcomeFlowImg } from "./Flows/welcomeFlowImg";
 import { welcomeFlowVideo } from "./Flows/welcomeFlowVideo";
 import { welcomeFlowDoc } from "./Flows/welcomeFlowDoc";
 import { locationFlow } from "./Flows/locationFlow";
+import { welcomeFlowButton } from "./Flows/welcomeFlowButton";
 import { AssistantResponseProcessor } from "./utils/AssistantResponseProcessor";
 import { updateMain } from "./addModule/updateMain";
 import { ErrorReporter } from "./utils/errorReporter";
@@ -374,7 +375,7 @@ const main = async () => {
     await updateMain();
 
     console.log('🚀 [Init] Iniciando createBot...');
-    const adapterFlow = createFlow([welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowVideo, welcomeFlowDoc, locationFlow, idleFlow]);
+    const adapterFlow = createFlow([welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowVideo, welcomeFlowDoc, locationFlow, idleFlow, welcomeFlowButton]);
     const adapterDB = new MemoryDB();
 
     const { httpServer } = await createBot({
