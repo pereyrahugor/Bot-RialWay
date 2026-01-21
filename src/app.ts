@@ -24,6 +24,7 @@ import { welcomeFlowVoice } from "./Flows/welcomeFlowVoice";
 import { welcomeFlowImg } from "./Flows/welcomeFlowImg";
 import { welcomeFlowVideo } from "./Flows/welcomeFlowVideo";
 import { welcomeFlowDoc } from "./Flows/welcomeFlowDoc";
+import { welcomeFlowButton } from "./Flows/welcomeFlowButton";
 import { locationFlow } from "./Flows/locationFlow";
 import { AssistantResponseProcessor } from "./utils/AssistantResponseProcessor";
 import { updateMain } from "./addModule/updateMain";
@@ -227,6 +228,8 @@ export const processUserMessage = async (
         // 📌 Manejo de error: volver al flujo adecuado
         if (ctx.type === EVENTS.VOICE_NOTE) {
             return gotoFlow(welcomeFlowVoice);
+        } else if (ctx.type === EVENTS.ACTION) {
+            return gotoFlow(welcomeFlowButton);
         } else {
             return gotoFlow(welcomeFlowTxt);
         }
@@ -363,7 +366,34 @@ const main = async () => {
         }
     });
 
-    adapterProvider.on('message', (payload) => { console.log('⚡ [Provider] message received'); });
+    adapterProvider.on('message', (ctx) => {
+        console.log('⚡ [Provider] message received');
+        
+        // Detección de botones para Sherpa/Baileys
+        const isButton = ctx.message?.buttonsResponseMessage || 
+                         ctx.message?.templateButtonReplyMessage || 
+                         ctx.message?.interactiveResponseMessage;
+        
+        if (isButton) {
+            console.log('🔘 Interacción de botón detectada');
+            // Mapear el texto del botón al body para que el flujo pueda procesarlo
+            if (ctx.message?.buttonsResponseMessage) {
+                ctx.body = ctx.message.buttonsResponseMessage.selectedDisplayText;
+            } else if (ctx.message?.templateButtonReplyMessage) {
+                ctx.body = ctx.message.templateButtonReplyMessage.selectedDisplayText;
+            } else if (ctx.message?.interactiveResponseMessage) {
+                try {
+                    const interactive = JSON.parse(ctx.message.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson);
+                    ctx.body = interactive.id;
+                } catch (e) {
+                    ctx.body = 'buttonInteraction';
+                }
+            }
+            
+            // Asignar el tipo ACTION para disparar welcomeFlowButton
+            ctx.type = EVENTS.ACTION;
+        }
+    });
     adapterProvider.on('ready', () => {
         console.log('✅ [Provider] READY: El bot está conectado y operativo.');
     });
@@ -382,7 +412,7 @@ const main = async () => {
     await updateMain();
 
     console.log('🚀 [Init] Iniciando createBot...');
-    const adapterFlow = createFlow([welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowVideo, welcomeFlowDoc, locationFlow, idleFlow]);
+    const adapterFlow = createFlow([welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowVideo, welcomeFlowDoc, welcomeFlowButton, locationFlow, idleFlow]);
     const adapterDB = new MemoryDB();
 
     const { httpServer } = await createBot({
@@ -767,7 +797,7 @@ process.on('uncaughtException', (error) => {
 });
 
 export {
-    welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowVideo, welcomeFlowDoc, locationFlow,
+    welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowVideo, welcomeFlowDoc, welcomeFlowButton, locationFlow,
     handleQueue, userQueues, userLocks,
 };
 
