@@ -228,6 +228,8 @@ export const processUserMessage = async (
         // 📌 Manejo de error: volver al flujo adecuado
         if (ctx.type === EVENTS.VOICE_NOTE) {
             return gotoFlow(welcomeFlowVoice);
+        } else if (ctx.type === EVENTS.ACTION) {
+            return gotoFlow(welcomeFlowButton);
         } else {
             return gotoFlow(welcomeFlowTxt);
         }
@@ -356,7 +358,36 @@ const main = async () => {
         }
     });
 
-    adapterProvider.on('message', (payload) => { console.log('⚡ [Provider] message received'); });
+    adapterProvider.on('message', (ctx) => {
+        console.log(`Type Msj Recibido: ${ctx.type || 'desconocido'}`);
+        console.log('⚡ [Provider] message received');
+        
+        // Detección de botones para Sherpa/Baileys
+        const isButton = ctx.message?.buttonsResponseMessage || 
+                         ctx.message?.templateButtonReplyMessage || 
+                         ctx.message?.interactiveResponseMessage;
+        
+        if (isButton) {
+            console.log('🔘 Interacción de botón detectada');
+            // Mapear el texto del botón al body para que el flujo pueda procesarlo
+            if (ctx.message?.buttonsResponseMessage) {
+                ctx.body = ctx.message.buttonsResponseMessage.selectedDisplayText;
+            } else if (ctx.message?.templateButtonReplyMessage) {
+                ctx.body = ctx.message.templateButtonReplyMessage.selectedDisplayText;
+            } else if (ctx.message?.interactiveResponseMessage) {
+                try {
+                    const interactive = JSON.parse(ctx.message.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson);
+                    ctx.body = interactive.id;
+                } catch (e) {
+                    ctx.body = 'buttonInteraction';
+                }
+            }
+            
+            // Asignar el tipo ACTION para disparar welcomeFlowButton
+            ctx.type = EVENTS.ACTION;
+            console.log(`Updated Type Msj Recibido: ${ctx.type}`);
+        }
+    });
     adapterProvider.on('ready', () => {
         console.log('✅ [Provider] READY: El bot está conectado y operativo.');
     });
