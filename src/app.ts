@@ -24,8 +24,8 @@ import { welcomeFlowVoice } from "./Flows/welcomeFlowVoice";
 import { welcomeFlowImg } from "./Flows/welcomeFlowImg";
 import { welcomeFlowVideo } from "./Flows/welcomeFlowVideo";
 import { welcomeFlowDoc } from "./Flows/welcomeFlowDoc";
-import { welcomeFlowButton } from "./Flows/welcomeFlowButton";
 import { locationFlow } from "./Flows/locationFlow";
+import { welcomeFlowButton } from "./Flows/welcomeFlowButton";
 import { AssistantResponseProcessor } from "./utils/AssistantResponseProcessor";
 import { updateMain } from "./addModule/updateMain";
 import { ErrorReporter } from "./utils/errorReporter";
@@ -260,16 +260,9 @@ const handleQueue = async (userId) => {
 // Función auxiliar para verificar si existe sesión activa (Local o Remota)
 const hasActiveSession = async () => {
     try {
-        // 1. Verificar si el provider ya tiene un usuario conectado
+        // 1. Verificar si el proveedor está realmente conectado
         // En builderbot-provider-sherpa (Baileys), el socket suele estar en vendor
-        const user = adapterProvider?.vendor?.user || adapterProvider?.globalVendorArgs?.sock?.user;
-        const isReady = !!user;
-
-        // Extraer el número si está conectado
-        let phoneNumber = null;
-        if (isReady && user?.id) {
-            phoneNumber = user.id.split('@')[0].split(':')[0]; // Manejar ids con :0
-        }
+        const isReady = !!(adapterProvider?.vendor?.user || adapterProvider?.globalVendorArgs?.sock?.user);
 
         // 2. Verificar localmente
         const sessionsDir = path.join(process.cwd(), 'bot_sessions');
@@ -281,8 +274,7 @@ const hasActiveSession = async () => {
         }
 
         // Si está conectado, es la prioridad máxima
-        if (isReady) return { active: true, source: 'connected', phoneNumber };
-
+        if (isReady) return { active: true, source: 'connected' };
 
         // Si tiene creds.json, es muy probable que se conecte pronto
         if (localActive) return { active: true, source: 'local' };
@@ -367,6 +359,7 @@ const main = async () => {
     });
 
     adapterProvider.on('message', (ctx) => {
+        console.log(`Type Msj Recibido: ${ctx.type || 'desconocido'}`);
         console.log('⚡ [Provider] message received');
         
         // Detección de botones para Sherpa/Baileys
@@ -392,6 +385,7 @@ const main = async () => {
             
             // Asignar el tipo ACTION para disparar welcomeFlowButton
             ctx.type = EVENTS.ACTION;
+            console.log(`Updated Type Msj Recibido: ${ctx.type}`);
         }
     });
     adapterProvider.on('ready', () => {
@@ -412,7 +406,7 @@ const main = async () => {
     await updateMain();
 
     console.log('🚀 [Init] Iniciando createBot...');
-    const adapterFlow = createFlow([welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowVideo, welcomeFlowDoc, welcomeFlowButton, locationFlow, idleFlow]);
+    const adapterFlow = createFlow([welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowVideo, welcomeFlowDoc, locationFlow, idleFlow, welcomeFlowButton]);
     const adapterDB = new MemoryDB();
 
     const { httpServer } = await createBot({
@@ -743,10 +737,9 @@ const main = async () => {
 
                 const reply = await webChatAdapterFn(ASSISTANT_ID, message, state, "", ip, threadId);
 
-                let accumulatedReply = '';
                 const flowDynamic = async (arr) => {
-                    const text = Array.isArray(arr) ? arr.map(a => a.body).join('\n') : (typeof arr === 'string' ? arr : (arr.body || ''));
-                    accumulatedReply = accumulatedReply ? accumulatedReply + "\n\n" + text : text;
+                    const text = Array.isArray(arr) ? arr.map(a => a.body).join('\n') : arr;
+                    replyText = replyText ? replyText + "\n\n" + text : text;
                 };
 
                 await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
@@ -759,8 +752,6 @@ const main = async () => {
                     webChatAdapterFn,
                     ASSISTANT_ID
                 );
-
-                replyText = accumulatedReply || reply;
                 session.addAssistantMessage(replyText);
             }
             res.json({ reply: replyText });
@@ -773,7 +764,6 @@ const main = async () => {
     // Iniciar servidor
     try {
         console.log(`🚀 [INFO] Iniciando servidor en puerto ${PORT}...`);
-        // Aseguramos que escuche en 0.0.0.0 para ser accesible desde el contenedor
         httpServer(+PORT);
         console.log(`✅ [INFO] Servidor escuchando en puerto ${PORT}`);
         if (app.server) {
@@ -797,7 +787,7 @@ process.on('uncaughtException', (error) => {
 });
 
 export {
-    welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowVideo, welcomeFlowDoc, welcomeFlowButton, locationFlow,
+    welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowVideo, welcomeFlowDoc, locationFlow,
     handleQueue, userQueues, userLocks,
 };
 
