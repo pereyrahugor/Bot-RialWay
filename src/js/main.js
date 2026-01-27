@@ -1,5 +1,5 @@
 // Obtener el nombre del asistente dinámicamente y actualizar el div
-window.addEventListener('DOMContentLoaded', function() {
+window.addEventListener('DOMContentLoaded', function () {
     fetch('/api/assistant-name')
         .then(res => res.json())
         .then(data => {
@@ -14,14 +14,7 @@ const input = document.getElementById('input')
 const sendBtn = document.getElementById('send')
 const chat = document.getElementById('chat') // style - agus
 
-// ===== Botón volver en header =====
-const headerBack = document.getElementById('backBtn')
-if (headerBack) {
-    headerBack.addEventListener('click', () => {
-        if (history.length > 1) history.back()
-        else window.location.href = 'https://asistentes.clientesneurolinks.com/' // ajustar URL
-    })
-}
+
 
 // ===== Viewport dinámico para Chrome/Firefox/iOS =====
 function setAppVh() {
