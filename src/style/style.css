@@ -263,28 +263,7 @@ button {
     /* box-shadow: 0 2px 8px rgba(0, 0, 0, .18); */
 }
 
-/* Botón flecha */
-#backBtn {
-    flex: 0 0 auto;
-    width: 36px;
-    height: 36px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
 
-    background: transparent;
-    color: #fff;
-    font-size: 22px;
-    /* ← */
-    line-height: 1;
-    border: none;
-    border-radius: 18px;
-    cursor: pointer;
-}
-
-#backBtn:active {
-    opacity: .8;
-}
 
 /* Avatar */
 #avatar {
