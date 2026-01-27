@@ -30,6 +30,41 @@ interface DeploymentResponse {
 
 export class RailwayApi {
   /**
+   * Helper privado para realizar peticiones fetch y validar la respuesta JSON
+   */
+  private static async fetchRailway(query: string, variables: any): Promise<any> {
+    const body = JSON.stringify({ query, variables });
+
+    const res = await fetch(RAILWAY_GRAPHQL_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${RAILWAY_TEAM_TOKEN}`,
+      },
+      body,
+    });
+
+    const contentType = res.headers.get("content-type");
+    const isJson = contentType && contentType.includes("application/json");
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.error(`[RailwayApi] HTTP Error ${res.status}: ${res.statusText}`);
+      console.error(`[RailwayApi] Response body (first 200 chars): ${text.substring(0, 200)}`);
+      throw new Error(`Railway API respondió con status ${res.status}: ${res.statusText}`);
+    }
+
+    if (!isJson) {
+      const text = await res.text();
+      console.error(`[RailwayApi] Error: Respuesta no es JSON. Content-Type: ${contentType}`);
+      console.error(`[RailwayApi] Response body (first 200 chars): ${text.substring(0, 200)}`);
+      throw new Error("Railway API no devolvió una respuesta JSON válida.");
+    }
+
+    return await res.json();
+  }
+
+  /**
    * Obtiene el ID del deployment activo de un proyecto Railway
    */
   static async getActiveDeploymentId(): Promise<string | null> {
@@ -65,35 +100,28 @@ export class RailwayApi {
       serviceId: RAILWAY_SERVICE_ID,
     };
 
-    const body = JSON.stringify({ query, variables });
+    try {
+      console.log("[RailwayApi] Request getActiveDeploymentId...");
+      const data: DeploymentResponse = await this.fetchRailway(query, variables);
+      // console.log("[RailwayApi] Response getActiveDeploymentId:", JSON.stringify(data, null, 2));
 
-    console.log("[RailwayApi] Request getActiveDeploymentId:", body);
+      if (data.errors?.length) {
+        console.error("Error desde Railway API:", data.errors);
+        return null;
+      }
 
-    const res = await fetch(RAILWAY_GRAPHQL_ENDPOINT, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${RAILWAY_TEAM_TOKEN}`,
-      },
-      body,
-    });
+      const deployment = data?.data?.deployments?.edges?.[0]?.node;
+      if (!deployment?.id) {
+        console.error("No se encontró ningún deployment activo.");
+        return null;
+      }
 
-    const data: DeploymentResponse = await res.json();
-    console.log("[RailwayApi] Response getActiveDeploymentId:", JSON.stringify(data, null, 2));
-
-    if (data.errors?.length) {
-      console.error("Error desde Railway API:", data.errors);
+      console.log("[RailwayApi] Deployment activo encontrado:", deployment.id);
+      return deployment.id;
+    } catch (err: any) {
+      console.error("[RailwayApi] Error en getActiveDeploymentId:", err.message);
       return null;
     }
-
-    const deployment = data?.data?.deployments?.edges?.[0]?.node;
-    if (!deployment?.id) {
-      console.error("No se encontró ningún deployment activo.");
-      return null;
-    }
-
-    console.log("[RailwayApi] Deployment activo encontrado:", deployment.id);
-    return deployment.id;
   }
 
   /**
@@ -113,16 +141,7 @@ export class RailwayApi {
     };
 
     try {
-      const res = await fetch(RAILWAY_GRAPHQL_ENDPOINT, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${RAILWAY_TEAM_TOKEN}`,
-        },
-        body: JSON.stringify({ query, variables }),
-      });
-
-      const data = await res.json();
+      const data = await this.fetchRailway(query, variables);
       if (data.errors?.length) {
         console.error("[RailwayApi] Error obteniendo variables:", data.errors);
         return null;
@@ -138,8 +157,8 @@ export class RailwayApi {
       });
 
       return filteredVariables;
-    } catch (err) {
-      console.error("[RailwayApi] Error en getVariables:", err);
+    } catch (err: any) {
+      console.error("[RailwayApi] Error en getVariables:", err.message);
       return null;
     }
   }
@@ -175,16 +194,7 @@ export class RailwayApi {
     };
 
     try {
-      const res = await fetch(RAILWAY_GRAPHQL_ENDPOINT, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${RAILWAY_TEAM_TOKEN}`,
-        },
-        body: JSON.stringify({ query: mutation, variables }),
-      });
-
-      const data = await res.json();
+      const data = await this.fetchRailway(mutation, variables);
       if (data.errors?.length) {
         console.error("[RailwayApi] Error en mutation masiva:", JSON.stringify(data.errors, null, 2));
         const errorMsg = data.errors.map((e: any) => e.message).join("; ");
@@ -193,7 +203,7 @@ export class RailwayApi {
 
       return { success: true };
     } catch (err: any) {
-      console.error("[RailwayApi] Error en updateVariables masivo:", err);
+      console.error("[RailwayApi] Error en updateVariables masivo:", err.message);
       return { success: false, error: err.message };
     }
   }
@@ -216,22 +226,10 @@ export class RailwayApi {
         }
       `;
 
-      const body = JSON.stringify({
-        query: mutation,
-        variables: { id: deploymentId },
-      });
+      const variables = { id: deploymentId };
 
-      const res = await fetch(RAILWAY_GRAPHQL_ENDPOINT, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${RAILWAY_TEAM_TOKEN}`,
-        },
-        body,
-      });
-
-      const data = await res.json();
-      console.log("[RailwayApi] Response restartActiveDeployment:", JSON.stringify(data, null, 2));
+      const data = await this.fetchRailway(mutation, variables);
+      // console.log("[RailwayApi] Response restartActiveDeployment:", JSON.stringify(data, null, 2));
 
       if (data.errors?.length) {
         const errorMsg = data.errors.map((e: any) => e.message).join("; ");
@@ -240,8 +238,9 @@ export class RailwayApi {
 
       return { success: true };
     } catch (err: any) {
-      console.error("[RailwayApi] Error reiniciando deployment:", err);
+      console.error("[RailwayApi] Error reiniciando deployment:", err.message);
       return { success: false, error: err.message };
     }
   }
 }
+
