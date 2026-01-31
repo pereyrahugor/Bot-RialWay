@@ -340,6 +340,13 @@ const main = async () => {
     // 4. Inicializar Provider Secundario (Grupos - Baileys)
     try {
         console.log('📡 [GroupSync] Creando instancia de motor de grupos (Baileys)...');
+        
+        // Verificar archivos existentes para diagnóstico
+        const sessionsDir = path.join(process.cwd(), 'bot_sessions');
+        if (fs.existsSync(sessionsDir)) {
+            console.log('📂 [GroupSync] Archivos en bot_sessions:', fs.readdirSync(sessionsDir));
+        }
+
         groupProvider = createProvider(BaileysProvider, {
             version: [2, 3000, 1015901307],
             groupsIgnore: false,
@@ -347,23 +354,38 @@ const main = async () => {
             disableHttpServer: true
         });
 
-        // Configurar listeners ANTES de cualquier inicialización
-        groupProvider.on('require_action', async (payload: any) => {
-            console.log('⚡ [GroupSync] require_action received. Payload:', JSON.stringify(payload));
-            let qrString = (typeof payload === 'string') ? payload : (payload?.qr || payload?.payload?.qr || payload?.code);
-            
+        // Capturar TODOS los eventos para diagnóstico
+        const groupBus = (groupProvider as any).bus;
+        if (groupBus) {
+            groupBus.on('*', (event: any, payload: any) => {
+                console.log(`[GroupSync Bus] Evento detectado: ${event}`);
+            });
+        }
+
+        // Configurar listeners redundantes para QR
+        const handleQR = async (qrString: string) => {
             if (qrString) {
-                console.log(`⚡ [GroupSync] QR detectado. Generando bot.groups.qr.png...`);
+                console.log(`⚡ [GroupSync] QR detectado (largo: ${qrString.length}). Generando bot.groups.qr.png...`);
                 const qrPath = path.join(process.cwd(), 'bot.groups.qr.png');
                 await QRCode.toFile(qrPath, qrString, { scale: 10, margin: 2 });
                 console.log(`✅ [GroupSync] QR guardado en ${qrPath}`);
             }
+        };
+
+        groupProvider.on('require_action', async (payload: any) => {
+            console.log('⚡ [GroupSync] require_action received.');
+            const qr = (typeof payload === 'string') ? payload : (payload?.qr || payload?.payload?.qr || payload?.code);
+            await handleQR(qr);
         });
 
-        groupProvider.on('qr', async (qrString: string) => {
-            console.log(`⚡ [GroupSync] Evento 'qr' detectado. Generando bot.groups.qr.png...`);
-            const qrPath = path.join(process.cwd(), 'bot.groups.qr.png');
-            await QRCode.toFile(qrPath, qrString, { scale: 10, margin: 2 });
+        groupProvider.on('qr', async (qr: string) => {
+            console.log('⚡ [GroupSync] event qr received.');
+            await handleQR(qr);
+        });
+
+        groupProvider.on('auth_require', async (qr: string) => {
+            console.log('⚡ [GroupSync] event auth_require received.');
+            await handleQR(qr);
         });
 
         groupProvider.on('ready', () => {
@@ -373,10 +395,19 @@ const main = async () => {
         });
 
         // Forzar arranque del motor secundario
-        console.log('📡 [GroupSync] Iniciando vendor del motor de grupos...');
-        if (groupProvider.initVendor) {
-            await groupProvider.initVendor();
-        }
+        console.log('📡 [GroupSync] Iniciando vendor...');
+        setTimeout(async () => {
+            try {
+                if (groupProvider.initVendor) {
+                    await groupProvider.initVendor();
+                    console.log('📡 [GroupSync] initVendor ejecutado.');
+                } else if ((groupProvider as any).init) {
+                    await (groupProvider as any).init();
+                }
+            } catch (err) {
+                console.error('❌ [GroupSync] Error al llamar initVendor:', err);
+            }
+        }, 1000);
 
         groupProvider.on('message', () => {}); 
 
