@@ -64,8 +64,8 @@ function limpiarBloquesJSON(texto: string): string {
     const specialBlocks: string[] = [];
     let textoConMarcadores = texto;
     
-    // Preservar [DB_QUERY: ...] (Permitiendo espacios opcionales tras el corchete y alrededor de los dos puntos)
-    textoConMarcadores = textoConMarcadores.replace(/\[\s*DB_QUERY\s*:\s*[\s\S]*?\]/gi, (match) => {
+    // Preservar [DB_QUERY ...] (Soporta nuevo formato JSON y antiguo con dos puntos)
+    textoConMarcadores = textoConMarcadores.replace(/\[\s*DB_QUERY\s*[:{][\s\S]*?\]/gi, (match) => {
         const index = specialBlocks.length;
         specialBlocks.push(match);
         return `___SPECIAL_BLOCK_${index}___`;
@@ -148,12 +148,26 @@ export class AssistantResponseProcessor {
         // Log específico para debug de DB_QUERY
         console.log('[DEBUG] Buscando [DB_QUERY] en:', textResponse.substring(0, 200));
         
-        // 0) Detectar y procesar DB QUERY [DB_QUERY: ...] (Permitiendo espacios opcionales tras el corchete y alrededor de los dos puntos)
-        const dbQueryRegex = /\[\s*DB_QUERY\s*:\s*([\s\S]*?)\]/i;
+        // 0) Detectar y procesar DB QUERY [DB_QUERY ...] (Soporta JSON y formato antiguo con dos puntos)
+        const dbQueryRegex = /\[\s*DB_QUERY\s*[:\s]*([\s\S]*?)\]/i;
         const dbMatch = textResponse.match(dbQueryRegex);
         console.log('[DEBUG] DB Match result:', dbMatch ? 'FOUND' : 'NULL');
         if (dbMatch) {
-            const sqlQuery = dbMatch[1].trim();
+            let sqlQuery = dbMatch[1].trim();
+            
+            // Si el contenido empieza con '{', lo tratamos como JSON según nueva directiva
+            if (sqlQuery.startsWith('{')) {
+                try {
+                    const queryParams = JSON.parse(sqlQuery);
+                    const { TABLA, COLUMNA, DATO } = queryParams;
+                    // Construir la query formateada: SELECT * FROM "tabla" WHERE "columna" ILIKE '%dato%'
+                    // Se usan comillas dobles para nombres de tabla y columna para mayor seguridad/compatibilidad.
+                    sqlQuery = `SELECT * FROM "${TABLA}" WHERE "${COLUMNA}" ILIKE '%${DATO}%'`;
+                } catch (e) {
+                    console.error('[AssistantResponseProcessor] Error al parsear JSON de DB_QUERY:', e.message);
+                }
+            }
+
             if (ctx && ctx.type === 'webchat') console.log(`[Webchat Debug] 🔄 Detectada solicitud de DB Query: ${sqlQuery}`);
             else console.log(`[WhatsApp Debug] 🔄 Detectada solicitud de DB Query: ${sqlQuery}`);
             
