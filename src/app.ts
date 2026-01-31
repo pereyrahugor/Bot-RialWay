@@ -324,51 +324,56 @@ const main = async () => {
         }
     }
 
-    // 2. Restaurar sesión desde DB ANTES de inicializar el provider
-    // Esto asegura que Baileys encuentre los archivos al arrancar
+    // 2. Restaurar sesión de grupos desde DB
     try {
-        await restoreSessionFromDb();
+        await restoreSessionFromDb('groups');
         // Pequeña espera para asegurar que el sistema de archivos se asiente
         await new Promise(resolve => setTimeout(resolve, 2000));
     } catch (e) {
-        console.error('[Init] Error restaurando sesión desde DB:', e);
+        console.error('[Init] Error restaurando sesión de grupos:', e);
     }
 
     // 3. Inicializar Provider Principal (YCloud)
     adapterProvider = createProvider(YCloudProvider, {});
 
     // 4. Inicializar Provider Secundario (Grupos - Baileys)
-    // Lo mantenemos iniciado para sincronizar llaves de cifrado en background
     try {
-        await restoreSessionFromDb('groups');
+        console.log('📡 [GroupSync] Iniciando motor de grupos (Baileys)...');
         groupProvider = createProvider(BaileysProvider, {
-            version: [2, 3000, 1030817285],
+            version: [2, 3000, 1012759392], 
             groupsIgnore: false,
             readStatus: false,
             disableHttpServer: true
         });
 
-        // Listeners para el segundo motor (QR de Grupos)
         groupProvider.on('require_action', async (payload: any) => {
-            const qrString = payload?.payload?.qr || payload?.qr;
+            console.log('⚡ [GroupSync] require_action received. Payload type:', typeof payload);
+            let qrString = (typeof payload === 'string') ? payload : (payload?.qr || payload?.payload?.qr || payload?.code);
+            
             if (qrString) {
-                console.log('⚡ [GroupSync] QR de grupos generado. bot.groups.qr.png');
+                console.log(`⚡ [GroupSync] QR detectado. Generando bot.groups.qr.png...`);
                 const qrPath = path.join(process.cwd(), 'bot.groups.qr.png');
                 await QRCode.toFile(qrPath, qrString, { scale: 10, margin: 2 });
+                console.log(`✅ [GroupSync] QR guardado en ${qrPath}`);
             }
         });
 
+        groupProvider.on('qr', async (qrString: string) => {
+            console.log(`⚡ [GroupSync] Evento 'qr' detectado. Generando bot.groups.qr.png...`);
+            const qrPath = path.join(process.cwd(), 'bot.groups.qr.png');
+            await QRCode.toFile(qrPath, qrString, { scale: 10, margin: 2 });
+        });
+
         groupProvider.on('ready', () => {
-             console.log('✅ [GroupSync] Motor de grupos (Baileys) listo.');
+             console.log('✅ [GroupSync] Motor de grupos conectado.');
              const qrPath = path.join(process.cwd(), 'bot.groups.qr.png');
              if (fs.existsSync(qrPath)) fs.unlinkSync(qrPath);
         });
 
-        // Listener silencioso para mantener llaves actualizadas
         groupProvider.on('message', () => {}); 
 
     } catch (e) {
-        console.error('❌ [GroupSync] Error iniciando motor de grupos:', e);
+        console.error('❌ [GroupSync] Fallo en motor de grupos:', e);
     }
 
     // 4. Listeners del Provider
@@ -821,6 +826,12 @@ const main = async () => {
             res.status(500).json({ reply: 'Error interno.' });
         }
     });
+
+    // Log informativo para configuración de Webhook
+    const webhookUrl = `${process.env.PROJECT_URL || 'https://tu-url-de-railway.up.railway.app'}/webhook`;
+    console.log('🌐 [Webhook] Configura esta URL en YCloud/Meta:');
+    console.log(`🔗 URL: ${webhookUrl}`);
+    console.log('✅ [Webhook] Evento a suscribir: whatsapp.inbound_message.received');
 
     // Iniciar servidor
     try {
