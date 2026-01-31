@@ -7,24 +7,31 @@
     <link rel="stylesheet" href="/style/dashboard.css">
 </head>
 <body>
-    <div class="card">
-        <h1>🤖 Estado del Bot</h1>
-        <p>Estado de Sesión: <span class="status" id="session-status">Cargando...</span></p>
-        <div id="session-error"></div>
-        <div id="qr-section" style="display:none">
-            <div class="qr-container">
-                <h3>Escanea el código QR con WhatsApp</h3>
-                <img src="/qr.png" class="qr" alt="Cargando QR..." onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
-                <p style="display:none; color:orange;">Generando QR... por favor espera.</p>
-                <p class="info-text">La página se actualizará automáticamente cuando aparezca el QR.</p>
-            </div>
-        </div>
-        <div id="session-info" class="info-text" style="display:none"></div>
-        <div id="whatsapp-link-container" style="display:none; margin-top: 15px;">
-            <a id="whatsapp-link" href="#" target="_blank" class="btn" style="background-color: #25D366; color: white; border: none;">
-                📱 Chatear en WhatsApp
+    <div class="card" id="card-ycloud">
+        <h1>📱 Canal Oficial (YCloud)</h1>
+        <p>Estado: <span class="status" id="ycloud-status">Cargando...</span></p>
+        <div id="ycloud-info" class="info-text"></div>
+        <div id="ycloud-link-container" style="display:none; margin-top: 15px;">
+            <a id="ycloud-link" href="#" target="_blank" class="btn" style="background-color: #25D366; color: white; border: none;">
+                💬 Chatear con el Bot
             </a>
         </div>
+    </div>
+
+    <div class="card" id="card-groups">
+        <h1>👥 Motor de Grupos (Baileys)</h1>
+        <p>Estado: <span class="status" id="groups-status">Cargando...</span></p>
+        
+        <div id="groups-qr-section" style="display:none">
+            <div class="qr-container">
+                <h3>Escanea para envíos a Grupos</h3>
+                <img src="/qr-groups.png" class="qr" alt="Cargando QR..." onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+                <p style="display:none; color:orange;">Generando QR... por favor espera.</p>
+                <p class="info-text">Usa este QR si necesitas reportes a grupos de WhatsApp.</p>
+            </div>
+        </div>
+
+        <div id="groups-info" class="info-text" style="display:none"></div>
     </div>
     <div class="card">
         <h2>💬 WebChat</h2>

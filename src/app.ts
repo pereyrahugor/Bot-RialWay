@@ -270,42 +270,41 @@ const handleQueue = async (userId) => {
     userQueues.delete(userId);
 };
 
-// Función auxiliar para verificar si existe sesión activa (Local o Remota)
-const hasActiveSession = async () => {
+// Función auxiliar para verificar el estado de ambos proveedores
+const getBotStatus = async () => {
     try {
-        // 1. Verificar si el proveedor está realmente conectado
-        // En builderbot-provider-sherpa (Baileys), el socket suele estar en vendor
-        const isReady = !!(adapterProvider?.vendor?.user || adapterProvider?.globalVendorArgs?.sock?.user);
-
-        // 2. Verificar localmente
+        // 1. Estado YCloud (Meta)
+        const ycloudConfigured = !!(process.env.YCLOUD_API_KEY && process.env.YCLOUD_WABA_NUMBER);
+        
+        // 2. Estado Motor de Grupos (Baileys)
+        const groupsReady = !!(groupProvider?.vendor?.user || groupProvider?.globalVendorArgs?.sock?.user);
+        
         const sessionsDir = path.join(process.cwd(), 'bot_sessions');
-        let localActive = false;
+        let groupsLocalActive = false;
         if (fs.existsSync(sessionsDir)) {
             const files = fs.readdirSync(sessionsDir).filter(f => f.endsWith('.json'));
-            // creds.json es el archivo crítico para Baileys
-            localActive = files.includes('creds.json');
+            groupsLocalActive = files.includes('creds.json');
         }
 
-        // Si está conectado, es la prioridad máxima
-        if (isReady) return { active: true, source: 'connected' };
+        const groupsRemoteActive = await isSessionInDb('groups');
 
-        // Si tiene creds.json, es muy probable que se conecte pronto
-        if (localActive) return { active: true, source: 'local' };
-
-        // 3. Si no hay nada local, verificar en DB
-        const remoteActive = await isSessionInDb();
-        if (remoteActive) {
-            return {
-                active: false,
-                hasRemote: true,
-                message: 'Sesión encontrada en la nube. El bot está intentando restaurarla. Si el QR aparece, puedes escanearlo para generar una nueva.'
-            };
-        }
-
-        return { active: false, hasRemote: false };
-    } catch (error) {
-        console.error('Error verificando sesión:', error);
-        return { active: false, error: error instanceof Error ? error.message : String(error) };
+        return {
+            ycloud: {
+                active: ycloudConfigured,
+                status: ycloudConfigured ? 'connected' : 'error',
+                phoneNumber: process.env.YCLOUD_WABA_NUMBER || null
+            },
+            groups: {
+                active: groupsReady,
+                source: groupsReady ? 'connected' : (groupsLocalActive ? 'local' : 'none'),
+                hasRemote: groupsRemoteActive,
+                qr: fs.existsSync(path.join(process.cwd(), 'bot.groups.qr.png')),
+                phoneNumber: groupProvider?.vendor?.user?.id?.split(':')[0] || null
+            }
+        };
+    } catch (e) {
+        console.error('[Status] Error obteniendo estado:', e);
+        return { error: String(e) };
     }
 };
 
@@ -464,8 +463,8 @@ const main = async () => {
     console.log('🔍 [DEBUG] createBot httpServer:', !!httpServer);
     console.log('🔍 [DEBUG] adapterProvider.server:', !!adapterProvider.server);
 
-    // Iniciar sincronización periódica de sesión hacia Supabase
-    startSessionSync();
+    // Iniciar sincronización periódica de sesión hacia Supabase (Solo para grupos)
+    startSessionSync('groups');
 
     // Inicializar servidor Polka propio para WebChat y QR
     const app = adapterProvider.server;
@@ -640,7 +639,7 @@ const main = async () => {
     });
 
     app.get('/api/dashboard-status', async (req, res) => {
-        const status = await hasActiveSession();
+        const status = await getBotStatus();
         res.json(status);
     });
 
