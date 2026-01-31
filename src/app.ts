@@ -295,6 +295,7 @@ const getBotStatus = async () => {
                 phoneNumber: process.env.YCLOUD_WABA_NUMBER || null
             },
             groups: {
+                initialized: !!groupProvider,
                 active: groupsReady,
                 source: groupsReady ? 'connected' : (groupsLocalActive ? 'local' : 'none'),
                 hasRemote: groupsRemoteActive,
@@ -340,6 +341,7 @@ const main = async () => {
     try {
         console.log('📡 [GroupSync] Creando instancia de motor de grupos (Baileys)...');
         groupProvider = createProvider(BaileysProvider, {
+            version: [2, 3000, 1015901307],
             groupsIgnore: false,
             readStatus: false,
             disableHttpServer: true
