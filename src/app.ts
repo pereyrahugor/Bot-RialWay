@@ -14,6 +14,7 @@ import QRCode from 'qrcode';
 let botEnabled = true;
 import { createBot, createProvider, createFlow, addKeyword, EVENTS } from "@builderbot/bot";
 import { MemoryDB } from "@builderbot/bot";
+import { YCloudProvider } from "./providers/YCloudProvider";
 import { BaileysProvider } from "builderbot-provider-sherpa";
 import { restoreSessionFromDb, startSessionSync, deleteSessionFromDb, isSessionInDb } from "./utils/sessionSync";
 import { toAsk, httpInject } from "@builderbot-plugins/openai-assistants";
@@ -57,6 +58,7 @@ const userLocks = new Map();
 
 // Listener para generar el archivo QR manualmente cuando se solicite
 export let adapterProvider;
+export let groupProvider;
 let errorReporter;
 
 const TIMEOUT_MS = 30000;
@@ -124,6 +126,17 @@ export const processUserMessage = async (
     ctx,
     { flowDynamic, state, provider, gotoFlow }
 ) => {
+    const userId = ctx.from;
+    const botNumber = (process.env.YCLOUD_WABA_NUMBER || '').replace(/\D/g, '');
+
+    // FILTRO DE SEGURIDAD: Evitar que el bot procese su propio eco (bucles infinitos)
+    if (userId.replace(/\D/g, '') === botNumber) {
+        console.log('🛑 [Security] Mensaje de eco detectado desde el número del bot. Ignorando.');
+        const { stop } = await import('./utils/timeOut.js');
+        stop(ctx); // Detiene cualquier timer de inactividad preventivamente
+        return;
+    }
+
     await typing(ctx, provider);
     try {
         const body = ctx.body && ctx.body.trim();
@@ -322,15 +335,42 @@ const main = async () => {
         console.error('[Init] Error restaurando sesión desde DB:', e);
     }
 
-    // 3. Inicializar Provider ÚNICO
-    adapterProvider = createProvider(BaileysProvider, {
-        version: [2, 3000, 1030817285],
-        groupsIgnore: false,
-        readStatus: false,
-        disableHttpServer: true,
-        // Forzar el uso de la carpeta bot_sessions explícitamente si el provider lo permite
-        // o asegurar que no haya conflictos de caché
-    });
+    // 3. Inicializar Provider Principal (YCloud)
+    adapterProvider = createProvider(YCloudProvider, {});
+
+    // 4. Inicializar Provider Secundario (Grupos - Baileys)
+    // Lo mantenemos iniciado para sincronizar llaves de cifrado en background
+    try {
+        await restoreSessionFromDb('groups');
+        groupProvider = createProvider(BaileysProvider, {
+            version: [2, 3000, 1030817285],
+            groupsIgnore: false,
+            readStatus: false,
+            disableHttpServer: true
+        });
+
+        // Listeners para el segundo motor (QR de Grupos)
+        groupProvider.on('require_action', async (payload: any) => {
+            const qrString = payload?.payload?.qr || payload?.qr;
+            if (qrString) {
+                console.log('⚡ [GroupSync] QR de grupos generado. bot.groups.qr.png');
+                const qrPath = path.join(process.cwd(), 'bot.groups.qr.png');
+                await QRCode.toFile(qrPath, qrString, { scale: 10, margin: 2 });
+            }
+        });
+
+        groupProvider.on('ready', () => {
+             console.log('✅ [GroupSync] Motor de grupos (Baileys) listo.');
+             const qrPath = path.join(process.cwd(), 'bot.groups.qr.png');
+             if (fs.existsSync(qrPath)) fs.unlinkSync(qrPath);
+        });
+
+        // Listener silencioso para mantener llaves actualizadas
+        groupProvider.on('message', () => {}); 
+
+    } catch (e) {
+        console.error('❌ [GroupSync] Error iniciando motor de grupos:', e);
+    }
 
     // 4. Listeners del Provider
     adapterProvider.on('require_action', async (payload: any) => {
@@ -362,24 +402,30 @@ const main = async () => {
         console.log(`Type Msj Recibido: ${ctx.type || 'desconocido'}`);
         console.log('⚡ [Provider] message received');
         
-        // Detección de botones para Sherpa/Baileys
-        const isButton = ctx.message?.buttonsResponseMessage || 
-                         ctx.message?.templateButtonReplyMessage || 
-                         ctx.message?.interactiveResponseMessage;
+        // Detección de botones para Sherpa/Baileys (ctx.message)
+        // Y para YCloud (ctx.type === 'interactive' o presence de payload)
+        const isBaileysButton = ctx.message?.buttonsResponseMessage || 
+                                ctx.message?.templateButtonReplyMessage || 
+                                ctx.message?.interactiveResponseMessage;
         
-        if (isButton) {
+        const isYCloudButton = ctx.type === 'interactive' || ctx.type === 'button';
+
+        if (isBaileysButton || isYCloudButton) {
             console.log('🔘 Interacción de botón detectada');
-            // Mapear el texto del botón al body para que el flujo pueda procesarlo
-            if (ctx.message?.buttonsResponseMessage) {
-                ctx.body = ctx.message.buttonsResponseMessage.selectedDisplayText;
-            } else if (ctx.message?.templateButtonReplyMessage) {
-                ctx.body = ctx.message.templateButtonReplyMessage.selectedDisplayText;
-            } else if (ctx.message?.interactiveResponseMessage) {
-                try {
-                    const interactive = JSON.parse(ctx.message.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson);
-                    ctx.body = interactive.id;
-                } catch (e) {
-                    ctx.body = 'buttonInteraction';
+            
+            if (isBaileysButton) {
+                // Mapear el texto del botón al body para que el flujo pueda procesarlo
+                if (ctx.message?.buttonsResponseMessage) {
+                    ctx.body = ctx.message.buttonsResponseMessage.selectedDisplayText;
+                } else if (ctx.message?.templateButtonReplyMessage) {
+                    ctx.body = ctx.message.templateButtonReplyMessage.selectedDisplayText;
+                } else if (ctx.message?.interactiveResponseMessage) {
+                    try {
+                        const interactive = JSON.parse(ctx.message.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson);
+                        ctx.body = interactive.id;
+                    } catch (e) {
+                        ctx.body = 'buttonInteraction';
+                    }
                 }
             }
             
@@ -545,6 +591,11 @@ const main = async () => {
         }
     }
 
+    // Registrar Webhook para YCloud/Meta
+    app.post('/webhook', (req, res) => {
+        adapterProvider.handleWebhook(req, res);
+    });
+
     // Inyectar rutas del plugin
     httpInject(app);
 
@@ -558,10 +609,21 @@ const main = async () => {
     app.use("/js", serve(path.join(process.cwd(), "src", "js")));
     app.use("/style", serve(path.join(process.cwd(), "src", "style")));
     app.use("/assets", serve(path.join(process.cwd(), "src", "assets")));
-
-    // Servir el código QR
+    // Servir el código QR Principal (YCloud Webhook QR si existiera)
     app.get("/qr.png", (req, res) => {
         const qrPath = path.join(process.cwd(), 'bot.qr.png');
+        if (fs.existsSync(qrPath)) {
+            res.setHeader('Content-Type', 'image/png');
+            fs.createReadStream(qrPath).pipe(res);
+        } else {
+            res.statusCode = 404;
+            res.end('QR not found');
+        }
+    });
+
+    // Servir el código QR de Grupos (Baileys)
+    app.get("/qr-groups.png", (req, res) => {
+        const qrPath = path.join(process.cwd(), 'bot.groups.qr.png');
         if (fs.existsSync(qrPath)) {
             res.setHeader('Content-Type', 'image/png');
             fs.createReadStream(qrPath).pipe(res);

@@ -1,5 +1,5 @@
 import { addKeyword, EVENTS } from '@builderbot/bot';
-import { safeToAsk } from '../app';
+import { safeToAsk, groupProvider } from '../app';
 import { GenericResumenData, extraerDatosResumen } from '~/utils/extractJsonData';
 import { addToSheet } from '~/utils/googleSheetsResumen';
 import fs from 'fs';
@@ -13,9 +13,17 @@ const ID_GRUPO_RESUMEN_2 = process.env.ID_GRUPO_RESUMEN_2 ?? '';
 const msjCierre: string = process.env.msjCierre as string;
 
 // Función auxiliar para reenviar media
+// Función auxiliar para reenviar media
 async function sendMediaToGroup(provider: any, state: any, targetGroup: string, data: any) {
-    // Detectar variaciones de "si" (si, sí, sii, si., Si, YES, etc - aunque el json suele ser español)
-    // Usamos regex flexible que busca "s" seguido de "i" o "í"
+    // Solo usamos el motor de grupos (Baileys) si el target es uno de los grupos de reporte oficiales Y es un ID de grupo (@g.us)
+    const isOfficialGroup = targetGroup === ID_GRUPO_RESUMEN || targetGroup === ID_GRUPO_RESUMEN_2;
+    const activeProvider = (isOfficialGroup && targetGroup.includes('@g.us')) ? groupProvider : provider;
+
+    if (!activeProvider) {
+        console.error('❌ Provider no disponible para el envío de media a', targetGroup);
+        return;
+    }
+
     const fotoOVideoRaw = data["Foto o video"] || '';
     const debeEnviar = /s[ií]+/i.test(fotoOVideoRaw);
 
@@ -27,7 +35,7 @@ async function sendMediaToGroup(provider: any, state: any, targetGroup: string, 
             if (fs.existsSync(lastImage)) {
                 await new Promise(resolve => setTimeout(resolve, 2000));
                 console.log(`📡 Intentando enviar imagen: ${lastImage} a ${targetGroup}`);
-                await provider.sendImage(targetGroup, lastImage, "");
+                await activeProvider.sendMessage(targetGroup, "", { media: lastImage });
                 console.log(`✅ Imagen reenviada al grupo ${targetGroup}`);
                 try {
                     fs.unlinkSync(lastImage);
@@ -40,12 +48,8 @@ async function sendMediaToGroup(provider: any, state: any, targetGroup: string, 
             if (fs.existsSync(lastVideo)) {
                 await new Promise(resolve => setTimeout(resolve, 2000));
                 console.log(`📡 Intentando enviar video: ${lastVideo} a ${targetGroup}`);
-                if (provider.sendVideo) {
-                    await provider.sendVideo(targetGroup, lastVideo, "");
-                } else {
-                    await provider.sendImage(targetGroup, lastVideo, "");
-                }
-                console.log(`✅ Video reenviado al grupo ${targetGroup}`);
+                await activeProvider.sendMessage(targetGroup, "", { media: lastVideo });
+                console.log(`✅ Video reenviada al grupo ${targetGroup}`);
                 try {
                     fs.unlinkSync(lastVideo);
                     await state.update({ lastVideo: null });
@@ -145,13 +149,21 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                 console.log('SI_RESUMEN_G2: Solo se envía resumen al grupo y sheets.');
                 data.linkWS = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
 
-                const resumenConLink = `${resumen}\n\n🔗 [Chat del usuario](${data.linkWS})`;
+                // Limpiar posibles enlaces wa.me que la IA haya inventado
+                const resumenLimpio = resumen.replace(/https:\/\/wa\.me\/[0-9]+/g, '').trim();
+                const resumenConLink = `${resumenLimpio}\n\n🔗 [Chat del usuario](${data.linkWS})`;
+                
                 try {
-                    await provider.sendText(ID_GRUPO_RESUMEN_2, resumenConLink);
-                    console.log(`✅ SI_RESUMEN_G2: Resumen enviado a ${ID_GRUPO_RESUMEN_2}`);
-
-                    await sendMediaToGroup(provider, state, ID_GRUPO_RESUMEN_2, data);
-
+                    const isOfficialGroup = ID_GRUPO_RESUMEN_2 === ID_GRUPO_RESUMEN_2 && ID_GRUPO_RESUMEN_2.includes('@g.us');
+                    const activeProvider = isOfficialGroup ? groupProvider : provider;
+                    
+                    if (activeProvider) {
+                        await activeProvider.sendMessage(ID_GRUPO_RESUMEN_2, resumenConLink, {});
+                        console.log(`✅ SI_RESUMEN_G2: Resumen enviado a ${ID_GRUPO_RESUMEN_2} via ${isOfficialGroup ? 'Baileys' : 'YCloud'}`);
+                        await sendMediaToGroup(provider, state, ID_GRUPO_RESUMEN_2, data);
+                    } else {
+                        console.error(`❌ Provider no disponible para ${ID_GRUPO_RESUMEN_2}`);
+                    }
                 } catch (err: any) {
                     console.error(`❌ SI_RESUMEN_G2 Error:`, err?.message || err);
                 }
@@ -163,13 +175,20 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                 console.log('SI_RESUMEN: Solo se envía resumen al grupo y sheets.');
                 data.linkWS = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
 
-                const resumenConLink = `${resumen}\n\n🔗 [Chat del usuario](${data.linkWS})`;
+                const resumenLimpio = resumen.replace(/https:\/\/wa\.me\/[0-9]+/g, '').trim();
+                const resumenConLink = `${resumenLimpio}\n\n🔗 [Chat del usuario](${data.linkWS})`;
+                
                 try {
-                    await provider.sendText(ID_GRUPO_RESUMEN, resumenConLink);
-                    console.log(`✅ SI_RESUMEN: Resumen enviado a ${ID_GRUPO_RESUMEN}`);
-
-                    await sendMediaToGroup(provider, state, ID_GRUPO_RESUMEN, data);
-
+                    const isOfficialGroup = ID_GRUPO_RESUMEN.includes('@g.us');
+                    const activeProvider = isOfficialGroup ? groupProvider : provider;
+                    
+                    if (activeProvider) {
+                        await activeProvider.sendMessage(ID_GRUPO_RESUMEN, resumenConLink, {});
+                        console.log(`✅ SI_RESUMEN: Resumen enviado a ${ID_GRUPO_RESUMEN} via ${isOfficialGroup ? 'Baileys' : 'YCloud'}`);
+                        await sendMediaToGroup(provider, state, ID_GRUPO_RESUMEN, data);
+                    } else {
+                        console.error(`❌ Provider no disponible para ${ID_GRUPO_RESUMEN}`);
+                    }
                 } catch (err: any) {
                     console.error(`❌ SI_RESUMEN Error:`, err?.message || err);
                 }
@@ -182,19 +201,26 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                 console.log('Tipo desconocido, procesando como SI_RESUMEN por defecto.');
                 data.linkWS = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
 
-                const resumenConLink = `${resumen}\n\n🔗 [Chat del usuario](${data.linkWS})`;
+                const resumenLimpio = resumen.replace(/https:\/\/wa\.me\/[0-9]+/g, '').trim();
+                const resumenConLink = `${resumenLimpio}\n\n🔗 [Chat del usuario](${data.linkWS})`;
+                
                 try {
-                    await provider.sendText(ID_GRUPO_RESUMEN, resumenConLink);
-                    console.log(`✅ DEFAULT: Resumen enviado a ${ID_GRUPO_RESUMEN}`);
+                    const isOfficialGroup = ID_GRUPO_RESUMEN.includes('@g.us');
+                    const activeProvider = isOfficialGroup ? groupProvider : provider;
 
-                    await sendMediaToGroup(provider, state, ID_GRUPO_RESUMEN, data);
-
+                    if (activeProvider) {
+                        await activeProvider.sendMessage(ID_GRUPO_RESUMEN, resumenConLink, {});
+                        console.log(`✅ DEFAULT: Resumen enviado a ${ID_GRUPO_RESUMEN} via ${isOfficialGroup ? 'Baileys' : 'YCloud'}`);
+                        await sendMediaToGroup(provider, state, ID_GRUPO_RESUMEN, data);
+                    } else {
+                        console.error(`❌ Provider no disponible para ${ID_GRUPO_RESUMEN} (DEFAULT)`);
+                    }
                 } catch (err: any) {
                     console.error(`❌ DEFAULT Error:`, err?.message || err);
                 }
 
                 await addToSheet(data);
-                return;
+                return endFlow();
             }
         } catch (error) {
             console.error("Error al obtener el resumen de OpenAI:", error);
