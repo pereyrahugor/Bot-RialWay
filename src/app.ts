@@ -338,16 +338,16 @@ const main = async () => {
 
     // 4. Inicializar Provider Secundario (Grupos - Baileys)
     try {
-        console.log('📡 [GroupSync] Iniciando motor de grupos (Baileys)...');
+        console.log('📡 [GroupSync] Creando instancia de motor de grupos (Baileys)...');
         groupProvider = createProvider(BaileysProvider, {
-            version: [2, 3000, 1012759392], 
             groupsIgnore: false,
             readStatus: false,
             disableHttpServer: true
         });
 
+        // Configurar listeners ANTES de cualquier inicialización
         groupProvider.on('require_action', async (payload: any) => {
-            console.log('⚡ [GroupSync] require_action received. Payload type:', typeof payload);
+            console.log('⚡ [GroupSync] require_action received. Payload:', JSON.stringify(payload));
             let qrString = (typeof payload === 'string') ? payload : (payload?.qr || payload?.payload?.qr || payload?.code);
             
             if (qrString) {
@@ -365,15 +365,21 @@ const main = async () => {
         });
 
         groupProvider.on('ready', () => {
-             console.log('✅ [GroupSync] Motor de grupos conectado.');
+             console.log('✅ [GroupSync] Motor de grupos conectado satisfactoriamente.');
              const qrPath = path.join(process.cwd(), 'bot.groups.qr.png');
              if (fs.existsSync(qrPath)) fs.unlinkSync(qrPath);
         });
 
+        // Forzar arranque del motor secundario
+        console.log('📡 [GroupSync] Iniciando vendor del motor de grupos...');
+        if (groupProvider.initVendor) {
+            await groupProvider.initVendor();
+        }
+
         groupProvider.on('message', () => {}); 
 
     } catch (e) {
-        console.error('❌ [GroupSync] Fallo en motor de grupos:', e);
+        console.error('❌ [GroupSync] Error crítico en motor de grupos:', e);
     }
 
     // 4. Listeners del Provider
