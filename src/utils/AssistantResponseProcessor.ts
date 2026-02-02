@@ -33,10 +33,10 @@ export async function waitForActiveRuns(threadId: string) {
         const maxAttempts = 20; // 40-60 segundos total
         while (attempt < maxAttempts) {
             const runs = await openai.beta.threads.runs.list(threadId, { limit: 5 });
-            const activeRun = runs.data.find(run => 
+            const activeRun = runs.data.find(run =>
                 ["queued", "in_progress", "cancelling", "requires_action"].includes(run.status)
             );
-            
+
             if (activeRun) {
                 console.log(`[AssistantResponseProcessor] [${attempt}/${maxAttempts}] Run activo detectado (${activeRun.id}, estado: ${activeRun.status}). Esperando 2s...`);
                 await new Promise(resolve => setTimeout(resolve, 2000));
@@ -63,29 +63,29 @@ function limpiarBloquesJSON(texto: string): string {
     // 1. Preservar bloques especiales temporalmente
     const specialBlocks: string[] = [];
     let textoConMarcadores = texto;
-    
+
     // Preservar [DB_QUERY ...] (Soporta nuevo formato JSON y antiguo con dos puntos)
     textoConMarcadores = textoConMarcadores.replace(/\[\s*DB_QUERY\s*[:{][\s\S]*?\]/gi, (match) => {
         const index = specialBlocks.length;
         specialBlocks.push(match);
         return `___SPECIAL_BLOCK_${index}___`;
     });
-    
+
     // Preservar [API]...[/API] (Tolerante a espacios)
     textoConMarcadores = textoConMarcadores.replace(/\[\s*API\s*\][\s\S]*?\[\/\s*API\s*\]/gi, (match) => {
         const index = specialBlocks.length;
         specialBlocks.push(match);
         return `___SPECIAL_BLOCK_${index}___`;
     });
-    
+
     // 2. Limpiar referencias de OpenAI tipo 【4:0†archivo.pdf】
     let limpio = textoConMarcadores.replace(/【.*?】/g, "");
-    
+
     // 3. Restaurar bloques especiales
     specialBlocks.forEach((block, index) => {
         limpio = limpio.replace(`___SPECIAL_BLOCK_${index}___`, block);
     });
-    
+
     return limpio;
 }
 
@@ -109,7 +109,7 @@ export class AssistantResponseProcessor {
     static async analizarYProcesarRespuestaAsistente(
         response: any,
         ctx: any,
-                                                                                                                                                                                         flowDynamic: any,
+        flowDynamic: any,
         state: any,
         provider: any,
         gotoFlow: any,
@@ -144,25 +144,25 @@ export class AssistantResponseProcessor {
         } else {
             console.log('[WhatsApp Debug] Mensaje saliente al usuario (sin filtrar):', textResponse);
         }
-        
+
         // Log específico para debug de DB_QUERY
         console.log('[DEBUG] Buscando [DB_QUERY] en:', textResponse.substring(0, 200));
-        
+
         // 0) Detectar y procesar DB QUERY [DB_QUERY ...] (Soporta JSON y formato antiguo con dos puntos)
         const dbQueryRegex = /\[\s*DB_QUERY\s*[:\s]*([\s\S]*?)\]/i;
         const dbMatch = textResponse.match(dbQueryRegex);
         console.log('[DEBUG] DB Match result:', dbMatch ? 'FOUND' : 'NULL');
         if (dbMatch) {
             let sqlQuery = dbMatch[1].trim();
-            
+
             // Si el contenido empieza con '{', lo tratamos como JSON según nueva directiva
             if (sqlQuery.startsWith('{')) {
                 try {
                     const queryParams = JSON.parse(sqlQuery);
-                    const { TABLA, COLUMNA, DATO } = queryParams;
-                    // Construir la query formateada: SELECT * FROM "tabla" WHERE "columna" ILIKE '%dato%'
-                    // Se usan comillas dobles para nombres de tabla y columna para mayor seguridad/compatibilidad.
-                    sqlQuery = `SELECT * FROM "${TABLA}" WHERE "${COLUMNA}" ILIKE '%${DATO}%'`;
+                    const { TABLA, DATO } = queryParams;
+                    // Construir la query formateada: SELECT * FROM "tabla" WHERE "tabla"::text ILIKE '%dato%'
+                    // Se usan comillas dobles para nombres de tabla para mayor seguridad/compatibilidad.
+                    sqlQuery = `SELECT * FROM "${TABLA}" WHERE "${TABLA}"::text ILIKE '%${DATO}%'`;
                 } catch (e) {
                     console.error('[AssistantResponseProcessor] Error al parsear JSON de DB_QUERY:', e.message);
                 }
@@ -170,12 +170,12 @@ export class AssistantResponseProcessor {
 
             if (ctx && ctx.type === 'webchat') console.log(`[Webchat Debug] 🔄 Detectada solicitud de DB Query: ${sqlQuery}`);
             else console.log(`[WhatsApp Debug] 🔄 Detectada solicitud de DB Query: ${sqlQuery}`);
-            
+
             // Ejecutar Query
             const queryResult = await executeDbQuery(sqlQuery);
-            console.log(`[AssistantResponseProcessor] 📝 Resultado DB RAW:`, queryResult.substring(0, 500) + (queryResult.length > 500 ? "..." : "")); 
+            console.log(`[AssistantResponseProcessor] 📝 Resultado DB RAW:`, queryResult.substring(0, 500) + (queryResult.length > 500 ? "..." : ""));
             const feedbackMsg = `[SYSTEM_DB_RESULT]: ${queryResult}`;
-            
+
             // Obtener threadId de forma segura
             let threadId = ctx && ctx.thread_id;
             if (!threadId && state && typeof state.get === 'function') {
@@ -186,13 +186,13 @@ export class AssistantResponseProcessor {
             if (threadId) {
                 await waitForActiveRuns(threadId);
             } else {
-                 await new Promise(resolve => setTimeout(resolve, 2000));
+                await new Promise(resolve => setTimeout(resolve, 2000));
             }
 
             // Obtener nueva respuesta del asistente
             let newResponse: any;
             try {
-                 newResponse = await getAssistantResponse(ASSISTANT_ID, feedbackMsg, state, "Error procesando resultado DB.", ctx ? ctx.from : null, threadId);
+                newResponse = await getAssistantResponse(ASSISTANT_ID, feedbackMsg, state, "Error procesando resultado DB.", ctx ? ctx.from : null, threadId);
             } catch (err: any) {
                 // Si aún así falla por run activo, intentamos una vez más tras una espera larga
                 if (err?.message?.includes('active')) {
@@ -204,7 +204,7 @@ export class AssistantResponseProcessor {
                     return;
                 }
             }
-            
+
             // Recursión: procesar la nueva respuesta
             await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
                 newResponse, ctx, flowDynamic, state, provider, gotoFlow, getAssistantResponse, ASSISTANT_ID
@@ -270,7 +270,7 @@ export class AssistantResponseProcessor {
             if (apiResponse) {
                 // En lugar de enviar el JSON al usuario, se lo devolvemos al asistente para que responda algo natural
                 const feedbackMsg = `[SYSTEM_API_RESULT]: ${JSON.stringify(apiResponse)}`;
-                
+
                 let threadId = ctx?.thread_id;
                 if (!threadId && state?.get) threadId = state.get('thread_id');
 
@@ -305,7 +305,7 @@ export class AssistantResponseProcessor {
         }
 
         // Si no hubo bloque JSON válido, enviar el texto limpio
-    const cleanTextResponse = limpiarBloquesJSON(textResponse).trim();
+        const cleanTextResponse = limpiarBloquesJSON(textResponse).trim();
         // Lógica especial para reserva: espera y reintento
         if (cleanTextResponse.includes('Voy a proceder a realizar la reserva.')) {
             // Espera 30 segundos y responde ok al asistente
@@ -335,7 +335,7 @@ export class AssistantResponseProcessor {
                     try {
                         await flowDynamic([{ body: chunk.trim() }]);
                         // Pequeña pausa para evitar que WhatsApp ignore mensajes muy rápidos
-                        await new Promise(r => setTimeout(r, 600)); 
+                        await new Promise(r => setTimeout(r, 600));
                         if (ctx && ctx.type !== 'webchat') {
                             // console.log('[WhatsApp Debug] flowDynamic ejecutado correctamente');
                         }
