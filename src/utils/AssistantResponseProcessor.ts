@@ -160,9 +160,9 @@ export class AssistantResponseProcessor {
                 try {
                     const queryParams = JSON.parse(sqlQuery);
                     const { TABLA, DATO } = queryParams;
-                    // Construir la query formateada: SELECT * FROM "tabla" WHERE "tabla"::text ILIKE '%dato%'
-                    // Se usan comillas dobles para nombres de tabla para mayor seguridad/compatibilidad.
-                    sqlQuery = `SELECT * FROM "${TABLA}" WHERE "${TABLA}"::text ILIKE '%${DATO}%'`;
+                    // Construir la query formateada: SELECT * FROM "tabla" WHERE "tabla"::text ~* 'dato'
+                    // Se usa ~* para búsqueda regex case-insensitive, lo que permite búsquedas como 'Tacho|silla'
+                    sqlQuery = `SELECT * FROM "${TABLA}" WHERE "${TABLA}"::text ~* '${DATO}'`;
                 } catch (e) {
                     console.error('[AssistantResponseProcessor] Error al parsear JSON de DB_QUERY:', e.message);
                 }
