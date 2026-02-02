@@ -68,12 +68,12 @@ export async function executeDbQuery(sqlQuery: string): Promise<string> {
                 return "No se encontraron resultados.";
             }
 
-            // Ordenar por created_at descendente (más reciente primero) y limitar a 10
+            // Ordenar por created_at descendente (más reciente primero) y limitar a 50
             const sortedData = data.sort((a: any, b: any) => {
                 const dateA = new Date(a.created_at || 0).getTime();
                 const dateB = new Date(b.created_at || 0).getTime();
                 return dateB - dateA;
-            }).slice(0, 10);
+            }).slice(0, 50);
 
             return JSON.stringify(sortedData, null, 2);
 
