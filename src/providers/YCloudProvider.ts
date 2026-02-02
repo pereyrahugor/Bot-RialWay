@@ -82,7 +82,8 @@ class YCloudProvider extends ProviderClass {
                           msg.interactive?.button_reply?.title || 
                           msg.interactive?.list_reply?.title || 
                           msg.button?.text || '',
-                    from: msg.from.replace('+', ''),
+                    from: msg.waId || msg.from.replace('+', ''),
+                    phoneNumber: msg.from.replace('+', ''),
                     name: msg.customerProfile?.name || 'User',
                     type: msg.type,
                     payload: msg
@@ -93,13 +94,20 @@ class YCloudProvider extends ProviderClass {
                 body.entry?.forEach((entry: any) => {
                     entry.changes?.forEach((change: any) => {
                         if (change.value?.messages) {
+                            change.value.contacts?.forEach((contact: any) => {
+                                // Guardar wa_id del contacto para referencia si es necesario
+                            });
                             change.value.messages.forEach((msg: any) => {
+                                const waId = msg.from; // En el formato de Meta, 'from' en message suele ser el wa_id
+                                const phoneNumber = waId; // Por defecto
+                                
                                 const formatedMessage = {
                                     body: msg.text?.body || 
                                           msg.interactive?.button_reply?.title || 
                                           msg.interactive?.list_reply?.title || 
                                           msg.button?.text || '',
-                                    from: msg.from.replace('+', ''),
+                                    from: waId,
+                                    phoneNumber: phoneNumber,
                                     name: msg.profile?.name || 'User',
                                     type: msg.type,
                                     payload: msg

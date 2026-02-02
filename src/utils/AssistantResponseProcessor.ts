@@ -178,13 +178,15 @@ export class AssistantResponseProcessor {
             // Obtener nueva respuesta del asistente
             let newResponse: any;
             try {
-                 newResponse = await getAssistantResponse(ASSISTANT_ID, feedbackMsg, state, "Error procesando resultado DB.", ctx ? ctx.from : null, threadId);
+                 const contextId = ctx ? (ctx.phoneNumber || ctx.from) : null;
+                 newResponse = await getAssistantResponse(ASSISTANT_ID, feedbackMsg, state, "Error procesando resultado DB.", contextId, threadId);
             } catch (err: any) {
                 // Si aún así falla por run activo, intentamos una vez más tras una espera larga
                 if (err?.message?.includes('active')) {
                     console.log("[AssistantResponseProcessor] Re-intentando tras detectar run activo residual (DB)...");
                     await new Promise(resolve => setTimeout(resolve, 5000));
-                    newResponse = await getAssistantResponse(ASSISTANT_ID, feedbackMsg, state, "Error procesando resultado DB.", ctx ? ctx.from : null, threadId);
+                    const contextId = ctx ? (ctx.phoneNumber || ctx.from) : null;
+                    newResponse = await getAssistantResponse(ASSISTANT_ID, feedbackMsg, state, "Error procesando resultado DB.", contextId, threadId);
                 } else {
                     console.error("Error al obtener respuesta recursiva (DB):", err);
                     return;
@@ -265,13 +267,15 @@ export class AssistantResponseProcessor {
 
                 let newResponse: any;
                 try {
-                    newResponse = await getAssistantResponse(ASSISTANT_ID, feedbackMsg, state, "Error procesando resultado API.", ctx?.from, threadId);
+                    const contextId = ctx ? (ctx.phoneNumber || ctx.from) : null;
+                    newResponse = await getAssistantResponse(ASSISTANT_ID, feedbackMsg, state, "Error procesando resultado API.", contextId, threadId);
                 } catch (err: any) {
                     // Si falla por run activo, intentamos una vez más tras una espera larga
                     if (err?.message?.includes('active')) {
                         console.log("[AssistantResponseProcessor] Re-intentando tras detectar run activo residual (API)...");
                         await new Promise(resolve => setTimeout(resolve, 5000));
-                        newResponse = await getAssistantResponse(ASSISTANT_ID, feedbackMsg, state, "Error procesando resultado API.", ctx?.from, threadId);
+                        const contextId = ctx ? (ctx.phoneNumber || ctx.from) : null;
+                        newResponse = await getAssistantResponse(ASSISTANT_ID, feedbackMsg, state, "Error procesando resultado API.", contextId, threadId);
                     } else {
                         console.error("Error al obtener respuesta recursiva tras API:", err);
                         if (unblockUser) unblockUser();
@@ -296,12 +300,13 @@ export class AssistantResponseProcessor {
         if (cleanTextResponse.includes('Voy a proceder a realizar la reserva.')) {
             // Espera 30 segundos y responde ok al asistente
             await new Promise(res => setTimeout(res, 30000));
-            let assistantApiResponse = await getAssistantResponse(ASSISTANT_ID, 'ok', state, undefined, ctx.from, ctx.from);
+            const contextId = ctx ? (ctx.phoneNumber || ctx.from) : null;
+            let assistantApiResponse = await getAssistantResponse(ASSISTANT_ID, 'ok', state, undefined, contextId, contextId);
             // Si la respuesta contiene (ID: ...), no la envíes al usuario, espera 10s y vuelve a enviar ok
             while (assistantApiResponse && /(ID:\s*\w+)/.test(assistantApiResponse)) {
                 console.log('[Debug] Respuesta contiene ID de reserva, esperando 10s y reenviando ok...');
                 await new Promise(res => setTimeout(res, 10000));
-                assistantApiResponse = await getAssistantResponse(ASSISTANT_ID, 'ok', state, undefined, ctx.from, ctx.from);
+                assistantApiResponse = await getAssistantResponse(ASSISTANT_ID, 'ok', state, undefined, contextId, contextId);
             }
             // Cuando la respuesta no contiene el ID, envíala al usuario
             if (assistantApiResponse) {
