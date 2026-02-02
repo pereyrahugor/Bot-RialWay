@@ -1,162 +1,146 @@
-# Implementación de YCloud Provider (Meta API)
+# Implementación de Sistema Dual: YCloud (Principal) y Baileys (Grupos)
 
-Esta guía detalla cómo implementar el proveedor `YCloudProvider` en otros repositorios de BuilderBot para conectar con la API oficial de WhatsApp a través de YCloud, eliminando la dependencia de la conexión por QR (Baileys) para la conversación principal.
+Este documento detalla cómo logramos la convivencia de la API Oficial (YCloud/Meta) para conversaciones individuales y el motor Baileys para el envío de reportes a grupos de WhatsApp, integrando persistencia en la nube.
 
-## 1. Archivos Requeridos
+## 1. Arquitectura de Proveedores
 
-Debes copiar el archivo `YCloudProvider.ts` en tu carpeta de proveedores (por ejemplo: `src/providers/`).
+Para superar las limitaciones de la API oficial con respecto a los grupos, configuramos dos proveedores en `app.ts`:
 
-### Código del Provider (`src/providers/YCloudProvider.ts`)
+*   **`adapterProvider` (YCloudProvider)**: Maneja el 100% de la mensajería individual y los flujos entrantes.
+*   **`groupProvider` (BaileysProvider)**: Un motor secundario dedicado exclusivamente a interactuar con grupos de WhatsApp (donde la API oficial no llega o es limitada).
 
-Este adaptador hereda de `ProviderClass` y maneja:
-*   El envío de mensajes vía HTTP POST a la API de YCloud.
-*   La recepción de mensajes vía Webhook y su conversión a eventos de BuilderBot.
+### Configuración en `app.ts`
 
-*(Puedes copiar el código fuente actual del archivo `src/providers/YCloudProvider.ts` de este repositorio).*
-
-## 2. Variables de Entorno (.env)
-
-Configura las siguientes variables en tu archivo `.env` y en tu plataforma de despliegue (Railway, Docker, etc.):
-
-```env
-# API Key generada en el panel de YCloud
-YCLOUD_API_KEY=tu_api_key_aqui
-
-# Tu número de WhatsApp Business activo en YCloud (WABA Number)
-# Formato internacional sin + (ej: 5491122334455)
-YCLOUD_WABA_NUMBER=54911xxxxxxxx
-
-# URL base de tu proyecto desplegado (usado solo para imprimir logs de ayuda)
-PROJECT_URL=https://tu-proyecto.up.railway.app
-```
-
-## 3. Modificaciones en `app.ts`
-
-### Importar el Provider
 ```typescript
-import { createProvider } from "@builderbot/bot";
+// ... imports
 import { YCloudProvider } from "./providers/YCloudProvider";
-import { initGroupSender } from "./utils/groupSender"; // Si usas envíos a grupos
-```
+import { BaileysProvider } from "builderbot-provider-sherpa";
 
-### Inicializar el Provider Principal (YCloud)
-Reemplaza `BaileysProvider` (o cualquier otro) por `YCloudProvider`.
+export let adapterProvider;
+export let groupProvider;
 
-```typescript
-const adapterProvider = createProvider(YCloudProvider, {});
-```
+const main = async () => {
+    // 1. Restaurar sesión de grupos ANTES de inicializar
+    await restoreSessionFromDb('groups');
 
-### Configurar el Webhook
-Debes exponer una ruta POST para recibir los mensajes de YCloud.
+    // 2. Inicializar YCloud (Principal)
+    adapterProvider = createProvider(YCloudProvider, {});
 
-```typescript
-const app = adapterProvider.server;
+    // 3. Inicializar Baileys (Grupos)
+    groupProvider = createProvider(BaileysProvider, {
+        version: [2, 3000, 1030817285],
+        groupsIgnore: false,
+        readStatus: false,
+        disableHttpServer: true
+    });
 
-app.post('/webhook', (req, res) => {
-    adapterProvider.handleWebhook(req, res);
-});
-```
-
-### Inicialización de Provider Secundario (Grupos)
-**Para repositorios que necesiten enviar mensajes a Grupos de WhatsApp:**
-La API de Meta tiene restricciones para enviar mensajes a grupos. Por ello, mantenemos una instancia secundaria de Baileys exclusivamente para esta función.
-
-1.  Copia el archivo `src/utils/groupSender.ts`.
-2.  Importa e inicializa en `main()` (dentro de `app.ts`, antes de crear el bot):
-    ```typescript
-    await initGroupSender(); 
-    ```
-    *(Esto iniciará la sincronización de sesión y generará `bot.groups.qr.png` si es necesario).*
-3.  **Importante al usar `groupProvider` en Flujos**:
-    Para evitar problemas de instancias `undefined`, importa siempre el provider usando **rutas relativas** (ej: `../utils/groupSender`) y **no alias** (ej: evita `~/utils/groupSender` o `@/utils/groupSender` si tu transpilador no garantiza Singletons).
+    // 4. Iniciar Sincronización de Sesión (Supabase)
+    startSessionSync('groups'); 
     
-    Además, valida siempre la existencia del método antes de llamar:
-    ```typescript
-    import { groupProvider } from '../utils/groupSender';
+    // ... resto de la lógica de creación del bot
+}
+```
 
-    // ... dentro de tu acción ...
-    if (groupProvider && typeof groupProvider.sendMessage === 'function') {
-        await groupProvider.sendMessage(ID_GRUPO_RESUMEN, mensaje, {});
-    } else {
-        console.error("Provider de Grupos no disponible");
-    }
-    ```
+## 2. Persistencia de Sesión con Supabase
 
-## 4. Reportes de Alta Fiabilidad (Reporte Premium)
+Para evitar perder la conexión de los grupos en cada despliegue (entornos efímeros como Railway), implementamos un sistema de sincronización en `src/utils/sessionSync.ts`:
 
-Debido a las inestabilidades de las librerías basadas en QR (Baileys) para el envío a grupos (errores de `No sessions` o `MAC failure`), la mejor práctica actual es enviar los reportes/resúmenes directamente a un número de WhatsApp administrativo utilizando la **API Oficial (YCloud)**.
+*   **Restauración**: `restoreSessionFromDb('groups')` descarga los archivos `creds.json` y archivos de estado desde Supabase a la carpeta local `bot_sessions/`.
+*   **Sincronización**: `startSessionSync('groups')` realiza un "checkpoint" a los 30s, 2m y luego cada hora, subiendo un backup comprimido (JSON) a Supabase.
 
-### Configuración del Reporte:
-1.  **Variable de Entorno**: Define `ID_GRUPO_RESUMEN` con el número de teléfono del administrador.
-    *   Formato: Código de país + Código de área + Número (ej: `5491130792789`).
-    *   **NO** usar `@s.whatsapp.net` ni símbolos como `+`.
-2.  **Uso en Flujos**: El bot detectará automáticamente que el destino es un número y usará la API oficial, garantizando un 100% de entrega.
+### Archivos clave:
+*   `src/utils/sessionSync.ts`: Contiene la lógica de `upsert` y `restore` usando el cliente de Supabase.
 
----
+## 3. Captura de QR para Grupos
 
-## 5. Filtro de Seguridad contra Bucles Infinitos (Eco Filter)
-
-Al usar APIs oficiales (YCloud/Meta), es frecuente recibir un webhook de "confirmación de envío" que el bot puede interpretar erróneamente como un mensaje entrante de un nuevo usuario. Si este mensaje por error activa un flujo (como el `idleFlow`), se generará un **bucle infinito de mensajes cada 10-15 minutos**.
-
-### Implementación Obligatoria en `app.ts`:
-Debes filtrar los mensajes cuyo remitente sea el mismo número del bot antes de procesarlos:
+Dado que el `groupProvider` es secundario y no maneja el servidor HTTP principal, implementamos listeners específicos en `app.ts` para capturar el QR y guardarlo como imagen:
 
 ```typescript
-export const processUserMessage = async (ctx, { flowDynamic, state, provider, gotoFlow }) => {
-  const userId = ctx.from;
-  const botNumber = (process.env.YCLOUD_WABA_NUMBER || '').replace(/\D/g, '');
-  
-  // FILTRO DE SEGURIDAD: Evitar que el bot procese su propio eco
-  if (userId.replace(/\D/g, '') === botNumber) {
-      const { stop } = await import('./utils/timeOut');
-      stop(ctx); // Detiene cualquier timer de inactividad preventivamente
-      return;
-  }
-  // ... resto de la lógica
+const handleQR = async (qrString: string) => {
+    if (qrString) {
+        const qrPath = path.join(process.cwd(), 'bot.groups.qr.png');
+        await QRCode.toFile(qrPath, qrString, { scale: 10, margin: 2 });
+        console.log(`✅ [GroupSync] QR guardado en ${qrPath}`);
+    }
+};
+
+groupProvider.on('require_action', async (payload) => {
+    const qr = (typeof payload === 'string') ? payload : (payload?.qr || payload?.code);
+    await handleQR(qr);
+});
+// También escuchamos eventos 'qr' y 'auth_require' por redundancia.
 ```
+
+## 4. Implementación en `IdleFlow` (Selección de Provider)
+
+La magia ocurre en los flujos. El bot debe decidir qué "brazo" usar para enviar el mensaje. 
+
+### Lógica de selección (`src/Flows/idleFlow.ts`):
+
+```typescript
+import { groupProvider } from '../app';
+
+async function sendMediaToGroup(provider: any, state: any, targetGroup: string, data: any) {
+    // Detectamos si el destino es un grupo oficial (@g.us)
+    const isOfficialGroup = targetGroup.includes('@g.us');
+    
+    // Si es grupo, usamos groupProvider (Baileys); si no, usamos provider (YCloud)
+    const activeProvider = isOfficialGroup ? groupProvider : provider;
+
+    if (activeProvider) {
+        await activeProvider.sendMessage(targetGroup, "Mensaje", { media: "ruta/archivo" });
+    }
+}
+```
+
+### Detalle detallado del flujo:
+1.  **Contexto**: El usuario termina una conversación.
+2.  **ID Destino**: El bot tiene variables como `ID_GRUPO_RESUMEN` (que puede ser un número individual o un ID de grupo `@g.us`).
+3.  **Acción**: Se verifica si el ID contiene `@g.us`.
+4.  **Ejecución**:
+    *   Si **SÍ** es grupo: Se usa la instancia exportada de `groupProvider`.
+    *   Si **NO** es grupo: Se usa el `provider` inyectado por BuilderBot (YCloud).
+
+## 5. Corrección de Identificadores (YCloud)
+
+Para asegurar que el asistente mantenga el contexto correcto mientras el proveedor usa el identificador técnico:
+
+*   **`wa_id`**: Utilizado para la entrega de mensajes física (campo `from` en el provider).
+*   **`phoneNumber`**: Utilizado para el contexto de OpenAI (evita problemas con números de Brasil o cambios de formato).
+
+En `YCloudProvider.ts`:
+```typescript
+const formatedMessage = {
+    // ...
+    from: msg.waId || msg.from.replace('+', ''), // Para el motor de BuilderBot
+    phoneNumber: msg.from.replace('+', ''),       // Para nuestra lógica de contexto
+    // ...
+};
+```
+
+En `app.ts`:
+```typescript
+const contextId = ctx.phoneNumber || ctx.from;
+const response = await getAssistantResponse(..., contextId, ...);
+```
+
+## 6. Portabilidad a otro Repositorio
+
+Para replicar esto en otro proyecto, necesitas:
+
+1.  **Copiar Proveedores**: `src/providers/YCloudProvider.ts`.
+2.  **Copiar Utils**: `src/utils/sessionSync.ts` y configurar las tablas en Supabase.
+3.  **Configurar `app.ts`**:
+    *   Exportar ambos providers.
+    *   Configurar los listeners de QR para el provider secundario.
+    *   Importar y ejecutar `restoreSessionFromDb` y `startSessionSync`.
+4.  **Adaptar Flujos**:
+    *   Importar `groupProvider` desde `app`.
+    *   Implementar la lógica de discriminación `isOfficialGroup`.
+5.  **Variables de Entorno**:
+    *   `YCLOUD_API_KEY`, `YCLOUD_WABA_NUMBER`.
+    *   `SUPABASE_URL`, `SUPABASE_KEY`.
+    *   `ID_GRUPO_RESUMEN` (Asegúrate de que incluya `@g.us` si es para Baileys).
 
 ---
-
-## 6. Buenas Prácticas en `idleFlow`
-
-Para asegurar que los resúmenes de reserva sean limpios y los estados del bot se cierren correctamente:
-
-1.  **Cierre de Estado**: Siempre utiliza `return endFlow()` al finalizar el envío de un resumen. Esto previene que el bot mantenga un estado de conversación "fantasma" que reactive el temporizador innecesariamente.
-2.  **Limpieza de Enlaces**: Si usas IA para generar el resumen, esta puede inventar enlaces `wa.me`. Limpia el texto antes de pegarle el enlace real generado por el bot:
-    ```typescript
-    const resumenLimpio = resumen.replace(/https:\/\/wa\.me\/[0-9]+/g, '').trim();
-    const resumenConLink = `${resumenLimpio}\n\n🔗 [Chat](${data.linkWS})`;
-    ```
-3.  **linkWS Robusto**: Asegúrate de que el enlace de WhatsApp al usuario se genere desde el `ctx.from` (o número del cliente real) y nunca desde el número del bot o del reporte.
-
----
-
-## 7. Configuración en YCloud
-
-1.  Accede a tu cuenta en [YCloud Console](https://console.ycloud.com).
-2.  Ve a **WhastApp** > **Integration** (o Webhooks).
-3.  En **Webhook URL**, ingresa la URL completa de tu bot:
-    `https://tu-proyecto.up.railway.app/webhook`
-4.  Asegúrate de marcar los eventos (events) a los que te quieres suscribir, principalmente:
-    *   `whatsapp.inbound_message.received` (o `messages` en la config de Meta).
-5.  Guarda los cambios.
-
-## 8. Verificación
-
-Al iniciar tu bot, deberías ver en la consola un mensaje indicando la URL del webhook si configuraste `PROJECT_URL`:
-
-```
-✅ YCloud Webhook URL (Configurar en Panel): https://tu-proyecto.up.railway.app/webhook
-```
-
-Al enviar un mensaje a tu número de WhatsApp, el bot debería recibirlo a través del webhook y procesarlo con el flujo configurado.
-
-Si usas el Provider de Grupos, verás logs adicionales:
-```
-🔌 [GroupSender] Iniciando Proveedor Baileys secundario para Grupos...
-✅ [GroupSender] Provider de Grupos conectado y listo.
-```
-Si el filtro de seguridad está activo y un mensaje de eco llega, verás en la consola:
-```
-🛑 [Security] Mensaje de eco detectado desde el número del bot. Ignorando.
-```
+*Nota: Siempre usa `instanceof` o chequeos de tipo al llamar a `groupProvider` para evitar errores si el motor secundario aún no ha sincronizado.*
