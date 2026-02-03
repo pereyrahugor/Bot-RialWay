@@ -65,7 +65,7 @@ function limpiarBloquesJSON(texto: string): string {
     let textoConMarcadores = texto;
 
     // Preservar [DB_QUERY ...] o [DB ...] (Soporta nuevo formato JSON y antiguo con dos puntos)
-    textoConMarcadores = textoConMarcadores.replace(/\[\s*(?:DB_QUERY|DB)\s*[:{][\s\S]*?\]/gi, (match) => {
+    textoConMarcadores = textoConMarcadores.replace(/\[\s*(?:DB_QUERY|DB)\s*[:\s]*[\s\S]*?\]/gi, (match) => {
         const index = specialBlocks.length;
         specialBlocks.push(match);
         return `___SPECIAL_BLOCK_${index}___`;
@@ -140,20 +140,30 @@ export class AssistantResponseProcessor {
 
         // Log de mensaje saliente al usuario (antes de cualquier filtro)
         if (ctx && ctx.type === 'webchat') {
-            console.log('[Webchat Debug] Mensaje saliente al usuario (sin filtrar):', textResponse);
+            console.log('[Webchat Debug] Mensaje saliente al asistente -> usuario:', textResponse);
         } else {
-            console.log('[WhatsApp Debug] Mensaje saliente al usuario (sin filtrar):', textResponse);
+            console.log('[WhatsApp Debug] Mensaje saliente al asistente -> usuario:', textResponse);
         }
 
-        // Log específico para debug de DB_QUERY
-        console.log('[DEBUG] Buscando [DB_QUERY] en:', textResponse.substring(0, 200));
-
         // 0) Detectar y procesar DB QUERY [DB_QUERY ...] o [DB ...] (Soporta JSON y formato antiguo con dos puntos)
-        const dbQueryRegex = /\[\s*(?:DB_QUERY|DB)\s*[:\s]*([\s\S]*?)\]/i;
+        // Regex mejorada: más flexible con espacios y caracteres alrededor
+        const dbQueryRegex = /\[\s*(?:DB_QUERY|DB)\s*[:\s]*(\{[\s\S]*?\}|[\s\S]*?)\]/i;
         const dbMatch = textResponse.match(dbQueryRegex);
-        console.log('[DEBUG] DB Match result:', dbMatch ? 'FOUND' : 'NULL');
+        
         if (dbMatch) {
+            console.log('[AssistantResponseProcessor] 🎯 DB Match detectado:', dbMatch[0]);
             let sqlQuery = dbMatch[1].trim();
+
+            // Enviar cualquier texto que esté ANTES del tag, para no perderlo
+            const tagIndex = textResponse.indexOf(dbMatch[0]);
+            if (tagIndex > 0) {
+                const preamble = textResponse.substring(0, tagIndex).trim();
+                const cleanPreamble = limpiarBloquesJSON(preamble);
+                if (cleanPreamble.length > 0) {
+                    console.log('[AssistantResponseProcessor] 📤 Enviando preámbulo antes de DB Query:', cleanPreamble);
+                    await flowDynamic([{ body: cleanPreamble }]);
+                }
+            }
 
             // Si el contenido empieza con '{', lo tratamos como JSON según nueva directiva
             if (sqlQuery.startsWith('{')) {
@@ -220,7 +230,18 @@ export class AssistantResponseProcessor {
         const match = textResponse.match(apiBlockRegex);
         if (match) {
             const jsonStr = match[1].trim();
-            console.log('[Debug] Bloque [API] detectado:', jsonStr);
+            console.log('[AssistantResponseProcessor] 🎯 Bloque [API] detectado:', jsonStr);
+
+            // Enviar preámbulo si existe
+            const apiTagIndex = textResponse.indexOf(match[0]);
+            if (apiTagIndex > 0) {
+                const preamble = textResponse.substring(0, apiTagIndex).trim();
+                const cleanPreamble = limpiarBloquesJSON(preamble);
+                if (cleanPreamble.length > 0) {
+                    await flowDynamic([{ body: cleanPreamble }]);
+                }
+            }
+
             try {
                 jsonData = JSON.parse(jsonStr);
             } catch (e) {
