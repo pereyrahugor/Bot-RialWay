@@ -145,6 +145,55 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                 return await reconFlow.start();
                 // No cerrar el hilo aquí, dejar abierto para que el usuario pueda responder
                 // Bloque SI_RESUMEN_G2
+            } else if (tipo === 'SI_REPORTAR_SEGUIR') {
+                // Se envía resumen al grupo y se activa seguimiento
+                console.log('SI_REPORTAR_SEGUIR: Se envía resumen al grupo y se realiza seguimiento.');
+                data.linkWS = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
+
+                const resumenLimpio = resumen.replace(/https:\/\/wa\.me\/[0-9]+/g, '').trim();
+                const resumenConLink = `${resumenLimpio}\n\n🔗 [Chat del usuario](${data.linkWS})`;
+
+                try {
+                    const isOfficialGroup = ID_GRUPO_RESUMEN.includes('@g.us');
+                    const activeProvider = isOfficialGroup ? groupProvider : provider;
+
+                    if (activeProvider) {
+                        await activeProvider.sendMessage(ID_GRUPO_RESUMEN, resumenConLink, {});
+                        console.log(`✅ SI_REPORTAR_SEGUIR: Resumen enviado a ${ID_GRUPO_RESUMEN} via ${isOfficialGroup ? 'Baileys' : 'YCloud'}`);
+                        await sendMediaToGroup(provider, state, ID_GRUPO_RESUMEN, data);
+                    } else {
+                        console.error(`❌ Provider no disponible para ${ID_GRUPO_RESUMEN}`);
+                    }
+                } catch (err: any) {
+                    console.error(`❌ SI_REPORTAR_SEGUIR Error:`, err?.message || err);
+                }
+
+                await addToSheet(data);
+
+                const reconFlow = new ReconectionFlow({
+                    ctx,
+                    state,
+                    provider,
+                    maxAttempts: 3,
+                    onSuccess: async (newData) => {
+                        // Derivar al flujo conversacional usando gotoFlow
+                        if (typeof ctx.gotoFlow === 'function') {
+                            if (ctx.type === 'voice_note' || ctx.type === 'VOICE_NOTE') {
+                                const mod = await import('./welcomeFlowVoice');
+                                await ctx.gotoFlow(mod.welcomeFlowVoice);
+                            } else {
+                                const mod = await import('./welcomeFlowTxt');
+                                await ctx.gotoFlow(mod.welcomeFlowTxt);
+                            }
+                        }
+                    },
+                    onFail: async () => {
+                        console.log('SI_REPORTAR_SEGUIR: No se obtuvo respuesta luego del seguimiento.');
+                    }
+                });
+                return await reconFlow.start();
+                // No cerrar el hilo aquí, dejar abierto para que el usuario pueda responder
+                // Bloque SI_RESUMEN_G2
             } else if (tipo === 'SI_RESUMEN_G2') {
                 console.log('SI_RESUMEN_G2: Solo se envía resumen al grupo y sheets.');
                 data.linkWS = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
