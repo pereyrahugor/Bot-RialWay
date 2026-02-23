@@ -70,6 +70,13 @@ function limpiarBloquesJSON(texto: string): string {
         specialBlocks.push(match);
         return `___SPECIAL_BLOCK_${index}___`;
     });
+
+    // Preservar [DB: "T":"tabla", "D":"dato"]
+    textoConMarcadores = textoConMarcadores.replace(/\[\s*DB\s*:\s*[\s\S]*?\]/gi, (match) => {
+        const index = specialBlocks.length;
+        specialBlocks.push(match);
+        return `___SPECIAL_BLOCK_${index}___`;
+    });
     
     // Preservar [API]...[/API] (Tolerante a espacios)
     textoConMarcadores = textoConMarcadores.replace(/\[\s*API\s*\][\s\S]*?\[\/\s*API\s*\]/gi, (match) => {
@@ -148,17 +155,46 @@ export class AssistantResponseProcessor {
         // Log específico para debug de DB_QUERY
         console.log('[DEBUG] Buscando [DB_QUERY] en:', textResponse.substring(0, 200));
         
-        // 0) Detectar y procesar DB QUERY [DB_QUERY: ...] (Permitiendo espacios opcionales tras el corchete y alrededor de los dos puntos)
+        let dbQueryMatchRegexResult = null;
+        let sqlQueryToExecute = "";
+
+        // 0.a) Detectar y procesar DB QUERY [DB_QUERY: ...] (Permitiendo espacios opcionales tras el corchete y alrededor de los dos puntos)
         const dbQueryRegex = /\[\s*DB_QUERY\s*:\s*([\s\S]*?)\]/i;
         const dbMatch = textResponse.match(dbQueryRegex);
-        console.log('[DEBUG] DB Match result:', dbMatch ? 'FOUND' : 'NULL');
+        
+        // 0.b) Detectar y procesar DB simple [DB: "T":"tabla", "D":"dato"]
+        const dbSimpleRegex = /\[\s*DB\s*:\s*([\s\S]*?)\]/i;
+        const dbSimpleMatch = textResponse.match(dbSimpleRegex);
+        
         if (dbMatch) {
-            const sqlQuery = dbMatch[1].trim();
-            if (ctx && ctx.type === 'webchat') console.log(`[Webchat Debug] 🔄 Detectada solicitud de DB Query: ${sqlQuery}`);
-            else console.log(`[WhatsApp Debug] 🔄 Detectada solicitud de DB Query: ${sqlQuery}`);
-            
+             console.log('[DEBUG] DB Match result: FOUND [DB_QUERY]');
+             sqlQueryToExecute = dbMatch[1].trim();
+             dbQueryMatchRegexResult = true;
+             if (ctx && ctx.type === 'webchat') console.log(`[Webchat Debug] 🔄 Detectada solicitud de DB Query: ${sqlQueryToExecute}`);
+             else console.log(`[WhatsApp Debug] 🔄 Detectada solicitud de DB Query: ${sqlQueryToExecute}`);
+        } else if (dbSimpleMatch) {
+             console.log('[DEBUG] DB Match result: FOUND [DB] simple');
+             const dataString = '{' + dbSimpleMatch[1].trim() + '}';
+             try {
+                 const parsedData = JSON.parse(dataString);
+                 if (parsedData.T && parsedData.D) {
+                     sqlQueryToExecute = `SELECT * FROM "${parsedData.T}" WHERE "${parsedData.T}"::text ~* '${parsedData.D}'`;
+                     dbQueryMatchRegexResult = true;
+                     if (ctx && ctx.type === 'webchat') console.log(`[Webchat Debug] 🔄 Detectada solicitud de DB simple: ${sqlQueryToExecute}`);
+                     else console.log(`[WhatsApp Debug] 🔄 Detectada solicitud de DB simple: ${sqlQueryToExecute}`);
+                 } else {
+                     console.log('[DEBUG] JSON en [DB] no contiene T o D validos');
+                 }
+             } catch (e) {
+                 console.log('[DEBUG] Error parseando JSON en [DB]:', e.message);
+             }
+        } else {
+             console.log('[DEBUG] DB Match result: NULL');
+        }
+
+        if (dbQueryMatchRegexResult) {
             // Ejecutar Query
-            const queryResult = await executeDbQuery(sqlQuery);
+            const queryResult = await executeDbQuery(sqlQueryToExecute);
             console.log(`[AssistantResponseProcessor] 📝 Resultado DB RAW:`, queryResult.substring(0, 500) + (queryResult.length > 500 ? "..." : "")); 
             const feedbackMsg = `[SYSTEM_DB_RESULT]: ${queryResult}`;
             
