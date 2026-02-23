@@ -427,9 +427,9 @@ const main = async () => {
     // Inicializar servidor Polka propio para WebChat y QR
     const app = adapterProvider.server;
 
-    // Middleware para parsear JSON en el body con limite ampliado para archivos
-    app.use(bodyParser.json({ limit: '50mb' }));
-    app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
+    // Middleware global de body-parser eliminado o reducido para no chocar
+    // app.use(bodyParser.json({ limit: '50mb' }));
+    // app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
     // 1. Middleware de compatibilidad (res.json, res.send, res.sendFile, etc)
     app.use((req, res, next) => {
@@ -706,7 +706,10 @@ const main = async () => {
         });
     };
 
-    app.post('/webchat-api', async (req, res) => {
+    const webchatJsonParser = bodyParser.json({ limit: '50mb' });
+    const webchatUrlencodedParser = bodyParser.urlencoded({ limit: '50mb', extended: true });
+
+    app.post('/webchat-api', webchatJsonParser, webchatUrlencodedParser, async (req, res) => {
         if (!req.body || (!req.body.message && !req.body.file)) {
             return res.status(400).json({ error: "Falta 'message' o 'file'" });
         }
