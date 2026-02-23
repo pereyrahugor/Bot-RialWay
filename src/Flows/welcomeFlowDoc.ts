@@ -81,14 +81,14 @@ export const welcomeFlowDoc = addKeyword<BaileysProvider, MemoryDB>(EVENTS.DOCUM
             // Limpiar archivos temporales SIEMPRE
             if (imagenesGeneradas.length > 0) {
                 for (const imgPath of imagenesGeneradas) {
-                    try { fs.unlinkSync(imgPath); } catch (e) { /* Ignorar error al borrar imagen temporal */ }
+                    try { fs.unlinkSync(imgPath); } catch (e) { console.error("Ignorado:", e.message); }
                 }
             }
             if (outputDir && fs.existsSync(outputDir)) {
-                try { fs.rmSync(outputDir, { recursive: true, force: true }); } catch (e) { /* Ignorar error al borrar carpeta temporal */ }
+                try { fs.rmSync(outputDir, { recursive: true, force: true }); } catch (e) { console.error("Ignorado:", e.message); }
             }
             if (localPath && fs.existsSync(localPath)) {
-                try { fs.unlinkSync(localPath); } catch (e) { /* Ignorar error al borrar PDF temporal */ }
+                try { fs.unlinkSync(localPath); } catch (e) { console.error("Ignorado:", e.message); }
             }
         }
     });

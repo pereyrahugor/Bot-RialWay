@@ -132,6 +132,65 @@ async function sendMessage() {
     }
 }
 
+// Evento para el clip de adjuntos
+const fileInput = document.getElementById('fileInput');
+const attachBtn = document.getElementById('attach');
+
+if (attachBtn) {
+    attachBtn.onclick = function (e) {
+        e.preventDefault();
+        fileInput.click();
+    };
+}
+
+if (fileInput) {
+    fileInput.onchange = async function () {
+        const file = fileInput.files[0];
+        if (!file) return;
+
+        // Reset UI altura (usa BASE_H)
+        autosizeSmart(textarea);
+
+        const reader = new FileReader();
+        reader.onload = async () => {
+            const base64 = reader.result.split(',')[1];
+            let type = 'document';
+            if (file.type.startsWith('image/')) type = 'image';
+            else if (file.type.startsWith('audio/')) type = 'audio';
+            else if (file.type.startsWith('video/')) type = 'video';
+
+            const msgPayload = {
+                message: "",
+                file: {
+                    base64: base64,
+                    name: file.name,
+                    mime: file.type || 'application/octet-stream',
+                    type: type
+                }
+            };
+
+            const displayType = type === 'image' ? '🖼️' : (type === 'video' ? '📽️' : '📎');
+            addMessage(`${displayType} ${file.name}`, 'user');
+            fileInput.value = '';
+
+            try {
+                const res = await fetch('/webchat-api', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(msgPayload)
+                });
+                const data = await res.json();
+                if (data.reply) {
+                    addMessage(data.reply, 'bot');
+                }
+            } catch (err) {
+                addMessage('Hubo un error enviando el archivo.', 'bot');
+            }
+        };
+        reader.readAsDataURL(file);
+    };
+}
+
 // Enter envía / Shift+Enter = nueva línea
 sendBtn.onclick = sendMessage
 input.addEventListener('keydown', function (e) {

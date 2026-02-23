@@ -424,8 +424,9 @@ const main = async () => {
     // Inicializar servidor Polka propio para WebChat y QR
     const app = adapterProvider.server;
 
-    // Middleware para parsear JSON en el body
-    app.use(bodyParser.json());
+    // Middleware para parsear JSON en el body con limite ampliado para archivos
+    app.use(bodyParser.json({ limit: '50mb' }));
+    app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
     // 1. Middleware de compatibilidad (res.json, res.send, res.sendFile, etc)
     app.use((req, res, next) => {
@@ -691,7 +692,7 @@ const main = async () => {
                         await state.clear();
                         replyText = "🔄 Chat reiniciado.";
                     } else {
-                        await processUserMessage({ from: ip, body: msg, type: 'webchat' }, { flowDynamic, state, provider: undefined, gotoFlow: () => { } });
+                        await processUserMessage({ from: ip, body: msg, type: 'webchat' }, { flowDynamic, state, provider: undefined, gotoFlow: () => { /* no-op */ } });
                     }
                     socket.emit('reply', replyText);
                 } catch (err) {
@@ -703,15 +704,73 @@ const main = async () => {
     };
 
     app.post('/webchat-api', async (req, res) => {
-        if (!req.body || !req.body.message) {
-            return res.status(400).json({ error: "Falta 'message'" });
+        if (!req.body || (!req.body.message && !req.body.file)) {
+            return res.status(400).json({ error: "Falta 'message' o 'file'" });
         }
         try {
-            const message = req.body.message;
+            let message = req.body.message || "";
             let ip = '';
             const xff = req.headers['x-forwarded-for'];
             if (typeof xff === 'string') ip = xff.split(',')[0];
             else ip = req.ip || '';
+
+            if (req.body.file) {
+                const file = req.body.file;
+                const mimetype = file.mime || '';
+                const base64Data = file.base64;
+                const ext = mimetype.split('/')[1] || 'bin';
+                
+                try {
+                    const fs = await import('fs');
+                    const path = await import('path');
+                    const buffer = Buffer.from(base64Data, 'base64');
+                    
+                    if (mimetype.startsWith('image/')) {
+                        const localDir = path.join("./temp/");
+                        if (!fs.existsSync(localDir)) fs.mkdirSync(localDir, { recursive: true });
+                        const localPath = path.join(localDir, Date.now() + "." + ext);
+                        fs.writeFileSync(localPath, buffer);
+                        console.log(`[Webchat-API] Imagen guardada en ${localPath}`);
+
+                        const { OpenAI } = await import('openai');
+                        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY_IMG });
+                        const response = await openai.chat.completions.create({
+                            model: "gpt-4o",
+                            messages: [{
+                                role: "user",
+                                content: [
+                                    { type: "text", text: "Describe esta imagen detalladamente para que el asistente pueda entender su contenido y responder al usuario." },
+                                    { type: "image_url", image_url: { url: `data:${mimetype};base64,${base64Data}` } }
+                                ]
+                            }]
+                        });
+                        const result = response.choices[0].message.content || "No se pudo obtener una descripción de la imagen.";
+                        message = `[Imagen recibida]: ${result} \n${message}`;
+
+                    } else if (mimetype.startsWith('audio/') || mimetype.startsWith('video/')) {
+                        const localDir = path.join("./temp/voiceNote/");
+                        if (!fs.existsSync(localDir)) fs.mkdirSync(localDir, { recursive: true });
+                        const localPath = path.join(localDir, Date.now() + "." + ext);
+                        fs.writeFileSync(localPath, buffer);
+                        console.log(`[Webchat-API] Audio/Video guardado en ${localPath}`);
+
+                        try {
+                            const { transcribeAudioFile } = await import('./utils/audioTranscriptior.js');
+                            const transcription = await transcribeAudioFile(localPath);
+                            message = `[Audio/Video transcrito]: ${transcription} \n${message}`;
+                        } catch (err) {
+                            console.error('[Webchat-API] Error transcribiendo audio/video:', err);
+                            message = `[Error] No se pudo procesar el audio/video. \n${message}`;
+                        }
+                    } else {
+                        // Document
+                        message = `[Archivo adjunto] ${file.name} (no soportado para lectura directa) \n${message}`;
+                    }
+                } catch (e) {
+                    console.error('[Webchat-API] Error procesando archivo:', e);
+                    message = `[Error al procesar archivo adjunto] \n${message}`;
+                }
+            }
 
             const { getOrCreateThreadId, sendMessageToThread, deleteThread } = await import('./utils-web/openaiThreadBridge');
             const session = webChatManager.getSession(ip);
@@ -727,7 +786,7 @@ const main = async () => {
 
                 const state = {
                     get: (key) => key === 'thread_id' ? session.thread_id : undefined,
-                    update: async () => { },
+                    update: async () => { /* no-op */ },
                     clear: async () => session.clear(),
                 };
 
@@ -748,7 +807,7 @@ const main = async () => {
                     flowDynamic,
                     state,
                     undefined,
-                    () => { },
+                    () => { /* no-op */ },
                     webChatAdapterFn,
                     ASSISTANT_ID
                 );

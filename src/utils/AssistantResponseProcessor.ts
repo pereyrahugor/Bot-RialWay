@@ -343,9 +343,7 @@ export class AssistantResponseProcessor {
             if (assistantApiResponse) {
                 try {
                     await flowDynamic([{ body: limpiarBloquesJSON(String(assistantApiResponse)).trim() }]);
-                    if (ctx && ctx.type !== 'webchat') {
-                        // console.log('[WhatsApp Debug] flowDynamic ejecutado correctamente');
-                    }
+                    // flowDynamic ejecutado correctamente
                 } catch (err) {
                     console.error('[WhatsApp Debug] Error en flowDynamic:', err);
                 }
@@ -358,9 +356,7 @@ export class AssistantResponseProcessor {
                         await flowDynamic([{ body: chunk.trim() }]);
                         // Pequeña pausa para evitar que WhatsApp ignore mensajes muy rápidos
                         await new Promise(r => setTimeout(r, 600)); 
-                        if (ctx && ctx.type !== 'webchat') {
-                            // console.log('[WhatsApp Debug] flowDynamic ejecutado correctamente');
-                        }
+                        // flowDynamic ejecutado correctamente
                     } catch (err) {
                         console.error('[WhatsApp Debug] Error en flowDynamic:', err);
                     }
