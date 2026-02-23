@@ -26,6 +26,10 @@ import { welcomeFlowVideo } from "./Flows/welcomeFlowVideo";
 import { welcomeFlowDoc } from "./Flows/welcomeFlowDoc";
 import { locationFlow } from "./Flows/locationFlow";
 import { welcomeFlowButton } from "./Flows/welcomeFlowButton";
+import OpenAI from "openai";
+import { transcribeAudioFile } from "./utils/audioTranscriptior";
+import { getOrCreateThreadId, sendMessageToThread, deleteThread } from "./utils-web/openaiThreadBridge";
+import { waitForActiveRuns } from "./utils/AssistantResponseProcessor";
 import { AssistantResponseProcessor } from "./utils/AssistantResponseProcessor";
 import { updateMain } from "./addModule/updateMain";
 import { ErrorReporter } from "./utils/errorReporter";
@@ -69,7 +73,6 @@ export const safeToAsk = async (assistantId: string, message: string, state: any
     const threadId = state && typeof state.get === 'function' && state.get('thread_id');
     if (threadId) {
         try {
-            const { waitForActiveRuns } = await import('./utils/AssistantResponseProcessor.js');
             await waitForActiveRuns(threadId);
         } catch (err) {
             console.error('[safeToAsk] Error esperando runs activos:', err);
@@ -721,8 +724,6 @@ const main = async () => {
                 const ext = mimetype.split('/')[1] || 'bin';
                 
                 try {
-                    const fs = await import('fs');
-                    const path = await import('path');
                     const buffer = Buffer.from(base64Data, 'base64');
                     
                     if (mimetype.startsWith('image/')) {
@@ -732,7 +733,6 @@ const main = async () => {
                         fs.writeFileSync(localPath, buffer);
                         console.log(`[Webchat-API] Imagen guardada en ${localPath}`);
 
-                        const { OpenAI } = await import('openai');
                         const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY_IMG });
                         const response = await openai.chat.completions.create({
                             model: "gpt-4o",
@@ -755,7 +755,6 @@ const main = async () => {
                         console.log(`[Webchat-API] Audio/Video guardado en ${localPath}`);
 
                         try {
-                            const { transcribeAudioFile } = await import('./utils/audioTranscriptior.js');
                             const transcription = await transcribeAudioFile(localPath);
                             message = `[Audio/Video transcrito]: ${transcription} \n${message}`;
                         } catch (err) {
@@ -772,7 +771,6 @@ const main = async () => {
                 }
             }
 
-            const { getOrCreateThreadId, sendMessageToThread, deleteThread } = await import('./utils-web/openaiThreadBridge');
             const session = webChatManager.getSession(ip);
             let replyText = '';
 
