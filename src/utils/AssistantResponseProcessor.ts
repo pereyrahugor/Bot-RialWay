@@ -57,7 +57,7 @@ export async function waitForActiveRuns(threadId: string) {
 
 // Mapa global para bloquear usuarios de WhatsApp durante operaciones API
 const userApiBlockMap = new Map();
-const API_BLOCK_TIMEOUT_MS = 1000; // 5 segundos
+const API_BLOCK_TIMEOUT_MS = 5000; // 5 segundos
 
 function limpiarBloquesJSON(texto: string): string {
     // 1. Preservar bloques especiales temporalmente
@@ -121,9 +121,14 @@ export class AssistantResponseProcessor {
         provider: any,
         gotoFlow: any,
         getAssistantResponse: Function,
-        ASSISTANT_ID: string
+        ASSISTANT_ID: string,
+        recursionDepth: number = 0
     ) {
-        // Soporte para tool/function call genérico
+        if (recursionDepth > 5) {
+            console.error('[AssistantResponseProcessor] Límite de recursión alcanzado (5). Abortando para evitar bucle infinito.');
+            await flowDynamic([{ body: "Lo siento, hubo un problema procesando la respuesta. Por favor, intenta de nuevo." }]);
+            return;
+        }
         // if (response && typeof response === 'object' && response.tool_call) {
         //     // Espera que response.tool_call tenga { name, parameters }
         //     const toolResponse = handleToolFunctionCall(response.tool_call);
@@ -143,20 +148,23 @@ export class AssistantResponseProcessor {
             }
         }
         let jsonData: any = null;
-        const textResponse = typeof response === "string" ? response : String(response || "");
+        // Sanitización y normalización del texto de respuesta
+        const textResponseRaw = typeof response === "string" ? response : String(response || "");
+        const textResponse = textResponseRaw.replace(/\0/g, '').trim();
 
         // Log de mensaje saliente al usuario (antes de cualquier filtro)
         if (ctx && ctx.type === 'webchat') {
-            console.log('[Webchat Debug] Mensaje saliente al usuario (sin filtrar):', textResponse);
+            console.log('[Webchat Debug] Mensaje saliente al usuario (sin filtrar):', textResponse.substring(0, 500));
         } else {
-            console.log('[WhatsApp Debug] Mensaje saliente al usuario (sin filtrar):', textResponse);
+            console.log('[WhatsApp Debug] Mensaje saliente al usuario (sin filtrar):', textResponse.substring(0, 500));
         }
         
         // Log específico para debug de DB_QUERY
         console.log('[DEBUG] Buscando [DB_QUERY] en:', textResponse.substring(0, 200));
         
-        let dbQueryMatchRegexResult = null;
+        let dbQueryMatchRegexResult = false;
         let sqlQueryToExecute = "";
+        const sanitizedTextResponse = textResponse; // Alias para compatibilidad con mis edits anteriores fallidos si los hubiera
 
         // 0.a) Detectar y procesar DB QUERY [DB_QUERY: ...] (Permitiendo espacios opcionales tras el corchete y alrededor de los dos puntos)
         const dbQueryRegex = /\[\s*DB_QUERY\s*:\s*([\s\S]*?)\]/i;
@@ -229,14 +237,14 @@ export class AssistantResponseProcessor {
             
             // Recursión: procesar la nueva respuesta
             await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
-                newResponse, ctx, flowDynamic, state, provider, gotoFlow, getAssistantResponse, ASSISTANT_ID
+                newResponse, ctx, flowDynamic, state, provider, gotoFlow, getAssistantResponse, ASSISTANT_ID, recursionDepth + 1
             );
             return; // Terminar ejecución actual
         }
 
         // 1) Extraer bloque [API] ... [/API] (Tolerante a espacios)
         const apiBlockRegex = /\[\s*API\s*\]([\s\S]*?)\[\/\s*API\s*\]/is;
-        const match = textResponse.match(apiBlockRegex);
+        const match = sanitizedTextResponse.match(apiBlockRegex);
         if (match) {
             const jsonStr = match[1].trim();
             console.log('[Debug] Bloque [API] detectado:', jsonStr);
@@ -319,7 +327,7 @@ export class AssistantResponseProcessor {
 
                 // Recursión: procesar la respuesta final del asistente
                 await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
-                    newResponse, ctx, flowDynamic, state, provider, gotoFlow, getAssistantResponse, ASSISTANT_ID
+                    newResponse, ctx, flowDynamic, state, provider, gotoFlow, getAssistantResponse, ASSISTANT_ID, recursionDepth + 1
                 );
                 return;
             }
@@ -327,17 +335,20 @@ export class AssistantResponseProcessor {
         }
 
         // Si no hubo bloque JSON válido, enviar el texto limpio
-    const cleanTextResponse = limpiarBloquesJSON(textResponse).trim();
+    const cleanTextResponse = limpiarBloquesJSON(sanitizedTextResponse).trim();
         // Lógica especial para reserva: espera y reintento
         if (cleanTextResponse.includes('Voy a proceder a realizar la reserva.')) {
             // Espera 30 segundos y responde ok al asistente
             await new Promise(res => setTimeout(res, 30000));
-            let assistantApiResponse = await getAssistantResponse(ASSISTANT_ID, 'ok', state, undefined, ctx.from, ctx.from);
+            let threadId = ctx?.thread_id;
+            if (!threadId && state?.get) threadId = state.get('thread_id');
+            
+            let assistantApiResponse = await getAssistantResponse(ASSISTANT_ID, 'ok', state, undefined, ctx.from, threadId);
             // Si la respuesta contiene (ID: ...), no la envíes al usuario, espera 10s y vuelve a enviar ok
             while (assistantApiResponse && /(ID:\s*\w+)/.test(assistantApiResponse)) {
                 console.log('[Debug] Respuesta contiene ID de reserva, esperando 10s y reenviando ok...');
                 await new Promise(res => setTimeout(res, 10000));
-                assistantApiResponse = await getAssistantResponse(ASSISTANT_ID, 'ok', state, undefined, ctx.from, ctx.from);
+                assistantApiResponse = await getAssistantResponse(ASSISTANT_ID, 'ok', state, undefined, ctx.from, threadId);
             }
             // Cuando la respuesta no contiene el ID, envíala al usuario
             if (assistantApiResponse) {
