@@ -327,7 +327,7 @@ const main = async () => {
 
     // 3. Inicializar Provider ÚNICO
     adapterProvider = createProvider(BaileysProvider, {
-        version: [2, 3000, 1030817285],
+        version: [2, 3000, 1033950307],
         groupsIgnore: false,
         readStatus: false,
         disableHttpServer: true,
