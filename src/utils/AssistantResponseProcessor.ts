@@ -182,21 +182,27 @@ export class AssistantResponseProcessor {
              else console.log(`[WhatsApp Debug] 🔄 Detectada solicitud de DB Query: ${sqlQueryToExecute}`);
         } else if (dbSimpleMatch) {
              console.log('[DEBUG] DB Match result: FOUND [DB] simple');
-             const dataString = '{' + dbSimpleMatch[1].trim() + '}';
+             let jsonContent = dbSimpleMatch[1].trim();
+             // Asegurar que tenga llaves para ser un JSON válido
+             if (!jsonContent.startsWith('{')) jsonContent = '{' + jsonContent + '}';
+             
              try {
-                 const parsedData = JSON.parse(dataString);
+                 const parsedData = JSON.parse(jsonContent);
                  if (parsedData.T && parsedData.D) {
-                     sqlQueryToExecute = `SELECT * FROM "${parsedData.T}" WHERE "${parsedData.T}"::text ~* '${parsedData.D}'`;
+                     // Escapar comillas simples en el dato para evitar errores de SQL
+                     const safeDato = String(parsedData.D).replace(/'/g, "''");
+                     sqlQueryToExecute = `SELECT * FROM "${parsedData.T}" WHERE "${parsedData.T}"::text ~* '${safeDato}'`;
                      dbQueryMatchRegexResult = true;
                      if (ctx && ctx.type === 'webchat') console.log(`[Webchat Debug] 🔄 Detectada solicitud de DB simple: ${sqlQueryToExecute}`);
                      else console.log(`[WhatsApp Debug] 🔄 Detectada solicitud de DB simple: ${sqlQueryToExecute}`);
                  } else {
-                     console.log('[DEBUG] JSON en [DB] no contiene T o D validos');
+                     console.log('[DEBUG] JSON en [DB] no contiene T o D validos:', parsedData);
                  }
              } catch (e) {
-                 console.log('[DEBUG] Error parseando JSON en [DB]:', e.message);
+                 console.log('[DEBUG] Error parseando JSON en [DB]:', e.message, 'Content:', jsonContent);
              }
-        } else {
+        }
+ else {
              console.log('[DEBUG] DB Match result: NULL');
         }
 
