@@ -16,6 +16,7 @@ function toArgentinaTime(fechaReservaStr: string): string {
 import { executeDbQuery } from '../utils/dbHandler';
 import { JsonBlockFinder } from "../Api-Google/JsonBlockFinder";
 import { CalendarEvents } from "../Api-Google/calendarEvents";
+import { downloadFileFromDrive } from './googleDriveHandler';
 import fs from 'fs';
 import moment from 'moment';
 import OpenAI from "openai";
@@ -92,6 +93,9 @@ function limpiarBloquesJSON(texto: string): string {
     // Se incluye opcionalmente una coma al final por si el asistente lo envía como parte de un array incompleto
     limpio = limpio.replace(/\{\s*"queries"\s*:\s*\[[\s\S]*?\]\s*\}[\s,]*?/gi, "");
     
+    // 2c. Limpiar bloques de PDF [PDF: ID]
+    limpio = limpio.replace(/\[\s*PDF\s*:\s*[\s\S]*?\]/gi, "");
+
     // 3. Restaurar bloques especiales
     specialBlocks.forEach((block, index) => {
         limpio = limpio.replace(`___SPECIAL_BLOCK_${index}___`, block);
@@ -344,8 +348,24 @@ export class AssistantResponseProcessor {
             if (unblockUser) unblockUser();
         }
 
-        // Si no hubo bloque JSON válido, enviar el texto limpio
-    const cleanTextResponse = limpiarBloquesJSON(sanitizedTextResponse).trim();
+
+        // 4) Procesar [PDF: ID] si existen
+        const pdfRegex = /\[\s*PDF\s*:\s*([a-zA-Z0-9_-]+)\s*\]/gi;
+        const pdfPaths: string[] = [];
+        let pdfMatch;
+
+        // Usar sanitizedTextResponse para buscar los IDs antes de limpiar
+        while ((pdfMatch = pdfRegex.exec(sanitizedTextResponse)) !== null) {
+            const fileId = pdfMatch[1];
+            try {
+                const filePath = await downloadFileFromDrive(fileId);
+                pdfPaths.push(filePath);
+            } catch (err: any) {
+                console.error(`[PDF Processor] Error con ID ${fileId}:`, err.message);
+            }
+        }
+
+        const cleanTextResponse = limpiarBloquesJSON(sanitizedTextResponse).trim();
         // Lógica especial para reserva: espera y reintento
         if (cleanTextResponse.includes('Voy a proceder a realizar la reserva.')) {
             // Espera 30 segundos y responde ok al asistente
@@ -369,7 +389,7 @@ export class AssistantResponseProcessor {
                     console.error('[WhatsApp Debug] Error en flowDynamic:', err);
                 }
             }
-        } else if (cleanTextResponse.length > 0) {
+        } else if (cleanTextResponse.length > 0 || pdfPaths.length > 0) {
             const chunks = cleanTextResponse.split(/\n\n+/);
             for (const chunk of chunks) {
                 if (chunk.trim().length > 0) {
@@ -381,6 +401,18 @@ export class AssistantResponseProcessor {
                     } catch (err) {
                         console.error('[WhatsApp Debug] Error en flowDynamic:', err);
                     }
+                }
+            }
+
+            // Enviar PDFs recolectados
+            for (const path of pdfPaths) {
+                try {
+                    console.log(`[AssistantResponseProcessor] Enviando media: ${path}`);
+                    await flowDynamic([{ body: "📄 Documento adjunto:", media: path }]);
+                    // Breve espera entre archivos para asegurar el orden
+                    await new Promise(r => setTimeout(r, 1000));
+                } catch (err) {
+                    console.error('[WhatsApp Debug] Error enviando PDF:', err);
                 }
             }
         }
