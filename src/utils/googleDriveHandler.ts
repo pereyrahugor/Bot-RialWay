@@ -1,32 +1,13 @@
 import { google } from "googleapis";
-import "dotenv/config";
+import { createGoogleAuth } from "./googleAuth";
 import fs from "fs";
 import path from "path";
 import { finished } from "stream/promises";
 
-// Limpiar la clave privada: quitar comillas si existen y manejar saltos de línea
-let rawKey = process.env.GOOGLE_PRIVATE_KEY || "";
-if (rawKey.startsWith('"') && rawKey.endsWith('"')) {
-    rawKey = rawKey.slice(1, -1);
-}
-const private_key = rawKey.replace(/\\n/g, '\n');
-
-const credentials = {
-    client_email: process.env.GOOGLE_CLIENT_EMAIL,
-    private_key: private_key,
-};
-
-if (!private_key) {
-    console.error("❌ [Drive] GOOGLE_PRIVATE_KEY no está definida en las variables de entorno.");
-}
-
-const auth = new google.auth.GoogleAuth({
-    credentials,
-    scopes: [
-        "https://www.googleapis.com/auth/drive.readonly",
-        "https://www.googleapis.com/auth/drive.file"
-    ],
-});
+const auth = createGoogleAuth([
+    "https://www.googleapis.com/auth/drive.readonly",
+    "https://www.googleapis.com/auth/drive.file"
+]);
 
 const drive = google.drive({ version: "v3", auth });
 

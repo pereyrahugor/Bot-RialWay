@@ -20,16 +20,10 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY;
 const supabase = (supabaseUrl && supabaseKey) ? createClient(supabaseUrl, supabaseKey) : null;
 
-// Construir credenciales desde variables de entorno
-const credentials = {
-    client_email: process.env.GOOGLE_CLIENT_EMAIL,
-    private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-};
+import { createGoogleAuth } from "../utils/googleAuth";
 
-const auth = new google.auth.GoogleAuth({
-    credentials,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-});
+// Construir credenciales usando la utilidad centralizada
+const auth = createGoogleAuth(["https://www.googleapis.com/auth/spreadsheets"]);
 
 const sheets = google.sheets({ version: "v4", auth });
 const openai = new OpenAI();
