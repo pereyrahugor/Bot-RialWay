@@ -38,6 +38,7 @@ import { WebChatManager } from './utils-web/WebChatManager';
 import { fileURLToPath } from 'url';
 import { getArgentinaDatetimeString } from "./utils/ArgentinaTime";
 import { RailwayApi } from "./Api-RailWay/Railway";
+import { withRetry } from "./utils/retryHelper";
 
 //import { imgResponseFlow } from "./Flows/imgResponse";
 //import { listImg } from "./addModule/listImg";
@@ -47,7 +48,8 @@ import { RailwayApi } from "./Api-RailWay/Railway";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Instancia global de WebChatManager para sesiones webchat
 const webChatManager = new WebChatManager();
-// Eliminado: processUserMessageWeb. Usar lógica principal para ambos canales.
+const openaiMain = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openaiVision = new OpenAI({ apiKey: process.env.OPENAI_API_KEY_IMG });
 
 /** Puerto en el que se ejecutará el servidor (Railway usa 8080 por defecto) */
 const PORT = process.env.PORT || 8080;
@@ -55,8 +57,11 @@ const PORT = process.env.PORT || 8080;
 export const ASSISTANT_ID = process.env.ASSISTANT_ID;
 const ID_GRUPO_RESUMEN = process.env.ID_GRUPO_RESUMEN ?? "";
 
-const userQueues = new Map();
-const userLocks = new Map();
+import { userQueues, userLocks, handleQueue, registerProcessCallback } from "./utils/queueManager";
+registerProcessCallback(async (item) => {
+    const { ctx, flowDynamic, state, provider, gotoFlow } = item;
+    await processUserMessage(ctx, { flowDynamic, state, provider, gotoFlow });
+});
 
 
 // Listener para generar el archivo QR manualmente cuando se solicite
@@ -240,25 +245,8 @@ export const processUserMessage = async (
 };
 
 
-const handleQueue = async (userId) => {
-    const queue = userQueues.get(userId);
-
-    if (userLocks.get(userId)) return;
-
-    userLocks.set(userId, true);
-
-    while (queue.length > 0) {
-        const { ctx, flowDynamic, state, provider, gotoFlow } = queue.shift();
-        try {
-            await processUserMessage(ctx, { flowDynamic, state, provider, gotoFlow });
-        } catch (error) {
-            console.error(`Error procesando el mensaje de ${userId}:`, error);
-        }
-    }
-
-    userLocks.set(userId, false);
-    userQueues.delete(userId);
-};
+// La función handleQueue ya está importada de queueManager y sabe procesar vía el callback registrado.
+const handleQueueWrapper = handleQueue;
 
 // Función auxiliar para verificar si existe sesión activa (Local o Remota)
 const hasActiveSession = async () => {
@@ -336,18 +324,21 @@ const main = async () => {
     });
 
     // 4. Listeners del Provider
+    let isGeneratingQR = false;
     adapterProvider.on('require_action', async (payload: any) => {
-        console.log('⚡ [Provider] require_action received. Payload:', payload);
-        let qrString = null;
-        if (typeof payload === 'string') {
-            qrString = payload;
-        } else if (payload && typeof payload === 'object') {
-            if (payload.qr) qrString = payload.qr;
-            else if (payload.code) qrString = payload.code;
-        }
-        if (qrString && typeof qrString === 'string') {
-            console.log('⚡ [Provider] QR Code detected (length: ' + qrString.length + '). Generating image...');
-            try {
+        try {
+            if (isGeneratingQR) return;
+            isGeneratingQR = true;
+            console.log('⚡ [Provider] require_action received.');
+            let qrString = null;
+            if (typeof payload === 'string') {
+                qrString = payload;
+            } else if (payload && typeof payload === 'object') {
+                if (payload.qr) qrString = payload.qr;
+                else if (payload.code) qrString = payload.code;
+            }
+            if (qrString && typeof qrString === 'string') {
+                console.log('⚡ [Provider] QR Code detected. Generating image...');
                 const qrPath = path.join(process.cwd(), 'bot.qr.png');
                 await QRCode.toFile(qrPath, qrString, {
                     color: { dark: '#000000', light: '#ffffff' },
@@ -355,9 +346,19 @@ const main = async () => {
                     margin: 2
                 });
                 console.log(`✅ [Provider] QR Image saved to ${qrPath}`);
-            } catch (err) {
-                console.error('❌ [Provider] Error generating QR image:', err);
             }
+        } catch (err) {
+            console.error('❌ [Provider] Error generating QR image:', err);
+        } finally {
+            isGeneratingQR = false;
+        }
+    });
+
+    adapterProvider.on('host_failure', (payload) => {
+        try {
+            console.log('⚠️ [Provider] HOST_FAILURE: Problema de conexión con WhatsApp.', payload);
+        } catch (e) {
+            console.error('[Provider] Error in host_failure listener:', e);
         }
     });
 
@@ -404,11 +405,6 @@ const main = async () => {
         console.log('❌ [Provider] AUTH_FAILURE: Error de autenticación.', payload);
     });
 
-    // Evento adicional para detectar desconexiones
-    adapterProvider.on('host_failure', (payload) => {
-        console.log('⚠️ [Provider] HOST_FAILURE: Problema de conexión con WhatsApp.', payload);
-    });
-
     errorReporter = new ErrorReporter(adapterProvider, ID_GRUPO_RESUMEN);
 
     console.log("📌 Inicializando datos desde Google Sheets...");
@@ -433,9 +429,9 @@ const main = async () => {
     // Inicializar servidor Polka propio para WebChat y QR
     const app = adapterProvider.server;
 
-    // Middleware global de body-parser eliminado o reducido para no chocar
-    // app.use(bodyParser.json({ limit: '50mb' }));
-    // app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
+    // Middleware global de body-parser para manejar payloads grandes en todas las rutas
+    app.use(bodyParser.json({ limit: '50mb' }));
+    app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
     // 1. Middleware de compatibilidad (res.json, res.send, res.sendFile, etc)
     app.use((req, res, next) => {
@@ -712,10 +708,7 @@ const main = async () => {
         });
     };
 
-    const webchatJsonParser = bodyParser.json({ limit: '50mb' });
-    const webchatUrlencodedParser = bodyParser.urlencoded({ limit: '50mb', extended: true });
-
-    app.post('/webchat-api', webchatJsonParser, webchatUrlencodedParser, async (req, res) => {
+    app.post('/webchat-api', async (req, res) => {
         if (!req.body || (!req.body.message && !req.body.file)) {
             return res.status(400).json({ error: "Falta 'message' o 'file'" });
         }
@@ -742,18 +735,23 @@ const main = async () => {
                         fs.writeFileSync(localPath, buffer);
                         console.log(`[Webchat-API] Imagen guardada en ${localPath}`);
 
-                        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY_IMG });
-                        const response = await openai.chat.completions.create({
-                            model: "gpt-4o",
-                            messages: [{
-                                role: "user",
-                                content: [
-                                    { type: "text", text: "Describe esta imagen detalladamente para que el asistente pueda entender su contenido y responder al usuario." },
-                                    { type: "image_url", image_url: { url: `data:${mimetype};base64,${base64Data}` } }
-                                ]
-                            }]
+                        const visionResponse = await withRetry(async () => {
+                            return await openaiVision.chat.completions.create({
+                                model: "gpt-4o",
+                                messages: [{
+                                    role: "user",
+                                    content: [
+                                        { type: "text", text: "Describe esta imagen detalladamente para que el asistente pueda entender su contenido y responder al usuario. Si ves texto, transcríbelo." },
+                                        { type: "image_url", image_url: { url: `data:${mimetype};base64,${base64Data}` } }
+                                    ]
+                                }]
+                            });
+                        }, {
+                            maxRetries: 3,
+                            onRetry: (err, attempt) => console.warn(`[Webchat-Vision] Reintento ${attempt} por error: ${err.message}`)
                         });
-                        const result = response.choices[0].message.content || "No se pudo obtener una descripción de la imagen.";
+                        
+                        const result = visionResponse.choices?.[0]?.message?.content || "No se pudo obtener una descripción de la imagen.";
                         message = `[Imagen recibida]: ${result} \n${message}`;
 
                     } else if (mimetype.startsWith('audio/') || mimetype.startsWith('video/')) {

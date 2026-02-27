@@ -23,7 +23,7 @@ import { welcomeFlowTxt } from "./welcomeFlowTxt";
 import { welcomeFlowVideo } from "./welcomeFlowVideo";
 import { OpenAI } from "openai";
 import { reset } from "../utils/timeOut";
-import { handleQueue, userQueues, userLocks } from "../app";
+import { userQueues, userLocks, handleQueue } from "../utils/queueManager";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY_IMG });
 const setTime = Number(process.env.timeOutCierre) * 60 * 1000;
@@ -126,6 +126,7 @@ const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
       if (!userLocks.get(userId) && userQueues.get(userId).length === 1) {
         await handleQueue(userId);
       }
+
       
       console.log(`💾 Imagen guardada para resumen: ${localPath}`);
     } catch (err) {

@@ -1,15 +1,23 @@
 import OpenAI from 'openai';
+import { withRetry } from '../utils/retryHelper';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 /**
- * Obtiene o crea un thread_id para el usuario webchat
+ * Obtiene o crea un thread_id para el usuario webchat con reintentos para fallos de red.
  * @param store objeto de sesión por IP
  * @returns thread_id
  */
 export async function getOrCreateThreadId(store: { thread_id?: string | null }) {
   if (store.thread_id) return store.thread_id;
-  const thread = await openai.beta.threads.create();
+  
+  const thread = await withRetry(async () => {
+    return await openai.beta.threads.create();
+  }, {
+    maxRetries: 3,
+    onRetry: (err, attempt) => console.log(`[ThreadBridge] Reintento ${attempt} creando thread por error: ${err.message}`)
+  });
+
   store.thread_id = thread.id;
   return thread.id;
 }
