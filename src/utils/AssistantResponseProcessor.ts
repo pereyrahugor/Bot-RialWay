@@ -87,6 +87,10 @@ function limpiarBloquesJSON(texto: string): string {
     
     // 2. Limpiar referencias de OpenAI tipo 【4:0†archivo.pdf】
     let limpio = textoConMarcadores.replace(/【.*?】/g, "");
+
+    // 2b. Limpiar bloques JSON de "queries" que a veces fuga el asistente de OpenAI (File Search / Web Search)
+    // Se incluye opcionalmente una coma al final por si el asistente lo envía como parte de un array incompleto
+    limpio = limpio.replace(/\{\s*"queries"\s*:\s*\[[\s\S]*?\]\s*\}[\s,]*?/gi, "");
     
     // 3. Restaurar bloques especiales
     specialBlocks.forEach((block, index) => {

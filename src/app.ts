@@ -368,15 +368,18 @@ const main = async () => {
         // Detección de botones para Sherpa/Baileys
         const isButton = ctx.message?.buttonsResponseMessage || 
                          ctx.message?.templateButtonReplyMessage || 
-                         ctx.message?.interactiveResponseMessage;
+                         ctx.message?.interactiveResponseMessage ||
+                         ctx.message?.listResponseMessage;
         
         if (isButton) {
-            console.log('🔘 Interacción de botón detectada');
+            console.log('🔘 Interacción de botón/lista detectada');
             // Mapear el texto del botón al body para que el flujo pueda procesarlo
             if (ctx.message?.buttonsResponseMessage) {
-                ctx.body = ctx.message.buttonsResponseMessage.selectedDisplayText;
+                ctx.body = ctx.message.buttonsResponseMessage.selectedDisplayText || ctx.message.buttonsResponseMessage.selectedId;
             } else if (ctx.message?.templateButtonReplyMessage) {
-                ctx.body = ctx.message.templateButtonReplyMessage.selectedDisplayText;
+                ctx.body = ctx.message.templateButtonReplyMessage.selectedDisplayText || ctx.message.templateButtonReplyMessage.selectedId;
+            } else if (ctx.message?.listResponseMessage) {
+                ctx.body = ctx.message.listResponseMessage.title || ctx.message.listResponseMessage.singleSelectReply?.selectedRowId;
             } else if (ctx.message?.interactiveResponseMessage) {
                 try {
                     const interactive = JSON.parse(ctx.message.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson);
@@ -388,7 +391,10 @@ const main = async () => {
             
             // Asignar el tipo ACTION para disparar welcomeFlowButton
             ctx.type = EVENTS.ACTION;
-            console.log(`Updated Type Msj Recibido: ${ctx.type}`);
+            console.log(`Updated Type Msj Recibido: ${ctx.type} | Body: ${ctx.body}`);
+        } else if (ctx.type === 'desconocido' || !ctx.body) {
+             // Log de ayuda para mensajes de plantilla de Meta no detectados
+             console.log('⚠️ [Debug] Mensaje potencial de plantilla no detectado. Estructura ctx:', JSON.stringify(ctx).substring(0, 500));
         }
     });
     adapterProvider.on('ready', () => {
