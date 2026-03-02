@@ -1,6 +1,8 @@
 // Clase para manejar la lógica de reconexión cuando el campo nombre está vacío
 import { safeToAsk } from '../app';
 import { extraerDatosResumen, GenericResumenData } from '~/utils/extractJsonData';
+import { downloadFileFromDrive } from '~/utils/googleDriveHandler';
+import fs from 'fs';
 
 // Opciones para configurar el flujo de reconexión
 interface ReconectionOptions {
@@ -112,10 +114,54 @@ export class ReconectionFlow {
             if (!msg || typeof msg !== 'string' || msg.trim() === '') {
                 throw new Error(`[ReconectionFlow] El mensaje de seguimiento para el intento ${this.attempts} es vacío o inválido. Verifica tus variables de entorno.`);
             }
+
+            // --- Lógica para detectar y descargar PDF ---
+            const pdfRegex = /\[\s*PDF\s*:\s*([a-zA-Z0-9_-]+)\s*\]/gi;
+            const pdfPaths: string[] = [];
+            let pdfMatch;
+            const originalMsg = msg;
+
+            while ((pdfMatch = pdfRegex.exec(originalMsg)) !== null) {
+                const fileId = pdfMatch[1];
+                try {
+                    console.log(`[ReconectionFlow] Detectado PDF ID: ${fileId}. Descargando...`);
+                    const filePath = await downloadFileFromDrive(fileId);
+                    pdfPaths.push(filePath);
+                } catch (err: any) {
+                    console.error(`[ReconectionFlow PDF] Error con ID ${fileId}:`, err.message);
+                }
+            }
+
+            // Limpiar el mensaje de etiquetas PDF para el envío de texto
+            const cleanMsg = originalMsg.replace(/\[\s*PDF\s*:\s*[\s\S]*?\]/gi, "").trim();
+
             if (jid) {
                 try {
                     console.log(`[ReconectionFlow] Enviando mensaje de reconexión a:`, jid);
-                    await this.provider.sendText(jid, msg);
+                    await this.provider.sendText(jid, cleanMsg);
+
+                    // Enviar los PDFs descargados
+                    for (const pdfPath of pdfPaths) {
+                        try {
+                            console.log(`[ReconectionFlow] Enviando archivo: ${pdfPath}`);
+                            // Usamos sendFile si el provider lo soporta, o sendMessage con media (común en Baileys)
+                            if (this.provider.sendFile) {
+                                await this.provider.sendFile(jid, pdfPath, "📄 Documento adjunto");
+                            } else {
+                                await this.provider.sendText(jid, "📄 Documento adjunto:", { media: pdfPath });
+                            }
+                            
+                            // Limpieza del archivo temporal después de un breve delay para asegurar envío
+                            setTimeout(() => {
+                                if (fs.existsSync(pdfPath)) {
+                                    fs.unlinkSync(pdfPath);
+                                    console.log(`[ReconectionFlow] Archivo temporal borrado: ${pdfPath}`);
+                                }
+                            }, 5000);
+                        } catch (mediaErr) {
+                            console.error(`[ReconectionFlow Media] Error enviando media ${pdfPath}:`, mediaErr);
+                        }
+                    }
                 } catch (err) {
                     console.error(`[ReconectionFlow] Error enviando mensaje de reconexión a ${jid}:`, err);
                 }
