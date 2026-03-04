@@ -65,15 +65,15 @@ function limpiarBloquesJSON(texto: string): string {
     const specialBlocks: string[] = [];
     let textoConMarcadores = texto;
     
-    // Preservar [DB_QUERY: ...] (Permitiendo espacios opcionales tras el corchete y alrededor de los dos puntos)
-    textoConMarcadores = textoConMarcadores.replace(/\[\s*DB_QUERY\s*:\s*[\s\S]*?\]/gi, (match) => {
+    // Preservar [DB_QUERY: ...] (Permitiendo espacios opcionales tras el corchete y el separador opcional)
+    textoConMarcadores = textoConMarcadores.replace(/\[\s*DB_QUERY\s*:?\s*[\s\S]*?\]/gi, (match) => {
         const index = specialBlocks.length;
         specialBlocks.push(match);
         return `___SPECIAL_BLOCK_${index}___`;
     });
 
-    // Preservar [DB: "T":"tabla", "D":"dato"]
-    textoConMarcadores = textoConMarcadores.replace(/\[\s*DB\s*:\s*[\s\S]*?\]/gi, (match) => {
+    // Preservar [DB: "T":"tabla", "D":"dato"] o [DB{"T":"..."}]
+    textoConMarcadores = textoConMarcadores.replace(/\[\s*DB\s*:?\s*[\s\S]*?\]/gi, (match) => {
         const index = specialBlocks.length;
         specialBlocks.push(match);
         return `___SPECIAL_BLOCK_${index}___`;
@@ -174,12 +174,12 @@ export class AssistantResponseProcessor {
         let sqlQueryToExecute = "";
         const sanitizedTextResponse = textResponse; // Alias para compatibilidad con mis edits anteriores fallidos si los hubiera
 
-        // 0.a) Detectar y procesar DB QUERY [DB_QUERY: ...] (Permitiendo espacios opcionales tras el corchete y alrededor de los dos puntos)
-        const dbQueryRegex = /\[\s*DB_QUERY\s*:\s*([\s\S]*?)\]/i;
+        // 0.a) Detectar y procesar DB QUERY [DB_QUERY: ...] (Permitiendo espacios opcionales tras el corchete y el separador opcional)
+        const dbQueryRegex = /\[\s*DB_QUERY\s*:?\s*([\s\S]*?)\]/i;
         const dbMatch = textResponse.match(dbQueryRegex);
         
-        // 0.b) Detectar y procesar DB simple [DB: "T":"tabla", "D":"dato"]
-        const dbSimpleRegex = /\[\s*DB\s*:\s*([\s\S]*?)\]/i;
+        // 0.b) Detectar y procesar DB simple [DB: "T":"tabla", "D":"dato"] o [DB{"T":"..."}]
+        const dbSimpleRegex = /\[\s*DB\s*:?\s*([\s\S]*?)\]/i;
         const dbSimpleMatch = textResponse.match(dbSimpleRegex);
         
         if (dbMatch) {
@@ -191,12 +191,28 @@ export class AssistantResponseProcessor {
         } else if (dbSimpleMatch) {
              console.log('[DEBUG] DB Match result: FOUND [DB] simple');
              let jsonContent = dbSimpleMatch[1].trim();
-             // Asegurar que tenga llaves para ser un JSON válido
-             if (!jsonContent.startsWith('{')) jsonContent = '{' + jsonContent + '}';
+             
+             // Reparación de JSON: envolver en llaves si faltan y asegurar comillas en claves T y D
+             let cleanJson = jsonContent;
+             if (!cleanJson.startsWith('{')) cleanJson = '{' + cleanJson + '}';
+             
+             // Intentar reparar comillas faltantes en claves comunes (T o D) para que JSON.parse no falle
+             cleanJson = cleanJson.replace(/([{,]\s*)(T|D)(\s*:)/g, '$1"$2"$3');
              
              try {
-                 const parsedData = JSON.parse(jsonContent);
-                 if (parsedData.T && parsedData.D) {
+                 let parsedData: any = null;
+                 try {
+                     parsedData = JSON.parse(cleanJson);
+                 } catch (e) {
+                     // Si falla JSON.parse, intentar extracción vía regex como último recurso
+                     const tMatch = cleanJson.match(/"?T"?\s*:\s*"([^"]+)"/i);
+                     const dMatch = cleanJson.match(/"?D"?\s*:\s*"([^"]+)"/i);
+                     if (tMatch && dMatch) {
+                         parsedData = { T: tMatch[1], D: dMatch[1] };
+                     }
+                 }
+
+                 if (parsedData && parsedData.T && parsedData.D) {
                      // Escapar comillas simples en el dato para evitar errores de SQL
                      const safeDato = String(parsedData.D).replace(/'/g, "''");
                      sqlQueryToExecute = `SELECT * FROM "${parsedData.T}" WHERE "${parsedData.T}"::text ~* '${safeDato}'`;
@@ -207,7 +223,7 @@ export class AssistantResponseProcessor {
                      console.log('[DEBUG] JSON en [DB] no contiene T o D validos:', parsedData);
                  }
              } catch (e) {
-                 console.log('[DEBUG] Error parseando JSON en [DB]:', e.message, 'Content:', jsonContent);
+                 console.log('[DEBUG] Error procesando contenido en [DB]:', e.message, 'Content:', cleanJson);
              }
         }
  else {
