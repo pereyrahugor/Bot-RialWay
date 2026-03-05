@@ -98,6 +98,10 @@ function limpiarBloquesJSON(texto: string): string {
     // 2c. Limpiar bloques de PDF [PDF: ID]
     limpio = limpio.replace(/\[\s*PDF\s*:\s*[\s\S]*?\]/gi, "");
 
+    // 2d. Filtrar SYSTEM_DB_RESULT o SYSTEM_API_RESULT filtrados por error del asistente
+    limpio = limpio.replace(/\[?\s*SYSTEM_(DB|API)_RESULT[\s\S]*?(?:\]|$)/gi, "");
+
+
     // 3. Restaurar bloques especiales
     specialBlocks.forEach((block, index) => {
         limpio = limpio.replace(`___SPECIAL_BLOCK_${index}___`, block);

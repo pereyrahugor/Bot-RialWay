@@ -622,12 +622,20 @@ const main = async () => {
             res.setHeader('Content-Type', 'image/png');
             fs.createReadStream(qrPath).pipe(res);
         } else {
-            res.statusCode = 404;
-            res.end('QR not found');
+            res.status(404).send('QR not found');
         }
     });
 
-    // API Endpoints
+    // 4. API Endpoints
+    app.get('/health', (req, res) => {
+        res.json({ 
+            status: 'ok', 
+            botEnabled, 
+            projectId: process.env.RAILWAY_PROJECT_ID,
+            time: new Date().toISOString()
+        });
+    });
+
     app.get('/api/assistant-name', (req, res) => {
         const assistantName = process.env.ASSISTANT_NAME || 'Asistente demo';
         res.json({ name: assistantName });
@@ -830,23 +838,27 @@ const main = async () => {
 
     // Socket.IO initialization function
     const initSocketIO = (serverInstance) => {
-        if (!serverInstance) {
-            console.error('❌ [ERROR] No se pudo obtener serverInstance para Socket.IO');
-            return;
-        }
-        console.log('✅ [DEBUG] Inicializando Socket.IO...');
-        const io = new Server(serverInstance, { cors: { origin: '*' } });
+        try {
+            if (!serverInstance) {
+                console.error('❌ [Socket.IO] No se pudo obtener serverInstance. app.server es null.');
+                return;
+            }
+            console.log('📡 [INFO] Inicializando Socket.IO en el servidor principal...');
+            const io = new Server(serverInstance, { 
+                cors: { origin: '*' },
+                allowEIO3: true // Compatibilidad
+            });
 
-        // Escuchar eventos de la base de datos (HistoryHandler) y retransmitir a Web
-        historyEvents.on('new_message', (payload) => {
-            console.log(`📡 [Socket] Emitiendo new_message para chat ${payload.chatId}`);
-            io.emit('new_message', payload);
-        });
+            // Escuchar eventos de la base de datos (HistoryHandler) y retransmitir a Web
+            historyEvents.on('new_message', (payload) => {
+                console.log(`📡 [Socket] Re-emitiendo new_message: ${payload.chatId}`);
+                io.emit('new_message', payload);
+            });
 
-        historyEvents.on('bot_toggled', (payload) => {
-            console.log(`📡 [Socket] Emitiendo bot_toggled para chat ${payload.chatId}`);
-            io.emit('bot_toggled', payload);
-        });
+            historyEvents.on('bot_toggled', (payload) => {
+                console.log(`📡 [Socket] Re-emitiendo bot_toggled: ${payload.chatId} -> ${payload.bot_enabled}`);
+                io.emit('bot_toggled', payload);
+            });
 
         io.on('connection', (socket) => {
             console.log('💬 Cliente web conectado');
@@ -891,6 +903,9 @@ const main = async () => {
                 }
             });
         });
+        } catch (e) {
+            console.error('❌ [Socket.IO] Error durante la inicialización:', e);
+        }
     };
 
     app.post('/webchat-api', async (req, res) => {
@@ -1015,9 +1030,17 @@ const main = async () => {
         console.log(`🚀 [INFO] Iniciando servidor en puerto ${PORT}...`);
         httpServer(+PORT);
         console.log(`✅ [INFO] Servidor escuchando en puerto ${PORT}`);
-        if (app.server) {
-            initSocketIO(app.server);
-        }
+        
+        // Esperamos un segundo para asegurar que el servidor subyacente esté listo
+        setTimeout(() => {
+            if (app && app.server) {
+                console.log('✅ [INFO] app.server detectado, lanzando initSocketIO');
+                initSocketIO(app.server);
+            } else {
+                console.error('❌ [ERROR] app.server NO DETECTADO después del listen.');
+            }
+        }, 1000);
+        
     } catch (err) {
         console.error('❌ [ERROR] Error al iniciar servidor:', err);
     }
