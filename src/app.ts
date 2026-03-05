@@ -599,7 +599,19 @@ const main = async () => {
                 }
 
                 if (htmlPath) {
-                    res.sendFile(htmlPath);
+                    let htmlContent = fs.readFileSync(htmlPath, 'utf8');
+                    const botName = process.env.ASSISTANT_NAME || process.env.RAILWAY_PROJECT_NAME || "Neurolinks";
+                    if (filename === 'backoffice.html' || filename === 'dashboard.html' || filename === 'login.html') {
+                        htmlContent = htmlContent.replace(/<title>.*?<\/title>/, `<title>BackOffice - ${botName}</title>`);
+                    }
+                    if (filename === 'backoffice.html') {
+                        htmlContent = htmlContent.replace(
+                            '<h2 style="margin:0; font-size: 1.2rem;">Backoffice</h2>',
+                            `<h2 style="margin:0; font-size: 1.2rem;">Backoffice - ${botName}</h2>`
+                        );
+                    }
+                    res.setHeader('Content-Type', 'text/html');
+                    res.end(htmlContent);
                 } else {
                     console.error(`[ERROR] File not found: ${filename}`);
                     res.status(404).send('HTML no encontrado en el servidor');
