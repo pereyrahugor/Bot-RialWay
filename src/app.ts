@@ -39,6 +39,7 @@ import { fileURLToPath } from 'url';
 import { getArgentinaDatetimeString } from "./utils/ArgentinaTime";
 import { RailwayApi } from "./Api-RailWay/Railway";
 import { withRetry } from "./utils/retryHelper";
+import { HistoryHandler } from "./utils/historyHandler";
 
 //import { imgResponseFlow } from "./Flows/imgResponse";
 //import { listImg } from "./addModule/listImg";
@@ -137,8 +138,31 @@ export const processUserMessage = async (
         const body = ctx.body && ctx.body.trim();
 
 
-        // Comando para encender el bot
+        // COMANDOS DE CONTROL (WhatsApp Admin)
         if (body === "#ON#") {
+            await HistoryHandler.toggleBot(ctx.from, true);
+            await flowDynamic([{ body: "🤖 Bot activado para este chat." }]);
+            return state;
+        }
+
+        if (body === "#OFF#") {
+            await HistoryHandler.toggleBot(ctx.from, false);
+            await flowDynamic([{ body: "🛑 Bot desactivado. (Intervención humana activa)" }]);
+            return state;
+        }
+
+        // Persistir mensaje del usuario
+        await HistoryHandler.saveMessage(ctx.from, 'user', body || (ctx.type === EVENTS.VOICE_NOTE ? "[Audio]" : "[Media]"), ctx.type);
+
+        // Verificar si el bot está habilitado para este usuario específico
+        const isBotActiveForUser = await HistoryHandler.isBotEnabled(ctx.from);
+        if (!isBotActiveForUser) {
+            console.log(`[Intervención Humana] Bot ignorando mensaje de ${ctx.from}`);
+            return state;
+        }
+
+        // Comando global para encender el bot (Mantiene compatibilidad con lógica anterior si se desea)
+        if (body === "#GOBAL_ON#") {
             if (!botEnabled) {
                 botEnabled = true;
                 await flowDynamic([{ body: "🤖 Bot activado." }]);
@@ -582,6 +606,61 @@ const main = async () => {
         const assistantName = process.env.ASSISTANT_NAME || 'Asistente demo';
         res.json({ name: assistantName });
     });
+
+    // --- ENDPOINTS BACKOFFICE ---
+
+    // Middleware de autenticación simple para el backoffice
+    const backofficeAuth = (req, res, next) => {
+        const token = req.headers['authorization'] || req.query.token;
+        const expectedToken = process.env.BACKOFFICE_TOKEN;
+        if (token === expectedToken) {
+            return next();
+        }
+        res.status(401).json({ success: false, error: "Unauthorized" });
+    };
+
+    app.post('/api/backoffice/auth', (req, res) => {
+        const { token } = req.body;
+        if (token === process.env.BACKOFFICE_TOKEN) {
+            res.json({ success: true });
+        } else {
+            res.status(401).json({ success: false, error: "Invalid token" });
+        }
+    });
+
+    app.get('/api/backoffice/chats', backofficeAuth, async (req, res) => {
+        const chats = await HistoryHandler.listChats();
+        res.json(chats);
+    });
+
+    app.get('/api/backoffice/messages/:chatId', backofficeAuth, async (req, res) => {
+        const messages = await HistoryHandler.getMessages(req.params.chatId);
+        res.json(messages);
+    });
+
+    app.post('/api/backoffice/toggle-bot', backofficeAuth, async (req, res) => {
+        const { chatId, enabled } = req.body;
+        const result = await HistoryHandler.toggleBot(chatId, enabled);
+        res.json(result);
+    });
+
+    app.post('/api/backoffice/send-message', backofficeAuth, async (req, res) => {
+        const { chatId, content } = req.body;
+        try {
+            if (adapterProvider && typeof adapterProvider.sendMessage === 'function') {
+                await adapterProvider.sendMessage(chatId, content);
+                await HistoryHandler.saveMessage(chatId, 'assistant', content, 'text');
+                res.json({ success: true });
+            } else {
+                res.status(500).json({ success: false, error: "Provider not ready" });
+            }
+        } catch (err) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
+    serveHtmlPage("/login", "login.html");
+    serveHtmlPage("/backoffice", "backoffice.html"); // Nueva vista de gestión
 
     app.get('/api/dashboard-status', async (req, res) => {
         const status = await hasActiveSession();

@@ -20,6 +20,8 @@ import { downloadFileFromDrive } from './googleDriveHandler';
 import fs from 'fs';
 import moment from 'moment';
 import OpenAI from "openai";
+import { transcribeAudioFile } from './audioTranscriptior';
+import { HistoryHandler } from './historyHandler';
 //import { handleToolFunctionCall } from '../Api-BotAsistente/handleToolFunctionCall.js';
 
 const openai = new OpenAI({
@@ -190,7 +192,7 @@ export class AssistantResponseProcessor {
              else console.log(`[WhatsApp Debug] 🔄 Detectada solicitud de DB Query: ${sqlQueryToExecute}`);
         } else if (dbSimpleMatch) {
              console.log('[DEBUG] DB Match result: FOUND [DB] simple');
-             let jsonContent = dbSimpleMatch[1].trim();
+             const jsonContent = dbSimpleMatch[1].trim();
              
              // Reparación de JSON: envolver en llaves si faltan y asegurar comillas en claves T y D
              let cleanJson = jsonContent;
@@ -406,6 +408,11 @@ export class AssistantResponseProcessor {
                 }
             }
         } else if (cleanTextResponse.length > 0 || pdfPaths.length > 0) {
+            // Guardar en Supabase antes de fragmentar
+            if (ctx && ctx.from) {
+                await HistoryHandler.saveMessage(ctx.from, 'assistant', cleanTextResponse, 'text');
+            }
+            
             const chunks = cleanTextResponse.split(/\n\n+/);
             for (const chunk of chunks) {
                 if (chunk.trim().length > 0) {
