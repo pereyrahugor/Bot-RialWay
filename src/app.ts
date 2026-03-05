@@ -141,18 +141,28 @@ export const processUserMessage = async (
         // COMANDOS DE CONTROL (WhatsApp Admin)
         if (body === "#ON#") {
             await HistoryHandler.toggleBot(ctx.from, true);
+            // Intentar actualizar nombre al mismo tiempo
+            if (ctx.pushName) await HistoryHandler.getOrCreateChat(ctx.from, 'whatsapp', ctx.pushName);
             await flowDynamic([{ body: "🤖 Bot activado para este chat." }]);
             return state;
         }
 
         if (body === "#OFF#") {
             await HistoryHandler.toggleBot(ctx.from, false);
+            // Intentar actualizar nombre al mismo tiempo
+            if (ctx.pushName) await HistoryHandler.getOrCreateChat(ctx.from, 'whatsapp', ctx.pushName);
             await flowDynamic([{ body: "🛑 Bot desactivado. (Intervención humana activa)" }]);
             return state;
         }
 
         // Persistir mensaje del usuario
-        await HistoryHandler.saveMessage(ctx.from, 'user', body || (ctx.type === EVENTS.VOICE_NOTE ? "[Audio]" : "[Media]"), ctx.type);
+        await HistoryHandler.saveMessage(
+            ctx.from, 
+            'user', 
+            body || (ctx.type === EVENTS.VOICE_NOTE ? "[Audio]" : "[Media]"), 
+            ctx.type,
+            ctx.pushName || null
+        );
 
         // Verificar si el bot está habilitado para este usuario específico
         const isBotActiveForUser = await HistoryHandler.isBotEnabled(ctx.from);
@@ -638,6 +648,33 @@ const main = async () => {
         res.json(messages);
     });
 
+    app.get('/api/backoffice/profile-pic/:chatId', async (req, res) => {
+        try {
+            const { chatId } = req.params;
+            const token = req.query.token as string;
+
+            if (token !== process.env.BACKOFFICE_TOKEN) {
+                return res.status(401).end();
+            }
+
+            if (!adapterProvider) return res.status(500).end();
+
+            let jid = chatId;
+            if (chatId.match(/^\d+$/)) jid = `${chatId}@s.whatsapp.net`;
+            if (!jid.includes('@')) jid = `${chatId}@s.whatsapp.net`;
+
+            const vendor = (adapterProvider as any).vendor;
+            if (vendor && typeof vendor.profilePictureUrl === 'function') {
+                const url = await vendor.profilePictureUrl(jid, 'image').catch(() => null);
+                if (url) return res.redirect(url);
+            }
+            
+            res.status(404).end();
+        } catch (e) {
+            res.status(500).end();
+        }
+    });
+
     app.post('/api/backoffice/toggle-bot', backofficeAuth, async (req, res) => {
         const { chatId, enabled } = req.body;
         const result = await HistoryHandler.toggleBot(chatId, enabled);
@@ -646,16 +683,41 @@ const main = async () => {
 
     app.post('/api/backoffice/send-message', backofficeAuth, async (req, res) => {
         const { chatId, content } = req.body;
+        console.log(`[Backoffice] Intentando enviar mensaje a ${chatId}: "${content.substring(0, 50)}..."`);
+        
         try {
-            if (adapterProvider && typeof adapterProvider.sendMessage === 'function') {
-                await adapterProvider.sendMessage(chatId, content);
-                await HistoryHandler.saveMessage(chatId, 'assistant', content, 'text');
-                res.json({ success: true });
-            } else {
-                res.status(500).json({ success: false, error: "Provider not ready" });
+            if (!adapterProvider) {
+                return res.status(500).json({ success: false, error: "Provider not ready (adapterProvider is null)" });
             }
-        } catch (err) {
-            res.status(500).json({ success: false, error: err.message });
+
+            // Normalización del ID para WhatsApp (Baileys JID format)
+            let targetJid = chatId;
+            if (chatId.match(/^\d+$/) && !chatId.includes('@')) {
+                // Si es solo números y no tiene @, añadimos el sufijo de WhatsApp
+                targetJid = `${chatId}@s.whatsapp.net`;
+                console.log(`[Backoffice] Normalizando ID ${chatId} -> ${targetJid}`);
+            }
+
+            // Usar sendMessage del provider
+            if (typeof adapterProvider.sendMessage === 'function') {
+                await adapterProvider.sendMessage(targetJid, content, {});
+                await HistoryHandler.saveMessage(chatId, 'assistant', content, 'text');
+                return res.json({ success: true });
+            } 
+            
+            // Fallback: intentar con sendText si existe
+            if (typeof adapterProvider.sendText === 'function') {
+                await adapterProvider.sendText(targetJid, content);
+                await HistoryHandler.saveMessage(chatId, 'assistant', content, 'text');
+                return res.json({ success: true });
+            }
+
+            console.error("[Backoffice] Error: El provider no tiene métodos de envío compatibles.");
+            res.status(500).json({ success: false, error: "Provider methods not found" });
+
+        } catch (err: any) {
+            console.error('[Backoffice] Error excepcional enviando mensaje:', err);
+            res.status(500).json({ success: false, error: err.message || "Unknown error during send-message" });
         }
     });
 

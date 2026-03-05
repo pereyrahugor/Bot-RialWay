@@ -167,10 +167,10 @@ export class HistoryHandler {
     /**
      * Guarda un mensaje en la base de datos
      */
-    static async saveMessage(chatId: string, role: 'user' | 'assistant' | 'system', content: string, type: string = 'text') {
+    static async saveMessage(chatId: string, role: 'user' | 'assistant' | 'system', content: string, type: string = 'text', contactName: string | null = null) {
         try {
             // Asegurar que el chat existe
-            await this.getOrCreateChat(chatId, chatId.includes('@') ? 'whatsapp' : 'webchat');
+            await this.getOrCreateChat(chatId, chatId.includes('@') ? 'whatsapp' : 'webchat', contactName);
 
             const { error } = await supabase
                 .from('messages')

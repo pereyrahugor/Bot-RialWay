@@ -54,7 +54,29 @@
         }
         .chat-item:hover { background: rgba(255,255,255,0.05); }
         .chat-item.active { background: rgba(99, 102, 241, 0.2); border-left: 4px solid var(--primary); }
-        .chat-avatar { width: 45px; height: 45px; border-radius: 50%; background: var(--primary); display: flex; align-items: center; justify-content: center; font-weight: 600; }
+        .chat-avatar { 
+            width: 44px; 
+            height: 44px; 
+            border-radius: 50%; 
+            background: linear-gradient(135deg, #6366f1, #a855f7); 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            font-weight: 700; 
+            font-size: 1.1rem; 
+            flex-shrink: 0; 
+            overflow: hidden;
+            position: relative; 
+        }
+        .chat-avatar img {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            object-fit: cover;
+            z-index: 2;
+            border-radius: 50%;
+            background: inherit;
+        }
         .chat-info { flex: 1; overflow: hidden; }
         .chat-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .chat-last-msg { font-size: 0.8rem; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -183,15 +205,23 @@
 
         function renderChatList() {
             const list = document.getElementById('chat-list');
-            list.innerHTML = chats.map(chat => `
-                <div class="chat-item ${activeChatId === chat.id ? 'active' : ''}" onclick="selectChat('${chat.id}')">
-                    <div class="chat-avatar">${(chat.name || chat.id).charAt(0).toUpperCase()}</div>
-                    <div class="chat-info">
-                        <div class="chat-name">${chat.name || chat.id}</div>
-                        <div class="chat-last-msg">${chat.bot_enabled ? '🤖 Bot' : '👤 Humano'}</div>
+            list.innerHTML = chats.map(chat => {
+                const initial = (chat.name || chat.id).charAt(0).toUpperCase();
+                const avatarUrl = `/api/backoffice/profile-pic/${chat.id}?token=${token}`;
+                
+                return `
+                    <div class="chat-item ${activeChatId === chat.id ? 'active' : ''}" onclick="selectChat('${chat.id}')">
+                        <div class="chat-avatar">
+                            <span style="position:relative; z-index:1;">${initial}</span>
+                            <img src="${avatarUrl}" onerror="this.style.display='none'">
+                        </div>
+                        <div class="chat-info">
+                            <div class="chat-name">${chat.name || chat.id}</div>
+                            <div class="chat-last-msg">${chat.bot_enabled ? '🤖 Bot' : '👤 Humano'}</div>
+                        </div>
                     </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         }
 
         async function selectChat(id) {
@@ -200,7 +230,15 @@
             
             document.getElementById('active-chat-name').innerText = chat.name || chat.id;
             document.getElementById('active-chat-id').innerText = chat.id;
-            document.getElementById('active-chat-avatar').innerText = (chat.name || chat.id).charAt(0).toUpperCase();
+            
+            const headerAvatar = document.getElementById('active-chat-avatar');
+            const initial = (chat.name || chat.id).charAt(0).toUpperCase();
+            const avatarUrl = `/api/backoffice/profile-pic/${chat.id}?token=${token}`;
+            
+            headerAvatar.innerHTML = `
+                <span style="position:relative; z-index:1;">${initial}</span>
+                <img src="${avatarUrl}" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; z-index:2;" onerror="this.style.display='none'">
+            `;
             
             const botToggle = document.getElementById('bot-toggle');
             botToggle.disabled = false;
@@ -275,6 +313,9 @@
             if (res.ok) {
                 input.value = '';
                 fetchMessages(activeChatId);
+            } else {
+                const errorData = await res.json();
+                alert('Error al enviar mensaje: ' + (errorData.error || 'Error desconocido'));
             }
         }
 
