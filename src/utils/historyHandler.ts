@@ -1,5 +1,6 @@
 
 import { createClient } from "@supabase/supabase-js";
+import { EventEmitter } from "events";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -8,6 +9,9 @@ dotenv.config();
 const supabaseUrl = process.env.SUPABASE_URL || "";
 const supabaseKey = process.env.SUPABASE_KEY || "";
 const supabase = createClient(supabaseUrl, supabaseKey);
+
+// Emitter para notificar cambios en tiempo real a otros módulos (como el de WebSockets)
+export const historyEvents = new EventEmitter();
 
 // Identificador único para este bot específico
 const PROJECT_ID = process.env.RAILWAY_PROJECT_ID || "default_project";
@@ -192,6 +196,9 @@ export class HistoryHandler {
                 .eq('id', chatId)
                 .eq('project_id', PROJECT_ID);
 
+            // Emitir evento para WebSockets
+            historyEvents.emit('new_message', { chatId, role, content, type });
+
         } catch (err) {
             console.error('[HistoryHandler] Error en saveMessage:', err);
         }
@@ -229,6 +236,10 @@ export class HistoryHandler {
                 .eq('project_id', PROJECT_ID);
             
             if (error) throw error;
+            
+            // Emitir evento para WebSockets
+            historyEvents.emit('bot_toggled', { chatId, bot_enabled: enabled });
+
             return { success: true };
         } catch (err) {
             console.error('[HistoryHandler] Error en toggleBot:', err);

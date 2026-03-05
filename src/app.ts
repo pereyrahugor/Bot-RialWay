@@ -39,7 +39,7 @@ import { fileURLToPath } from 'url';
 import { getArgentinaDatetimeString } from "./utils/ArgentinaTime";
 import { RailwayApi } from "./Api-RailWay/Railway";
 import { withRetry } from "./utils/retryHelper";
-import { HistoryHandler } from "./utils/historyHandler";
+import { HistoryHandler, historyEvents } from "./utils/historyHandler";
 
 //import { imgResponseFlow } from "./Flows/imgResponse";
 //import { listImg } from "./addModule/listImg";
@@ -836,6 +836,18 @@ const main = async () => {
         }
         console.log('✅ [DEBUG] Inicializando Socket.IO...');
         const io = new Server(serverInstance, { cors: { origin: '*' } });
+
+        // Escuchar eventos de la base de datos (HistoryHandler) y retransmitir a Web
+        historyEvents.on('new_message', (payload) => {
+            console.log(`📡 [Socket] Emitiendo new_message para chat ${payload.chatId}`);
+            io.emit('new_message', payload);
+        });
+
+        historyEvents.on('bot_toggled', (payload) => {
+            console.log(`📡 [Socket] Emitiendo bot_toggled para chat ${payload.chatId}`);
+            io.emit('bot_toggled', payload);
+        });
+
         io.on('connection', (socket) => {
             console.log('💬 Cliente web conectado');
             socket.on('message', async (msg) => {

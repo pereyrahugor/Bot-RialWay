@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard Backoffice - Neurolinks</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <script src="/socket.io/socket.io.js"></script>
     <style>
         :root {
             --primary: #6366f1;
@@ -194,6 +195,34 @@
         let activeChatId = null;
         let chats = [];
 
+        // Inicializar Socket.IO para tiempo real
+        const socket = io();
+
+        socket.on('connect', () => {
+            console.log('✅ Conectado al servidor de tiempo real');
+        });
+
+        socket.on('new_message', (payload) => {
+            console.log('📡 Nuevo mensaje recibido:', payload);
+            // Si el mensaje es para el chat que estamos viendo, recargar mensajes
+            if (activeChatId === payload.chatId) {
+                fetchMessages(activeChatId);
+            }
+            // En cualquier caso, refrescar la lista lateral para actualizar el orden/último mensaje
+            fetchChats();
+        });
+
+        socket.on('bot_toggled', (payload) => {
+            console.log('📡 Bot toggled:', payload);
+            if (activeChatId === payload.chatId) {
+                const toggle = document.getElementById('bot-toggle');
+                toggle.checked = payload.bot_enabled;
+                updateBotStatusText(payload.bot_enabled);
+                updateInputState(payload.bot_enabled);
+            }
+            fetchChats();
+        });
+
         async function fetchChats() {
             try {
                 const res = await fetch(`/api/backoffice/chats?token=${token}`);
@@ -217,6 +246,9 @@
                         </div>
                         <div class="chat-info">
                             <div class="chat-name">${chat.name || chat.id}</div>
+                            <div style="font-size:0.75rem; opacity:0.8; margin-top:0.25rem;">
+                                ${chat.bot_enabled ? '🤖 Bot' : '👤 Humano'}
+                            </div>
                         </div>
                     </div>
                 `;
@@ -324,7 +356,8 @@
         }
 
         // Auto-refresh lista de chats
-        setInterval(fetchChats, 5000);
+        // Auto-refresh lista de chats (cada 30 seg como fallback, socket hace lo pesado)
+        setInterval(fetchChats, 30000);
         fetchChats();
 
         // Enter to send
