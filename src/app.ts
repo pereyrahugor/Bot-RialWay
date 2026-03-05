@@ -654,24 +654,40 @@ const main = async () => {
             const token = req.query.token as string;
 
             if (token !== process.env.BACKOFFICE_TOKEN) {
-                return res.status(401).end();
+                res.statusCode = 401;
+                return res.end();
             }
 
-            if (!adapterProvider) return res.status(500).end();
+            if (!adapterProvider) {
+                console.error('[ProfilePic] Error: adapterProvider no inicializado');
+                res.statusCode = 500;
+                return res.end();
+            }
 
             let jid = chatId;
-            if (chatId.match(/^\d+$/)) jid = `${chatId}@s.whatsapp.net`;
-            if (!jid.includes('@')) jid = `${chatId}@s.whatsapp.net`;
+            if (chatId.match(/^\d+$/) && !chatId.includes('@')) {
+                jid = `${chatId}@s.whatsapp.net`;
+            }
 
             const vendor = (adapterProvider as any).vendor;
             if (vendor && typeof vendor.profilePictureUrl === 'function') {
-                const url = await vendor.profilePictureUrl(jid, 'image').catch(() => null);
-                if (url) return res.redirect(url);
+                try {
+                    const url = await vendor.profilePictureUrl(jid, 'image');
+                    if (url) {
+                        res.writeHead(302, { Location: url });
+                        return res.end();
+                    }
+                } catch (picError) {
+                    console.log(`[ProfilePic] No se pudo obtener foto para ${jid}:`, picError.message);
+                }
             }
             
-            res.status(404).end();
+            res.statusCode = 404;
+            res.end();
         } catch (e) {
-            res.status(500).end();
+            console.error('[ProfilePic] Error excepcional:', e);
+            res.statusCode = 500;
+            res.end();
         }
     });
 
