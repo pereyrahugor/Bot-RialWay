@@ -143,7 +143,9 @@ export const processUserMessage = async (
             await HistoryHandler.toggleBot(ctx.from, true);
             // Intentar actualizar nombre al mismo tiempo
             if (ctx.pushName) await HistoryHandler.getOrCreateChat(ctx.from, 'whatsapp', ctx.pushName);
-            await flowDynamic([{ body: "🤖 Bot activado para este chat." }]);
+            const msg = "🤖 Bot activado para este chat.";
+            await flowDynamic([{ body: msg }]);
+            await HistoryHandler.saveMessage(ctx.from, 'assistant', msg, 'text');
             return state;
         }
 
@@ -151,7 +153,9 @@ export const processUserMessage = async (
             await HistoryHandler.toggleBot(ctx.from, false);
             // Intentar actualizar nombre al mismo tiempo
             if (ctx.pushName) await HistoryHandler.getOrCreateChat(ctx.from, 'whatsapp', ctx.pushName);
-            await flowDynamic([{ body: "🛑 Bot desactivado. (Intervención humana activa)" }]);
+            const msg = "🛑 Bot desactivado. (Intervención humana activa)";
+            await flowDynamic([{ body: msg }]);
+            await HistoryHandler.saveMessage(ctx.from, 'assistant', msg, 'text');
             return state;
         }
 
@@ -173,34 +177,46 @@ export const processUserMessage = async (
 
         // Comando global para encender el bot (Mantiene compatibilidad con lógica anterior si se desea)
         if (body === "#GOBAL_ON#") {
+            let msg = "";
             if (!botEnabled) {
                 botEnabled = true;
-                await flowDynamic([{ body: "🤖 Bot activado." }]);
+                msg = "🤖 Bot activado.";
+                await flowDynamic([{ body: msg }]);
             } else {
-                await flowDynamic([{ body: "🤖 El bot ya está activado." }]);
+                msg = "🤖 El bot ya está activado.";
+                await flowDynamic([{ body: msg }]);
             }
+            await HistoryHandler.saveMessage(ctx.from, 'assistant', msg, 'text');
             return state;
         }
 
         // Comando para apagar el bot
         if (body === "#OFF#") {
+            let msg = "";
             if (botEnabled) {
                 botEnabled = false;
-                await flowDynamic([{ body: "🛑 Bot desactivado. No responderé a más mensajes hasta recibir #ON#." }]);
+                msg = "🛑 Bot desactivado. No responderé a más mensajes hasta recibir #ON#.";
+                await flowDynamic([{ body: msg }]);
             } else {
-                await flowDynamic([{ body: "🛑 El bot ya está desactivado." }]);
+                msg = "🛑 El bot ya está desactivado.";
+                await flowDynamic([{ body: msg }]);
             }
+            await HistoryHandler.saveMessage(ctx.from, 'assistant', msg, 'text');
             return state;
         }
 
         // Comando para actualizar datos desde sheets
         if (body === "#ACTUALIZAR#") {
+            let msg = "";
             try {
                 await updateMain();
-                await flowDynamic([{ body: "🔄 Datos actualizados desde Google." }]);
+                msg = "🔄 Datos actualizados desde Google.";
+                await flowDynamic([{ body: msg }]);
             } catch (err) {
-                await flowDynamic([{ body: "❌ Error al actualizar datos desde Google." }]);
+                msg = "❌ Error al actualizar datos desde Google.";
+                await flowDynamic([{ body: msg }]);
             }
+            await HistoryHandler.saveMessage(ctx.from, 'assistant', msg, 'text');
             return state;
         }
 

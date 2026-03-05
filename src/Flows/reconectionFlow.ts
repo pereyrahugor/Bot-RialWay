@@ -2,6 +2,7 @@
 import { safeToAsk } from '../app';
 import { extraerDatosResumen, GenericResumenData } from '~/utils/extractJsonData';
 import { downloadFileFromDrive } from '~/utils/googleDriveHandler';
+import { HistoryHandler } from '~/utils/historyHandler';
 import fs from 'fs';
 
 // Opciones para configurar el flujo de reconexión
@@ -139,6 +140,8 @@ export class ReconectionFlow {
                 try {
                     console.log(`[ReconectionFlow] Enviando mensaje de reconexión a:`, jid);
                     await this.provider.sendText(jid, cleanMsg);
+                    // Persistir en el historial del backoffice (vía Supabase)
+                    await HistoryHandler.saveMessage(this.ctx.from, 'assistant', cleanMsg, 'text');
 
                     // Enviar los PDFs descargados
                     for (const pdfPath of pdfPaths) {
@@ -150,6 +153,9 @@ export class ReconectionFlow {
                             } else {
                                 await this.provider.sendText(jid, "📄 Documento adjunto:", { media: pdfPath });
                             }
+                            
+                            // Persistir referencia al documento en el historial
+                            await HistoryHandler.saveMessage(this.ctx.from, 'assistant', "[Documento PDF]", 'document');
                             
                             // Limpieza del archivo temporal después de un breve delay para asegurar envío
                             setTimeout(() => {
@@ -230,6 +236,8 @@ export class ReconectionFlow {
                 const userMsg = msg.body;
                 const prompt = `hola, ${userMsg}`;
                 try {
+                    // Persistir el mensaje real del usuario en el backoffice
+                    await HistoryHandler.saveMessage(this.ctx.from, 'user', userMsg, 'text', this.ctx.pushName || null);
                     await safeToAsk(this.ASSISTANT_ID, prompt, this.state);
                 } catch (err) {
                     console.error('[ReconectionFlow] Error enviando mensaje al asistente:', err);
