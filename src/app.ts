@@ -75,17 +75,31 @@ const TIMEOUT_MS = 30000;
 const userTimeouts = new Map();
 
 // Wrapper seguro para toAsk que SIEMPRE verifica runs activos
-export const safeToAsk = async (assistantId: string, message: string, state: any) => {
-    const threadId = state && typeof state.get === 'function' && state.get('thread_id');
-    if (threadId) {
+export const safeToAsk = async (assistantId: string, message: string, state: any, maxRetries: number = 3) => {
+    let attempt = 0;
+    while (attempt < maxRetries) {
+        const threadId = state && typeof state.get === 'function' && state.get('thread_id');
+        if (threadId) {
+            try {
+                await waitForActiveRuns(threadId);
+            } catch (err) {
+                console.error('[safeToAsk] Error esperando runs activos:', err);
+                await new Promise(r => setTimeout(r, 3000));
+            }
+        }
         try {
-            await waitForActiveRuns(threadId);
-        } catch (err) {
-            console.error('[safeToAsk] Error esperando runs activos:', err);
-            await new Promise(r => setTimeout(r, 3000));
+            return await toAsk(assistantId, message, state);
+        } catch (err: any) {
+            attempt++;
+            console.error(`[safeToAsk] Error en toAsk al contactar OpenAI (Intento ${attempt}/${maxRetries}):`, err?.message || err);
+            if (attempt >= maxRetries) {
+                console.error(`[safeToAsk] Fallo definitivo tras ${maxRetries} intentos.`);
+                throw err;
+            }
+            console.log(`[safeToAsk] Esperando ${attempt * 2} segundos antes del reintento...`);
+            await new Promise(r => setTimeout(r, attempt * 2000));
         }
     }
-    return toAsk(assistantId, message, state);
 };
 
 export const getAssistantResponse = async (assistantId, message, state, fallbackMessage, userId, thread_id = null) => {
