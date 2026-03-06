@@ -29,7 +29,7 @@ import { welcomeFlowButton } from "./Flows/welcomeFlowButton";
 import OpenAI from "openai";
 import { transcribeAudioFile } from "./utils/audioTranscriptior";
 import { getOrCreateThreadId, sendMessageToThread, deleteThread } from "./utils-web/openaiThreadBridge";
-import { waitForActiveRuns } from "./utils/AssistantResponseProcessor";
+import { waitForActiveRuns, cancelActiveRuns } from "./utils/AssistantResponseProcessor";
 import { AssistantResponseProcessor } from "./utils/AssistantResponseProcessor";
 import { updateMain } from "./addModule/updateMain";
 import { ErrorReporter } from "./utils/errorReporter";
@@ -84,26 +84,39 @@ export const safeToAsk = async (assistantId: string, message: string, state: any
                 await waitForActiveRuns(threadId);
             } catch (err) {
                 console.error('[safeToAsk] Error esperando runs activos:', err);
-                await new Promise(r => setTimeout(r, 3000));
+                await new Promise(r => setTimeout(r, 2000));
             }
         }
         try {
             return await toAsk(assistantId, message, state);
         } catch (err: any) {
             attempt++;
-            console.error(`[safeToAsk] Error en toAsk al contactar OpenAI (Intento ${attempt}/${maxRetries}):`, err?.message || err);
+            const errorMessage = err?.message || String(err);
+            console.error(`[safeToAsk] Error en toAsk al contactar OpenAI (Intento ${attempt}/${maxRetries}):`, errorMessage);
+            
+            // Si el error indica un run activo, intentamos cancelarlo proactivamente
+            if (errorMessage.includes('active') && threadId) {
+                console.log(`[safeToAsk] Detectado run activo bloqueante. Intentando cancelar...`);
+                await cancelActiveRuns(threadId);
+                // Retraso breve para que OpenAI procese la cancelación
+                await new Promise(r => setTimeout(r, 1500));
+                continue; // Reintentar inmediatamente después de cancelar
+            }
+
             if (attempt >= maxRetries) {
                 console.error(`[safeToAsk] Fallo definitivo tras ${maxRetries} intentos.`);
                 throw err;
             }
-            console.log(`[safeToAsk] Esperando ${attempt * 2} segundos antes del reintento...`);
-            await new Promise(r => setTimeout(r, attempt * 2000));
+            
+            const waitTime = attempt * 2000;
+            console.log(`[safeToAsk] Esperando ${waitTime/1000} segundos antes del reintento...`);
+            await new Promise(r => setTimeout(r, waitTime));
         }
     }
 };
 
 export const getAssistantResponse = async (assistantId, message, state, fallbackMessage, userId, thread_id = null) => {
-    // Solo enviar la fecha/hora si es realmente un hilo nuevo (no existe thread_id ni en el argumento ni en el state)
+    // Solo enviar la fecha/hora si es realmente un hilo nuevo
     let effectiveThreadId = thread_id;
     if (!effectiveThreadId && state && typeof state.get === 'function') {
         effectiveThreadId = state.get('thread_id');
@@ -113,34 +126,39 @@ export const getAssistantResponse = async (assistantId, message, state, fallback
         systemPrompt += `Fecha y hora actual: ${getArgentinaDatetimeString()}\n`;
     }
     const finalMessage = systemPrompt + message;
-    // Si hay un timeout previo, lo limpiamos
+
+    // Limpiamos timeouts previos si existen para este usuario
     if (userTimeouts.has(userId)) {
         clearTimeout(userTimeouts.get(userId));
         userTimeouts.delete(userId);
     }
 
-    let timeoutResolve;
-    const timeoutPromise = new Promise((resolve) => {
-        timeoutResolve = resolve;
+    // Usamos el wrapper safeToAsk directamente.
+    // El timeout de 30s ahora se maneja de forma más limpia sin disparar una ejecución paralela
+    return new Promise(async (resolve, reject) => {
         const timeoutId = setTimeout(async () => {
-            console.warn("⏱ Timeout alcanzado. Reintentando con mensaje de control...");
-            resolve(await safeToAsk(assistantId, fallbackMessage ?? finalMessage, state));
-            userTimeouts.delete(userId);
+            console.warn("⏱ Timeout de 30s alcanzado en la comunicación con OpenAI.");
+            // No resolvemos aquí con safeToAsk de nuevo para evitar carreras, 
+            // dejamos que la petición original siga o falle por si sola, o retornamos un fallback simple.
+            // resolve("Lo siento, estoy tardando un poco más de lo habitual. Por favor, aguarda un momento o reintenta.");
         }, TIMEOUT_MS);
         userTimeouts.set(userId, timeoutId);
-    });
 
-    // Lanzamos la petición a OpenAI, pasando thread_id si existe
-    const askPromise = safeToAsk(assistantId, finalMessage, state).then((result) => {
-        if (userTimeouts.has(userId)) {
-            clearTimeout(userTimeouts.get(userId));
-            userTimeouts.delete(userId);
+        try {
+            const result = await safeToAsk(assistantId, finalMessage, state);
+            if (userTimeouts.has(userId)) {
+                clearTimeout(userTimeouts.get(userId));
+                userTimeouts.delete(userId);
+            }
+            resolve(result);
+        } catch (error) {
+            if (userTimeouts.has(userId)) {
+                clearTimeout(userTimeouts.get(userId));
+                userTimeouts.delete(userId);
+            }
+            reject(error);
         }
-        timeoutResolve(result);
-        return result;
     });
-
-    return Promise.race([askPromise, timeoutPromise]);
 };
 
 export const processUserMessage = async (
