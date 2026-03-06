@@ -117,9 +117,18 @@
             flex-direction: column;
             gap: 1rem;
         }
-        .msg { max-width: 70%; padding: 0.75rem 1.25rem; border-radius: 1rem; line-height: 1.5; font-size: 0.95rem; }
+        .msg { max-width: 70%; padding: 0.75rem 1.25rem; border-radius: 1rem; line-height: 1.5; font-size: 0.95rem; position: relative; }
         .msg.user { align-self: flex-start; background: #334155; color: white; border-bottom-left-radius: 0.2rem; }
         .msg.assistant { align-self: flex-end; background: linear-gradient(135deg, #6366f1, #4f46e5); color: white; border-bottom-right-radius: 0.2rem; }
+        
+        .msg-time {
+            font-size: 0.7rem;
+            opacity: 0.7;
+            margin-top: 0.25rem;
+            display: block;
+            text-align: right;
+        }
+        .msg.user .msg-time { text-align: left; }
         
         #input-area {
             padding: 1.5rem 2rem;
@@ -296,13 +305,20 @@
             btn.disabled = botEnabled;
         }
 
+        function formatTime(isoString) {
+            if (!isoString) return '';
+            const date = new Date(isoString);
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
         async function fetchMessages(chatId) {
             const res = await fetch(`/api/backoffice/messages/${chatId}?token=${token}`);
             const messages = await res.json();
             const container = document.getElementById('messages');
             container.innerHTML = messages.map(m => `
                 <div class="msg ${m.role}">
-                    ${m.content}
+                    <div class="msg-body">${m.content}</div>
+                    <span class="msg-time">${formatTime(m.created_at)}</span>
                 </div>
             `).join('');
             container.scrollTop = container.scrollHeight;
