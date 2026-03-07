@@ -28,66 +28,8 @@ const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
 
-export async function cancelActiveRuns(threadId: string) {
-    if (!threadId) return;
-    try {
-        console.log(`[AssistantResponseProcessor] Verificando runs para cancelar en thread ${threadId}...`);
-        const runs = await openai.beta.threads.runs.list(threadId, { limit: 5 });
-        for (const run of runs.data) {
-            if (["queued", "in_progress", "requires_action"].includes(run.status)) {
-                console.log(`[AssistantResponseProcessor] Cancelando run activo: ${run.id} (estado: ${run.status})`);
-                try {
-                    await openai.beta.threads.runs.cancel(threadId, run.id);
-                    // Esperar brevemente a que el estado cambie
-                    await new Promise(r => setTimeout(r, 1000));
-                } catch (e) {
-                    console.error(`[AssistantResponseProcessor] Error al cancelar run ${run.id}:`, e.message);
-                }
-            }
-        }
-    } catch (error) {
-        console.error(`[AssistantResponseProcessor] Error en cancelActiveRuns:`, error);
-    }
-}
+import { waitForActiveRuns, cancelActiveRuns } from './openaiHelper';
 
-export async function waitForActiveRuns(threadId: string) {
-    if (!threadId) return;
-    try {
-        console.log(`[AssistantResponseProcessor] Verificando runs activos en thread ${threadId}...`);
-        let attempt = 0;
-        const maxAttempts = 15; // Reducido un poco para no bloquear tanto
-        while (attempt < maxAttempts) {
-            const runs = await openai.beta.threads.runs.list(threadId, { limit: 5 });
-            const activeRun = runs.data.find(run => 
-                ["queued", "in_progress", "cancelling", "requires_action"].includes(run.status)
-            );
-            
-            if (activeRun) {
-                // Si el run está en requires_action y llevamos varios intentos, lo cancelamos proactivamente
-                if (activeRun.status === 'requires_action' && attempt > 3) {
-                    console.warn(`[AssistantResponseProcessor] Run ${activeRun.id} estancado en requires_action. Cancelando...`);
-                    await cancelActiveRuns(threadId);
-                    return; 
-                }
-
-                console.log(`[AssistantResponseProcessor] [${attempt}/${maxAttempts}] Run activo detectado (${activeRun.id}, estado: ${activeRun.status}). Esperando 2s...`);
-                await new Promise(resolve => setTimeout(resolve, 2000));
-                attempt++;
-            } else {
-                console.log(`[AssistantResponseProcessor] No hay runs activos. OK.`);
-                await new Promise(resolve => setTimeout(resolve, 800));
-                return;
-            }
-        }
-        
-        // Si llegamos aquí por timeout, intentamos cancelar todo para "destrabar" el hilo
-        console.warn(`[AssistantResponseProcessor] Timeout esperando liberación. Forzando cancelación...`);
-        await cancelActiveRuns(threadId);
-    } catch (error) {
-        console.error(`[AssistantResponseProcessor] Error verificando runs:`, error);
-        await new Promise(resolve => setTimeout(resolve, 2000));
-    }
-}
 
 // Mapa global para bloquear usuarios de WhatsApp durante operaciones API
 const userApiBlockMap = new Map();

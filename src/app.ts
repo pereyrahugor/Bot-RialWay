@@ -16,7 +16,7 @@ import { createBot, createProvider, createFlow, addKeyword, EVENTS } from "@buil
 import { MemoryDB } from "@builderbot/bot";
 import { BaileysProvider } from "builderbot-provider-sherpa";
 import { restoreSessionFromDb, startSessionSync, deleteSessionFromDb, isSessionInDb } from "./utils/sessionSync";
-import { toAsk, httpInject } from "@builderbot-plugins/openai-assistants";
+import { httpInject } from "@builderbot-plugins/openai-assistants";
 import { typing } from "./utils/presence";
 import { idleFlow } from "./Flows/idleFlow";
 import { welcomeFlowTxt } from "./Flows/welcomeFlowTxt";
@@ -29,7 +29,8 @@ import { welcomeFlowButton } from "./Flows/welcomeFlowButton";
 import OpenAI from "openai";
 import { transcribeAudioFile } from "./utils/audioTranscriptior";
 import { getOrCreateThreadId, sendMessageToThread, deleteThread } from "./utils-web/openaiThreadBridge";
-import { waitForActiveRuns, cancelActiveRuns } from "./utils/AssistantResponseProcessor";
+import { safeToAsk, waitForActiveRuns, cancelActiveRuns, renewThreadAndRetry } from "./utils/openaiHelper";
+export { safeToAsk, waitForActiveRuns, cancelActiveRuns, renewThreadAndRetry };
 import { AssistantResponseProcessor } from "./utils/AssistantResponseProcessor";
 import { updateMain } from "./addModule/updateMain";
 import { ErrorReporter } from "./utils/errorReporter";
@@ -67,53 +68,13 @@ registerProcessCallback(async (item) => {
 
 // Listener para generar el archivo QR manualmente cuando se solicite
 export let adapterProvider;
-let errorReporter;
+export let errorReporter;
 
 const TIMEOUT_MS = 30000;
 
 // Control de timeout por usuario para evitar ejecuciones automáticas superpuestas
 const userTimeouts = new Map();
 
-// Wrapper seguro para toAsk que SIEMPRE verifica runs activos
-export const safeToAsk = async (assistantId: string, message: string, state: any, maxRetries: number = 3) => {
-    let attempt = 0;
-    while (attempt < maxRetries) {
-        const threadId = state && typeof state.get === 'function' && state.get('thread_id');
-        if (threadId) {
-            try {
-                await waitForActiveRuns(threadId);
-            } catch (err) {
-                console.error('[safeToAsk] Error esperando runs activos:', err);
-                await new Promise(r => setTimeout(r, 2000));
-            }
-        }
-        try {
-            return await toAsk(assistantId, message, state);
-        } catch (err: any) {
-            attempt++;
-            const errorMessage = err?.message || String(err);
-            console.error(`[safeToAsk] Error en toAsk al contactar OpenAI (Intento ${attempt}/${maxRetries}):`, errorMessage);
-            
-            // Si el error indica un run activo, intentamos cancelarlo proactivamente
-            if (errorMessage.includes('active') && threadId) {
-                console.log(`[safeToAsk] Detectado run activo bloqueante. Intentando cancelar...`);
-                await cancelActiveRuns(threadId);
-                // Retraso breve para que OpenAI procese la cancelación
-                await new Promise(r => setTimeout(r, 1500));
-                continue; // Reintentar inmediatamente después de cancelar
-            }
-
-            if (attempt >= maxRetries) {
-                console.error(`[safeToAsk] Fallo definitivo tras ${maxRetries} intentos.`);
-                throw err;
-            }
-            
-            const waitTime = attempt * 2000;
-            console.log(`[safeToAsk] Esperando ${waitTime/1000} segundos antes del reintento...`);
-            await new Promise(r => setTimeout(r, waitTime));
-        }
-    }
-};
 
 export const getAssistantResponse = async (assistantId, message, state, fallbackMessage, userId, thread_id = null) => {
     // Solo enviar la fecha/hora si es realmente un hilo nuevo
@@ -145,7 +106,7 @@ export const getAssistantResponse = async (assistantId, message, state, fallback
         userTimeouts.set(userId, timeoutId);
 
         try {
-            const result = await safeToAsk(assistantId, finalMessage, state);
+            const result = await safeToAsk(assistantId, finalMessage, state, userId, errorReporter);
             if (userTimeouts.has(userId)) {
                 clearTimeout(userTimeouts.get(userId));
                 userTimeouts.delete(userId);
