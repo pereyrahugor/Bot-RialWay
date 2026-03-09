@@ -112,7 +112,7 @@ export class AssistantResponseProcessor {
         recursionDepth: number = 0
     ) {
         if (recursionDepth > 5) {
-            console.error('[AssistantResponseProcessor] Límite de recursión alcanzado (5). Abortando para evitar bucle infinito.');
+            // console.error('[AssistantResponseProcessor] Límite de recursión alcanzado (5). Abortando para evitar bucle infinito.');
             await flowDynamic([{ body: "Lo siento, hubo un problema procesando la respuesta. Por favor, intenta de nuevo." }]);
             return;
         }
@@ -130,7 +130,7 @@ export class AssistantResponseProcessor {
             // console.log('[WhatsApp Debug] Mensaje entrante del asistente:', response);
             // Si el usuario está bloqueado por una operación API, evitar procesar nuevos mensajes
             if (userApiBlockMap.has(ctx.from)) {
-                console.log(`[API Block] Mensaje ignorado de usuario bloqueado: ${ctx.from}`);
+                // console.log(`[API Block] Mensaje ignorado de usuario bloqueado: ${ctx.from}`);
                 return;
             }
         }
@@ -141,13 +141,13 @@ export class AssistantResponseProcessor {
 
         // Log de mensaje saliente al usuario (antes de cualquier filtro)
         if (ctx && ctx.type === 'webchat') {
-            console.log('[Webchat Debug] Mensaje saliente al usuario (sin filtrar):', textResponse.substring(0, 500));
+            // console.log('[Webchat Debug] Mensaje saliente al usuario (sin filtrar):', textResponse.substring(0, 500));
         } else {
-            console.log('[WhatsApp Debug] Mensaje saliente al usuario (sin filtrar):', textResponse.substring(0, 500));
+            // console.log('[WhatsApp Debug] Mensaje saliente al usuario (sin filtrar):', textResponse.substring(0, 500));
         }
         
         // Log específico para debug de DB_QUERY
-        console.log('[DEBUG] Buscando [DB_QUERY] en:', textResponse.substring(0, 200));
+        // console.log('[DEBUG] Buscando [DB_QUERY] en:', textResponse.substring(0, 200));
         
         let dbQueryMatchRegexResult = false;
         let sqlQueryToExecute = "";
@@ -162,13 +162,13 @@ export class AssistantResponseProcessor {
         const dbSimpleMatch = textResponse.match(dbSimpleRegex);
         
         if (dbMatch) {
-             console.log('[DEBUG] DB Match result: FOUND [DB_QUERY]');
+             // console.log('[DEBUG] DB Match result: FOUND [DB_QUERY]');
              sqlQueryToExecute = dbMatch[1].trim();
              dbQueryMatchRegexResult = true;
-             if (ctx && ctx.type === 'webchat') console.log(`[Webchat Debug] 🔄 Detectada solicitud de DB Query: ${sqlQueryToExecute}`);
-             else console.log(`[WhatsApp Debug] 🔄 Detectada solicitud de DB Query: ${sqlQueryToExecute}`);
+             // if (ctx && ctx.type === 'webchat') console.log(`[Webchat Debug] 🔄 Detectada solicitud de DB Query: ${sqlQueryToExecute}`);
+             // else console.log(`[WhatsApp Debug] 🔄 Detectada solicitud de DB Query: ${sqlQueryToExecute}`);
         } else if (dbSimpleMatch) {
-             console.log('[DEBUG] DB Match result: FOUND [DB] simple');
+             // console.log('[DEBUG] DB Match result: FOUND [DB] simple');
              const jsonContent = dbSimpleMatch[1].trim();
              
              // Reparación de JSON: envolver en llaves si faltan y asegurar comillas en claves T y D
@@ -196,23 +196,23 @@ export class AssistantResponseProcessor {
                      const safeDato = String(parsedData.D).replace(/'/g, "''");
                      sqlQueryToExecute = `SELECT * FROM "${parsedData.T}" WHERE "${parsedData.T}"::text ~* '${safeDato}'`;
                      dbQueryMatchRegexResult = true;
-                     if (ctx && ctx.type === 'webchat') console.log(`[Webchat Debug] 🔄 Detectada solicitud de DB simple: ${sqlQueryToExecute}`);
-                     else console.log(`[WhatsApp Debug] 🔄 Detectada solicitud de DB simple: ${sqlQueryToExecute}`);
+                     // if (ctx && ctx.type === 'webchat') console.log(`[Webchat Debug] 🔄 Detectada solicitud de DB simple: ${sqlQueryToExecute}`);
+                     // else console.log(`[WhatsApp Debug] 🔄 Detectada solicitud de DB simple: ${sqlQueryToExecute}`);
                  } else {
-                     console.log('[DEBUG] JSON en [DB] no contiene T o D validos:', parsedData);
+                     // console.log('[DEBUG] JSON en [DB] no contiene T o D validos:', parsedData);
                  }
              } catch (e) {
-                 console.log('[DEBUG] Error procesando contenido en [DB]:', e.message, 'Content:', cleanJson);
+                 // console.log('[DEBUG] Error procesando contenido en [DB]:', e.message, 'Content:', cleanJson);
              }
         }
  else {
-             console.log('[DEBUG] DB Match result: NULL');
+             // console.log('[DEBUG] DB Match result: NULL');
         }
 
         if (dbQueryMatchRegexResult) {
             // Ejecutar Query
             const queryResult = await executeDbQuery(sqlQueryToExecute);
-            console.log(`[AssistantResponseProcessor] 📝 Resultado DB RAW:`, queryResult.substring(0, 500) + (queryResult.length > 500 ? "..." : "")); 
+            // console.log(`[AssistantResponseProcessor] 📝 Resultado DB RAW:`, queryResult.substring(0, 500) + (queryResult.length > 500 ? "..." : "")); 
             const feedbackMsg = `[SYSTEM_DB_RESULT]: ${queryResult}`;
             
             // Obtener threadId de forma segura
@@ -235,11 +235,11 @@ export class AssistantResponseProcessor {
             } catch (err: any) {
                 // Si aún así falla por run activo, intentamos una vez más tras una espera larga
                 if (err?.message?.includes('active')) {
-                    console.log("[AssistantResponseProcessor] Re-intentando tras detectar run activo residual (DB)...");
+                    // console.log("[AssistantResponseProcessor] Re-intentando tras detectar run activo residual (DB)...");
                     await new Promise(resolve => setTimeout(resolve, 5000));
                     newResponse = await getAssistantResponse(ASSISTANT_ID, feedbackMsg, state, "Error procesando resultado DB.", ctx ? ctx.from : null, threadId);
                 } else {
-                    console.error("Error al obtener respuesta recursiva (DB):", err);
+                    // console.error("Error al obtener respuesta recursiva (DB):", err);
                     return;
                 }
             }
@@ -256,11 +256,11 @@ export class AssistantResponseProcessor {
         const match = sanitizedTextResponse.match(apiBlockRegex);
         if (match) {
             const jsonStr = match[1].trim();
-            console.log('[Debug] Bloque [API] detectado:', jsonStr);
+            // console.log('[Debug] Bloque [API] detectado:', jsonStr);
             try {
                 jsonData = JSON.parse(jsonStr);
             } catch (e) {
-                console.error('[AssistantResponseProcessor] Error al parsear bloque [API]:', e.message);
+                // console.error('[AssistantResponseProcessor] Error al parsear bloque [API]:', e.message);
                 jsonData = null;
             }
         }
@@ -322,11 +322,11 @@ export class AssistantResponseProcessor {
                 } catch (err: any) {
                     // Si falla por run activo, intentamos una vez más tras una espera larga
                     if (err?.message?.includes('active')) {
-                        console.log("[AssistantResponseProcessor] Re-intentando tras detectar run activo residual (API)...");
+                        // console.log("[AssistantResponseProcessor] Re-intentando tras detectar run activo residual (API)...");
                         await new Promise(resolve => setTimeout(resolve, 5000));
                         newResponse = await getAssistantResponse(ASSISTANT_ID, feedbackMsg, state, "Error procesando resultado API.", ctx?.from, threadId);
                     } else {
-                        console.error("Error al obtener respuesta recursiva tras API:", err);
+                        // console.error("Error al obtener respuesta recursiva tras API:", err);
                         if (unblockUser) unblockUser();
                         return;
                     }
@@ -356,7 +356,7 @@ export class AssistantResponseProcessor {
                 const filePath = await downloadFileFromDrive(fileId);
                 pdfPaths.push(filePath);
             } catch (err: any) {
-                console.error(`[PDF Processor] Error con ID ${fileId}:`, err.message);
+                // console.error(`[PDF Processor] Error con ID ${fileId}:`, err.message);
             }
         }
 
@@ -371,7 +371,7 @@ export class AssistantResponseProcessor {
             let assistantApiResponse = await getAssistantResponse(ASSISTANT_ID, 'ok', state, undefined, ctx.from, threadId);
             // Si la respuesta contiene (ID: ...), no la envíes al usuario, espera 10s y vuelve a enviar ok
             while (assistantApiResponse && /(ID:\s*\w+)/.test(assistantApiResponse)) {
-                console.log('[Debug] Respuesta contiene ID de reserva, esperando 10s y reenviando ok...');
+                // console.log('[Debug] Respuesta contiene ID de reserva, esperando 10s y reenviando ok...');
                 await new Promise(res => setTimeout(res, 10000));
                 assistantApiResponse = await getAssistantResponse(ASSISTANT_ID, 'ok', state, undefined, ctx.from, threadId);
             }
@@ -381,7 +381,7 @@ export class AssistantResponseProcessor {
                     await flowDynamic([{ body: limpiarBloquesJSON(String(assistantApiResponse)).trim() }]);
                     // flowDynamic ejecutado correctamente
                 } catch (err) {
-                    console.error('[WhatsApp Debug] Error en flowDynamic:', err);
+                    // console.error('[WhatsApp Debug] Error en flowDynamic:', err);
                 }
             }
         } else if (cleanTextResponse.length > 0 || pdfPaths.length > 0) {
@@ -399,7 +399,7 @@ export class AssistantResponseProcessor {
                         await new Promise(r => setTimeout(r, 600)); 
                         // flowDynamic ejecutado correctamente
                     } catch (err) {
-                        console.error('[WhatsApp Debug] Error en flowDynamic:', err);
+                        // console.error('[WhatsApp Debug] Error en flowDynamic:', err);
                     }
                 }
             }
@@ -407,12 +407,12 @@ export class AssistantResponseProcessor {
             // Enviar PDFs recolectados
             for (const path of pdfPaths) {
                 try {
-                    console.log(`[AssistantResponseProcessor] Enviando media: ${path}`);
+                    // console.log(`[AssistantResponseProcessor] Enviando media: ${path}`);
                     await flowDynamic([{ body: "📄 Documento adjunto:", media: path }]);
                     // Breve espera entre archivos para asegurar el orden
                     await new Promise(r => setTimeout(r, 1000));
                 } catch (err) {
-                    console.error('[WhatsApp Debug] Error enviando PDF:', err);
+                    // console.error('[WhatsApp Debug] Error enviando PDF:', err);
                 }
             }
         }

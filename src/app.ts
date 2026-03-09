@@ -164,7 +164,7 @@ export const processUserMessage = async (
         // Verificar si el bot está habilitado para este usuario específico
         const isBotActiveForUser = await HistoryHandler.isBotEnabled(ctx.from);
         if (!isBotActiveForUser) {
-            console.log(`[Intervención Humana] Bot ignorando mensaje de ${ctx.from}`);
+            // console.log(`[Intervención Humana] Bot ignorando mensaje de ${ctx.from}`);
             return state;
         }
 
@@ -221,11 +221,11 @@ export const processUserMessage = async (
         // Ignorar mensajes de listas de difusión, newsletters, canales o contactos @lid
         if (ctx.from) {
             if (/@broadcast$/.test(ctx.from) || /@newsletter$/.test(ctx.from) || /@channel$/.test(ctx.from)) {
-                console.log('Mensaje de difusión/canal ignorado:', ctx.from);
+                // console.log('Mensaje de difusión/canal ignorado:', ctx.from);
                 return;
             }
             if (/@lid$/.test(ctx.from)) {
-                console.log('Mensaje de contacto @lid ignorado:', ctx.from);
+                // console.log('Mensaje de contacto @lid ignorado:', ctx.from);
                 // Reportar al admin
                 const assistantName = process.env.ASSISTANT_NAME || 'Asistente demo';
                 const assistantId = process.env.ASSISTANT_ID || 'ID no definido';
@@ -247,7 +247,7 @@ export const processUserMessage = async (
 
         // Usar el nuevo wrapper para obtener respuesta y thread_id
         const response = (await getAssistantResponse(ASSISTANT_ID, ctx.body, state, "Por favor, reenvia el msj anterior ya que no llego al usuario.", ctx.from, ctx.thread_id)) as string;
-        console.log('🔍 DEBUG RAW ASSISTANT MSG (WhatsApp):', JSON.stringify(response));
+        // console.log('🔍 DEBUG RAW ASSISTANT MSG (WhatsApp):', JSON.stringify(response));
 
         // Delegar procesamiento al AssistantResponseProcessor (Maneja DB_QUERY y envios)
         await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
@@ -267,7 +267,7 @@ export const processUserMessage = async (
         return state;
 
     } catch (error) {
-        console.error("Error al procesar el mensaje del usuario:", error);
+        // console.error("Error al procesar el mensaje del usuario:", error);
 
         // Enviar reporte de error al grupo de WhatsApp
         await errorReporter.reportError(
@@ -325,7 +325,7 @@ const hasActiveSession = async () => {
 
         return { active: false, hasRemote: false };
     } catch (error) {
-        console.error('Error verificando sesión:', error);
+        // console.error('Error verificando sesión:', error);
         return { active: false, error: error instanceof Error ? error.message : String(error) };
     }
 };
@@ -340,9 +340,9 @@ const main = async () => {
     if (fs.existsSync(qrPath)) {
         try {
             fs.unlinkSync(qrPath);
-            console.log('🗑️ [Init] QR antiguo eliminado.');
+            // console.log('🗑️ [Init] QR antiguo eliminado.');
         } catch (e) {
-            console.error('⚠️ [Init] No se pudo eliminar QR antiguo:', e);
+            // console.error('⚠️ [Init] No se pudo eliminar QR antiguo:', e);
         }
     }
 
@@ -353,7 +353,7 @@ const main = async () => {
         // Pequeña espera para asegurar que el sistema de archivos se asiente
         await new Promise(resolve => setTimeout(resolve, 2000));
     } catch (e) {
-        console.error('[Init] Error restaurando sesión desde DB:', e);
+        // console.error('[Init] Error restaurando sesión desde DB:', e);
     }
 
     // 3. Inicializar Provider ÚNICO
@@ -372,7 +372,7 @@ const main = async () => {
         try {
             if (isGeneratingQR) return;
             isGeneratingQR = true;
-            console.log('⚡ [Provider] require_action received.');
+            // console.log('⚡ [Provider] require_action received.');
             let qrString = null;
             if (typeof payload === 'string') {
                 qrString = payload;
@@ -381,17 +381,17 @@ const main = async () => {
                 else if (payload.code) qrString = payload.code;
             }
             if (qrString && typeof qrString === 'string') {
-                console.log('⚡ [Provider] QR Code detected. Generating image...');
+                // console.log('⚡ [Provider] QR Code detected. Generating image...');
                 const qrPath = path.join(process.cwd(), 'bot.qr.png');
                 await QRCode.toFile(qrPath, qrString, {
                     color: { dark: '#000000', light: '#ffffff' },
                     scale: 4,
                     margin: 2
                 });
-                console.log(`✅ [Provider] QR Image saved to ${qrPath}`);
+                // console.log(`✅ [Provider] QR Image saved to ${qrPath}`);
             }
         } catch (err) {
-            console.error('❌ [Provider] Error generating QR image:', err);
+            // console.error('❌ [Provider] Error generating QR image:', err);
         } finally {
             isGeneratingQR = false;
         }
@@ -399,15 +399,15 @@ const main = async () => {
 
     adapterProvider.on('host_failure', (payload) => {
         try {
-            console.log('⚠️ [Provider] HOST_FAILURE: Problema de conexión con WhatsApp.', payload);
+            // console.log('⚠️ [Provider] HOST_FAILURE: Problema de conexión con WhatsApp.', payload);
         } catch (e) {
-            console.error('[Provider] Error in host_failure listener:', e);
+            // console.error('[Provider] Error in host_failure listener:', e);
         }
     });
 
     adapterProvider.on('message', (ctx) => {
-        console.log(`Type Msj Recibido: ${ctx.type || 'desconocido'}`);
-        console.log('⚡ [Provider] message received');
+        // console.log(`Type Msj Recibido: ${ctx.type || 'desconocido'}`);
+        // console.log('⚡ [Provider] message received');
         
         // Detección de botones para Sherpa/Baileys
         const isButton = ctx.message?.buttonsResponseMessage || 
@@ -416,7 +416,7 @@ const main = async () => {
                          ctx.message?.listResponseMessage;
         
         if (isButton) {
-            console.log('🔘 Interacción de botón/lista detectada');
+            // console.log('🔘 Interacción de botón/lista detectada');
             // Mapear el texto del botón al body para que el flujo pueda procesarlo
             if (ctx.message?.buttonsResponseMessage) {
                 ctx.body = ctx.message.buttonsResponseMessage.selectedDisplayText || ctx.message.buttonsResponseMessage.selectedId;
@@ -435,25 +435,25 @@ const main = async () => {
             
             // Asignar el tipo ACTION para disparar welcomeFlowButton
             ctx.type = EVENTS.ACTION;
-            console.log(`Updated Type Msj Recibido: ${ctx.type} | Body: ${ctx.body}`);
+            // console.log(`Updated Type Msj Recibido: ${ctx.type} | Body: ${ctx.body}`);
         } else if (ctx.type === 'desconocido' || !ctx.body) {
              // Log de ayuda para mensajes de plantilla de Meta no detectados
-             console.log('⚠️ [Debug] Mensaje potencial de plantilla no detectado. Estructura ctx:', JSON.stringify(ctx).substring(0, 500));
+             // console.log('⚠️ [Debug] Mensaje potencial de plantilla no detectado. Estructura ctx:', JSON.stringify(ctx).substring(0, 500));
         }
     });
     adapterProvider.on('ready', () => {
-        console.log('✅ [Provider] READY: El bot está conectado y operativo.');
+        // console.log('✅ [Provider] READY: El bot está conectado y operativo.');
     });
     adapterProvider.on('auth_failure', (payload) => {
-        console.log('❌ [Provider] AUTH_FAILURE: Error de autenticación.', payload);
+        // console.log('❌ [Provider] AUTH_FAILURE: Error de autenticación.', payload);
     });
 
     errorReporter = new ErrorReporter(adapterProvider, ID_GRUPO_RESUMEN);
 
-    console.log("📌 Inicializando datos desde Google Sheets...");
+    // console.log("📌 Inicializando datos desde Google Sheets...");
     await updateMain();
 
-    console.log('🚀 [Init] Iniciando createBot...');
+    // console.log('🚀 [Init] Iniciando createBot...');
     const adapterFlow = createFlow([welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowVideo, welcomeFlowDoc, locationFlow, idleFlow, welcomeFlowButton]);
     const adapterDB = new MemoryDB();
 
@@ -463,8 +463,8 @@ const main = async () => {
         database: adapterDB,
     });
 
-    console.log('🔍 [DEBUG] createBot httpServer:', !!httpServer);
-    console.log('🔍 [DEBUG] adapterProvider.server:', !!adapterProvider.server);
+    // console.log('🔍 [DEBUG] createBot httpServer:', !!httpServer);
+    // console.log('🔍 [DEBUG] adapterProvider.server:', !!adapterProvider.server);
 
     // Iniciar sincronización periódica de sesión hacia Supabase
     startSessionSync();
@@ -521,12 +521,12 @@ const main = async () => {
                         })
                         .pipe(res);
                 } else {
-                    console.error(`[ERROR] sendFile: File not found: ${filepath}`);
+                    // console.error(`[ERROR] sendFile: File not found: ${filepath}`);
                     res.statusCode = 404;
                     res.end('Not Found');
                 }
             } catch (e) {
-                console.error(`[ERROR] Error in sendFile (${filepath}):`, e);
+                // console.error(`[ERROR] Error in sendFile (${filepath}):`, e);
                 if (!res.headersSent) {
                     res.statusCode = 500;
                     res.end('Internal Error');
@@ -538,16 +538,16 @@ const main = async () => {
 
     // 2. Middleware de logging y redirección de raíz
     app.use((req, res, next) => {
-        console.log(`[REQUEST] ${req.method} ${req.url}`);
+        // console.log(`[REQUEST] ${req.method} ${req.url}`);
         try {
             if (req.url === "/" || req.url === "") {
-                console.log('[DEBUG] Redirigiendo raíz (/) a /dashboard via middleware');
+                // console.log('[DEBUG] Redirigiendo raíz (/) a /dashboard via middleware');
                 res.writeHead(302, { 'Location': '/dashboard' });
                 return res.end();
             }
             next();
         } catch (err) {
-            console.error('❌ [ERROR] Crash en cadena de middleware:', err);
+            // console.error('❌ [ERROR] Crash en cadena de middleware:', err);
             if (!res.headersSent) {
                 res.statusCode = 500;
                 res.end('Internal Server Error');
@@ -558,7 +558,7 @@ const main = async () => {
     // 3. Función para servir páginas HTML
     function serveHtmlPage(route, filename) {
         const handler = (req, res) => {
-            console.log(`[DEBUG] Serving HTML for ${req.url} -> ${filename}`);
+            // console.log(`[DEBUG] Serving HTML for ${req.url} -> ${filename}`);
             try {
                 const possiblePaths = [
                     path.join(process.cwd(), 'src', 'html', filename),
@@ -592,11 +592,11 @@ const main = async () => {
                     res.setHeader('Content-Type', 'text/html');
                     res.end(htmlContent);
                 } else {
-                    console.error(`[ERROR] File not found: ${filename}`);
+                    // console.error(`[ERROR] File not found: ${filename}`);
                     res.status(404).send('HTML no encontrado en el servidor');
                 }
             } catch (err) {
-                console.error(`[ERROR] Failed to serve ${filename}:`, err);
+                // console.error(`[ERROR] Failed to serve ${filename}:`, err);
                 res.status(500).send('Error interno al servir HTML');
             }
         };
@@ -707,7 +707,7 @@ const main = async () => {
                         return res.end();
                     }
                 } catch (picError) {
-                    console.log(`[ProfilePic] No se pudo obtener foto para ${jid}:`, picError.message);
+                    // console.log(`[ProfilePic] No se pudo obtener foto para ${jid}:`, picError.message);
                 }
             }
             
@@ -728,7 +728,7 @@ const main = async () => {
 
     app.post('/api/backoffice/send-message', backofficeAuth, async (req, res) => {
         const { chatId, content } = req.body;
-        console.log(`[Backoffice] Intentando enviar mensaje a ${chatId}: "${content.substring(0, 50)}..."`);
+        // console.log(`[Backoffice] Intentando enviar mensaje a ${chatId}: "${content.substring(0, 50)}..."`);
         
         try {
             if (!adapterProvider) {
@@ -740,7 +740,7 @@ const main = async () => {
             if (chatId.match(/^\d+$/) && !chatId.includes('@')) {
                 // Si es solo números y no tiene @, añadimos el sufijo de WhatsApp
                 targetJid = `${chatId}@s.whatsapp.net`;
-                console.log(`[Backoffice] Normalizando ID ${chatId} -> ${targetJid}`);
+                // console.log(`[Backoffice] Normalizando ID ${chatId} -> ${targetJid}`);
             }
 
             // Usar sendMessage del provider
@@ -856,17 +856,17 @@ const main = async () => {
 
             // Escuchar eventos de la base de datos (HistoryHandler) y retransmitir a Web
             historyEvents.on('new_message', (payload) => {
-                console.log(`📡 [Socket] Re-emitiendo new_message: ${payload.chatId}`);
+                // console.log(`📡 [Socket] Re-emitiendo new_message: ${payload.chatId}`);
                 io.emit('new_message', payload);
             });
 
             historyEvents.on('bot_toggled', (payload) => {
-                console.log(`📡 [Socket] Re-emitiendo bot_toggled: ${payload.chatId} -> ${payload.bot_enabled}`);
+                // console.log(`📡 [Socket] Re-emitiendo bot_toggled: ${payload.chatId} -> ${payload.bot_enabled}`);
                 io.emit('bot_toggled', payload);
             });
 
         io.on('connection', (socket) => {
-            console.log('💬 Cliente web conectado');
+            // console.log('💬 Cliente web conectado');
             socket.on('message', async (msg) => {
                 try {
                     let ip = '';
@@ -903,13 +903,13 @@ const main = async () => {
                     }
                     socket.emit('reply', replyText);
                 } catch (err) {
-                    console.error('Error Socket.IO:', err);
+                    // console.error('Error Socket.IO:', err);
                     socket.emit('reply', 'Error procesando mensaje.');
                 }
             });
         });
         } catch (e) {
-            console.error('❌ [Socket.IO] Error durante la inicialización:', e);
+            // console.error('❌ [Socket.IO] Error durante la inicialización:', e);
         }
     };
 
@@ -938,7 +938,7 @@ const main = async () => {
                         if (!fs.existsSync(localDir)) fs.mkdirSync(localDir, { recursive: true });
                         const localPath = path.join(localDir, Date.now() + "." + ext);
                         fs.writeFileSync(localPath, buffer);
-                        console.log(`[Webchat-API] Imagen guardada en ${localPath}`);
+                        // console.log(`[Webchat-API] Imagen guardada en ${localPath}`);
 
                         const visionResponse = await withRetry(async () => {
                             return await openaiVision.chat.completions.create({
@@ -953,7 +953,7 @@ const main = async () => {
                             });
                         }, {
                             maxRetries: 3,
-                            onRetry: (err, attempt) => console.warn(`[Webchat-Vision] Reintento ${attempt} por error: ${err.message}`)
+                            onRetry: (err, attempt) => {} // console.warn(`[Webchat-Vision] Reintento ${attempt} por error: ${err.message}`)
                         });
                         
                         const result = visionResponse.choices?.[0]?.message?.content || "No se pudo obtener una descripción de la imagen.";
@@ -964,13 +964,13 @@ const main = async () => {
                         if (!fs.existsSync(localDir)) fs.mkdirSync(localDir, { recursive: true });
                         const localPath = path.join(localDir, Date.now() + "." + ext);
                         fs.writeFileSync(localPath, buffer);
-                        console.log(`[Webchat-API] Audio/Video guardado en ${localPath}`);
+                        // console.log(`[Webchat-API] Audio/Video guardado en ${localPath}`);
 
                         try {
                             const transcription = await transcribeAudioFile(localPath);
                             message = `[Audio/Video transcrito]: ${transcription} \n${message}`;
                         } catch (err) {
-                            console.error('[Webchat-API] Error transcribiendo audio/video:', err);
+                            // console.error('[Webchat-API] Error transcribiendo audio/video:', err);
                             message = `[Error] No se pudo procesar el audio/video. \n${message}`;
                         }
                     } else {
@@ -978,7 +978,7 @@ const main = async () => {
                         message = `[Archivo adjunto] ${file.name} (no soportado para lectura directa) \n${message}`;
                     }
                 } catch (e) {
-                    console.error('[Webchat-API] Error procesando archivo:', e);
+                    // console.error('[Webchat-API] Error procesando archivo:', e);
                     message = `[Error al procesar archivo adjunto] \n${message}`;
                 }
             }
@@ -1025,40 +1025,40 @@ const main = async () => {
             }
             res.json({ reply: replyText });
         } catch (err) {
-            console.error('Error /webchat-api:', err);
+            // console.error('Error /webchat-api:', err);
             res.status(500).json({ reply: 'Error interno.' });
         }
     });
 
     // Iniciar servidor
     try {
-        console.log(`🚀 [INFO] Iniciando servidor en puerto ${PORT}...`);
+        // console.log(`🚀 [INFO] Iniciando servidor en puerto ${PORT}...`);
         httpServer(+PORT);
-        console.log(`✅ [INFO] Servidor escuchando en puerto ${PORT}`);
+        // console.log(`✅ [INFO] Servidor escuchando en puerto ${PORT}`);
         
         // Esperamos un segundo para asegurar que el servidor subyacente esté listo
         setTimeout(() => {
             if (app && app.server) {
-                console.log('✅ [INFO] app.server detectado, lanzando initSocketIO');
+                // console.log('✅ [INFO] app.server detectado, lanzando initSocketIO');
                 initSocketIO(app.server);
             } else {
-                console.error('❌ [ERROR] app.server NO DETECTADO después del listen.');
+                // console.error('❌ [ERROR] app.server NO DETECTADO después del listen.');
             }
         }, 1000);
         
     } catch (err) {
-        console.error('❌ [ERROR] Error al iniciar servidor:', err);
+        // console.error('❌ [ERROR] Error al iniciar servidor:', err);
     }
 
-    console.log('✅ [INFO] Main function completed');
+    // console.log('✅ [INFO] Main function completed');
 };
 
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+    // console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
 });
 
 process.on('uncaughtException', (error) => {
-    console.error('❌ Uncaught Exception:', error);
+    // console.error('❌ Uncaught Exception:', error);
     // Opcional: reiniciar proceso si es crítico
     // process.exit(1);
 });
@@ -1069,7 +1069,7 @@ export {
 };
 
 main().catch(err => {
-    console.error('❌ [FATAL] Error en la función main:', err);
+    // console.error('❌ [FATAL] Error en la función main:', err);
 });
 
 //ok

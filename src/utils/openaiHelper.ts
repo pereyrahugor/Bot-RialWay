@@ -19,10 +19,10 @@ export async function waitForActiveRuns(threadId: string, maxAttempts = 5) {
             );
 
             if (activeRun) {
-                console.log(`[Reconexión] Run activo detectado (${activeRun.status}): ${activeRun.id}`);
+                // console.log(`[Reconexión] Run activo detectado (${activeRun.status}): ${activeRun.id}`);
                 // Si está estancado en requires_action, lo cancelamos proactivamente
                 if (activeRun.status === 'requires_action' && attempt >= 2) {
-                    console.warn(`[Reconexión] Run ${activeRun.id} estancado en requires_action. Cancelando...`);
+                    // console.warn(`[Reconexión] Run ${activeRun.id} estancado en requires_action. Cancelando...`);
                     await openai.beta.threads.runs.cancel(threadId, activeRun.id);
                     return;
                 }
@@ -36,7 +36,7 @@ export async function waitForActiveRuns(threadId: string, maxAttempts = 5) {
         // Si llegamos al límite, forzamos cancelación de cualquier cosa que quede
         await cancelActiveRuns(threadId);
     } catch (error) {
-        console.error(`Error verificando runs:`, error);
+        // console.error(`Error verificando runs:`, error);
     }
 }
 
@@ -49,17 +49,17 @@ export async function cancelActiveRuns(threadId: string) {
         const runs = await openai.beta.threads.runs.list(threadId, { limit: 10 });
         for (const run of runs.data) {
             if (['in_progress', 'queued', 'requires_action'].includes(run.status)) {
-                console.log(`[Reconexión] Cancelando run residual ${run.id} (${run.status})`);
+                // console.log(`[Reconexión] Cancelando run residual ${run.id} (${run.status})`);
                 try {
                     await openai.beta.threads.runs.cancel(threadId, run.id);
                     await new Promise(r => setTimeout(r, 1000));
                 } catch (e) {
-                    console.error(`Error cancelando run ${run.id}:`, e.message);
+                    // console.error(`Error cancelando run ${run.id}:`, e.message);
                 }
             }
         }
     } catch (error) {
-        console.error(`Error en cancelActiveRuns:`, error);
+        // console.error(`Error en cancelActiveRuns:`, error);
     }
 }
 
@@ -75,7 +75,7 @@ export async function renewThreadAndRetry(
     errorReporter?: any
 ) {
     try {
-        console.warn(`[ThreadRenewal] Renovando hilo para ${userId} debido a errores persistentes.`);
+        // console.warn(`[ThreadRenewal] Renovando hilo para ${userId} debido a errores persistentes.`);
         
         // 1. Notificar al desarrollador (si hay reporter)
         if (errorReporter && typeof errorReporter.reportError === 'function') {
@@ -97,7 +97,7 @@ export async function renewThreadAndRetry(
         }
 
         const newThread = await openai.beta.threads.create(threadOptions);
-        console.log(`[ThreadRenewal] Nuevo hilo creado: ${newThread.id}`);
+        // console.log(`[ThreadRenewal] Nuevo hilo creado: ${newThread.id}`);
 
         // 4. Actualizar estado y reintentar
         if (state && typeof state.update === 'function') {
@@ -106,7 +106,7 @@ export async function renewThreadAndRetry(
         
         return await toAsk(assistantId, message, state);
     } catch (error) {
-        console.error('[ThreadRenewal] Error fatal renovando hilo:', error);
+        // console.error('[ThreadRenewal] Error fatal renovando hilo:', error);
         throw error;
     }
 }
@@ -136,19 +136,19 @@ export const safeToAsk = async (
         } catch (err: any) {
             attempt++;
             const errorMessage = err?.message || String(err);
-            console.error(`[safeToAsk] Error (Intento ${attempt}/${maxRetries}):`, errorMessage);
+            // console.error(`[safeToAsk] Error (Intento ${attempt}/${maxRetries}):`, errorMessage);
 
             // Si OpenAI nos dice qué run está bloqueando, lo cancelamos de inmediato
             if (errorMessage.includes('while a run') && errorMessage.includes('is active') && threadId) {
                 const runIdMatch = errorMessage.match(/run_[a-zA-Z0-9]+/);
                 if (runIdMatch) {
-                    console.log(`[safeToAsk] Cancelando run bloqueante detectado: ${runIdMatch[0]}`);
+                    // console.log(`[safeToAsk] Cancelando run bloqueante detectado: ${runIdMatch[0]}`);
                     try {
                         await openai.beta.threads.runs.cancel(threadId, runIdMatch[0]);
                         await new Promise(r => setTimeout(r, 3000));
                         continue; // Reintento inmediato
                     } catch (cancelErr) {
-                        console.error(`[safeToAsk] Error cancelando ${runIdMatch[0]}:`, cancelErr);
+                        // console.error(`[safeToAsk] Error cancelando ${runIdMatch[0]}:`, cancelErr);
                     }
                 }
             }
@@ -159,7 +159,7 @@ export const safeToAsk = async (
             }
             
             const waitTime = attempt * 2000;
-            console.log(`[safeToAsk] Esperando ${waitTime/1000}s para reintentar...`);
+            // console.log(`[safeToAsk] Esperando ${waitTime/1000}s para reintentar...`);
             await new Promise(r => setTimeout(r, waitTime));
         }
     }
