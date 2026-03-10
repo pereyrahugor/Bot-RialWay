@@ -49,6 +49,14 @@ const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
       return;
     }
 
+    // --- FILTRO DE ECO / MENSAJES PROPIOS ---
+    const botNumber = (process.env.YCLOUD_WABA_NUMBER || '').replace(/\D/g, '');
+    const senderNumber = (userId || '').replace(/\D/g, '');
+    
+    if (ctx.key?.fromMe || (botNumber && senderNumber === botNumber)) {
+        return;
+    }
+
     reset(ctx, gotoFlow, setTime);
 
     // Asegurar que userQueues tenga un array inicializado para este usuario

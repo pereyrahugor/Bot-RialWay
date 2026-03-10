@@ -1,5 +1,5 @@
 // Clase para manejar la lógica de reconexión cuando el campo nombre está vacío
-import { safeToAsk } from '../app';
+import { safeToAsk } from '../utils/openaiHelper';
 import { extraerDatosResumen, GenericResumenData } from '~/utils/extractJsonData';
 import { downloadFileFromDrive } from '~/utils/googleDriveHandler';
 import { HistoryHandler } from '~/utils/historyHandler';
@@ -194,7 +194,7 @@ export class ReconectionFlow {
             }
 
             // Si no respondió, intentar obtener el resumen nuevamente desde el asistente
-            const resumen = await safeToAsk(this.ASSISTANT_ID, "GET_RESUMEN", this.state);
+            const resumen = await safeToAsk(this.ASSISTANT_ID, "GET_RESUMEN", this.state) as string;
             const data: GenericResumenData = extraerDatosResumen(resumen);
             const tipo = data.tipo || "SI_RESUMEN";
             if (tipo === "SI_RESUMEN") {
@@ -241,25 +241,12 @@ export class ReconectionFlow {
                 }
                 // Enviar el mensaje recibido al asistente como "hola, [msj]"
                 const userMsg = msg.body;
-                const prompt = `hola, ${userMsg}`;
                 try {
-                    // Persistir el mensaje real del usuario en el backoffice
-                    await HistoryHandler.saveMessage(this.ctx.from, 'user', userMsg, 'text', this.ctx.pushName || null);
-                    const response = await safeToAsk(this.ASSISTANT_ID, prompt, this.state);
-                    
-                    // PROCESAR Y ENVIAR RESPUESTA AL USUARIO
-                    await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
-                        response,
-                        this.ctx,
-                        this.flowDynamic,
-                        this.state,
-                        this.provider,
-                        this.gotoFlow,
-                        safeToAsk,
-                        this.ASSISTANT_ID
-                    );
+                    // No procesamos la respuesta aquí para evitar doble respuesta, 
+                    // ya que al retornar resolve(true), el flujo derivará a welcomeFlowTxt
+                    // que se encargará del procesamiento normal.
                 } catch (err) {
-                    // console.error('[ReconectionFlow] Error enviando mensaje al asistente:', err);
+                    // console.error('[ReconectionFlow] Error en onMessage del reconector:', err);
                 }
                 responded = true;
                 if (this.provider.off) this.provider.off('message', onMessage);

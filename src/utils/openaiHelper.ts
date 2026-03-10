@@ -123,44 +123,51 @@ export const safeToAsk = async (
     errorReporter?: any,
     maxRetries = 5
 ) => {
-    let attempt = 0;
-    while (attempt < maxRetries) {
-        let threadId = state && typeof state.get === 'function' && state.get('thread_id');
-        
-        if (threadId) {
-            await waitForActiveRuns(threadId);
-        }
+    const SAFE_TIMEOUT = 60000; // 1 minuto de timeout total de seguridad
+    
+    return Promise.race([
+        (async () => {
+            let attempt = 0;
+            while (attempt < maxRetries) {
+                let threadId = state && typeof state.get === 'function' && state.get('thread_id');
+                
+                if (threadId) {
+                    await waitForActiveRuns(threadId);
+                }
 
-        try {
-            return await toAsk(assistantId, message, state);
-        } catch (err: any) {
-            attempt++;
-            const errorMessage = err?.message || String(err);
-            // console.error(`[safeToAsk] Error (Intento ${attempt}/${maxRetries}):`, errorMessage);
+                try {
+                    return await toAsk(assistantId, message, state);
+                } catch (err: any) {
+                    attempt++;
+                    const errorMessage = err?.message || String(err);
+                    // console.error(`[safeToAsk] Error (Intento ${attempt}/${maxRetries}):`, errorMessage);
 
-            // Si OpenAI nos dice qué run está bloqueando, lo cancelamos de inmediato
-            if (errorMessage.includes('while a run') && errorMessage.includes('is active') && threadId) {
-                const runIdMatch = errorMessage.match(/run_[a-zA-Z0-9]+/);
-                if (runIdMatch) {
-                    // console.log(`[safeToAsk] Cancelando run bloqueante detectado: ${runIdMatch[0]}`);
-                    try {
-                        await openai.beta.threads.runs.cancel(threadId, runIdMatch[0]);
-                        await new Promise(r => setTimeout(r, 3000));
-                        continue; // Reintento inmediato
-                    } catch (cancelErr) {
-                        // console.error(`[safeToAsk] Error cancelando ${runIdMatch[0]}:`, cancelErr);
+                    // Si OpenAI nos dice qué run está bloqueando, lo cancelamos de inmediato
+                    if (errorMessage.includes('while a run') && errorMessage.includes('is active') && threadId) {
+                        const runIdMatch = errorMessage.match(/run_[a-zA-Z0-9]+/);
+                        if (runIdMatch) {
+                            // console.log(`[safeToAsk] Cancelando run bloqueante detectado: ${runIdMatch[0]}`);
+                            try {
+                                await openai.beta.threads.runs.cancel(threadId, runIdMatch[0]);
+                                await new Promise(r => setTimeout(r, 3000));
+                                continue; // Reintento inmediato
+                            } catch (cancelErr) {
+                                // console.error(`[safeToAsk] Error cancelando ${runIdMatch[0]}:`, cancelErr);
+                            }
+                        }
                     }
+
+                    if (attempt >= maxRetries) {
+                        // CAPA 3: Renovación de Hilo
+                        return await renewThreadAndRetry(assistantId, message, state, userId, errorReporter);
+                    }
+                    
+                    const waitTime = attempt * 2000;
+                    // console.log(`[safeToAsk] Esperando ${waitTime/1000}s para reintentar...`);
+                    await new Promise(r => setTimeout(r, waitTime));
                 }
             }
-
-            if (attempt >= maxRetries) {
-                // CAPA 3: Renovación de Hilo
-                return await renewThreadAndRetry(assistantId, message, state, userId, errorReporter);
-            }
-            
-            const waitTime = attempt * 2000;
-            // console.log(`[safeToAsk] Esperando ${waitTime/1000}s para reintentar...`);
-            await new Promise(r => setTimeout(r, waitTime));
-        }
-    }
+        })(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT_SAFE_TO_ASK')), SAFE_TIMEOUT))
+    ]);
 };

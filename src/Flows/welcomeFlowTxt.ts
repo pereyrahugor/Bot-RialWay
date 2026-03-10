@@ -21,6 +21,14 @@ export const welcomeFlowTxt = addKeyword<BaileysProvider, MemoryDB>(EVENTS.WELCO
             return;
         }
 
+        // --- FILTRO DE ECO / MENSAJES PROPIOS ---
+        const botNumber = (process.env.YCLOUD_WABA_NUMBER || '').replace(/\D/g, '');
+        const senderNumber = (userId || '').replace(/\D/g, '');
+        
+        if (ctx.key?.fromMe || (botNumber && senderNumber === botNumber)) {
+            return;
+        }
+
         console.log(`📩 Mensaje recibido de :${userId}`);
 
         reset(ctx, gotoFlow, setTime);

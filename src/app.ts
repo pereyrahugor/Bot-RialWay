@@ -34,6 +34,7 @@ export { safeToAsk, waitForActiveRuns, cancelActiveRuns, renewThreadAndRetry };
 import { AssistantResponseProcessor } from "./utils/AssistantResponseProcessor";
 import { updateMain } from "./addModule/updateMain";
 import { ErrorReporter } from "./utils/errorReporter";
+import { stop, reset } from "./utils/timeOut";
 // import { AssistantBridge } from './utils-web/AssistantBridge';
 import { WebChatManager } from './utils-web/WebChatManager';
 import { fileURLToPath } from 'url';
@@ -117,7 +118,12 @@ export const getAssistantResponse = async (assistantId, message, state, fallback
                 clearTimeout(userTimeouts.get(userId));
                 userTimeouts.delete(userId);
             }
-            reject(error);
+            if (error?.message === 'TIMEOUT_SAFE_TO_ASK') {
+                console.error(`[getAssistantResponse] Finalizando por timeout de seguridad para ${userId}`);
+                resolve(fallbackMessage || "Lo siento, estoy tardando un poco más de lo habitual. Por favor, reintenta en un momento.");
+            } else {
+                reject(error);
+            }
         }
     });
 };
@@ -151,6 +157,19 @@ export const processUserMessage = async (
             await HistoryHandler.saveMessage(ctx.from, 'assistant', msg, 'text');
             return state;
         }
+
+        // --- FILTRO DE ECO / MENSAJES PROPIOS ---
+        const botNumber = (process.env.YCLOUD_WABA_NUMBER || '').replace(/\D/g, '');
+        const senderNumber = (ctx.from || '').replace(/\D/g, '');
+        
+        if (ctx.key?.fromMe || (botNumber && senderNumber === botNumber)) {
+            // console.log(`[Echo Filter] Ignorando mensaje propio de ${senderNumber}`);
+            stop(ctx); // Detenemos cualquier timer de inactividad que se haya activado por error
+            return;
+        }
+
+        // Detener timer de inactividad inmediatamente al recibir mensaje real del usuario
+        stop(ctx);
 
         // Persistir mensaje del usuario
         await HistoryHandler.saveMessage(
@@ -260,6 +279,10 @@ export const processUserMessage = async (
             getAssistantResponse,
             ASSISTANT_ID
         );
+
+        // Reiniciar timer de inactividad después de que el asistente ha respondido
+        const setTime = Number(process.env.timeOutCierre || 5) * 60 * 1000;
+        reset(ctx, gotoFlow, setTime);
 
         // Si es un contacto con nombre, intentamos guardar el nombre (si no lo tenemos)
         // en algún lugar, o manejarlo como variable de sesión.
