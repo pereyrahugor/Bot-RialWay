@@ -123,7 +123,7 @@ export const safeToAsk = async (
     errorReporter?: any,
     maxRetries = 5
 ) => {
-    const SAFE_TIMEOUT = 60000; // 1 minuto de timeout total de seguridad
+    const SAFE_TIMEOUT = 120000; // 2 minutos de timeout total de seguridad
     
     return Promise.race([
         (async () => {

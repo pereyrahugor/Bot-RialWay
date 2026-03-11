@@ -71,7 +71,7 @@ registerProcessCallback(async (item) => {
 export let adapterProvider;
 export let errorReporter;
 
-const TIMEOUT_MS = 30000;
+const TIMEOUT_MS = 60000;
 
 // Control de timeout por usuario para evitar ejecuciones automáticas superpuestas
 const userTimeouts = new Map();
@@ -96,10 +96,10 @@ export const getAssistantResponse = async (assistantId, message, state, fallback
     }
 
     // Usamos el wrapper safeToAsk directamente.
-    // El timeout de 30s ahora se maneja de forma más limpia sin disparar una ejecución paralela
+    // El timeout se maneja de forma más limpia sin disparar una ejecución paralela
     return new Promise(async (resolve, reject) => {
         const timeoutId = setTimeout(async () => {
-            console.warn("⏱ Timeout de 30s alcanzado en la comunicación con OpenAI.");
+            console.warn("⏱ Timeout de 60s alcanzado en la comunicación con OpenAI.");
             // No resolvemos aquí con safeToAsk de nuevo para evitar carreras, 
             // dejamos que la petición original siga o falle por si sola, o retornamos un fallback simple.
             // resolve("Lo siento, estoy tardando un poco más de lo habitual. Por favor, aguarda un momento o reintenta.");
