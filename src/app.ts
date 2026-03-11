@@ -430,17 +430,23 @@ const main = async () => {
 
     adapterProvider.on('message', (ctx) => {
         // console.log(`Type Msj Recibido: ${ctx.type || 'desconocido'}`);
-        // console.log('⚡ [Provider] message received');
         
-        // Detección de botones para Sherpa/Baileys
+        // Detección de tipos especiales (Botones, Listas, Flows, Ubicación, etc)
+        const isLocation = ctx.message?.locationMessage || ctx.message?.liveLocationMessage;
+        const isOrder = ctx.message?.orderMessage || ctx.message?.productMessage;
         const isButton = ctx.message?.buttonsResponseMessage || 
                          ctx.message?.templateButtonReplyMessage || 
                          ctx.message?.interactiveResponseMessage ||
                          ctx.message?.listResponseMessage;
         
-        if (isButton) {
+        if (isLocation) {
+            ctx.type = EVENTS.LOCATION;
+            ctx.body = ctx.body || '_event_location_';
+        } else if (isOrder) {
+            ctx.type = EVENTS.ACTION;
+            ctx.body = ctx.message?.orderMessage ? `Orden: ${ctx.message.orderMessage.orderId}` : 'Producto en catálogo';
+        } else if (isButton) {
             // console.log('🔘 Interacción de botón/lista detectada');
-            // Mapear el texto del botón al body para que el flujo pueda procesarlo
             if (ctx.message?.buttonsResponseMessage) {
                 ctx.body = ctx.message.buttonsResponseMessage.selectedDisplayText || ctx.message.buttonsResponseMessage.selectedId;
             } else if (ctx.message?.templateButtonReplyMessage) {
@@ -448,19 +454,28 @@ const main = async () => {
             } else if (ctx.message?.listResponseMessage) {
                 ctx.body = ctx.message.listResponseMessage.title || ctx.message.listResponseMessage.singleSelectReply?.selectedRowId;
             } else if (ctx.message?.interactiveResponseMessage) {
-                try {
-                    const interactive = JSON.parse(ctx.message.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson);
-                    ctx.body = interactive.id;
-                } catch (e) {
+                const interactive = ctx.message.interactiveResponseMessage;
+                if (interactive.nativeFlowResponseMessage) {
+                    try {
+                        const params = JSON.parse(interactive.nativeFlowResponseMessage.paramsJson);
+                        ctx.body = params.id || params.flow_token || 'flow_response';
+                    } catch (e) { ctx.body = 'flow_interaction'; }
+                } else if (interactive.buttonReply) {
+                    ctx.body = interactive.buttonReply.title || interactive.buttonReply.id;
+                } else if (interactive.listReply) {
+                    ctx.body = interactive.listReply.title || interactive.listReply.id;
+                } else {
                     ctx.body = 'buttonInteraction';
                 }
             }
             
-            // Asignar el tipo ACTION para disparar welcomeFlowButton
             ctx.type = EVENTS.ACTION;
-            // console.log(`Updated Type Msj Recibido: ${ctx.type} | Body: ${ctx.body}`);
         } else if (ctx.type === 'desconocido' || !ctx.body) {
-             // Log de ayuda para mensajes de plantilla de Meta no detectados
+             // Fallback para otros tipos de mensajes de Meta que no traen texto plano
+             if (ctx.message?.contactMessage || ctx.message?.contactsArrayMessage) {
+                 ctx.type = EVENTS.ACTION;
+                 ctx.body = 'Contacto Compartido';
+             }
              // console.log('⚠️ [Debug] Mensaje potencial de plantilla no detectado. Estructura ctx:', JSON.stringify(ctx).substring(0, 500));
         }
     });
