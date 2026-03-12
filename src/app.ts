@@ -431,30 +431,37 @@ const main = async () => {
     adapterProvider.on('message', (ctx) => {
         // console.log(`Type Msj Recibido: ${ctx.type || 'desconocido'}`);
         
-        // Detección de tipos especiales (Botones, Listas, Flows, Ubicación, etc)
-        const isLocation = ctx.message?.locationMessage || ctx.message?.liveLocationMessage;
-        const isOrder = ctx.message?.orderMessage || ctx.message?.productMessage;
-        const isButton = ctx.message?.buttonsResponseMessage || 
-                         ctx.message?.templateButtonReplyMessage || 
-                         ctx.message?.interactiveResponseMessage ||
-                         ctx.message?.listResponseMessage;
+        // Detección de tipos especiales (Botones, Listas, Flows, Ubicación, Anuncios, etc)
+        const message = ctx.message;
+        const isLocation = message?.locationMessage || message?.liveLocationMessage;
+        const isOrder = message?.orderMessage || message?.productMessage;
+        const isAd = message?.extendedTextMessage?.contextInfo?.externalAdReply;
+        const isButton = message?.buttonsResponseMessage || 
+                         message?.templateButtonReplyMessage || 
+                         message?.interactiveResponseMessage ||
+                         message?.listResponseMessage;
         
+        // Prioridad 1: Ubicación
         if (isLocation) {
             ctx.type = EVENTS.LOCATION;
             ctx.body = ctx.body || '_event_location_';
-        } else if (isOrder) {
+        } 
+        // Prioridad 2: Órdenes de carrito/catálogo
+        else if (isOrder) {
             ctx.type = EVENTS.ACTION;
-            ctx.body = ctx.message?.orderMessage ? `Orden: ${ctx.message.orderMessage.orderId}` : 'Producto en catálogo';
-        } else if (isButton) {
-            // console.log('🔘 Interacción de botón/lista detectada');
-            if (ctx.message?.buttonsResponseMessage) {
-                ctx.body = ctx.message.buttonsResponseMessage.selectedDisplayText || ctx.message.buttonsResponseMessage.selectedId;
-            } else if (ctx.message?.templateButtonReplyMessage) {
-                ctx.body = ctx.message.templateButtonReplyMessage.selectedDisplayText || ctx.message.templateButtonReplyMessage.selectedId;
-            } else if (ctx.message?.listResponseMessage) {
-                ctx.body = ctx.message.listResponseMessage.title || ctx.message.listResponseMessage.singleSelectReply?.selectedRowId;
-            } else if (ctx.message?.interactiveResponseMessage) {
-                const interactive = ctx.message.interactiveResponseMessage;
+            ctx.body = message?.orderMessage ? `Orden: ${message.orderMessage.orderId}` : 'Producto en catálogo';
+        } 
+        // Prioridad 3: Interacciones de botones/listas/flows
+        else if (isButton) {
+            // console.log('🔘 Interacción de botón detectada');
+            if (message?.buttonsResponseMessage) {
+                ctx.body = message.buttonsResponseMessage.selectedDisplayText || message.buttonsResponseMessage.selectedId;
+            } else if (message?.templateButtonReplyMessage) {
+                ctx.body = message.templateButtonReplyMessage.selectedDisplayText || message.templateButtonReplyMessage.selectedId;
+            } else if (message?.listResponseMessage) {
+                ctx.body = message.listResponseMessage.title || message.listResponseMessage.singleSelectReply?.selectedRowId;
+            } else if (message?.interactiveResponseMessage) {
+                const interactive = message.interactiveResponseMessage;
                 if (interactive.nativeFlowResponseMessage) {
                     try {
                         const params = JSON.parse(interactive.nativeFlowResponseMessage.paramsJson);
@@ -464,19 +471,33 @@ const main = async () => {
                     ctx.body = interactive.buttonReply.title || interactive.buttonReply.id;
                 } else if (interactive.listReply) {
                     ctx.body = interactive.listReply.title || interactive.listReply.id;
-                } else {
-                    ctx.body = 'buttonInteraction';
                 }
             }
-            
             ctx.type = EVENTS.ACTION;
-        } else if (ctx.type === 'desconocido' || !ctx.body) {
-             // Fallback para otros tipos de mensajes de Meta que no traen texto plano
-             if (ctx.message?.contactMessage || ctx.message?.contactsArrayMessage) {
+        } 
+        // Prioridad 4: Anuncios de Meta (Click-to-WhatsApp) y mensajes extendidos
+        else if (isAd || message?.extendedTextMessage) {
+            const extText = message?.extendedTextMessage;
+            // Capturamos el texto si no está ya en el body
+            if (!ctx.body || ctx.body === '') {
+                ctx.body = extText?.text || '';
+            }
+            
+            // Si es un anuncio, enriquecemos el body para que la IA tenga contexto
+            if (isAd) {
+                const adTitle = isAd.title || '';
+                const adBody = isAd.body || '';
+                // Agregamos contexto de anuncio de forma invisible para el usuario pero visible para el bot
+                ctx.body = `${ctx.body} [Contexto Anuncio: ${adTitle} - ${adBody}]`.trim();
+                // console.log(`📢 Detectado Anuncio de Meta: ${adTitle}`);
+            }
+        }
+        // Fallback: Otros tipos (Contactos, etc)
+        else if (ctx.type === 'desconocido' || !ctx.body) {
+             if (message?.contactMessage || message?.contactsArrayMessage) {
                  ctx.type = EVENTS.ACTION;
                  ctx.body = 'Contacto Compartido';
              }
-             // console.log('⚠️ [Debug] Mensaje potencial de plantilla no detectado. Estructura ctx:', JSON.stringify(ctx).substring(0, 500));
         }
     });
     adapterProvider.on('ready', () => {
