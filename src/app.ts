@@ -42,6 +42,8 @@ import { getArgentinaDatetimeString } from "./utils/ArgentinaTime";
 import { RailwayApi } from "./Api-RailWay/Railway";
 import { withRetry } from "./utils/retryHelper";
 import { HistoryHandler, historyEvents } from "./utils/historyHandler";
+import { obtenerTextoDelMensaje, obtenerMensajeUnwrapped } from "./utils/messageHelper";
+
 
 //import { imgResponseFlow } from "./Flows/imgResponse";
 //import { listImg } from "./addModule/listImg";
@@ -431,8 +433,20 @@ const main = async () => {
     adapterProvider.on('message', (ctx) => {
         // console.log(`Type Msj Recibido: ${ctx.type || 'desconocido'}`);
         
+        // 1. Desenvolver el mensaje (Temporales, Vista Única, etc)
+        const message = obtenerMensajeUnwrapped(ctx);
+        if (message) {
+            ctx.message = message;
+        }
+        
+        // 2. Extraer texto base usando el nuevo extractor robusto
+        const textoExtraido = obtenerTextoDelMensaje(message);
+
+        if (!ctx.body || ctx.body === '' || ctx.body === '_event_media_' || ctx.body === '_event_document_' || ctx.body === '_event_voice_note_') {
+            ctx.body = textoExtraido;
+        }
+
         // Detección de tipos especiales (Botones, Listas, Flows, Ubicación, Anuncios, etc)
-        const message = ctx.message;
         const isLocation = message?.locationMessage || message?.liveLocationMessage;
         const isOrder = message?.orderMessage || message?.productMessage;
         const isAd = message?.extendedTextMessage?.contextInfo?.externalAdReply;
@@ -500,6 +514,7 @@ const main = async () => {
              }
         }
     });
+
     adapterProvider.on('ready', () => {
         // console.log('✅ [Provider] READY: El bot está conectado y operativo.');
     });

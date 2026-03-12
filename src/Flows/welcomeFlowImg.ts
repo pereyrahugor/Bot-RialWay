@@ -123,7 +123,9 @@ const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
       const result = response.choices[0].message.content || "No se pudo obtener una descripción de la imagen.";
 
       // Enviar el mensaje al asistente principal para que lo procese y mantenga el contexto
-      ctx.body = `[Imagen recibida]: ${result}`;
+      const caption = ctx.body && !ctx.body.includes('_event_') ? ctx.body : '';
+      ctx.body = `[Imagen recibida]${caption ? ': ' + caption : ''}. (Análisis): ${result}`;
+
 
       // Reencolar el mensaje para que lo procese el flujo principal (texto)
       if (!userQueues.has(userId)) {
