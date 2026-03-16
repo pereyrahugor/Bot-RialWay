@@ -11,8 +11,7 @@ class ErrorReporter {
     }
 
     async reportError(error: Error, userId: string, userLink: string) {
-        const errorMessage = `⚠ pregunta que NO supe responder ⚠\n` +
-            `No supe: ${error.message}\n` +
+        const errorMessage = `⚠️ Falla de conexion OPEN IA ⚠️\nSe hicieron 5 reintento de establecer conexión.\n` +
             `whatsappLink = ${userLink}`;
 
         try {
