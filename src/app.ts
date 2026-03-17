@@ -10,6 +10,7 @@ import polka from 'polka';
 import bodyParser from 'body-parser';
 import { createServer } from 'http';
 import QRCode from 'qrcode';
+import multer from 'multer';
 // Estado global para encender/apagar el bot
 let botEnabled = true;
 
@@ -57,8 +58,23 @@ import { fileURLToPath } from 'url';
 import { getArgentinaDatetimeString } from "./utils/ArgentinaTime";
 import { RailwayApi } from "./Api-RailWay/Railway";
 import { withRetry } from "./utils/retryHelper";
-import { HistoryHandler, historyEvents } from "./utils/historyHandler";
+import { HistoryHandler, historyEvents, supabase } from "./utils/historyHandler";
 import { obtenerTextoDelMensaje, obtenerMensajeUnwrapped } from "./utils/messageHelper";
+
+// Multer config para subida de archivos (manteniendo extensiones)
+const multerStorage = multer.diskStorage({
+    destination: (_req, _file, cb) => {
+        const dir = 'uploads/';
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        cb(null, dir);
+    },
+    filename: (_req, file, cb) => {
+        const ext = path.extname(file.originalname);
+        const fileName = `${Date.now()}-${Math.round(Math.random() * 1E9)}${ext}`;
+        cb(null, fileName);
+    }
+});
+const upload = multer({ storage: multerStorage });
 
 
 //import { imgResponseFlow } from "./Flows/imgResponse";
@@ -718,6 +734,7 @@ const main = async () => {
     app.use("/js", serve(path.join(process.cwd(), "src", "js")));
     app.use("/style", serve(path.join(process.cwd(), "src", "style")));
     app.use("/assets", serve(path.join(process.cwd(), "src", "assets")));
+    app.use("/uploads", serve(path.join(process.cwd(), "uploads")));
 
     // Servir el código QR
     app.get("/qr.png", (req, res) => {
@@ -825,45 +842,112 @@ const main = async () => {
         res.json(result);
     });
 
-    app.post('/api/backoffice/send-message', backofficeAuth, async (req, res) => {
-        const { chatId, content } = req.body;
-        // console.log(`[Backoffice] Intentando enviar mensaje a ${chatId}: "${content.substring(0, 50)}..."`);
-        
+    app.post('/api/backoffice/send-message', backofficeAuth, upload.single('file'), async (req, res) => {
         try {
+            const { chatId, message } = req.body;
+            const file = (req as any).file;
+
+            if (!chatId) return res.status(400).json({ success: false, error: 'chatId is required' });
+
             if (!adapterProvider) {
-                return res.status(500).json({ success: false, error: "Provider not ready (adapterProvider is null)" });
+                return res.status(503).json({ success: false, error: 'WhatsApp provider not ready' });
             }
 
-            // Normalización del ID para WhatsApp (Baileys JID format)
-            let targetJid = chatId;
-            if (chatId.match(/^\d+$/) && !chatId.includes('@')) {
-                // Si es solo números y no tiene @, añadimos el sufijo de WhatsApp
-                targetJid = `${chatId}@s.whatsapp.net`;
-                // console.log(`[Backoffice] Normalizando ID ${chatId} -> ${targetJid}`);
+            const jid = chatId.includes('@') ? chatId : `${chatId}@s.whatsapp.net`;
+            console.log(`[BACKOFFICE] Intentando enviar mensaje a ${jid}...`);
+
+            let fileUrl = '';
+
+            if (file) {
+                // Enviar archivo multimedia
+                if (typeof adapterProvider.sendMessage === 'function') {
+                    await adapterProvider.sendMessage(jid, message || '', { media: file.path });
+                }
+                fileUrl = `/uploads/${file.filename}`;
+            } else {
+                // Enviar texto
+                if (typeof adapterProvider.sendMessage === 'function') {
+                    await adapterProvider.sendMessage(jid, message, {});
+                } else if (typeof adapterProvider.sendText === 'function') {
+                    await adapterProvider.sendText(jid, message);
+                }
             }
 
-            // Usar sendMessage del provider
-            if (typeof adapterProvider.sendMessage === 'function') {
-                await adapterProvider.sendMessage(targetJid, content, {});
-                await HistoryHandler.saveMessage(chatId, 'assistant', content, 'text');
-                return res.json({ success: true });
-            } 
-            
-            // Fallback: intentar con sendText si existe
-            if (typeof adapterProvider.sendText === 'function') {
-                await adapterProvider.sendText(targetJid, content);
-                await HistoryHandler.saveMessage(chatId, 'assistant', content, 'text');
-                return res.json({ success: true });
-            }
+            // Guardar en historial como assistant
+            const finalContent = file ? fileUrl : (message || '');
+            const finalType = file ? 'media' : 'text';
+            await HistoryHandler.saveMessage(chatId, 'assistant', finalContent, finalType as any);
 
-            console.error("[Backoffice] Error: El provider no tiene métodos de envío compatibles.");
-            res.status(500).json({ success: false, error: "Provider methods not found" });
+            // Actualizar timestamp de última actividad humana
+            await HistoryHandler.updateLastHumanMessage(chatId);
 
-        } catch (err: any) {
-            console.error('[Backoffice] Error excepcional enviando mensaje:', err);
-            res.status(500).json({ success: false, error: err.message || "Unknown error during send-message" });
+            console.log(`✅ [BACKOFFICE] Mensaje enviado y guardado para ${jid}`);
+            res.json({ success: true, fileUrl: file ? fileUrl : undefined });
+        } catch (e: any) {
+            console.error('[BACKOFFICE] Error enviando mensaje:', e);
+            res.status(500).json({ success: false, error: e.message });
         }
     });
+
+    // --- Rutas de Etiquetas (Tags) ---
+    app.get('/api/backoffice/tags', backofficeAuth, async (req, res) => {
+        const tags = await HistoryHandler.getTags();
+        res.json(tags);
+    });
+
+    app.post('/api/backoffice/tags', backofficeAuth, async (req, res) => {
+        const { name, color } = req.body;
+        const result = await HistoryHandler.createTag(name, color);
+        res.json(result);
+    });
+
+    app.put('/api/backoffice/tags/:id', backofficeAuth, async (req, res) => {
+        const { name, color } = req.body;
+        const result = await HistoryHandler.updateTag(req.params.id, name, color);
+        res.json(result);
+    });
+
+    app.delete('/api/backoffice/tags/:id', backofficeAuth, async (req, res) => {
+        const result = await HistoryHandler.deleteTag(req.params.id);
+        res.json(result);
+    });
+
+    app.post('/api/backoffice/chats/:chatId/tags', backofficeAuth, async (req, res) => {
+        const { tagId } = req.body;
+        const result = await HistoryHandler.addTagToChat(req.params.chatId, tagId);
+        res.json(result);
+    });
+
+    app.delete('/api/backoffice/chats/:chatId/tags/:tagId', backofficeAuth, async (req, res) => {
+        const result = await HistoryHandler.removeTagFromChat(req.params.chatId, req.params.tagId);
+        res.json(result);
+    });
+
+    // --- Worker de Inactividad Humana ---
+    // Reactiva el bot si el humano no responde en 15 minutos
+    setInterval(async () => {
+        try {
+            const now = new Date();
+            const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000);
+            
+            const { data: inactiveChats, error } = await supabase
+                .from('chats')
+                .select('id')
+                .eq('project_id', process.env.RAILWAY_PROJECT_ID || 'default_project')
+                .eq('bot_enabled', false)
+                .or(`last_human_message_at.lte.${fifteenMinutesAgo.toISOString()},last_human_message_at.is.null`);
+
+            if (error) throw error;
+
+            for (const chat of (inactiveChats || [])) {
+                console.log(`[WORKER] Reactivando bot para ${chat.id} por inactividad humana`);
+                await HistoryHandler.toggleBot(chat.id, true);
+                historyEvents.emit('bot_toggled', { chatId: chat.id, enabled: true });
+            }
+        } catch (e) {
+            console.error('[WORKER] Error checking human inactivity:', e);
+        }
+    }, 60000); // Revisar cada minuto
 
     serveHtmlPage("/login", "login.html");
     serveHtmlPage("/backoffice", "backoffice.html"); // Nueva vista de gestión
