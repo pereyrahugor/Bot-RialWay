@@ -12,6 +12,22 @@ import { createServer } from 'http';
 import QRCode from 'qrcode';
 // Estado global para encender/apagar el bot
 let botEnabled = true;
+
+// Función para registrar handlers seguros de errores globales
+// que NO maten el proceso (el provider de Sherpa registra los suyos
+// con process.exit(1) en uncaughtException, y los sobreescribimos).
+function registerSafeErrorHandlers() {
+    process.removeAllListeners('uncaughtException');
+    process.removeAllListeners('unhandledRejection');
+    process.on('uncaughtException', (error) => {
+        console.error(`⚠️ [UncaughtException] ${new Date().toISOString()}:`, error);
+        // NO llamamos process.exit — dejamos que el bot siga corriendo
+    });
+    process.on('unhandledRejection', (reason, promise) => {
+        console.error(`⚠️ [UnhandledRejection] ${new Date().toISOString()}:`, reason);
+    });
+}
+
 import { createBot, createProvider, createFlow, addKeyword, EVENTS } from "@builderbot/bot";
 import { MemoryDB } from "@builderbot/bot";
 import { BaileysProvider } from "builderbot-provider-sherpa";
@@ -57,7 +73,7 @@ const openaiMain = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const openaiVision = new OpenAI({ apiKey: process.env.OPENAI_API_KEY_IMG });
 
 /** Puerto en el que se ejecutará el servidor (Railway usa 8080 por defecto) */
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT || 3008;
 /** ID del asistente de OpenAI */
 export const ASSISTANT_ID = process.env.ASSISTANT_ID;
 const ID_GRUPO_RESUMEN = process.env.ID_GRUPO_RESUMEN ?? "";
@@ -101,8 +117,8 @@ export const getAssistantResponse = async (assistantId, message, state, fallback
 
     // Usamos el wrapper safeToAsk directamente.
     // El timeout se maneja de forma más limpia sin disparar una ejecución paralela
-    return new Promise(async (resolve, reject) => {
-        const timeoutId = setTimeout(async () => {
+    return new Promise((resolve, reject) => {
+        const timeoutId = setTimeout(() => {
             console.warn("⏱ Timeout de 60s alcanzado en la comunicación con OpenAI.");
             // No resolvemos aquí con safeToAsk de nuevo para evitar carreras, 
             // dejamos que la petición original siga o falle por si sola, o retornamos un fallback simple.
@@ -110,25 +126,26 @@ export const getAssistantResponse = async (assistantId, message, state, fallback
         }, TIMEOUT_MS);
         userTimeouts.set(userId, timeoutId);
 
-        try {
-            const result = await safeToAsk(assistantId, finalMessage, state, userId, errorReporter);
-            if (userTimeouts.has(userId)) {
-                clearTimeout(userTimeouts.get(userId));
-                userTimeouts.delete(userId);
-            }
-            resolve(result);
-        } catch (error) {
-            if (userTimeouts.has(userId)) {
-                clearTimeout(userTimeouts.get(userId));
-                userTimeouts.delete(userId);
-            }
-            if (error?.message === 'TIMEOUT_SAFE_TO_ASK') {
-                console.error(`[getAssistantResponse] Finalizando por timeout de seguridad para ${userId}`);
-                resolve(fallbackMessage || "Lo siento, estoy tardando un poco más de lo habitual. Por favor, reintenta en un momento.");
-            } else {
-                reject(error);
-            }
-        }
+        safeToAsk(assistantId, finalMessage, state, userId, errorReporter)
+            .then(result => {
+                if (userTimeouts.has(userId)) {
+                    clearTimeout(userTimeouts.get(userId));
+                    userTimeouts.delete(userId);
+                }
+                resolve(result);
+            })
+            .catch(error => {
+                if (userTimeouts.has(userId)) {
+                    clearTimeout(userTimeouts.get(userId));
+                    userTimeouts.delete(userId);
+                }
+                if (error?.message === 'TIMEOUT_SAFE_TO_ASK') {
+                    console.error(`[getAssistantResponse] Finalizando por timeout de seguridad para ${userId}`);
+                    resolve(fallbackMessage || "Lo siento, estoy tardando un poco más de lo habitual. Por favor, reintenta en un momento.");
+                } else {
+                    reject(error);
+                }
+            });
     });
 };
 
@@ -369,7 +386,7 @@ const main = async () => {
             fs.unlinkSync(qrPath);
             // console.log('🗑️ [Init] QR antiguo eliminado.');
         } catch (e) {
-            // console.error('⚠️ [Init] No se pudo eliminar QR antiguo:', e);
+            console.error('⚠️ [Init] No se pudo eliminar QR antiguo:', e.message);
         }
     }
 
@@ -539,6 +556,11 @@ const main = async () => {
         database: adapterDB,
     });
 
+    // IMPORTANTE: Re-registrar handlers DESPUÉS de createBot, porque
+    // builderbot-provider-sherpa llama removeAllListeners y registra
+    // su propio uncaughtException que hace process.exit(1).
+    registerSafeErrorHandlers();
+
     // console.log('🔍 [DEBUG] createBot httpServer:', !!httpServer);
     // console.log('🔍 [DEBUG] adapterProvider.server:', !!adapterProvider.server);
 
@@ -547,8 +569,9 @@ const main = async () => {
 
     // Inicializar servidor Polka propio para WebChat y QR
     const app = adapterProvider.server;
-
+    console.log('🔍 [DEBUG] app (adapterProvider.server):', !!app);
     // Middleware global de body-parser para manejar payloads grandes en todas las rutas
+    console.log('🔍 [DEBUG] Aplicando middlewares...');
     app.use(bodyParser.json({ limit: '50mb' }));
     app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
@@ -1029,7 +1052,9 @@ const main = async () => {
                             });
                         }, {
                             maxRetries: 3,
-                            onRetry: (err, attempt) => {} // console.warn(`[Webchat-Vision] Reintento ${attempt} por error: ${err.message}`)
+                            onRetry: (err, attempt) => { 
+                            console.warn(`[Webchat-Vision] Reintento ${attempt} por error: ${err.message}`);
+                        }
                         });
                         
                         const result = visionResponse.choices?.[0]?.message?.content || "No se pudo obtener una descripción de la imagen.";
@@ -1101,41 +1126,40 @@ const main = async () => {
             }
             res.json({ reply: replyText });
         } catch (err) {
-            // console.error('Error /webchat-api:', err);
+            console.error('[Error] History check failed:', err);
             res.status(500).json({ reply: 'Error interno.' });
         }
     });
 
     // Iniciar servidor
     try {
-        // console.log(`🚀 [INFO] Iniciando servidor en puerto ${PORT}...`);
+        console.log(`🚀 [INFO] Iniciando servidor en puerto ${PORT}...`);
         httpServer(+PORT);
-        // console.log(`✅ [INFO] Servidor escuchando en puerto ${PORT}`);
+        console.log(`✅ [INFO] Servidor escuchando en puerto ${PORT}`);
         
         // Esperamos un segundo para asegurar que el servidor subyacente esté listo
         setTimeout(() => {
             if (app && app.server) {
-                // console.log('✅ [INFO] app.server detectado, lanzando initSocketIO');
+                console.log('✅ [INFO] app.server detectado, lanzando initSocketIO');
                 initSocketIO(app.server);
             } else {
-                // console.error('❌ [ERROR] app.server NO DETECTADO después del listen.');
+                console.error('❌ [ERROR] app.server NO DETECTADO después del listen.');
             }
         }, 1000);
         
     } catch (err) {
-        // console.error('❌ [ERROR] Error al iniciar servidor:', err);
+        console.error('❌ [ERROR] Error al iniciar servidor:', err);
     }
 
-    // console.log('✅ [INFO] Main function completed');
+    console.log('✅ [INFO] Main function completed');
 };
 
 process.on('unhandledRejection', (reason, promise) => {
-    // console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+    console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
 });
 
 process.on('uncaughtException', (error) => {
-    // console.error('❌ Uncaught Exception:', error);
-    // Opcional: reiniciar proceso si es crítico
+    console.error('❌ Uncaught Exception:', error);
     // process.exit(1);
 });
 
@@ -1145,7 +1169,7 @@ export {
 };
 
 main().catch(err => {
-    // console.error('❌ [FATAL] Error en la función main:', err);
+    console.error('❌ [FATAL] Error en la función main:', err);
 });
 
 //ok

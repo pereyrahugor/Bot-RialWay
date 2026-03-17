@@ -33,7 +33,7 @@ async function sendMediaToGroup(provider: any, state: any, targetGroup: string, 
                 try {
                     fs.unlinkSync(lastImage);
                     await state.update({ lastImage: null });
-                } catch (e) { /* console.error('Error borrando img:', e); */ }
+                } catch (e) { console.error('Error borrando img:', e.message); }
             }
         }
 
@@ -50,7 +50,7 @@ async function sendMediaToGroup(provider: any, state: any, targetGroup: string, 
                 try {
                     fs.unlinkSync(lastVideo);
                     await state.update({ lastVideo: null });
-                } catch (e) { /* console.error('Error borrando video:', e); */ }
+                } catch (e) { console.error('Error borrando video:', e.message); }
             }
         }
     }
@@ -129,10 +129,10 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                         if (typeof gotoFlow === 'function') {
                             if (ctx.type === 'voice_note' || ctx.type === 'VOICE_NOTE') {
                                 const mod = await import('./welcomeFlowVoice');
-                                await gotoFlow(mod.welcomeFlowVoice);
+                                return gotoFlow(mod.welcomeFlowVoice);
                             } else {
                                 const mod = await import('./welcomeFlowTxt');
-                                await gotoFlow(mod.welcomeFlowTxt);
+                                return gotoFlow(mod.welcomeFlowTxt);
                             }
                         }
                     },
@@ -175,10 +175,10 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                         if (typeof gotoFlow === 'function') {
                             if (ctx.type === 'voice_note' || ctx.type === 'VOICE_NOTE') {
                                 const mod = await import('./welcomeFlowVoice');
-                                await gotoFlow(mod.welcomeFlowVoice);
+                                return gotoFlow(mod.welcomeFlowVoice);
                             } else {
                                 const mod = await import('./welcomeFlowTxt');
-                                await gotoFlow(mod.welcomeFlowTxt);
+                                return gotoFlow(mod.welcomeFlowTxt);
                             }
                         }
                     },

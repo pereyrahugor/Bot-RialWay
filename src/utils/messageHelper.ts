@@ -40,7 +40,7 @@ export const obtenerTextoDelMensaje = (msg: any): string => {
  */
 export const obtenerMensajeUnwrapped = (msg: any): any => {
     if (!msg) return null;
-    let mensajeReal = msg.message || msg;
+    const mensajeReal = msg.message || msg;
     if (!mensajeReal) return null;
 
     if (mensajeReal.ephemeralMessage) {

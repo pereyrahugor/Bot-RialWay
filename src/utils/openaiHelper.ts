@@ -165,41 +165,36 @@ export async function renewThreadAndRetry(
     userId: string, 
     errorReporter?: any
 ) {
-    try {
-        // console.warn(`[ThreadRenewal] Renovando hilo para ${userId} debido a errores persistentes.`);
-        
-        // 1. Notificar al desarrollador (si hay reporter)
-        if (errorReporter && typeof errorReporter.reportError === 'function') {
-            await errorReporter.reportError(new Error("Hilo bloqueado. Renovando automáticamente..."), userId, `https://wa.me/${userId.replace(/[^0-9]/g, '')}`);
-        }
-
-        // 2. Traer el historial reciente (últimos 10 mensajes)
-        const history = await HistoryHandler.getMessages(userId, 10);
-        
-        // 3. Crear nuevo hilo en OpenAI con ese contexto
-        const threadOptions: any = {};
-        if (history && history.length > 0) {
-            threadOptions.messages = history
-                .filter(m => m.content && m.content.trim() !== '')
-                .map(m => ({ 
-                    role: m.role === 'assistant' ? 'assistant' : 'user', 
-                    content: m.content 
-                }));
-        }
-
-        const newThread = await openai.beta.threads.create(threadOptions);
-        // console.log(`[ThreadRenewal] Nuevo hilo creado: ${newThread.id}`);
-
-        // 4. Actualizar estado y reintentar
-        if (state && typeof state.update === 'function') {
-            await state.update({ thread_id: newThread.id });
-        }
-        
-        return await askWithFunctions(assistantId, message, state);
-    } catch (error) {
-        // console.error('[ThreadRenewal] Error fatal renovando hilo:', error);
-        throw error;
+    // console.warn(`[ThreadRenewal] Renovando hilo para ${userId} debido a errores persistentes.`);
+    
+    // 1. Notificar al desarrollador (si hay reporter)
+    if (errorReporter && typeof errorReporter.reportError === 'function') {
+        await errorReporter.reportError(new Error("Hilo bloqueado. Renovando automáticamente..."), userId, `https://wa.me/${userId.replace(/[^0-9]/g, '')}`);
     }
+
+    // 2. Traer el historial reciente (últimos 10 mensajes)
+    const history = await HistoryHandler.getMessages(userId, 10);
+    
+    // 3. Crear nuevo hilo en OpenAI con ese contexto
+    const threadOptions: any = {};
+    if (history && history.length > 0) {
+        threadOptions.messages = history
+            .filter(m => m.content && m.content.trim() !== '')
+            .map(m => ({ 
+                role: m.role === 'assistant' ? 'assistant' : 'user', 
+                content: m.content 
+            }));
+    }
+
+    const newThread = await openai.beta.threads.create(threadOptions);
+    // console.log(`[ThreadRenewal] Nuevo hilo creado: ${newThread.id}`);
+
+    // 4. Actualizar estado y reintentar
+    if (state && typeof state.update === 'function') {
+        await state.update({ thread_id: newThread.id });
+    }
+    
+    return await askWithFunctions(assistantId, message, state);
 }
 
 /**
@@ -220,7 +215,7 @@ export const safeToAsk = async (
         (async () => {
             let attempt = 0;
             while (attempt < maxRetries) {
-                let threadId = state && typeof state.get === 'function' && state.get('thread_id');
+                const threadId = state && typeof state.get === 'function' && state.get('thread_id');
                 
                 if (threadId) {
                     await waitForActiveRuns(threadId);

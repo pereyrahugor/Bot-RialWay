@@ -74,6 +74,7 @@ export class HistoryHandler {
         ];
 
         for (const table of tables) {
+            console.log(`🔍 [HistoryHandler] Procesando tabla: ${table.name}`);
             try {
                 // Verificar si la tabla existe
                 const { error: checkError } = await supabase.from(table.name).select('*').limit(1);
@@ -122,6 +123,7 @@ export class HistoryHandler {
                 console.error(`❌ Error fatal inicializando tabla '${table.name}':`, fatalErr);
             }
         }
+        console.log('✅ [HistoryHandler] Inicialización completa.');
     }
     
     /**
