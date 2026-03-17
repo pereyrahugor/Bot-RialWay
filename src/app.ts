@@ -89,6 +89,11 @@ export const getAssistantResponse = async (assistantId, message, state, fallback
     if (!effectiveThreadId) {
         systemPrompt += `Fecha y hora actual: ${getArgentinaDatetimeString()}\n`;
     }
+    
+    // Inyectamos el texto de refuerzo si existe en el .env
+    if (process.env.EXTRA_SYSTEM_PROMPT) {
+        systemPrompt += `\nInstrucción de refuerzo: ${process.env.EXTRA_SYSTEM_PROMPT}\n`;
+    }
     const finalMessage = systemPrompt + message;
 
     // Limpiamos timeouts previos si existen para este usuario
