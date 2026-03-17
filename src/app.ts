@@ -269,7 +269,7 @@ export const processUserMessage = async (
         // }
 
         // Usar el nuevo wrapper para obtener respuesta y thread_id
-        const response = (await getAssistantResponse(ASSISTANT_ID, ctx.body, state, "Por favor, reenvia el msj anterior ya que no llego al usuario.", ctx.from, ctx.thread_id)) as string;
+        const response = (await getAssistantResponse(ASSISTANT_ID, ctx.body, state, undefined, ctx.from, ctx.thread_id)) as string;
         // console.log('🔍 DEBUG RAW ASSISTANT MSG (WhatsApp):', JSON.stringify(response));
 
         // Delegar procesamiento al AssistantResponseProcessor (Maneja DB_QUERY y envios)

@@ -129,10 +129,11 @@ export class AssistantResponseProcessor {
         } else {
             // console.log('[WhatsApp Debug] Mensaje entrante del asistente:', response);
             // Si el usuario está bloqueado por una operación API, evitar procesar nuevos mensajes
-            if (userApiBlockMap.has(ctx.from)) {
-                // console.log(`[API Block] Mensaje ignorado de usuario bloqueado: ${ctx.from}`);
-                return;
-            }
+            // BLOQUEO ELIMINADO: Se detectó que interfiere con respuestas de API
+            // if (userApiBlockMap.has(ctx.from)) {
+            //     // console.log(`[API Block] Mensaje ignorado de usuario bloqueado: ${ctx.from}`);
+            //     return;
+            // }
         }
         let jsonData: any = null;
         // Sanitización y normalización del texto de respuesta
