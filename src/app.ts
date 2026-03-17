@@ -80,21 +80,18 @@ const userTimeouts = new Map();
 
 
 export const getAssistantResponse = async (assistantId, message, state, fallbackMessage, userId, thread_id = null) => {
-    // Solo enviar la fecha/hora si es realmente un hilo nuevo
-    let effectiveThreadId = thread_id;
-    if (!effectiveThreadId && state && typeof state.get === 'function') {
-        effectiveThreadId = state.get('thread_id');
-    }
-    let systemPrompt = "";
-    if (!effectiveThreadId) {
-        systemPrompt += `Fecha y hora actual: ${getArgentinaDatetimeString()}\n`;
-    }
+    const currentDatetimeArg = getArgentinaDatetimeString();
+    let systemPrompt = `Fecha, hora y día de la semana de referencia: ${currentDatetimeArg}`;
     
     // Inyectamos el texto de refuerzo si existe en el .env
     if (process.env.EXTRA_SYSTEM_PROMPT) {
-        systemPrompt += `\nInstrucción de refuerzo: ${process.env.EXTRA_SYSTEM_PROMPT}\n`;
+        systemPrompt += `\nInstrucción de refuerzo: ${process.env.EXTRA_SYSTEM_PROMPT}`;
     }
-    const finalMessage = systemPrompt + message;
+
+    if (fallbackMessage) systemPrompt += `\n${fallbackMessage}`;
+    if (userId) systemPrompt += `\nNúmero de contacto: ${userId}`;
+    
+    const finalMessage = systemPrompt + "\n" + message;
 
     // Limpiamos timeouts previos si existen para este usuario
     if (userTimeouts.has(userId)) {
