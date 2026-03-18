@@ -4,8 +4,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import multer from "multer";
 import OpenAI from "openai";
+import { BaileysProvider } from "builderbot-provider-sherpa";
 import { createBot, createProvider, createFlow, MemoryDB } from "@builderbot/bot";
-import { BaileysProvider } from "@builderbot/provider-baileys";
 import { httpInject } from "@builderbot-plugins/openai-assistants";
 
 // --- Utils & Handlers ---
@@ -81,9 +81,8 @@ function registerSafeErrorHandlers() {
  */
 const main = async () => {
     // 1. Storage cleanup and session restoration
+    // await restoreSessionFromDb(); // Comentado temporalmente para limpiar sesión corrupta
     const qrPath = path.join(process.cwd(), "bot.qr.png");
-    if (fs.existsSync(qrPath)) fs.unlinkSync(qrPath);
-    await restoreSessionFromDb();
 
     // 2. Initialize Provider
     adapterProvider = createProvider(BaileysProvider, {
