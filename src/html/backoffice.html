@@ -494,6 +494,17 @@
                 if (res.status === 401) logout();
                 chats = await res.json();
                 handleSearch();
+                
+                // Si hay un chat activo, actualizar su estado (por si el worker cambió bot_enabled)
+                if (activeChatId) {
+                    const activeChat = chats.find(c => c.id === activeChatId);
+                    if (activeChat) {
+                        updateBotStatusText(activeChat.bot_enabled);
+                        updateInputState(activeChat.bot_enabled);
+                        const toggle = document.getElementById('bot-toggle');
+                        if (toggle) toggle.checked = activeChat.bot_enabled;
+                    }
+                }
             } catch (e) { console.error(e); }
         }
 
@@ -617,8 +628,11 @@
             const attachBtn = document.getElementById('attach-btn');
             if (!input || !btn || !attachBtn) return;
 
-            const isBotEnabled = botEnabled === true || botEnabled === 'true' || botEnabled === 1;
+            // Normalización estricta a booleano
+            const isBotEnabled = (botEnabled === true || botEnabled === 'true' || botEnabled === 1 || botEnabled === '1');
             
+            console.log(`[UI] Actualizando estado de input. Bot habilitado: ${isBotEnabled}`);
+
             // Bloqueamos el input si el bot está activo para evitar interferencias
             input.disabled = isBotEnabled;
             btn.disabled = isBotEnabled;
@@ -626,9 +640,11 @@
             
             if (isBotEnabled) {
                 input.style.borderBottom = '2px solid var(--wa-accent)';
+                input.style.opacity = '0.6';
                 input.placeholder = "🤖 Bot activo - Desactívalo para intervenir";
             } else {
                 input.style.borderBottom = '2px solid #f87171';
+                input.style.opacity = '1';
                 input.placeholder = "Escribe un mensaje aquí";
             }
         }
@@ -709,20 +725,22 @@
 
         async function sendMessage() {
             if (isSending) return;
+            isSending = true;
 
             const input = document.getElementById('message-input');
             const content = input.value.trim();
             if (!content && !selectedFile) {
                 console.log('⚠️ Intento de envío vacío ignorado');
+                isSending = false;
                 return;
             }
             if (!activeChatId) {
                 console.warn('⚠️ No hay chat activo seleccionado');
+                isSending = false;
                 return;
             }
 
             console.log(`📤 Enviando mensaje a ${activeChatId}...`, { hasFile: !!selectedFile });
-            isSending = true;
             const btn = document.getElementById('send-btn');
             const originalBtnText = btn.innerHTML;
             btn.disabled = true;
@@ -902,10 +920,6 @@
         setInterval(fetchChats, 30000);
         fetchChats();
         fetchBotTags();
-
-        document.getElementById('message-input').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') sendMessage();
-        });
     </script>
 </body>
 </html>

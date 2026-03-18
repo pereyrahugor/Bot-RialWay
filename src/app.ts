@@ -630,16 +630,143 @@ const main = async () => {
     console.log('🔍 [DEBUG] app (adapterProvider.server):', !!app);
     // Middleware global de body-parser para manejar payloads grandes en todas las rutas
     console.log('🔍 [DEBUG] Aplicando middlewares...');
-    app.use((req, res, next) => {
-        // Ignorar completamente el procesamiento de body si es para el envío de mensajes, 
-        // ya que el handler de la ruta se encargará de Multer o bodyParser específico.
-        if (req.url.includes('/api/backoffice/send-message')) {
+    
+    // 1. DEFINICIONES DE APOYO PARA BACKOFFICE (Elevadas al máximo nivel)
+    
+    /** Middleware de autenticación robusto para el backoffice */
+    const backofficeAuth = (req, res, next) => {
+        // Asegurar parsing de query si Polka/Node no lo ha expuesto aún
+        let q: any = {};
+        try {
+            const url = new URL(req.url, 'http://localhost');
+            url.searchParams.forEach((v, k) => q[k] = v);
+        } catch (e) { /* fallback a vacío */ }
+        req.query = q;
+
+        let token = req.headers['authorization'] || q.token || '';
+        if (typeof token === 'string') {
+            if (token.startsWith('token=')) token = token.slice(6);
+            else if (token.startsWith('Bearer ')) token = token.slice(7);
+        }
+        
+        if (token && token === process.env.BACKOFFICE_TOKEN) {
             return next();
         }
+        console.warn(`[AUTH] Intento fallido de acceso al backoffice. Token recibido: ${token ? 'presente(***)' : 'ausente'}`);
+        res.status(401).json({ success: false, error: "Unauthorized" });
+    };
+
+    /** Función unificada para procesar el envío de mensajes e historial */
+    const processSendMessage = async (req: any, res: any, chatId: string, message: string, file: any) => {
+        try {
+            if (!adapterProvider) {
+                return res.status(503).json({ success: false, error: 'WhatsApp provider not initialized' });
+            }
+
+            console.log(`[BACKOFFICE] Enviando ${file ? file.mimetype : 'texto'} a ${chatId}...`);
+            const jid = chatId.includes('@') ? chatId : `${chatId}@s.whatsapp.net`;
+            
+            let finalType: 'text' | 'image' | 'video' | 'document' = 'text';
+            if (file) {
+                if (file.mimetype.startsWith('image/')) finalType = 'image';
+                else if (file.mimetype.startsWith('video/')) finalType = 'video';
+                else finalType = 'document';
+            }
+            
+            const fileUrl = file ? `/uploads/${file.filename}` : '';
+            const finalContent = file ? fileUrl : (message || '');
+            
+            await HistoryHandler.saveMessage(chatId, 'assistant', finalContent, finalType);
+            await HistoryHandler.updateLastHumanMessage(chatId);
+
+            // Inyectar en thread OpenAI (silencioso)
+            HistoryHandler.getThreadId(chatId).then(threadId => {
+                if (threadId && (message || file)) {
+                    openaiMain.beta.threads.messages.create(threadId, {
+                        role: 'assistant',
+                        content: `[Backoffice]: ${message || '[Media]'}`
+                    }).catch(() => {});
+                }
+            }).catch(() => {});
+
+            // Envío por WhatsApp
+            if (file) {
+                const absolutePath = path.resolve(file.path);
+                if (finalType === 'image') {
+                    if (typeof adapterProvider.sendImage === 'function') await adapterProvider.sendImage(jid, absolutePath, message || '');
+                    else await adapterProvider.sendMessage(jid, message || '', { media: absolutePath });
+                } else if (finalType === 'video') {
+                    if (typeof (adapterProvider as any).sendVideo === 'function') await (adapterProvider as any).sendVideo(jid, absolutePath, message || '');
+                    else await adapterProvider.sendMessage(jid, message || '', { media: absolutePath });
+                } else {
+                    if (typeof (adapterProvider as any).sendFile === 'function') await (adapterProvider as any).sendFile(jid, absolutePath, message || file.originalname);
+                    else await adapterProvider.sendMessage(jid, message || '', { media: absolutePath, fileName: file.originalname });
+                }
+            } else {
+                await adapterProvider.sendMessage(jid, message, {});
+            }
+            
+            return res.json({ success: true, fileUrl: file ? fileUrl : undefined });
+
+        } catch (e: any) {
+            console.error('❌ Error en processSendMessage:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    };
+
+    // 2. RUTAS PRIORITARIAS (Antes de middlewares globales de parseo)
+
+    // Ruta crítica para envío de mensajes con soporte de archivos (Multer)
+    app.post('/api/backoffice/send-message', backofficeAuth, (req, res, next) => {
+        const contentType = req.headers['content-type'] || '';
+        if (contentType.includes('multipart/form-data')) {
+            console.log(`[ROUTE] Interceptando multipart para /send-message. Aplicando Multer...`);
+            return upload.single('file')(req, (res as any), (err) => {
+                if (err) {
+                    console.error('[ROUTE] Error Multer:', err);
+                    return res.status(400).json({ success: false, error: `Error de archivo: ${err.message}` });
+                }
+                next();
+            });
+        }
+        // Para JSON, usamos el parser estándar
+        bodyParser.json({ limit: '10mb' })(req, res, next);
+    }, async (req, res) => {
+        const chatId = req.body.chatId;
+        const message = req.body.message;
+        const file = (req as any).file;
+
+        if (!chatId) return res.status(400).json({ success: false, error: 'chatId is required' });
+        await processSendMessage(req, res, chatId, message, file);
+    });
+
+    // Ruta para alternar bot (también prioritaria)
+    app.post('/api/backoffice/toggle-bot', backofficeAuth, bodyParser.json(), async (req, res) => {
+        const { chatId, enabled } = req.body;
+        if (!chatId) return res.status(400).json({ success: false, error: 'chatId is required' });
+        
+        try {
+            await HistoryHandler.toggleBot(chatId, enabled);
+            (adapterProvider as any).server?.io?.emit('bot_toggled', { chatId, enabled });
+            res.json({ success: true, enabled });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    // 3. MIDDLEWARES GLOBALES (Después de las rutas críticas)
+
+    app.use((req, res, next) => {
+        // Protección extra: ya manejamos estas rutas arriba, si llegan aquí es que algo falló en casar el path exacto
+        if (req.url.startsWith('/api/backoffice/send-message') || req.url.startsWith('/api/backoffice/toggle-bot')) {
+            return next(); 
+        }
+        
         const contentType = req.headers['content-type'] || '';
         if (contentType.includes('multipart/form-data')) {
             return next();
         }
+        
         bodyParser.json({ limit: '50mb' })(req, res, (err) => {
             if (err) return next(err);
             bodyParser.urlencoded({ limit: '50mb', extended: true })(req, res, next);
@@ -713,164 +840,7 @@ const main = async () => {
         next();
     });
 
-    // --- DEFINICIONES DE APOYO PARA BACKOFFICE (Movidas arriba para evitar conflictos de stream) ---
-
-    // Middleware de autenticación simple para el backoffice
-    const backofficeAuth = (req, res, next) => {
-        // En Polka, req.query puede estar indefinido, lo parseamos manualmente si es necesario
-        if (!req.query && req.url.includes('?')) {
-            try {
-                const url = new URL(req.url, 'http://localhost');
-                const q: any = {};
-                url.searchParams.forEach((v, k) => q[k] = v);
-                req.query = q;
-            } catch (e) { req.query = {}; }
-        }
-
-        let token = req.headers['authorization'] || (req.query && (req.query as any).token) || '';
-        if (typeof token === 'string') {
-            if (token.startsWith('token=')) token = token.slice(6);
-            else if (token.startsWith('Bearer ')) token = token.slice(7);
-        }
-        const expectedToken = process.env.BACKOFFICE_TOKEN;
-        if (token && token === expectedToken) {
-            return next();
-        }
-        res.status(401).json({ success: false, error: "Unauthorized" });
-    };
-
-    // Función auxiliar para procesar el envío de mensajes (unificada para JSON y Multipart)
-    const processSendMessage = async (req: any, res: any, chatId: string, message: string, file: any) => {
-        try {
-            if (!adapterProvider) {
-                console.error('[BACKOFFICE] Error: Proveedor no inicializado');
-                return res.status(503).json({ success: false, error: 'WhatsApp provider not initialized' });
-            }
-
-            console.log(`[BACKOFFICE] Intentando enviar ${file ? file.mimetype : 'texto'} a ${chatId}...`);
-
-            const jid = chatId.includes('@') ? chatId : `${chatId}@s.whatsapp.net`;
-            // Guardar en historial PRIMERO para que el operador vea su mensaje en el Backoffice de inmediato
-            let finalType: 'text' | 'image' | 'video' | 'document' = 'text';
-            if (file) {
-                if (file.mimetype.startsWith('image/')) finalType = 'image';
-                else if (file.mimetype.startsWith('video/')) finalType = 'video';
-                else finalType = 'document';
-            }
-            
-            const fileUrl = file ? `/uploads/${file.filename}` : '';
-            const finalContent = file ? fileUrl : (message || '');
-            
-            console.log(`[BACKOFFICE] Guardando mensaje en historial (${finalType})...`);
-            await HistoryHandler.saveMessage(chatId, 'assistant', finalContent, finalType);
-            await HistoryHandler.updateLastHumanMessage(chatId);
-
-            // Intentar inyectar en thread de OpenAI (opcional, no bloquea)
-            try {
-                const threadId = await HistoryHandler.getThreadId(chatId);
-                if (threadId && (message || file)) {
-                    await openaiMain.beta.threads.messages.create(threadId, {
-                        role: 'assistant',
-                        content: `[Mensaje enviado por operador humano]: ${message || (file ? '[Archivo adjunto]' : '')}`
-                    });
-                }
-            } catch (e: any) {
-                console.warn('[BACKOFFICE] No se pudo inyectar en thread:', e.message);
-            }
-
-            // AHORA intentar enviar por WhatsApp
-            try {
-                if (!adapterProvider) {
-                    throw new Error('Proveedor de WhatsApp no inicializado');
-                }
-
-                if (file) {
-                    const absolutePath = path.resolve(file.path);
-                    console.log(`[BACKOFFICE] Enviando media a ${jid}...`);
-                    
-                    if (file.mimetype.startsWith('image/')) {
-                        if (typeof adapterProvider.sendImage === 'function') {
-                            await adapterProvider.sendImage(jid, absolutePath, message || '');
-                        } else {
-                            await adapterProvider.sendMessage(jid, message || '', { media: absolutePath });
-                        }
-                    } else if (file.mimetype.startsWith('video/')) {
-                        if (typeof adapterProvider.sendVideo === 'function') {
-                            await (adapterProvider as any).sendVideo(jid, absolutePath, message || '');
-                        } else {
-                            await (adapterProvider as any).sendMessage(jid, message || '', { media: absolutePath });
-                        }
-                    } else {
-                        // Documentos (PDF, etc.)
-                        if (typeof (adapterProvider as any).sendFile === 'function') {
-                            await (adapterProvider as any).sendFile(jid, absolutePath, message || file.originalname);
-                        } else {
-                            await adapterProvider.sendMessage(jid, message || '', { 
-                                media: absolutePath,
-                                fileName: file.originalname 
-                            });
-                        }
-                    }
-                } else {
-                    console.log(`[BACKOFFICE] Enviando texto a ${jid}...`);
-                    if (typeof adapterProvider.sendMessage === 'function') {
-                        await adapterProvider.sendMessage(jid, message, {});
-                    } else if (typeof (adapterProvider as any).sendText === 'function') {
-                        await (adapterProvider as any).sendText(jid, message);
-                    } else {
-                        throw new Error('Provider does not support sendText or sendMessage');
-                    }
-                }
-                console.log(`✅ [BACKOFFICE] Mensaje/Media enviado con éxito a ${jid}`);
-                return res.json({ success: true, fileUrl: file ? fileUrl : undefined });
-
-            } catch (sendError: any) {
-                console.error('❌ [BACKOFFICE] Error al enviar a WhatsApp:', sendError);
-                return res.status(200).json({ 
-                    success: true, 
-                    warning: `Mensaje guardado en historial, pero no se pudo enviar a WhatsApp: ${sendError.message}`,
-                    fileUrl: file ? fileUrl : undefined 
-                });
-            }
-
-        } catch (e: any) {
-            console.error('[BACKOFFICE] Error general en processSendMessage:', e);
-            return res.status(500).json({ success: false, error: e.message || 'Error interno al procesar' });
-        }
-    };
-
-    // --- RUTA CRITICA: Envío de Mensajes (SITUADA ANTES DE OTROS MIDDLEWARES PARA EVITAR CONSUMO DE STREAM) ---
-    app.post('/api/backoffice/send-message', backofficeAuth, (req, res, next) => {
-        const contentType = req.headers['content-type'] || '';
-        if (contentType.includes('multipart/form-data')) {
-            console.log(`[BACKOFFICE] Detectado multipart/form-data. Llamando a Multer directamente...`);
-            return upload.single('file')(req, (res as any), (err) => {
-                if (err) {
-                    console.error('[BACKOFFICE] Error al procesar archivo con Multer:', err);
-                    return res.status(400).json({ success: false, error: `Error de archivo: ${err.message}` });
-                }
-                next();
-            });
-        }
-        
-        // Si no es multipart, parseamos el JSON manualmente para esta ruta porque el global lo omite
-        bodyParser.json({ limit: '10mb' })(req, res, next);
-    }, async (req, res) => {
-        try {
-            const chatId = req.body.chatId;
-            const message = req.body.message;
-            const file = (req as any).file;
-
-            if (!chatId) {
-                return res.status(400).json({ success: false, error: 'chatId is required' });
-            }
-
-            await processSendMessage(req, res, chatId, message, file);
-        } catch (e: any) {
-            console.error('[BACKOFFICE] Error en route /send-message:', e);
-            res.status(500).json({ success: false, error: e.message });
-        }
-    });
+    // (Definiciones de backoffice movidas arriba)
 
     // 2. Middleware de logging y redirección de raíz
     app.use((req, res, next) => {
@@ -1050,11 +1020,7 @@ const main = async () => {
         }
     });
 
-    app.post('/api/backoffice/toggle-bot', backofficeAuth, async (req, res) => {
-        const { chatId, enabled } = req.body;
-        const result = await HistoryHandler.toggleBot(chatId, enabled);
-        res.json(result);
-    });
+    // (Ruta /toggle-bot movida arriba)
 
     // --- Rutas de Etiquetas (Tags) ---
     app.get('/api/backoffice/tags', backofficeAuth, async (req, res) => {

@@ -217,9 +217,22 @@ const processSendMessage = async (req, res, chatId, message, file) => {
 - Se agregaron estilos CSS para que los archivos adjuntos se vean integrados en las burbujas de chat con un fondo distintivo.
 - Se agregaron protecciones contra contenido nulo para evitar que el bucle de renderizado se detenga si hay un mensaje mal formado.
 
-## Requisitos Técnicos
-- Base de datos: Tablas `tags` y `chat_tags` en Supabase. Columna `last_human_message_at` en `chats`. Campo `thread_id` dentro de `chats.metadata` (JSONB).
-- Backend: `multer` para subida de archivos, nuevas rutas de API para tags, worker de inactividad, y middleware de auth con parseo manual de query para Polka y prefijo `token=`.
-- Frontend: JavaScript nativo con Socket.IO para actualizaciones en tiempo real, CSS Variables y Flexbox/Grid para el layout fluido.
-- OpenAI: Uso de `openai.beta.threads.messages.create()` sin `runs.create()` para inyectar mensajes al thread sin generar respuesta del asistente.
-- Proveedores: Compatibilidad verificada con `builderbot-provider-sherpa` y `BaileysProvider`.
+## 12. Priorización de Rutas y Solución Multer (Fix Crítico ✅)
+- **Problema**: Al usar Multer con Polka/Express, si existen middlewares globales como `bodyParser.json()` o `bodyParser.urlencoded()` configurados de forma ingenua, estos "consumen" el flujo de datos (stream) de la solicitud POST antes de que Multer pueda procesar el archivo. Esto causaba el error `Unexpected end of form` en el backoffice al intentar subir imágenes o PDFs.
+- **Solución**: Se reestructuró `app.ts` para que las rutas críticas del backoffice se definan **antes** que cualquier middleware de parsing global.
+- **Implementación**:
+    - Las rutas `/api/backoffice/send-message` y `/api/backoffice/toggle-bot` se movieron al principio de la configuración del servidor.
+    - Se configuró el middleware global de `body-parser` para que ignore explícitamente estas rutas y el content-type `multipart/form-data`, permitiendo que Multer maneje el flujo original de bytes sin interferencias.
+    - El endpoint de envío detecta dinámicamente el `Content-Type`: si es multipart, invoca `upload.single('file')` manualmente; si es JSON, invoca `bodyParser.json()` localmente.
+
+## 13. Robustez de la Interfaz (UI Improvements ✅)
+- **Bloqueo de Input Estricto**: Se mejoró la lógica de `updateInputState` en el frontend para asegurar que el área de escritura se bloquee visualmente y funcionalmente si el bot está activo.
+- **Sincronización Silenciosa**: El intervalo de actualización de chats (cada 30s) ahora también refresca el estado del bot del chat que esté abierto en ese momento. Si el bot se reactiva automáticamente por inactividad, la interfaz reflejará el cambio sin intervención del usuario.
+- **Prevención de Duplicados**: Se optimizó el flag `isSending` para cubrir fallos de red y errores de validación, eliminando listeners duplicados en la tecla Enter.
+
+---
+
+## Requisitos Técnicos Actualizados
+- **Backend Architecture**: Rutas prioritarias antes de middleware global de body-parsing.
+- **Multer Middleware**: Invocación manual dentro del handler de ruta para evitar conflictos con otros parsers.
+- **Polling + Sockets**: Combinación de WebSockets (actualización inmediata) y Polling (respaldo de estado consistente).
