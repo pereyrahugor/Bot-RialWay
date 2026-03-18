@@ -435,6 +435,51 @@ export class HistoryHandler {
             console.error('[HistoryHandler] Error en updateLastHumanMessage:', err);
         }
     }
+
+    /**
+     * Guarda el thread_id de OpenAI en el metadata del chat
+     */
+    static async saveThreadId(chatId: string, threadId: string) {
+        try {
+            // Primero obtenemos metadata actual
+            const { data } = await supabase
+                .from('chats')
+                .select('metadata')
+                .eq('id', chatId)
+                .eq('project_id', PROJECT_ID)
+                .maybeSingle();
+
+            const currentMetadata = data?.metadata || {};
+            const updatedMetadata = { ...currentMetadata, thread_id: threadId };
+
+            await supabase
+                .from('chats')
+                .update({ metadata: updatedMetadata })
+                .eq('id', chatId)
+                .eq('project_id', PROJECT_ID);
+        } catch (err) {
+            console.error('[HistoryHandler] Error en saveThreadId:', err);
+        }
+    }
+
+    /**
+     * Obtiene el thread_id de OpenAI del metadata del chat
+     */
+    static async getThreadId(chatId: string): Promise<string | null> {
+        try {
+            const { data } = await supabase
+                .from('chats')
+                .select('metadata')
+                .eq('id', chatId)
+                .eq('project_id', PROJECT_ID)
+                .maybeSingle();
+
+            return data?.metadata?.thread_id || null;
+        } catch (err) {
+            console.error('[HistoryHandler] Error en getThreadId:', err);
+            return null;
+        }
+    }
 }
 
 // Inicializar base de datos al cargar el modulo

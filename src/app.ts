@@ -221,6 +221,19 @@ export const processUserMessage = async (
         const isBotActiveForUser = await HistoryHandler.isBotEnabled(ctx.from);
         if (!isBotActiveForUser) {
             // console.log(`[Intervención Humana] Bot ignorando mensaje de ${ctx.from}`);
+            
+            // Inyectar el mensaje al thread de OpenAI para mantener contexto (sin run → no responde)
+            try {
+                const threadId = await HistoryHandler.getThreadId(ctx.from);
+                if (threadId) {
+                    await openaiMain.beta.threads.messages.create(threadId, {
+                        role: 'user',
+                        content: body || '[Media]'
+                    });
+                    console.log(`[Intervención Humana] Mensaje del usuario inyectado al thread ${threadId} (sin respuesta)`);
+                }
+            } catch (e) { /* no-op si falla */ }
+
             return state;
         }
 
@@ -304,6 +317,14 @@ export const processUserMessage = async (
         // Usar el nuevo wrapper para obtener respuesta y thread_id
         const response = (await getAssistantResponse(ASSISTANT_ID, ctx.body, state, undefined, ctx.from, ctx.thread_id)) as string;
         // console.log('🔍 DEBUG RAW ASSISTANT MSG (WhatsApp):', JSON.stringify(response));
+
+        // Persistir thread_id en Supabase para que el backoffice pueda inyectar mensajes al thread
+        try {
+            const currentThreadId = state && typeof state.get === 'function' ? state.get('thread_id') : null;
+            if (currentThreadId && ctx.from) {
+                await HistoryHandler.saveThreadId(ctx.from, currentThreadId);
+            }
+        } catch (e) { /* no-op si falla guardar thread_id */ }
 
         // Delegar procesamiento al AssistantResponseProcessor (Maneja DB_QUERY y envios)
         await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
@@ -766,7 +787,12 @@ const main = async () => {
 
     // Middleware de autenticación simple para el backoffice
     const backofficeAuth = (req, res, next) => {
-        const token = req.headers['authorization'] || req.query.token;
+        let token = req.headers['authorization'] || req.query.token || '';
+        // Soportar formato "token=VALUE" y "Bearer VALUE" además del token directo
+        if (typeof token === 'string') {
+            if (token.startsWith('token=')) token = token.slice(6);
+            else if (token.startsWith('Bearer ')) token = token.slice(7);
+        }
         const expectedToken = process.env.BACKOFFICE_TOKEN;
         if (token === expectedToken) {
             return next();
@@ -880,6 +906,20 @@ const main = async () => {
 
             // Actualizar timestamp de última actividad humana
             await HistoryHandler.updateLastHumanMessage(chatId);
+
+            // Inyectar mensaje del operador al thread de OpenAI para mantener contexto
+            try {
+                const threadId = await HistoryHandler.getThreadId(chatId);
+                if (threadId && message) {
+                    await openaiMain.beta.threads.messages.create(threadId, {
+                        role: 'assistant',
+                        content: `[Mensaje enviado por operador humano]: ${message}`
+                    });
+                    console.log(`[BACKOFFICE] Mensaje inyectado al thread de OpenAI ${threadId}`);
+                }
+            } catch (e) {
+                console.warn('[BACKOFFICE] No se pudo inyectar mensaje al thread de OpenAI:', (e as any).message);
+            }
 
             console.log(`✅ [BACKOFFICE] Mensaje enviado y guardado para ${jid}`);
             res.json({ success: true, fileUrl: file ? fileUrl : undefined });
