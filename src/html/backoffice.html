@@ -415,7 +415,7 @@
             <input type="file" id="file-input" style="display:none" onchange="handleFileSelect(this)">
             <button class="btn-icon" id="attach-btn" onclick="document.getElementById('file-input').click()" disabled>📎</button>
             <div class="input-wrapper">
-                <input type="text" id="message-input" placeholder="Escribe un mensaje aquí" disabled onkeypress="if(event.key === 'Enter') sendMessage()">
+                <input type="text" id="message-input" placeholder="Escribe un mensaje aquí" disabled onkeydown="if(event.key === 'Enter') { event.preventDefault(); sendMessage(); }">
             </div>
             <button class="btn-icon" id="send-btn" onclick="sendMessage()" disabled style="color: var(--wa-accent);">
                 <span style="transform: rotate(45deg); display: inline-block; margin-bottom: 2px;">➤</span>
@@ -460,6 +460,7 @@
         let chats = [];
         let botTags = [];
         let selectedFile = null;
+        let isSending = false;
 
         // Inicializar Socket.IO para tiempo real
         const socket = io();
@@ -617,15 +618,18 @@
             if (!input || !btn || !attachBtn) return;
 
             const isBotEnabled = botEnabled === true || botEnabled === 'true' || botEnabled === 1;
-            // Permitimos siempre el input para el humano, pero lo resaltamos visualmente si el bot está activo
-            input.disabled = false;
-            btn.disabled = false;
-            attachBtn.disabled = false;
+            
+            // Bloqueamos el input si el bot está activo para evitar interferencias
+            input.disabled = isBotEnabled;
+            btn.disabled = isBotEnabled;
+            attachBtn.disabled = isBotEnabled;
             
             if (isBotEnabled) {
                 input.style.borderBottom = '2px solid var(--wa-accent)';
+                input.placeholder = "🤖 Bot activo - Desactívalo para intervenir";
             } else {
                 input.style.borderBottom = '2px solid #f87171';
+                input.placeholder = "Escribe un mensaje aquí";
             }
         }
 
@@ -704,6 +708,8 @@
         }
 
         async function sendMessage() {
+            if (isSending) return;
+
             const input = document.getElementById('message-input');
             const content = input.value.trim();
             if (!content && !selectedFile) {
@@ -716,6 +722,7 @@
             }
 
             console.log(`📤 Enviando mensaje a ${activeChatId}...`, { hasFile: !!selectedFile });
+            isSending = true;
             const btn = document.getElementById('send-btn');
             const originalBtnText = btn.innerHTML;
             btn.disabled = true;
@@ -784,6 +791,7 @@
                 console.error('❌ Error de red:', err);
                 alert('Error de conexión al enviar el mensaje');
             } finally {
+                isSending = false;
                 btn.disabled = false;
                 btn.innerHTML = originalBtnText;
             }
