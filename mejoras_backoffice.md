@@ -157,57 +157,65 @@ Bot Activo → el asistente VE todo lo que se habló y continúa con contexto co
 ```
 
 ## 10. Robustez en Envío de Mensajes y Multimedia (Update ✅)
-- Se mejoró el endpoint `/api/backoffice/send-message` para manejar de forma separada solicitudes `application/json` (texto simple) y `multipart/form-data` (archivos). Esto evita el error de Multer `Unexpected end of form`.
-- **Manejo de Multimedia**: Se implementó una lógica de envío inteligente en `processSendMessage` que utiliza métodos específicos del proveedor:
+- **Separación de Content-Types**: El endpoint `/api/backoffice/send-message` maneja de forma separada solicitudes `application/json` (texto simple) y `multipart/form-data` (archivos). Esto evita el error de Multer `Unexpected end of form`.
+- **Feedback Instantáneo (Save-then-Send)**: Se invirtió el orden de ejecución en `processSendMessage`. El mensaje se guarda en el historial de Supabase **antes** de intentar enviarlo a WhatsApp.
+    - Esto permite que el operador vea su mensaje (incluyendo archivos adjuntos) de inmediato en el Backoffice.
+    - Si el envío a WhatsApp falla (por falta de conexión o QR no escaneado), el mensaje ya está persistido localmente y el sistema devuelve un éxito parcial con una advertencia (`warning`).
+- **Manejo de Multimedia Inteligente**: 
     - `sendImage(jid, path, caption)` para imágenes.
     - `sendVideo(jid, path, caption)` para videos.
     - `sendFile(jid, path, fileName)` para documentos (PDF, etc.).
-- **Fallback de Envío**: Si los métodos específicos no existen, se utiliza `sendMessage(jid, message, { media: absolutePath })` como respaldo universal.
-- **Rutas Absolutas**: Se aplica `path.resolve()` a las rutas de archivos de Multer para asegurar que el sistema de archivos del servidor localice correctamente los adjuntos antes del envío.
-- **Directorios Automáticos**: El servidor crea el directorio `uploads/` al iniciar (`fs.mkdirSync(dir, { recursive: true })`) para prevenir fallos de escritura de Multer.
+- **Feedback al Usuario**: El Backoffice ahora detecta el campo `warning` en la respuesta del servidor y muestra un `alert()` informativo si el mensaje no pudo llegar a WhatsApp, pero confirmando que fue registrado en el historial.
 
 - **Código del envío mejorado (en `app.ts`):**
 ```typescript
 const processSendMessage = async (req, res, chatId, message, file) => {
-    const jid = chatId.includes('@') ? chatId : `${chatId}@s.whatsapp.net`;
-    let fileUrl = '';
-    
-    if (file) {
-        const absolutePath = path.resolve(file.path);
-        fileUrl = `/uploads/${file.filename}`;
-        
-        // Selección inteligente de método según el MIME type
-        if (file.mimetype.startsWith('image/')) {
-            await adapterProvider.sendImage(jid, absolutePath, message || '');
-        } else if (file.mimetype.startsWith('video/')) {
-            await adapterProvider.sendVideo(jid, absolutePath, message || '');
-        } else {
-            // Documentos (PDF, Word, etc.)
-            await adapterProvider.sendFile(jid, absolutePath, message || file.originalname);
-        }
-    } else {
-        await adapterProvider.sendMessage(jid, message, {});
-    }
-    
-    // Guardar en historial con tipo específico
+    // 1. Determinar tipo y contenido
     let finalType: 'text' | 'image' | 'video' | 'document' = 'text';
+    let finalContent = message || '';
     if (file) {
+        finalContent = `/uploads/${file.filename}`;
         if (file.mimetype.startsWith('image/')) finalType = 'image';
         else if (file.mimetype.startsWith('video/')) finalType = 'video';
         else finalType = 'document';
     }
-    
-    const finalContent = file ? fileUrl : (message || '');
+
+    // 2. GUARDAR PRIMERO (Feedback instantáneo)
     await HistoryHandler.saveMessage(chatId, 'assistant', finalContent, finalType);
     await HistoryHandler.updateLastHumanMessage(chatId);
-    // ... inyección en thread de OpenAI ...
+
+    // 3. ENVIAR A WHATSAPP
+    try {
+        const jid = chatId.includes('@') ? chatId : `${chatId}@s.whatsapp.net`;
+        if (file) {
+            const absolutePath = path.resolve(file.path);
+            if (finalType === 'image') {
+                await adapterProvider.sendImage(jid, absolutePath, message || '');
+            } else if (finalType === 'video') {
+                await adapterProvider.sendVideo(jid, absolutePath, message || '');
+            } else {
+                await adapterProvider.sendFile(jid, absolutePath, message || file.originalname);
+            }
+        } else {
+            await adapterProvider.sendMessage(jid, message, {});
+        }
+        res.json({ success: true });
+    } catch (waError) {
+        console.error('[BACKOFFICE] Error enviando a Whatsapp:', waError);
+        res.json({ 
+            success: true, 
+            warning: 'El mensaje se guardó en el historial pero falló el envío a WhatsApp (¿Bot conectado?)' 
+        });
+    }
 };
 ```
 
-## 11. Visualización de Documentos (UI)
-- Se mejoró el renderizado de mensajes en el Backoffice para detectar archivos que no son imágenes ni videos.
-- Los documentos (PDF, etc.) se muestran con un icono descriptivo y un enlace de descarga directo.
+## 11. Visualización de Documentos y Multimedia (UI)
+- Se mejoró el renderizado de mensajes en el Backoffice para detectar archivos mediante la extensión y el campo `type` de la base de datos.
+- **Imágenes y Videos**: Se previsualizan directamente en las burbujas de chat.
+- **Documentos (PDF, etc.)**: Se muestran con un icono descriptivo (📄) y un enlace de descarga directo.
 - Se agregaron estilos CSS para que los archivos adjuntos se vean integrados en las burbujas de chat con un fondo distintivo.
+- Se agregaron protecciones contra contenido nulo para evitar que el bucle de renderizado se detenga si hay un mensaje mal formado.
 
 ## Requisitos Técnicos
 - Base de datos: Tablas `tags` y `chat_tags` en Supabase. Columna `last_human_message_at` en `chats`. Campo `thread_id` dentro de `chats.metadata` (JSONB).

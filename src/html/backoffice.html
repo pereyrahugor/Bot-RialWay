@@ -648,18 +648,20 @@
 
                 const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 
-                let contentHtml = m.content;
-                const isImageUrl = m.content.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i) || (m.content.includes('/uploads/') && m.content.match(/\.(jpeg|jpg|gif|png|webp|svg)/i));
-                const isVideoUrl = m.content.match(/\.(mp4|webm|ogg)$/i) || (m.content.includes('/uploads/') && m.content.match(/\.(mp4|webm|ogg)/i));
-                const isFileUrl = m.content.includes('/uploads/') && !isImageUrl && !isVideoUrl;
+                let contentHtml = m.content || '';
+                const type = m.type || 'text';
+                
+                const isImageUrl = type === 'image' || contentHtml.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i) || (contentHtml.includes('/uploads/') && contentHtml.match(/\.(jpeg|jpg|gif|png|webp|svg)/i));
+                const isVideoUrl = type === 'video' || contentHtml.match(/\.(mp4|webm|ogg)$/i) || (contentHtml.includes('/uploads/') && contentHtml.match(/\.(mp4|webm|ogg)/i));
+                const isFileUrl = type === 'document' || (contentHtml.includes('/uploads/') && !isImageUrl && !isVideoUrl);
 
-                if (isImageUrl) {
-                    contentHtml = `<div class="msg-media"><img src="${m.content}" alt="imagen"></div>`;
-                } else if (isVideoUrl) {
-                    contentHtml = `<div class="msg-media"><video src="${m.content}" controls></video></div>`;
-                } else if (isFileUrl) {
-                    const fileName = m.content.split('/').pop();
-                    contentHtml = `<div class="msg-file"><a href="${m.content}" target="_blank">📄 Documento adjunto (${fileName})</a></div>`;
+                if (isImageUrl && contentHtml) {
+                    contentHtml = `<div class="msg-media"><img src="${contentHtml}" alt="imagen"></div>`;
+                } else if (isVideoUrl && contentHtml) {
+                    contentHtml = `<div class="msg-media"><video src="${contentHtml}" controls></video></div>`;
+                } else if (isFileUrl && contentHtml) {
+                    const fileName = contentHtml.split('/').pop();
+                    contentHtml = `<div class="msg-file"><a href="${contentHtml}" target="_blank">📄 Documento adjunto (${fileName})</a></div>`;
                 }
                 
                 html += `
@@ -753,7 +755,13 @@
                 }
 
                 if (res.ok) {
-                    console.log('✅ Mensaje enviado exitosamente');
+                    const data = await res.json();
+                    if (data.warning) {
+                        console.warn('⚠️ Advertencia del servidor:', data.warning);
+                        alert('⚠️ ' + data.warning);
+                    } else {
+                        console.log('✅ Mensaje enviado exitosamente');
+                    }
                     input.value = '';
                     input.placeholder = "Escribe un mensaje aquí";
                     selectedFile = null;

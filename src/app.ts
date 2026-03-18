@@ -918,17 +918,44 @@ const main = async () => {
             console.log(`[BACKOFFICE] Intentando enviar ${file ? file.mimetype : 'texto'} a ${chatId}...`);
 
             const jid = chatId.includes('@') ? chatId : `${chatId}@s.whatsapp.net`;
-            let fileUrl = '';
-
+            // Guardar en historial PRIMERO para que el operador vea su mensaje en el Backoffice de inmediato
+            let finalType: 'text' | 'image' | 'video' | 'document' = 'text';
             if (file) {
-                const absolutePath = path.resolve(file.path);
-                console.log(`[BACKOFFICE] Preparando envío de media a ${jid}:`, {
-                    filename: file.filename,
-                    mimetype: file.mimetype,
-                    path: absolutePath
-                });
+                if (file.mimetype.startsWith('image/')) finalType = 'image';
+                else if (file.mimetype.startsWith('video/')) finalType = 'video';
+                else finalType = 'document';
+            }
+            
+            const fileUrl = file ? `/uploads/${file.filename}` : '';
+            const finalContent = file ? fileUrl : (message || '');
+            
+            console.log(`[BACKOFFICE] Guardando mensaje en historial (${finalType})...`);
+            await HistoryHandler.saveMessage(chatId, 'assistant', finalContent, finalType);
+            await HistoryHandler.updateLastHumanMessage(chatId);
 
-                try {
+            // Intentar inyectar en thread de OpenAI (opcional, no bloquea)
+            try {
+                const threadId = await HistoryHandler.getThreadId(chatId);
+                if (threadId && (message || file)) {
+                    await openaiMain.beta.threads.messages.create(threadId, {
+                        role: 'assistant',
+                        content: `[Mensaje enviado por operador humano]: ${message || (file ? '[Archivo adjunto]' : '')}`
+                    });
+                }
+            } catch (e: any) {
+                console.warn('[BACKOFFICE] No se pudo inyectar en thread:', e.message);
+            }
+
+            // AHORA intentar enviar por WhatsApp
+            try {
+                if (!adapterProvider) {
+                    throw new Error('Proveedor de WhatsApp no inicializado');
+                }
+
+                if (file) {
+                    const absolutePath = path.resolve(file.path);
+                    console.log(`[BACKOFFICE] Enviando media a ${jid}...`);
+                    
                     if (file.mimetype.startsWith('image/')) {
                         if (typeof adapterProvider.sendImage === 'function') {
                             await adapterProvider.sendImage(jid, absolutePath, message || '');
@@ -943,7 +970,6 @@ const main = async () => {
                         }
                     } else {
                         // Documentos (PDF, etc.)
-                        console.log(`[BACKOFFICE] Enviando documento: ${file.originalname}`);
                         if (typeof (adapterProvider as any).sendFile === 'function') {
                             await (adapterProvider as any).sendFile(jid, absolutePath, message || file.originalname);
                         } else {
@@ -953,53 +979,33 @@ const main = async () => {
                             });
                         }
                     }
-                    console.log(`✅ [BACKOFFICE] Media enviado con éxito a ${jid}`);
-                } catch (sendError: any) {
-                    console.error('❌ [BACKOFFICE] Error fatal de envío de imagen/file:', sendError);
-                    throw new Error(`Error del proveedor de WhatsApp: ${sendError.message}`);
-                }
-                
-                fileUrl = `/uploads/${file.filename}`;
-            } else {
-                console.log(`[BACKOFFICE] Enviando texto a ${jid}: ${message}`);
-                if (typeof adapterProvider.sendMessage === 'function') {
-                    await adapterProvider.sendMessage(jid, message, {});
-                } else if (typeof (adapterProvider as any).sendText === 'function') {
-                    await (adapterProvider as any).sendText(jid, message);
                 } else {
-                    throw new Error('Provider does not support sendText or sendMessage');
+                    console.log(`[BACKOFFICE] Enviando texto a ${jid}...`);
+                    if (typeof adapterProvider.sendMessage === 'function') {
+                        await adapterProvider.sendMessage(jid, message, {});
+                    } else if (typeof (adapterProvider as any).sendText === 'function') {
+                        await (adapterProvider as any).sendText(jid, message);
+                    } else {
+                        throw new Error('Provider does not support sendText or sendMessage');
+                    }
                 }
+                console.log(`✅ [BACKOFFICE] Mensaje/Media enviado con éxito a ${jid}`);
+                return res.json({ success: true, fileUrl: file ? fileUrl : undefined });
+
+            } catch (sendError: any) {
+                console.error('❌ [BACKOFFICE] Error al enviar a WhatsApp:', sendError);
+                // Retornamos 200 porque el mensaje YA se guardó en el historial del Backoffice,
+                // pero informamos del error de envío real.
+                return res.status(200).json({ 
+                    success: true, 
+                    warning: `Mensaje guardado en historial, pero no se pudo enviar a WhatsApp: ${sendError.message}`,
+                    fileUrl: file ? fileUrl : undefined 
+                });
             }
 
-            // Guardar en historial
-            let finalType: 'text' | 'image' | 'video' | 'document' = 'text';
-            if (file) {
-                if (file.mimetype.startsWith('image/')) finalType = 'image';
-                else if (file.mimetype.startsWith('video/')) finalType = 'video';
-                else finalType = 'document';
-            }
-            
-            const finalContent = file ? fileUrl : (message || '');
-            await HistoryHandler.saveMessage(chatId, 'assistant', finalContent, finalType);
-            await HistoryHandler.updateLastHumanMessage(chatId);
-
-            // Inyectar en thread de OpenAI
-            try {
-                const threadId = await HistoryHandler.getThreadId(chatId);
-                if (threadId && message) {
-                    await openaiMain.beta.threads.messages.create(threadId, {
-                        role: 'assistant',
-                        content: `[Mensaje enviado por operador humano]: ${message}`
-                    });
-                }
-            } catch (e: any) {
-                console.warn('[BACKOFFICE] No se pudo inyectar en thread:', e.message);
-            }
-
-            return res.json({ success: true, fileUrl: file ? fileUrl : undefined });
         } catch (e: any) {
-            console.error('[BACKOFFICE] Error en processSendMessage:', e);
-            return res.status(500).json({ success: false, error: e.message || 'Error interno al enviar' });
+            console.error('[BACKOFFICE] Error general en processSendMessage:', e);
+            return res.status(500).json({ success: false, error: e.message || 'Error interno al procesar' });
         }
     };
 
@@ -1008,17 +1014,19 @@ const main = async () => {
         console.log(`[BACKOFFICE] POST /send-message - Content-Type: ${contentType}`);
         
         if (contentType.includes('multipart/form-data')) {
-            console.log('[BACKOFFICE] Procesando mensaje con archivo (Multer)...');
             upload.single('file')(req, (res as any), async (err) => {
                 if (err) {
                     console.error('[BACKOFFICE] Multer Error:', err);
-                    return res.json({ success: false, error: `Error de archivo: ${err.message}` });
+                    return res.status(400).json({ success: false, error: `Error de archivo: ${err.message}` });
                 }
                 const { chatId, message } = req.body;
                 const file = (req as any).file;
-                console.log('[BACKOFFICE] Multer finalizado:', { chatId, hasFile: !!file, message });
                 
-                if (!chatId) return res.status(400).json({ success: false, error: 'chatId is required' });
+                if (!chatId) {
+                    return res.status(400).json({ success: false, error: 'Falta chatId' });
+                }
+
+                console.log('[BACKOFFICE] Multer finalizado:', { chatId, hasFile: !!file, message });
                 await processSendMessage(req, res, chatId, message, file);
             });
         } else {
