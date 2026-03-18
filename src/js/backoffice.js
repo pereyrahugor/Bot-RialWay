@@ -1,3 +1,4 @@
+/* global io */
 const token = localStorage.getItem('backoffice_token');
 if (!token) window.location.href = '/login';
 

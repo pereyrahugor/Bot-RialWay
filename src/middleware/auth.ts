@@ -6,7 +6,7 @@
  */
 export const backofficeAuth = (req: any, res: any, next: () => void) => {
     // Asegurar parsing de query si Polka/Node no lo ha expuesto aún
-    let q: any = {};
+    const q: any = {};
     try {
         const url = new URL(req.url || '', 'http://localhost');
         url.searchParams.forEach((v, k) => q[k] = v);

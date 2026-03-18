@@ -117,7 +117,9 @@ export class AiManager {
                             content: body || '[Media]'
                         });
                     }
-                } catch (e) {}
+                } catch (e: any) {
+                    console.error("[AiManager] Error guardando threadId:", e.message);
+                }
                 return state;
             }
 
@@ -150,7 +152,9 @@ export class AiManager {
                 if (currentThreadId && ctx.from) {
                     await HistoryHandler.saveThreadId(ctx.from, currentThreadId);
                 }
-            } catch (e) {}
+            } catch (e: any) {
+                console.error("[AiManager] Error guardando threadId:", e.message);
+            }
 
             await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
                 response,

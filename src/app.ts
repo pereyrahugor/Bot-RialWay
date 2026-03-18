@@ -14,7 +14,7 @@ import { ErrorReporter } from "./utils/errorReporter";
 import { updateMain } from "./addModule/updateMain";
 import { WebChatManager } from "./utils-web/WebChatManager";
 import { HistoryHandler } from "./utils/historyHandler";
-import { registerProcessCallback } from "./utils/queueManager";
+import { registerProcessCallback, handleQueue, userQueues, userLocks } from "./utils/queueManager";
 
 // --- Managers & Routes ---
 import { registerBackofficeRoutes } from "./routes/backoffice.routes";
@@ -40,8 +40,9 @@ import { welcomeFlowButton } from "./Flows/welcomeFlowButton";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Global instances
-let adapterProvider: any;
-let errorReporter: any;
+export let adapterProvider: any;
+export let errorReporter: any;
+export let aiManagerInstance: AiManager;
 const webChatManager = new WebChatManager();
 const openaiMain = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const openaiVision = new OpenAI({ apiKey: process.env.OPENAI_API_KEY_IMG });
@@ -103,6 +104,7 @@ const main = async () => {
     const aiManager = new AiManager(openaiMain, ASSISTANT_ID, errorReporter, {
         welcomeFlowTxt, welcomeFlowVoice, welcomeFlowButton
     });
+    aiManagerInstance = aiManager;
 
     registerProcessCallback(async (item: any) => {
         const { ctx, flowDynamic, state, provider, gotoFlow } = item;
@@ -195,5 +197,10 @@ main().catch(err => console.error("❌ [FATAL MAIN]:", err));
 
 export {
     welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowVideo, welcomeFlowDoc, locationFlow,
-    AiManager
+    AiManager, handleQueue, userQueues, userLocks
+};
+
+export const processUserMessage = async (ctx: any, items: any) => {
+    if (!aiManagerInstance) throw new Error("AiManager not initialized");
+    return await aiManagerInstance.processUserMessage(ctx, items);
 };
