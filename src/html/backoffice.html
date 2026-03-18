@@ -2,8 +2,10 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🤖 {{BOT_NAME}} - Backoffice</title>
     <link rel="stylesheet" href="/style/backoffice.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 </head>
@@ -11,10 +13,13 @@
 
     <div id="sidebar">
         <div class="sidebar-header">
-            <h2 style="margin:0; font-size:1.4rem;">{{BOT_NAME}}</h2>
-            <div style="display:flex; gap:8px;">
+            <div class="chat-avatar" style="width: 40px; height: 40px; background: #6a7175;">
+                <span>🤖</span>
+            </div>
+            <h2 style="margin:0; font-size:1.2rem; flex:1; margin-left:12px;">{{BOT_NAME}}</h2>
+            <div style="display:flex; gap:12px;">
                 <button class="btn-icon" onclick="toggleTagManager()" title="Gestión Etiquetas"><i class="fas fa-tags"></i></button>
-                <button class="btn-icon" onclick="logout()" title="Cerrar Sesión"><i class="fas fa-sign-out-alt"></i></button>
+                <button class="btn-icon" onclick="logout()" title="Cerrar Sesión" style="color:#f87171;"><i class="fas fa-sign-out-alt"></i></button>
             </div>
         </div>
 
@@ -72,7 +77,7 @@
                        onkeydown="if(event.key === 'Enter') sendMessage()">
             </div>
             
-            <button class="btn-icon" id="send-btn" title="Enviar mensaje" onclick="sendMessage()" disabled>
+            <button class="btn-icon" id="send-btn" title="Enviar mensaje" onclick="sendMessage()" disabled style="color: var(--wa-accent);">
                 <i class="fas fa-paper-plane"></i>
             </button>
         </div>

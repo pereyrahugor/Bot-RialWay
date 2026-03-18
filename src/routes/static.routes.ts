@@ -30,16 +30,15 @@ export const registerStaticRoutes = (app: any, { __dirname }: { __dirname: strin
                 if (htmlPath) {
                     let htmlContent = fs.readFileSync(htmlPath, 'utf8');
                     const botName = process.env.ASSISTANT_NAME || process.env.RAILWAY_PROJECT_NAME || "Neurolinks";
-                    if (['backoffice.html', 'dashboard.html', 'login.html'].includes(filename)) {
-                        htmlContent = htmlContent.replace(/<title>.*?<\/title>/, `<title>BackOffice - ${botName}</title>`);
-                    }
-                    if (filename === 'backoffice.html') {
-                        htmlContent = htmlContent.replace(
-                            '<h2 style="margin:0; font-size: 1.2rem;">Backoffice</h2>',
-                            `<h2 style="margin:0; font-size: 1.2rem;">Backoffice - ${botName}</h2>`
-                        );
-                    }
+                    
+                    console.log(`[Static] Sirviendo ${filename} para ${route}. botName=${botName}`);
+
+                    // Reemplazo universal de placeholders
+                    htmlContent = htmlContent.replace(/{{BOT_NAME}}/g, botName);
+                    htmlContent = htmlContent.replace(/{{ASSISTANT_NAME}}/g, botName);
+                    
                     res.setHeader('Content-Type', 'text/html');
+                    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
                     res.end(htmlContent);
                 } else {
                     res.status(404).send('HTML no encontrado en el servidor');

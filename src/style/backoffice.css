@@ -15,7 +15,7 @@
 
 body {
     margin: 0; padding: 0;
-    font-family: 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+    font-family: 'Outfit', sans-serif;
     background-color: var(--wa-bg-dark);
     color: var(--wa-text);
     display: flex;
