@@ -630,8 +630,16 @@ const main = async () => {
     console.log('🔍 [DEBUG] app (adapterProvider.server):', !!app);
     // Middleware global de body-parser para manejar payloads grandes en todas las rutas
     console.log('🔍 [DEBUG] Aplicando middlewares...');
-    app.use(bodyParser.json({ limit: '50mb' }));
-    app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
+    app.use((req, res, next) => {
+        const contentType = req.headers['content-type'] || '';
+        if (contentType.includes('multipart/form-data')) {
+            return next();
+        }
+        bodyParser.json({ limit: '50mb' })(req, res, (err) => {
+            if (err) return next(err);
+            bodyParser.urlencoded({ limit: '50mb', extended: true })(req, res, next);
+        });
+    });
 
     // 1. Middleware de compatibilidad (res.json, res.send, res.sendFile, etc)
     app.use((req, res, next) => {
@@ -1009,31 +1017,43 @@ const main = async () => {
         }
     };
 
-    app.post('/api/backoffice/send-message', backofficeAuth, (req, res) => {
+    app.post('/api/backoffice/send-message', backofficeAuth, (req, res, next) => {
         const contentType = req.headers['content-type'] || '';
-        console.log(`[BACKOFFICE] POST /send-message - Content-Type: ${contentType}`);
-        
         if (contentType.includes('multipart/form-data')) {
-            upload.single('file')(req, (res as any), async (err) => {
+            console.log(`[BACKOFFICE] Detectado multipart/form-data. Llamando a Multer...`);
+            return upload.single('file')(req, (res as any), (err) => {
                 if (err) {
-                    console.error('[BACKOFFICE] Multer Error:', err);
+                    console.error('[BACKOFFICE] Error al procesar archivo con Multer:', err);
                     return res.status(400).json({ success: false, error: `Error de archivo: ${err.message}` });
                 }
-                const { chatId, message } = req.body;
-                const file = (req as any).file;
-                
-                if (!chatId) {
-                    return res.status(400).json({ success: false, error: 'Falta chatId' });
-                }
-
-                console.log('[BACKOFFICE] Multer finalizado:', { chatId, hasFile: !!file, message });
-                await processSendMessage(req, res, chatId, message, file);
+                next();
             });
-        } else {
-            console.log('[BACKOFFICE] Procesando mensaje de solo texto (JSON)...');
-            const { chatId, message } = req.body;
-            if (!chatId) return res.status(400).json({ success: false, error: 'chatId is required' });
-            processSendMessage(req, res, chatId, message, null);
+        }
+        next();
+    }, async (req, res) => {
+        try {
+            const contentType = req.headers['content-type'] || '';
+            let chatId, message, file;
+
+            if (contentType.includes('multipart/form-data')) {
+                chatId = req.body.chatId;
+                message = req.body.message;
+                file = (req as any).file;
+                console.log('[BACKOFFICE] Multer procesado:', { chatId, message, hasFile: !!file });
+            } else {
+                chatId = req.body.chatId;
+                message = req.body.message;
+                console.log('[BACKOFFICE] JSON procesado:', { chatId, message });
+            }
+
+            if (!chatId) {
+                return res.status(400).json({ success: false, error: 'chatId is required' });
+            }
+
+            await processSendMessage(req, res, chatId, message, file);
+        } catch (e: any) {
+            console.error('[BACKOFFICE] Error en route /send-message:', e);
+            res.status(500).json({ success: false, error: e.message });
         }
     });
 
