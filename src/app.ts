@@ -606,6 +606,20 @@ const main = async () => {
 
     // Inicializar servidor Polka propio para WebChat y QR
     const app = adapterProvider.server;
+    
+    // Global error handler para Polka (Evita que el 500 sea texto plano si hay error fuera de try-catch)
+    if (app) {
+        app.onError = (err, req, res) => {
+            console.error('🔥 [POLKA ERROR HANDLER]:', err);
+            if (res && typeof (res as any).json === 'function') {
+                (res as any).status(500).json({ success: false, error: err.message || 'Internal Server Error' });
+            } else {
+                res.statusCode = 500;
+                res.end(JSON.stringify({ success: false, error: err.message || 'Internal Server Error' }));
+            }
+        };
+    }
+
     console.log('🔍 [DEBUG] app (adapterProvider.server):', !!app);
     // Middleware global de body-parser para manejar payloads grandes en todas las rutas
     console.log('🔍 [DEBUG] Aplicando middlewares...');
@@ -627,8 +641,15 @@ const main = async () => {
         };
         res.json = (data) => {
             if (res.headersSent) return res;
-            res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify(data || null));
+            try {
+                const body = JSON.stringify(data || null);
+                res.setHeader('Content-Type', 'application/json');
+                res.end(body);
+            } catch (e) {
+                console.error('🔥 Error serializing JSON response:', e);
+                res.statusCode = 500;
+                res.end(JSON.stringify({ success: false, error: 'Internal JSON Serialization Error' }));
+            }
             return res;
         };
         res.sendFile = (filepath) => {
@@ -877,72 +898,83 @@ const main = async () => {
         res.json(result);
     });
 
-    app.post('/api/backoffice/send-message', backofficeAuth, upload.single('file'), async (req, res) => {
-        try {
-            const { chatId, message } = req.body;
-            const file = (req as any).file;
-
-            if (!chatId) return res.status(400).json({ success: false, error: 'chatId is required' });
-
-            if (!adapterProvider || !adapterProvider.vendor) {
-                console.error('[BACKOFFICE] Error: Proveedor no inicializado o sin vendor');
-                return res.status(503).json({ success: false, error: 'WhatsApp provider not ready (disconnected)' });
+    app.post('/api/backoffice/send-message', backofficeAuth, (req, res) => {
+        // Envolvemos el middleware de multer para manejar errores con nuestra propia estructura de respuesta
+        upload.single('file')(req, (res as any), async (err) => {
+            if (err) {
+                console.error('[BACKOFFICE] Error en Multer:', err);
+                return (res as any).status(400).json({ success: false, error: `Multer Error: ${err.message}` });
             }
 
-            const jid = chatId.includes('@') ? chatId : `${chatId}@s.whatsapp.net`;
-            console.log(`[BACKOFFICE] Intentando enviar mensaje a ${jid}...`);
-
-            let fileUrl = '';
-
-            if (file) {
-                // Enviar archivo multimedia
-                console.log(`[BACKOFFICE] Enviando media: ${file.path}`);
-                if (typeof adapterProvider.sendMessage === 'function') {
-                    await adapterProvider.sendMessage(jid, message || '', { media: file.path });
-                } else {
-                    throw new Error('Provider does not support sendMessage for media');
-                }
-                fileUrl = `/uploads/${file.filename}`;
-            } else {
-                // Enviar texto
-                console.log(`[BACKOFFICE] Enviando texto a ${jid}`);
-                if (typeof adapterProvider.sendMessage === 'function') {
-                    await adapterProvider.sendMessage(jid, message, {});
-                } else if (typeof adapterProvider.sendText === 'function') {
-                    await (adapterProvider as any).sendText(jid, message);
-                } else {
-                    throw new Error('Provider does not support sendText or sendMessage');
-                }
-            }
-
-            // Guardar en historial como assistant
-            const finalContent = file ? fileUrl : (message || '');
-            const finalType = file ? 'media' : 'text';
-            await HistoryHandler.saveMessage(chatId, 'assistant', finalContent, finalType as any);
-
-            // Actualizar timestamp de última actividad humana
-            await HistoryHandler.updateLastHumanMessage(chatId);
-
-            // Inyectar mensaje del operador al thread de OpenAI para mantener contexto
             try {
-                const threadId = await HistoryHandler.getThreadId(chatId);
-                if (threadId && message) {
-                    await openaiMain.beta.threads.messages.create(threadId, {
-                        role: 'assistant',
-                        content: `[Mensaje enviado por operador humano]: ${message}`
-                    });
-                    console.log(`[BACKOFFICE] Mensaje inyectado al thread de OpenAI ${threadId}`);
-                }
-            } catch (e) {
-                console.warn('[BACKOFFICE] No se pudo inyectar mensaje al thread de OpenAI:', (e as any).message);
-            }
+                const { chatId, message } = req.body;
+                const file = (req as any).file;
 
-            console.log(`✅ [BACKOFFICE] Mensaje enviado y guardado para ${jid}`);
-            res.json({ success: true, fileUrl: file ? fileUrl : undefined });
-        } catch (e: any) {
-            console.error('[BACKOFFICE] Error enviando mensaje:', e);
-            res.status(500).json({ success: false, error: e.message });
-        }
+                if (!chatId) return (res as any).status(400).json({ success: false, error: 'chatId is required' });
+
+                if (!adapterProvider || !adapterProvider.vendor) {
+                    console.error('[BACKOFFICE] Error: Proveedor no inicializado o sin vendor');
+                    return (res as any).status(503).json({ success: false, error: 'WhatsApp provider not connected' });
+                }
+
+                const jid = chatId.includes('@') ? chatId : `${chatId}@s.whatsapp.net`;
+                console.log(`[BACKOFFICE] Intentando enviar mensaje a ${jid}...`, { hasFile: !!file });
+
+                let fileUrl = '';
+
+                if (file) {
+                    // Enviar archivo multimedia
+                    console.log(`[BACKOFFICE] Enviando media: ${file.path}`);
+                    if (typeof adapterProvider.sendMessage === 'function') {
+                        await adapterProvider.sendMessage(jid, message || '', { media: file.path });
+                    } else {
+                        throw new Error('Provider does not support sendMessage for media');
+                    }
+                    fileUrl = `/uploads/${file.filename}`;
+                } else {
+                    // Enviar texto
+                    console.log(`[BACKOFFICE] Enviando texto a ${jid}`);
+                    if (typeof adapterProvider.sendMessage === 'function') {
+                        await adapterProvider.sendMessage(jid, message, {});
+                    } else if (typeof (adapterProvider as any).sendText === 'function') {
+                        await (adapterProvider as any).sendText(jid, message);
+                    } else {
+                        throw new Error('Provider does not support sendText or sendMessage');
+                    }
+                }
+
+                // Guardar en historial como assistant
+                const finalContent = file ? (fileUrl || '[Media]') : (message || '');
+                const finalType = file ? 'media' : 'text';
+                
+                // Usamos el chatId original que viene del backoffice para que coincida con lo que el frontend espera
+                await HistoryHandler.saveMessage(chatId, 'assistant', finalContent, finalType as any);
+
+                // Actualizar timestamp de última actividad humana
+                await HistoryHandler.updateLastHumanMessage(chatId);
+
+                // Inyectar mensaje del operador al thread de OpenAI para mantener contexto
+                try {
+                    const threadId = await HistoryHandler.getThreadId(chatId);
+                    if (threadId && message) {
+                        await openaiMain.beta.threads.messages.create(threadId, {
+                            role: 'assistant',
+                            content: `[Mensaje enviado por operador humano]: ${message}`
+                        });
+                        console.log(`[BACKOFFICE] Mensaje inyectado al thread de OpenAI ${threadId}`);
+                    }
+                } catch (e: any) {
+                    console.warn('[BACKOFFICE] No se pudo inyectar mensaje al thread de OpenAI:', e.message);
+                }
+
+                console.log(`✅ [BACKOFFICE] Mensaje enviado y guardado para ${jid}`);
+                (res as any).json({ success: true, fileUrl: file ? fileUrl : undefined });
+
+            } catch (e: any) {
+                console.error('[BACKOFFICE] Error fatal enviando mensaje:', e);
+                (res as any).status(500).json({ success: false, error: e.message || 'Error interno al enviar' });
+            }
+        });
     });
 
     // --- Rutas de Etiquetas (Tags) ---

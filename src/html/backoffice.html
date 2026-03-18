@@ -710,9 +710,17 @@
                     document.getElementById('file-input').value = '';
                     fetchMessages(activeChatId);
                 } else {
-                    const errorData = await res.json();
-                    console.error('❌ Error del servidor:', errorData);
-                    alert('Error al enviar mensaje: ' + (errorData.error || 'Error desconocido'));
+                    let errorMsg = 'Error desconocido';
+                    try {
+                        const errorData = await res.json();
+                        errorMsg = errorData.error || errorMsg;
+                    } catch (e) {
+                        // Si no es JSON, intentamos leer como texto
+                        const text = await res.text();
+                        errorMsg = text || res.statusText || 'Error del servidor';
+                    }
+                    console.error('❌ Error del servidor:', errorMsg);
+                    alert('Error al enviar mensaje: ' + errorMsg);
                 }
             } catch (err) {
                 console.error('❌ Error de red:', err);
