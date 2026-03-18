@@ -598,6 +598,13 @@ const main = async () => {
     // su propio uncaughtException que hace process.exit(1).
     registerSafeErrorHandlers();
 
+    // Asegurar que el directorio de uploads exista al inicio
+    const finalUploadDir = path.resolve('uploads');
+    if (!fs.existsSync(finalUploadDir)) {
+        console.log(`[INIT] Creando directorio de uploads en: ${finalUploadDir}`);
+        fs.mkdirSync(finalUploadDir, { recursive: true });
+    }
+
     // console.log('🔍 [DEBUG] createBot httpServer:', !!httpServer);
     // console.log('🔍 [DEBUG] adapterProvider.server:', !!adapterProvider.server);
 
@@ -901,21 +908,56 @@ const main = async () => {
     // Función auxiliar para procesar el envío de mensajes (unificada para JSON y Multipart)
     const processSendMessage = async (req: any, res: any, chatId: string, message: string, file: any) => {
         try {
-            if (!adapterProvider || !adapterProvider.vendor) {
-                console.error('[BACKOFFICE] Error: Proveedor no conectado');
-                return res.status(503).json({ success: false, error: 'WhatsApp provider not connected' });
+            if (!adapterProvider) {
+                console.error('[BACKOFFICE] Error: Proveedor no inicializado');
+                return res.status(503).json({ success: false, error: 'WhatsApp provider not initialized' });
             }
+
+            // Verificar si el proveedor está "conectado" (Baileys)
+            // if (adapterProvider.provider && adapterProvider.provider.ev) { ... }
+            console.log(`[BACKOFFICE] Intentando enviar ${file ? file.mimetype : 'texto'} a ${chatId}...`);
 
             const jid = chatId.includes('@') ? chatId : `${chatId}@s.whatsapp.net`;
             let fileUrl = '';
 
             if (file) {
-                console.log(`[BACKOFFICE] Enviando media a ${jid}: ${file.path}`);
-                if (typeof adapterProvider.sendMessage === 'function') {
-                    await adapterProvider.sendMessage(jid, message || '', { media: file.path });
-                } else {
-                    throw new Error('Provider does not support sendMessage for media');
+                const absolutePath = path.resolve(file.path);
+                console.log(`[BACKOFFICE] Preparando envío de media a ${jid}:`, {
+                    filename: file.filename,
+                    mimetype: file.mimetype,
+                    path: absolutePath
+                });
+
+                try {
+                    if (file.mimetype.startsWith('image/')) {
+                        if (typeof adapterProvider.sendImage === 'function') {
+                            await adapterProvider.sendImage(jid, absolutePath, message || '');
+                        } else {
+                            await adapterProvider.sendMessage(jid, message || '', { media: absolutePath });
+                        }
+                    } else if (file.mimetype.startsWith('video/')) {
+                        if (typeof adapterProvider.sendVideo === 'function') {
+                            await adapterProvider.sendVideo(jid, absolutePath, message || '');
+                        } else {
+                            await adapterProvider.sendMessage(jid, message || '', { media: absolutePath });
+                        }
+                        // Documentos (PDF, etc.)
+                        console.log(`[BACKOFFICE] Enviando documento: ${file.originalname}`);
+                        if (typeof adapterProvider.sendFile === 'function') {
+                            await adapterProvider.sendFile(jid, absolutePath, message || file.originalname);
+                        } else {
+                            await adapterProvider.sendMessage(jid, message || '', { 
+                                media: absolutePath,
+                                fileName: file.originalname 
+                            });
+                        }
+                    }
+                    console.log(`✅ [BACKOFFICE] Media enviado con éxito a ${jid}`);
+                } catch (sendError: any) {
+                    console.error('❌ [BACKOFFICE] Error fatal de envío de imagen/file:', sendError);
+                    throw new Error(`Error del proveedor de WhatsApp: ${sendError.message}`);
                 }
+                
                 fileUrl = `/uploads/${file.filename}`;
             } else {
                 console.log(`[BACKOFFICE] Enviando texto a ${jid}: ${message}`);
@@ -956,9 +998,10 @@ const main = async () => {
 
     app.post('/api/backoffice/send-message', backofficeAuth, (req, res) => {
         const contentType = req.headers['content-type'] || '';
+        console.log(`[BACKOFFICE] POST /send-message - Content-Type: ${contentType}`);
         
         if (contentType.includes('multipart/form-data')) {
-            // Caso 1: Envío de archivo (Multipart)
+            console.log('[BACKOFFICE] Procesando mensaje con archivo (Multer)...');
             upload.single('file')(req, (res as any), async (err) => {
                 if (err) {
                     console.error('[BACKOFFICE] Multer Error:', err);
@@ -966,11 +1009,13 @@ const main = async () => {
                 }
                 const { chatId, message } = req.body;
                 const file = (req as any).file;
+                console.log('[BACKOFFICE] Multer finalizado:', { chatId, hasFile: !!file, message });
+                
                 if (!chatId) return res.status(400).json({ success: false, error: 'chatId is required' });
                 await processSendMessage(req, res, chatId, message, file);
             });
         } else {
-            // Caso 2: Envío de texto (JSON)
+            console.log('[BACKOFFICE] Procesando mensaje de solo texto (JSON)...');
             const { chatId, message } = req.body;
             if (!chatId) return res.status(400).json({ success: false, error: 'chatId is required' });
             processSendMessage(req, res, chatId, message, null);
@@ -1015,22 +1060,23 @@ const main = async () => {
     // Reactiva el bot si el humano no responde en 15 minutos
     setInterval(async () => {
         try {
+            const timeoutMinutes = 15;
             const now = new Date();
-            const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000);
+            const threshold = new Date(now.getTime() - timeoutMinutes * 60 * 1000);
             
             const { data: inactiveChats, error } = await supabase
                 .from('chats')
-                .select('id')
+                .select('id, last_human_message_at')
                 .eq('project_id', process.env.RAILWAY_PROJECT_ID || 'default_project')
                 .eq('bot_enabled', false)
-                .or(`last_human_message_at.lte.${fifteenMinutesAgo.toISOString()},last_human_message_at.is.null`);
+                .or(`last_human_message_at.lte.${threshold.toISOString()},last_human_message_at.is.null`);
 
             if (error) throw error;
 
             for (const chat of (inactiveChats || [])) {
-                console.log(`[WORKER] Reactivando bot para ${chat.id} por inactividad humana`);
+                console.log(`[WORKER] [${new Date().toLocaleTimeString()}] Auto-activando bot para ${chat.id} (Inactividad > ${timeoutMinutes} min)`);
                 await HistoryHandler.toggleBot(chat.id, true);
-                historyEvents.emit('bot_toggled', { chatId: chat.id, enabled: true });
+                // No es necesario emitir aquí manualmente si toggleBot ya lo hace
             }
         } catch (e) {
             console.error('[WORKER] Error checking human inactivity:', e);

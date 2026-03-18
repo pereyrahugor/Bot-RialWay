@@ -261,9 +261,14 @@ export class HistoryHandler {
      */
     static async toggleBot(chatId: string, enabled: boolean) {
         try {
+            const updateData: any = { bot_enabled: enabled };
+            if (enabled === false) {
+                updateData.last_human_message_at = new Date().toISOString();
+            }
+
             const { error } = await supabase
                 .from('chats')
-                .update({ bot_enabled: enabled })
+                .update(updateData)
                 .eq('id', chatId)
                 .eq('project_id', PROJECT_ID);
             
