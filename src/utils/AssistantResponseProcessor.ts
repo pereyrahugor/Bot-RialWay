@@ -112,7 +112,7 @@ export class AssistantResponseProcessor {
         recursionDepth: number = 0
     ) {
         if (recursionDepth > 5) {
-            // console.error('[AssistantResponseProcessor] Límite de recursión alcanzado (5). Abortando para evitar bucle infinito.');
+            console.error('[AssistantResponseProcessor] Límite de recursión alcanzado (5). Abortando para evitar bucle infinito.');
             await flowDynamic([{ body: "Lo siento, hubo un problema procesando la respuesta. Por favor, intenta de nuevo." }]);
             return;
         }
@@ -125,9 +125,9 @@ export class AssistantResponseProcessor {
         // }
         // Log de mensaje entrante del asistente (antes de cualquier filtro)
         if (ctx && ctx.type === 'webchat') {
-            // console.log('[Webchat Debug] Mensaje entrante del asistente:', response);
+            console.log('[Webchat Debug] Mensaje entrante del asistente:', response);
         } else {
-            // console.log('[WhatsApp Debug] Mensaje entrante del asistente:', response);
+            console.log('[WhatsApp Debug] Mensaje entrante del asistente:', response);
             // Si el usuario está bloqueado por una operación API, evitar procesar nuevos mensajes
             // BLOQUEO ELIMINADO: Se detectó que interfiere con respuestas de API
             // if (userApiBlockMap.has(ctx.from)) {
@@ -142,9 +142,9 @@ export class AssistantResponseProcessor {
 
         // Log de mensaje saliente al usuario (antes de cualquier filtro)
         if (ctx && ctx.type === 'webchat') {
-            // console.log('[Webchat Debug] Mensaje saliente al usuario (sin filtrar):', textResponse.substring(0, 500));
+            console.log('[Webchat Debug] Mensaje saliente al usuario (sin filtrar):', textResponse.substring(0, 500));
         } else {
-            // console.log('[WhatsApp Debug] Mensaje saliente al usuario (sin filtrar):', textResponse.substring(0, 500));
+            console.log('[WhatsApp Debug] Mensaje saliente al usuario (sin filtrar):', textResponse.substring(0, 500));
         }
         
         // Log específico para debug de DB_QUERY
@@ -382,7 +382,7 @@ export class AssistantResponseProcessor {
                     await flowDynamic([{ body: limpiarBloquesJSON(String(assistantApiResponse)).trim() }]);
                     // flowDynamic ejecutado correctamente
                 } catch (err) {
-                    // console.error('[WhatsApp Debug] Error en flowDynamic:', err);
+                    console.error('[WhatsApp Debug] Error en flowDynamic:', err);
                 }
             }
         } else if (cleanTextResponse.length > 0 || pdfPaths.length > 0) {
@@ -400,7 +400,7 @@ export class AssistantResponseProcessor {
                         await new Promise(r => setTimeout(r, 600)); 
                         // flowDynamic ejecutado correctamente
                     } catch (err) {
-                        // console.error('[WhatsApp Debug] Error en flowDynamic:', err);
+                        console.error('[WhatsApp Debug] Error en flowDynamic:', err);
                     }
                 }
             }
