@@ -589,17 +589,29 @@
 
         function updateBotStatusText(enabled) {
             const txt = document.getElementById('bot-status-text');
-            txt.innerText = enabled ? 'Bot Activo' : 'Intervención Humana';
-            txt.className = enabled ? 'status-bot' : 'status-human';
+            if (!txt) return;
+            const isEnabled = enabled === true || enabled === 'true' || enabled === 1;
+            txt.innerText = isEnabled ? 'Bot Activo' : 'Intervención Humana';
+            txt.className = isEnabled ? 'status-bot' : 'status-human';
         }
 
         function updateInputState(botEnabled) {
             const input = document.getElementById('message-input');
             const btn = document.getElementById('send-btn');
             const attachBtn = document.getElementById('attach-btn');
-            input.disabled = botEnabled;
-            btn.disabled = botEnabled;
-            attachBtn.disabled = botEnabled;
+            if (!input || !btn || !attachBtn) return;
+
+            const isBotEnabled = botEnabled === true || botEnabled === 'true' || botEnabled === 1;
+            // Permitimos siempre el input para el humano, pero lo resaltamos visualmente si el bot está activo
+            input.disabled = false;
+            btn.disabled = false;
+            attachBtn.disabled = false;
+            
+            if (isBotEnabled) {
+                input.style.borderBottom = '2px solid var(--wa-accent)';
+            } else {
+                input.style.borderBottom = '2px solid #f87171';
+            }
         }
 
         async function fetchMessages(chatId) {
@@ -689,18 +701,37 @@
             btn.innerHTML = '...';
 
             try {
-                const formData = new FormData();
-                formData.append('chatId', activeChatId);
-                if (content) formData.append('message', content);
-                if (selectedFile) formData.append('file', selectedFile);
+                let res;
+                const token = sessionStorage.getItem('backoffice_token');
 
-                const res = await fetch('/api/backoffice/send-message', {
-                    method: 'POST',
-                    headers: { 
-                        'Authorization': 'token=' + token
-                    },
-                    body: formData
-                });
+                if (!selectedFile) {
+                    // Enviar como JSON simple (más confiable para texto)
+                    res = await fetch('/api/backoffice/send-message', {
+                        method: 'POST',
+                        headers: { 
+                            'Authorization': 'token=' + token,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            chatId: activeChatId,
+                            message: content
+                        })
+                    });
+                } else {
+                    // Enviar como FormData (necesario para archivos)
+                    const formData = new FormData();
+                    formData.append('chatId', activeChatId);
+                    if (content) formData.append('message', content);
+                    formData.append('file', selectedFile);
+
+                    res = await fetch('/api/backoffice/send-message', {
+                        method: 'POST',
+                        headers: { 
+                            'Authorization': 'token=' + token
+                        },
+                        body: formData
+                    });
+                }
 
                 if (res.ok) {
                     console.log('✅ Mensaje enviado exitosamente');
