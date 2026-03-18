@@ -1,1394 +1,199 @@
-import { executeDbQuery } from "./utils/dbHandler";
-// ...existing imports y lógica del bot...
-// import { exec } from 'child_process';
 import "dotenv/config";
-import path from 'path';
-import serve from 'serve-static';
-import { Server } from 'socket.io';
-import fs from 'fs';
-import polka from 'polka';
-import bodyParser from 'body-parser';
-import { createServer } from 'http';
-import QRCode from 'qrcode';
-import multer from 'multer';
-// Estado global para encender/apagar el bot
-let botEnabled = true;
-
-// Función para registrar handlers seguros de errores globales
-// que NO maten el proceso (el provider de Sherpa registra los suyos
-// con process.exit(1) en uncaughtException, y los sobreescribimos).
-function registerSafeErrorHandlers() {
-    process.removeAllListeners('uncaughtException');
-    process.removeAllListeners('unhandledRejection');
-    process.on('uncaughtException', (error) => {
-        console.error(`⚠️ [UncaughtException] ${new Date().toISOString()}:`, error);
-        // NO llamamos process.exit — dejamos que el bot siga corriendo
-    });
-    process.on('unhandledRejection', (reason, promise) => {
-        console.error(`⚠️ [UnhandledRejection] ${new Date().toISOString()}:`, reason);
-    });
-}
-
-import { createBot, createProvider, createFlow, addKeyword, EVENTS } from "@builderbot/bot";
-import { MemoryDB } from "@builderbot/bot";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import multer from "multer";
+import OpenAI from "openai";
+import { createBot, createProvider, createFlow, MemoryDB } from "@builderbot/bot";
 import { BaileysProvider } from "builderbot-provider-sherpa";
-import { restoreSessionFromDb, startSessionSync, deleteSessionFromDb, isSessionInDb } from "./utils/sessionSync";
 import { httpInject } from "@builderbot-plugins/openai-assistants";
-import { typing } from "./utils/presence";
-import { idleFlow } from "./Flows/idleFlow";
+
+// --- Utils & Handlers ---
+import { restoreSessionFromDb, startSessionSync, deleteSessionFromDb } from "./utils/sessionSync";
+import { ErrorReporter } from "./utils/errorReporter";
+import { updateMain } from "./addModule/updateMain";
+import { WebChatManager } from "./utils-web/WebChatManager";
+import { HistoryHandler } from "./utils/historyHandler";
+import { registerProcessCallback } from "./utils/queueManager";
+
+// --- Managers & Routes ---
+import { registerBackofficeRoutes } from "./routes/backoffice.routes";
+import { registerRailwayRoutes } from "./routes/railway.routes";
+import { registerWebchatRoutes } from "./routes/webchat.routes";
+import { registerStaticRoutes } from "./routes/static.routes";
+import { initSocketIO } from "./sockets/socket.manager";
+import { registerProviderEvents, hasActiveSession } from "./providers/provider.manager";
+import { startHumanInactivityWorker } from "./workers/humanInactivity.worker";
+import { AiManager } from "./utils/ai.manager";
+import { smartBodyParser, compatibilityLayer, rootRedirect } from "./middleware/global";
+
+// --- Flows ---
 import { welcomeFlowTxt } from "./Flows/welcomeFlowTxt";
 import { welcomeFlowVoice } from "./Flows/welcomeFlowVoice";
 import { welcomeFlowImg } from "./Flows/welcomeFlowImg";
 import { welcomeFlowVideo } from "./Flows/welcomeFlowVideo";
 import { welcomeFlowDoc } from "./Flows/welcomeFlowDoc";
 import { locationFlow } from "./Flows/locationFlow";
+import { idleFlow } from "./Flows/idleFlow";
 import { welcomeFlowButton } from "./Flows/welcomeFlowButton";
-import OpenAI from "openai";
-import { transcribeAudioFile } from "./utils/audioTranscriptior";
-import { getOrCreateThreadId, sendMessageToThread, deleteThread } from "./utils-web/openaiThreadBridge";
-import { safeToAsk, waitForActiveRuns, cancelActiveRuns, renewThreadAndRetry } from "./utils/openaiHelper";
-export { safeToAsk, waitForActiveRuns, cancelActiveRuns, renewThreadAndRetry };
-import { AssistantResponseProcessor } from "./utils/AssistantResponseProcessor";
-import { updateMain } from "./addModule/updateMain";
-import { ErrorReporter } from "./utils/errorReporter";
-import { stop, reset } from "./utils/timeOut";
-// import { AssistantBridge } from './utils-web/AssistantBridge';
-import { WebChatManager } from './utils-web/WebChatManager';
-import { fileURLToPath } from 'url';
-import { getArgentinaDatetimeString } from "./utils/ArgentinaTime";
-import { RailwayApi } from "./Api-RailWay/Railway";
-import { withRetry } from "./utils/retryHelper";
-import { HistoryHandler, historyEvents, supabase } from "./utils/historyHandler";
-import { obtenerTextoDelMensaje, obtenerMensajeUnwrapped } from "./utils/messageHelper";
 
-// Multer config para subida de archivos (manteniendo extensiones)
-const multerStorage = multer.diskStorage({
-    destination: (_req, _file, cb) => {
-        const dir = 'uploads/';
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-        cb(null, dir);
-    },
-    filename: (_req, file, cb) => {
-        const ext = path.extname(file.originalname);
-        const fileName = `${Date.now()}-${Math.round(Math.random() * 1E9)}${ext}`;
-        cb(null, fileName);
-    }
-});
-const upload = multer({ storage: multerStorage });
-
-
-//import { imgResponseFlow } from "./Flows/imgResponse";
-//import { listImg } from "./addModule/listImg";
-//import { testAuth } from './utils/test-google-auth.js';
-
-// Definir __dirname para ES modules
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-// Instancia global de WebChatManager para sesiones webchat
+
+// Global instances
+let adapterProvider: any;
+let errorReporter: any;
 const webChatManager = new WebChatManager();
 const openaiMain = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const openaiVision = new OpenAI({ apiKey: process.env.OPENAI_API_KEY_IMG });
-
-/** Puerto en el que se ejecutará el servidor (Railway usa 8080 por defecto) */
+const ASSISTANT_ID = process.env.ASSISTANT_ID!;
 const PORT = process.env.PORT || 3008;
-/** ID del asistente de OpenAI */
-export const ASSISTANT_ID = process.env.ASSISTANT_ID;
-const ID_GRUPO_RESUMEN = process.env.ID_GRUPO_RESUMEN ?? "";
 
-import { userQueues, userLocks, handleQueue, registerProcessCallback } from "./utils/queueManager";
-registerProcessCallback(async (item) => {
-    const { ctx, flowDynamic, state, provider, gotoFlow } = item;
-    await processUserMessage(ctx, { flowDynamic, state, provider, gotoFlow });
+// Multer config
+const upload = multer({ 
+    storage: multer.diskStorage({
+        destination: (_req, _file, cb) => {
+            const dir = "uploads/";
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+            cb(null, dir);
+        },
+        filename: (_req, file, cb) => {
+            const ext = path.extname(file.originalname);
+            cb(null, `${Date.now()}-${Math.round(Math.random() * 1E9)}${ext}`);
+        }
+    })
 });
 
-
-// Listener para generar el archivo QR manualmente cuando se solicite
-export let adapterProvider;
-export let errorReporter;
-
-const TIMEOUT_MS = 60000;
-
-// Control de timeout por usuario para evitar ejecuciones automáticas superpuestas
-const userTimeouts = new Map();
-
-
-export const getAssistantResponse = async (assistantId, message, state, fallbackMessage, userId, thread_id = null) => {
-    const currentDatetimeArg = getArgentinaDatetimeString();
-    let systemPrompt = `Fecha, hora y día de la semana de referencia: ${currentDatetimeArg}`;
-    
-    // Inyectamos el texto de refuerzo si existe en el .env
-    if (process.env.EXTRA_SYSTEM_PROMPT) {
-        systemPrompt += `\nInstrucción de refuerzo: ${process.env.EXTRA_SYSTEM_PROMPT}`;
-    }
-
-    if (fallbackMessage) systemPrompt += `\n${fallbackMessage}`;
-    if (userId) systemPrompt += `\nNúmero de contacto: ${userId}`;
-    
-    const finalMessage = systemPrompt + "\n" + message;
-
-    // Limpiamos timeouts previos si existen para este usuario
-    if (userTimeouts.has(userId)) {
-        clearTimeout(userTimeouts.get(userId));
-        userTimeouts.delete(userId);
-    }
-
-    // Usamos el wrapper safeToAsk directamente.
-    // El timeout se maneja de forma más limpia sin disparar una ejecución paralela
-    return new Promise((resolve, reject) => {
-        const timeoutId = setTimeout(() => {
-            console.warn("⏱ Timeout de 60s alcanzado en la comunicación con OpenAI.");
-            // No resolvemos aquí con safeToAsk de nuevo para evitar carreras, 
-            // dejamos que la petición original siga o falle por si sola, o retornamos un fallback simple.
-            // resolve("Lo siento, estoy tardando un poco más de lo habitual. Por favor, aguarda un momento o reintenta.");
-        }, TIMEOUT_MS);
-        userTimeouts.set(userId, timeoutId);
-
-        safeToAsk(assistantId, finalMessage, state, userId, errorReporter)
-            .then(result => {
-                if (userTimeouts.has(userId)) {
-                    clearTimeout(userTimeouts.get(userId));
-                    userTimeouts.delete(userId);
-                }
-                resolve(result);
-            })
-            .catch(error => {
-                if (userTimeouts.has(userId)) {
-                    clearTimeout(userTimeouts.get(userId));
-                    userTimeouts.delete(userId);
-                }
-                if (error?.message === 'TIMEOUT_SAFE_TO_ASK') {
-                    console.error(`[getAssistantResponse] Finalizando por timeout de seguridad para ${userId}`);
-                    resolve(fallbackMessage || "Lo siento, estoy tardando un poco más de lo habitual. Por favor, reintenta en un momento.");
-                } else {
-                    reject(error);
-                }
-            });
+// Error handling setup
+function registerSafeErrorHandlers() {
+    process.removeAllListeners("uncaughtException");
+    process.removeAllListeners("unhandledRejection");
+    process.on("uncaughtException", (error) => {
+        console.error(`⚠️ [UncaughtException] ${new Date().toISOString()}:`, error);
     });
-};
+    process.on("unhandledRejection", (reason) => {
+        console.error(`⚠️ [UnhandledRejection] ${new Date().toISOString()}:`, reason);
+    });
+}
 
-export const processUserMessage = async (
-    ctx,
-    { flowDynamic, state, provider, gotoFlow }
-) => {
-    await typing(ctx, provider);
-    try {
-        const body = ctx.body && ctx.body.trim();
-
-
-        // COMANDOS DE CONTROL (WhatsApp Admin)
-        if (body === "#ON#") {
-            await HistoryHandler.toggleBot(ctx.from, true);
-            // Intentar actualizar nombre al mismo tiempo
-            if (ctx.pushName) await HistoryHandler.getOrCreateChat(ctx.from, 'whatsapp', ctx.pushName);
-            const msg = "🤖 Bot activado para este chat.";
-            await flowDynamic([{ body: msg }]);
-            await HistoryHandler.saveMessage(ctx.from, 'assistant', msg, 'text');
-            return state;
-        }
-
-        if (body === "#OFF#") {
-            await HistoryHandler.toggleBot(ctx.from, false);
-            // Intentar actualizar nombre al mismo tiempo
-            if (ctx.pushName) await HistoryHandler.getOrCreateChat(ctx.from, 'whatsapp', ctx.pushName);
-            const msg = "🛑 Bot desactivado. (Intervención humana activa)";
-            await flowDynamic([{ body: msg }]);
-            await HistoryHandler.saveMessage(ctx.from, 'assistant', msg, 'text');
-            return state;
-        }
-
-        // --- FILTRO DE ECO / MENSAJES PROPIOS ---
-        const botNumber = (process.env.YCLOUD_WABA_NUMBER || '').replace(/\D/g, '');
-        const senderNumber = (ctx.from || '').replace(/\D/g, '');
-        
-        if (ctx.key?.fromMe || (botNumber && senderNumber === botNumber)) {
-            // console.log(`[Echo Filter] Ignorando mensaje propio de ${senderNumber}`);
-            stop(ctx); // Detenemos cualquier timer de inactividad que se haya activado por error
-            return;
-        }
-
-        // Detener timer de inactividad inmediatamente al recibir mensaje real del usuario
-        stop(ctx);
-
-        // Persistir mensaje del usuario
-        await HistoryHandler.saveMessage(
-            ctx.from, 
-            'user', 
-            body || (ctx.type === EVENTS.VOICE_NOTE ? "[Audio]" : "[Media]"), 
-            ctx.type,
-            ctx.pushName || null
-        );
-
-        // Verificar si el bot está habilitado para este usuario específico
-        const isBotActiveForUser = await HistoryHandler.isBotEnabled(ctx.from);
-        if (!isBotActiveForUser) {
-            // console.log(`[Intervención Humana] Bot ignorando mensaje de ${ctx.from}`);
-            
-            // Inyectar el mensaje al thread de OpenAI para mantener contexto (sin run → no responde)
-            try {
-                const threadId = await HistoryHandler.getThreadId(ctx.from);
-                if (threadId) {
-                    await openaiMain.beta.threads.messages.create(threadId, {
-                        role: 'user',
-                        content: body || '[Media]'
-                    });
-                    console.log(`[Intervención Humana] Mensaje del usuario inyectado al thread ${threadId} (sin respuesta)`);
-                }
-            } catch (e) { /* no-op si falla */ }
-
-            return state;
-        }
-
-        // Comando global para encender el bot (Mantiene compatibilidad con lógica anterior si se desea)
-        if (body === "#GOBAL_ON#") {
-            let msg = "";
-            if (!botEnabled) {
-                botEnabled = true;
-                msg = "🤖 Bot activado.";
-                await flowDynamic([{ body: msg }]);
-            } else {
-                msg = "🤖 El bot ya está activado.";
-                await flowDynamic([{ body: msg }]);
-            }
-            await HistoryHandler.saveMessage(ctx.from, 'assistant', msg, 'text');
-            return state;
-        }
-
-        // Comando para apagar el bot
-        if (body === "#OFF#") {
-            let msg = "";
-            if (botEnabled) {
-                botEnabled = false;
-                msg = "🛑 Bot desactivado. No responderé a más mensajes hasta recibir #ON#.";
-                await flowDynamic([{ body: msg }]);
-            } else {
-                msg = "🛑 El bot ya está desactivado.";
-                await flowDynamic([{ body: msg }]);
-            }
-            await HistoryHandler.saveMessage(ctx.from, 'assistant', msg, 'text');
-            return state;
-        }
-
-        // Comando para actualizar datos desde sheets
-        if (body === "#ACTUALIZAR#") {
-            let msg = "";
-            try {
-                await updateMain();
-                msg = "🔄 Datos actualizados desde Google.";
-                await flowDynamic([{ body: msg }]);
-            } catch (err) {
-                msg = "❌ Error al actualizar datos desde Google.";
-                await flowDynamic([{ body: msg }]);
-            }
-            await HistoryHandler.saveMessage(ctx.from, 'assistant', msg, 'text');
-            return state;
-        }
-
-        // Si el bot está apagado, ignorar todo excepto #ON#
-        if (!botEnabled) {
-            return;
-        }
-
-        // Ignorar mensajes de listas de difusión, newsletters, canales o contactos @lid
-        if (ctx.from) {
-            if (/@broadcast$/.test(ctx.from) || /@newsletter$/.test(ctx.from) || /@channel$/.test(ctx.from)) {
-                // console.log('Mensaje de difusión/canal ignorado:', ctx.from);
-                return;
-            }
-            if (/@lid$/.test(ctx.from)) {
-                // console.log('Mensaje de contacto @lid ignorado:', ctx.from);
-                // Reportar al admin
-                const assistantName = process.env.ASSISTANT_NAME || 'Asistente demo';
-                const assistantId = process.env.ASSISTANT_ID || 'ID no definido';
-                if (provider && typeof provider.sendMessage === 'function') {
-                    await provider.sendMessage(
-                        '+5491130792789',
-                        `⚠️ Mensaje recibido de contacto @lid (${ctx.from}). El bot no responde a estos contactos. Asistente: ${assistantName} | ID: ${assistantId}`
-                    );
-                }
-                return;
-            }
-        }
-
-        // Interceptar trigger de imagen antes de pasar al asistente
-        // if (body === "#TestImg#") {
-        //     // Usar el flow de imagen para responder y detener el flujo
-        //     return gotoFlow(imgResponseFlow);
-        // }
-
-        // Usar el nuevo wrapper para obtener respuesta y thread_id
-        const response = (await getAssistantResponse(ASSISTANT_ID, ctx.body, state, undefined, ctx.from, ctx.thread_id)) as string;
-        // console.log('🔍 DEBUG RAW ASSISTANT MSG (WhatsApp):', JSON.stringify(response));
-
-        // Persistir thread_id en Supabase para que el backoffice pueda inyectar mensajes al thread
-        try {
-            const currentThreadId = state && typeof state.get === 'function' ? state.get('thread_id') : null;
-            if (currentThreadId && ctx.from) {
-                await HistoryHandler.saveThreadId(ctx.from, currentThreadId);
-            }
-        } catch (e) { /* no-op si falla guardar thread_id */ }
-
-        // Delegar procesamiento al AssistantResponseProcessor (Maneja DB_QUERY y envios)
-        await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
-            response,
-            ctx,
-            flowDynamic,
-            state,
-            provider,
-            gotoFlow,
-            getAssistantResponse,
-            ASSISTANT_ID
-        );
-
-        // Reiniciar timer de inactividad después de que el asistente ha respondido
-        const setTime = Number(process.env.timeOutCierre || 5) * 60 * 1000;
-        reset(ctx, gotoFlow, setTime);
-
-        // Si es un contacto con nombre, intentamos guardar el nombre (si no lo tenemos)
-        // en algún lugar, o manejarlo como variable de sesión.
-        // Aquí podrías agregar lógica para actualizar nombre en sheet si el asistente lo extrajo.
-        return state;
-
-    } catch (error) {
-        // console.error("Error al procesar el mensaje del usuario:", error);
-
-        // Enviar reporte de error al grupo de WhatsApp
-        await errorReporter.reportError(
-            error,
-            ctx.from,
-            `https://wa.me/${ctx.from}`
-        );
-
-        // 📌 Manejo de error: volver al flujo adecuado
-        if (ctx.type === EVENTS.VOICE_NOTE) {
-            return gotoFlow(welcomeFlowVoice);
-        } else if (ctx.type === EVENTS.ACTION) {
-            return gotoFlow(welcomeFlowButton);
-        } else {
-            return gotoFlow(welcomeFlowTxt);
-        }
-    }
-};
-
-
-// La función handleQueue ya está importada de queueManager y sabe procesar vía el callback registrado.
-const handleQueueWrapper = handleQueue;
-
-// Función auxiliar para verificar si existe sesión activa (Local o Remota)
-const hasActiveSession = async () => {
-    try {
-        // 1. Verificar si el proveedor está realmente conectado
-        // En builderbot-provider-sherpa (Baileys), el socket suele estar en vendor
-        const isReady = !!(adapterProvider?.vendor?.user || adapterProvider?.globalVendorArgs?.sock?.user);
-
-        // 2. Verificar localmente
-        const sessionsDir = path.join(process.cwd(), 'bot_sessions');
-        let localActive = false;
-        if (fs.existsSync(sessionsDir)) {
-            const files = fs.readdirSync(sessionsDir).filter(f => f.endsWith('.json'));
-            // creds.json es el archivo crítico para Baileys
-            localActive = files.includes('creds.json');
-        }
-
-        // Si está conectado, es la prioridad máxima
-        if (isReady) return { active: true, source: 'connected' };
-
-        // Si tiene creds.json, es muy probable que se conecte pronto
-        if (localActive) return { active: true, source: 'local' };
-
-        // 3. Si no hay nada local, verificar en DB
-        const remoteActive = await isSessionInDb();
-        if (remoteActive) {
-            return {
-                active: false,
-                hasRemote: true,
-                message: 'Sesión encontrada en la nube. El bot está intentando restaurarla. Si el QR aparece, puedes escanearlo para generar una nueva.'
-            };
-        }
-
-        return { active: false, hasRemote: false };
-    } catch (error) {
-        // console.error('Error verificando sesión:', error);
-        return { active: false, error: error instanceof Error ? error.message : String(error) };
-    }
-};
-
-// Main function to initialize the bot and load Google Sheets data
+/**
+ * Main function for Bot and Server Orchestration
+ */
 const main = async () => {
-    // 0. Ejecutar script de inicialización de funciones (solo si no existen)
+    // 1. Storage cleanup and session restoration
+    const qrPath = path.join(process.cwd(), "bot.qr.png");
+    if (fs.existsSync(qrPath)) fs.unlinkSync(qrPath);
+    await restoreSessionFromDb();
 
-
-    // 1. Limpiar QR antiguo al inicio
-    const qrPath = path.join(process.cwd(), 'bot.qr.png');
-    if (fs.existsSync(qrPath)) {
-        try {
-            fs.unlinkSync(qrPath);
-            // console.log('🗑️ [Init] QR antiguo eliminado.');
-        } catch (e) {
-            console.error('⚠️ [Init] No se pudo eliminar QR antiguo:', e.message);
-        }
-    }
-
-    // 2. Restaurar sesión desde DB ANTES de inicializar el provider
-    // Esto asegura que Baileys encuentre los archivos al arrancar
-    try {
-        await restoreSessionFromDb();
-        // Pequeña espera para asegurar que el sistema de archivos se asiente
-        await new Promise(resolve => setTimeout(resolve, 2000));
-    } catch (e) {
-        // console.error('[Init] Error restaurando sesión desde DB:', e);
-    }
-
-    // 3. Inicializar Provider ÚNICO
+    // 2. Initialize Provider
     adapterProvider = createProvider(BaileysProvider, {
-        version: [2, 3000, 1033950307],
+        version: [2, 3000, 1013950307],
         groupsIgnore: false,
         readStatus: false,
-        disableHttpServer: true,
-        // Forzar el uso de la carpeta bot_sessions explícitamente si el provider lo permite
-        // o asegurar que no haya conflictos de caché
+        disableHttpServer: true
     });
 
-    // 4. Listeners del Provider
-    let isGeneratingQR = false;
-    adapterProvider.on('require_action', async (payload: any) => {
-        try {
-            if (isGeneratingQR) return;
-            isGeneratingQR = true;
-            // console.log('⚡ [Provider] require_action received.');
-            let qrString = null;
-            if (typeof payload === 'string') {
-                qrString = payload;
-            } else if (payload && typeof payload === 'object') {
-                if (payload.qr) qrString = payload.qr;
-                else if (payload.code) qrString = payload.code;
-            }
-            if (qrString && typeof qrString === 'string') {
-                // console.log('⚡ [Provider] QR Code detected. Generating image...');
-                const qrPath = path.join(process.cwd(), 'bot.qr.png');
-                await QRCode.toFile(qrPath, qrString, {
-                    color: { dark: '#000000', light: '#ffffff' },
-                    scale: 4,
-                    margin: 2
-                });
-                // console.log(`✅ [Provider] QR Image saved to ${qrPath}`);
-            }
-        } catch (err) {
-            // console.error('❌ [Provider] Error generating QR image:', err);
-        } finally {
-            isGeneratingQR = false;
-        }
-    });
+    // 3. Register Provider Events
+    registerProviderEvents(adapterProvider);
 
-    adapterProvider.on('host_failure', (payload) => {
-        try {
-            // console.log('⚠️ [Provider] HOST_FAILURE: Problema de conexión con WhatsApp.', payload);
-        } catch (e) {
-            // console.error('[Provider] Error in host_failure listener:', e);
-        }
-    });
-
-    adapterProvider.on('message', (ctx) => {
-        // console.log(`Type Msj Recibido: ${ctx.type || 'desconocido'}`);
-        
-        // 1. Desenvolver el mensaje (Temporales, Vista Única, etc)
-        const message = obtenerMensajeUnwrapped(ctx);
-        if (message) {
-            ctx.message = message;
-        }
-        
-        // 2. Extraer texto base usando el nuevo extractor robusto
-        const textoExtraido = obtenerTextoDelMensaje(message);
-
-        if (!ctx.body || ctx.body === '' || ctx.body === '_event_media_' || ctx.body === '_event_document_' || ctx.body === '_event_voice_note_') {
-            ctx.body = textoExtraido;
-        }
-
-        // Detección de tipos especiales (Botones, Listas, Flows, Ubicación, Anuncios, etc)
-        const isLocation = message?.locationMessage || message?.liveLocationMessage;
-        const isOrder = message?.orderMessage || message?.productMessage;
-        const isAd = message?.extendedTextMessage?.contextInfo?.externalAdReply;
-        const isButton = message?.buttonsResponseMessage || 
-                         message?.templateButtonReplyMessage || 
-                         message?.interactiveResponseMessage ||
-                         message?.listResponseMessage;
-        
-        // Prioridad 1: Ubicación
-        if (isLocation) {
-            ctx.type = EVENTS.LOCATION;
-            ctx.body = ctx.body || '_event_location_';
-        } 
-        // Prioridad 2: Órdenes de carrito/catálogo
-        else if (isOrder) {
-            ctx.type = EVENTS.ACTION;
-            ctx.body = message?.orderMessage ? `Orden: ${message.orderMessage.orderId}` : 'Producto en catálogo';
-        } 
-        // Prioridad 3: Interacciones de botones/listas/flows
-        else if (isButton) {
-            // console.log('🔘 Interacción de botón detectada');
-            if (message?.buttonsResponseMessage) {
-                ctx.body = message.buttonsResponseMessage.selectedDisplayText || message.buttonsResponseMessage.selectedId;
-            } else if (message?.templateButtonReplyMessage) {
-                ctx.body = message.templateButtonReplyMessage.selectedDisplayText || message.templateButtonReplyMessage.selectedId;
-            } else if (message?.listResponseMessage) {
-                ctx.body = message.listResponseMessage.title || message.listResponseMessage.singleSelectReply?.selectedRowId;
-            } else if (message?.interactiveResponseMessage) {
-                const interactive = message.interactiveResponseMessage;
-                if (interactive.nativeFlowResponseMessage) {
-                    try {
-                        const params = JSON.parse(interactive.nativeFlowResponseMessage.paramsJson);
-                        ctx.body = params.id || params.flow_token || 'flow_response';
-                    } catch (e) { ctx.body = 'flow_interaction'; }
-                } else if (interactive.buttonReply) {
-                    ctx.body = interactive.buttonReply.title || interactive.buttonReply.id;
-                } else if (interactive.listReply) {
-                    ctx.body = interactive.listReply.title || interactive.listReply.id;
-                }
-            }
-            ctx.type = EVENTS.ACTION;
-        } 
-        // Prioridad 4: Anuncios de Meta (Click-to-WhatsApp) y mensajes extendidos
-        else if (isAd || message?.extendedTextMessage) {
-            const extText = message?.extendedTextMessage;
-            // Capturamos el texto si no está ya en el body
-            if (!ctx.body || ctx.body === '') {
-                ctx.body = extText?.text || '';
-            }
-            
-            // Si es un anuncio, enriquecemos el body para que la IA tenga contexto
-            if (isAd) {
-                const adTitle = isAd.title || '';
-                const adBody = isAd.body || '';
-                // Agregamos contexto de anuncio de forma invisible para el usuario pero visible para el bot
-                ctx.body = `${ctx.body} [Contexto Anuncio: ${adTitle} - ${adBody}]`.trim();
-                // console.log(`📢 Detectado Anuncio de Meta: ${adTitle}`);
-            }
-        }
-        // Fallback: Otros tipos (Contactos, etc)
-        else if (ctx.type === 'desconocido' || !ctx.body) {
-             if (message?.contactMessage || message?.contactsArrayMessage) {
-                 ctx.type = EVENTS.ACTION;
-                 ctx.body = 'Contacto Compartido';
-             }
-        }
-    });
-
-    adapterProvider.on('ready', () => {
-        // console.log('✅ [Provider] READY: El bot está conectado y operativo.');
-    });
-    adapterProvider.on('auth_failure', (payload) => {
-        // console.log('❌ [Provider] AUTH_FAILURE: Error de autenticación.', payload);
-    });
-
-    errorReporter = new ErrorReporter(adapterProvider, ID_GRUPO_RESUMEN);
-
-    // console.log("📌 Inicializando datos desde Google Sheets...");
+    // 4. Initialize Data and Error Reporter
+    errorReporter = new ErrorReporter(adapterProvider, process.env.ID_GRUPO_RESUMEN || "");
     await updateMain();
 
-    // console.log('🚀 [Init] Iniciando createBot...');
-    const adapterFlow = createFlow([welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowVideo, welcomeFlowDoc, locationFlow, idleFlow, welcomeFlowButton]);
+    // 5. Initialize AI Manager and flows
+    const aiManager = new AiManager(openaiMain, ASSISTANT_ID, errorReporter, {
+        welcomeFlowTxt, welcomeFlowVoice, welcomeFlowButton
+    });
+
+    registerProcessCallback(async (item: any) => {
+        const { ctx, flowDynamic, state, provider, gotoFlow } = item;
+        await aiManager.processUserMessage(ctx, { flowDynamic, state, provider, gotoFlow });
+    });
+
+    // 6. Initialize Bot Instance
+    const adapterFlow = createFlow([
+        welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, 
+        welcomeFlowVideo, welcomeFlowDoc, locationFlow, 
+        idleFlow, welcomeFlowButton
+    ]);
     const adapterDB = new MemoryDB();
 
     const { httpServer } = await createBot({
         flow: adapterFlow,
         provider: adapterProvider,
-        database: adapterDB,
+        database: adapterDB
     });
 
-    // IMPORTANTE: Re-registrar handlers DESPUÉS de createBot, porque
-    // builderbot-provider-sherpa llama removeAllListeners y registra
-    // su propio uncaughtException que hace process.exit(1).
     registerSafeErrorHandlers();
-
-    // Asegurar que el directorio de uploads exista al inicio
-    const finalUploadDir = path.resolve('uploads');
-    if (!fs.existsSync(finalUploadDir)) {
-        console.log(`[INIT] Creando directorio de uploads en: ${finalUploadDir}`);
-        fs.mkdirSync(finalUploadDir, { recursive: true });
-    }
-
-    // console.log('🔍 [DEBUG] createBot httpServer:', !!httpServer);
-    // console.log('🔍 [DEBUG] adapterProvider.server:', !!adapterProvider.server);
-
-    // Iniciar sincronización periódica de sesión hacia Supabase
     startSessionSync();
 
-    // Inicializar servidor Polka propio para WebChat y QR
+    // 7. Polka/Express Server setup
     const app = adapterProvider.server;
-    
-    // Global error handler para Polka (Evita que el 500 sea texto plano si hay error fuera de try-catch)
     if (app) {
-        app.onError = (err, req, res) => {
-            console.error('🔥 [POLKA ERROR HANDLER]:', err);
-            if (res && typeof (res as any).json === 'function') {
-                (res as any).status(500).json({ success: false, error: err.message || 'Internal Server Error' });
-            } else {
-                res.statusCode = 500;
-                res.end(JSON.stringify({ success: false, error: err.message || 'Internal Server Error' }));
-            }
-        };
-    }
-
-    console.log('🔍 [DEBUG] app (adapterProvider.server):', !!app);
-    // Middleware global de body-parser para manejar payloads grandes en todas las rutas
-    console.log('🔍 [DEBUG] Aplicando middlewares...');
-    
-    // 1. DEFINICIONES DE APOYO PARA BACKOFFICE (Elevadas al máximo nivel)
-    
-    /** Middleware de autenticación robusto para el backoffice */
-    const backofficeAuth = (req, res, next) => {
-        // Asegurar parsing de query si Polka/Node no lo ha expuesto aún
-        let q: any = {};
-        try {
-            const url = new URL(req.url, 'http://localhost');
-            url.searchParams.forEach((v, k) => q[k] = v);
-        } catch (e) { /* fallback a vacío */ }
-        req.query = q;
-
-        let token = req.headers['authorization'] || q.token || '';
-        if (typeof token === 'string') {
-            if (token.startsWith('token=')) token = token.slice(6);
-            else if (token.startsWith('Bearer ')) token = token.slice(7);
-        }
-        
-        if (token && token === process.env.BACKOFFICE_TOKEN) {
-            return next();
-        }
-        console.warn(`[AUTH] Intento fallido de acceso al backoffice. Token recibido: ${token ? 'presente(***)' : 'ausente'}`);
-        res.status(401).json({ success: false, error: "Unauthorized" });
-    };
-
-    /** Función unificada para procesar el envío de mensajes e historial */
-    const processSendMessage = async (req: any, res: any, chatId: string, message: string, file: any) => {
-        try {
-            if (!adapterProvider) {
-                return res.status(503).json({ success: false, error: 'WhatsApp provider not initialized' });
-            }
-
-            console.log(`[BACKOFFICE] Enviando ${file ? file.mimetype : 'texto'} a ${chatId}...`);
-            const jid = chatId.includes('@') ? chatId : `${chatId}@s.whatsapp.net`;
-            
-            let finalType: 'text' | 'image' | 'video' | 'document' = 'text';
-            if (file) {
-                if (file.mimetype.startsWith('image/')) finalType = 'image';
-                else if (file.mimetype.startsWith('video/')) finalType = 'video';
-                else finalType = 'document';
-            }
-            
-            const fileUrl = file ? `/uploads/${file.filename}` : '';
-            const finalContent = file ? fileUrl : (message || '');
-            
-            await HistoryHandler.saveMessage(chatId, 'assistant', finalContent, finalType);
-            await HistoryHandler.updateLastHumanMessage(chatId);
-
-            // Inyectar en thread OpenAI (silencioso)
-            HistoryHandler.getThreadId(chatId).then(threadId => {
-                if (threadId && (message || file)) {
-                    openaiMain.beta.threads.messages.create(threadId, {
-                        role: 'assistant',
-                        content: `[Backoffice]: ${message || '[Media]'}`
-                    }).catch(() => {});
-                }
-            }).catch(() => {});
-
-            // Envío por WhatsApp
-            if (file) {
-                const absolutePath = path.resolve(file.path);
-                if (finalType === 'image') {
-                    if (typeof adapterProvider.sendImage === 'function') await adapterProvider.sendImage(jid, absolutePath, message || '');
-                    else await adapterProvider.sendMessage(jid, message || '', { media: absolutePath });
-                } else if (finalType === 'video') {
-                    if (typeof (adapterProvider as any).sendVideo === 'function') await (adapterProvider as any).sendVideo(jid, absolutePath, message || '');
-                    else await adapterProvider.sendMessage(jid, message || '', { media: absolutePath });
-                } else {
-                    if (typeof (adapterProvider as any).sendFile === 'function') await (adapterProvider as any).sendFile(jid, absolutePath, message || file.originalname);
-                    else await adapterProvider.sendMessage(jid, message || '', { media: absolutePath, fileName: file.originalname });
-                }
-            } else {
-                await adapterProvider.sendMessage(jid, message, {});
-            }
-            
-            return res.json({ success: true, fileUrl: file ? fileUrl : undefined });
-
-        } catch (e: any) {
-            console.error('❌ Error en processSendMessage:', e);
-            res.status(500).json({ success: false, error: e.message });
-        }
-    };
-
-    // 2. RUTAS PRIORITARIAS (Antes de middlewares globales de parseo)
-
-    // Ruta crítica para envío de mensajes con soporte de archivos (Multer)
-    app.post('/api/backoffice/send-message', backofficeAuth, (req, res, next) => {
-        const contentType = req.headers['content-type'] || '';
-        if (contentType.includes('multipart/form-data')) {
-            console.log(`[ROUTE] Interceptando multipart para /send-message. Aplicando Multer...`);
-            return upload.single('file')(req, (res as any), (err) => {
-                if (err) {
-                    console.error('[ROUTE] Error Multer:', err);
-                    return res.status(400).json({ success: false, error: `Error de archivo: ${err.message}` });
-                }
-                next();
-            });
-        }
-        // Para JSON, usamos el parser estándar
-        bodyParser.json({ limit: '10mb' })(req, res, next);
-    }, async (req, res) => {
-        const chatId = req.body.chatId;
-        const message = req.body.message;
-        const file = (req as any).file;
-
-        if (!chatId) return res.status(400).json({ success: false, error: 'chatId is required' });
-        await processSendMessage(req, res, chatId, message, file);
-    });
-
-    // Ruta para alternar bot (también prioritaria)
-    app.post('/api/backoffice/toggle-bot', backofficeAuth, bodyParser.json(), async (req, res) => {
-        const { chatId, enabled } = req.body;
-        if (!chatId) return res.status(400).json({ success: false, error: 'chatId is required' });
-        
-        try {
-            await HistoryHandler.toggleBot(chatId, enabled);
-            (adapterProvider as any).server?.io?.emit('bot_toggled', { chatId, enabled });
-            res.json({ success: true, enabled });
-        } catch (e: any) {
-            res.status(500).json({ success: false, error: e.message });
-        }
-    });
-
-    // 3. MIDDLEWARES GLOBALES (Después de las rutas críticas)
-
-    app.use((req, res, next) => {
-        // Protección extra: ya manejamos estas rutas arriba, si llegan aquí es que algo falló en casar el path exacto
-        if (req.url.startsWith('/api/backoffice/send-message') || req.url.startsWith('/api/backoffice/toggle-bot')) {
-            return next(); 
-        }
-        
-        const contentType = req.headers['content-type'] || '';
-        if (contentType.includes('multipart/form-data')) {
-            return next();
-        }
-        
-        bodyParser.json({ limit: '50mb' })(req, res, (err) => {
-            if (err) return next(err);
-            bodyParser.urlencoded({ limit: '50mb', extended: true })(req, res, next);
-        });
-    });
-
-    // 1. Middleware de compatibilidad (res.json, res.send, res.sendFile, etc)
-    app.use((req, res, next) => {
-        res.status = (code) => { res.statusCode = code; return res; };
-        res.send = (body) => {
-            if (res.headersSent) return res;
-            if (typeof body === 'object') {
-                res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify(body || null));
-            } else {
-                res.end(body || '');
-            }
-            return res;
-        };
-        res.json = (data) => {
-            if (res.headersSent) return res;
-            try {
-                const body = JSON.stringify(data || null);
-                res.setHeader('Content-Type', 'application/json');
-                res.end(body);
-            } catch (e) {
-                console.error('🔥 Error serializing JSON response:', e);
-                res.statusCode = 500;
-                res.end(JSON.stringify({ success: false, error: 'Internal JSON Serialization Error' }));
-            }
-            return res;
-        };
-        res.sendFile = (filepath) => {
-            if (res.headersSent) return;
-            try {
-                if (fs.existsSync(filepath)) {
-                    const ext = path.extname(filepath).toLowerCase();
-                    const mimeTypes = {
-                        '.html': 'text/html',
-                        '.js': 'application/javascript',
-                        '.css': 'text/css',
-                        '.png': 'image/png',
-                        '.jpg': 'image/jpeg',
-                        '.gif': 'image/gif',
-                        '.svg': 'image/svg+xml',
-                        '.json': 'application/json'
-                    };
-                    res.setHeader('Content-Type', mimeTypes[ext] || 'application/octet-stream');
-                    fs.createReadStream(filepath)
-                        .on('error', (err) => {
-                            console.error(`[ERROR] Stream error in sendFile (${filepath}):`, err);
-                            if (!res.headersSent) {
-                                res.statusCode = 500;
-                                res.end('Internal Server Error');
-                            }
-                        })
-                        .pipe(res);
-                } else {
-                    // console.error(`[ERROR] sendFile: File not found: ${filepath}`);
-                    res.statusCode = 404;
-                    res.end('Not Found');
-                }
-            } catch (e) {
-                // console.error(`[ERROR] Error in sendFile (${filepath}):`, e);
-                if (!res.headersSent) {
-                    res.statusCode = 500;
-                    res.end('Internal Error');
-                }
-            }
-        };
-        next();
-    });
-
-    // (Definiciones de backoffice movidas arriba)
-
-    // 2. Middleware de logging y redirección de raíz
-    app.use((req, res, next) => {
-        // console.log(`[REQUEST] ${req.method} ${req.url}`);
-        try {
-            if (req.url === "/" || req.url === "") {
-                // console.log('[DEBUG] Redirigiendo raíz (/) a /dashboard via middleware');
-                res.writeHead(302, { 'Location': '/dashboard' });
-                return res.end();
-            }
-            next();
-        } catch (err) {
-            // console.error('❌ [ERROR] Crash en cadena de middleware:', err);
-            if (!res.headersSent) {
-                res.statusCode = 500;
-                res.end('Internal Server Error');
-            }
-        }
-    });
-
-    // 3. Función para servir páginas HTML
-    function serveHtmlPage(route, filename) {
-        const handler = (req, res) => {
-            // console.log(`[DEBUG] Serving HTML for ${req.url} -> ${filename}`);
-            try {
-                const possiblePaths = [
-                    path.join(process.cwd(), 'src', 'html', filename),
-                    path.join(process.cwd(), filename),
-                    path.join(process.cwd(), 'src', filename),
-                    path.join(__dirname, 'html', filename),
-                    path.join(__dirname, filename),
-                    path.join(__dirname, '..', 'src', 'html', filename)
-                ];
-
-                let htmlPath = null;
-                for (const p of possiblePaths) {
-                    if (fs.existsSync(p) && fs.lstatSync(p).isFile()) {
-                        htmlPath = p;
-                        break;
-                    }
-                }
-
-                if (htmlPath) {
-                    let htmlContent = fs.readFileSync(htmlPath, 'utf8');
-                    const botName = process.env.ASSISTANT_NAME || process.env.RAILWAY_PROJECT_NAME || "Neurolinks";
-                    if (filename === 'backoffice.html' || filename === 'dashboard.html' || filename === 'login.html') {
-                        htmlContent = htmlContent.replace(/<title>.*?<\/title>/, `<title>BackOffice - ${botName}</title>`);
-                    }
-                    if (filename === 'backoffice.html') {
-                        htmlContent = htmlContent.replace(
-                            '<h2 style="margin:0; font-size: 1.2rem;">Backoffice</h2>',
-                            `<h2 style="margin:0; font-size: 1.2rem;">Backoffice - ${botName}</h2>`
-                        );
-                    }
-                    res.setHeader('Content-Type', 'text/html');
-                    res.end(htmlContent);
-                } else {
-                    // console.error(`[ERROR] File not found: ${filename}`);
-                    res.status(404).send('HTML no encontrado en el servidor');
-                }
-            } catch (err) {
-                // console.error(`[ERROR] Failed to serve ${filename}:`, err);
-                res.status(500).send('Error interno al servir HTML');
-            }
-        };
-        app.get(route, handler);
-        if (route !== "/") {
-            app.get(route + '/', handler);
-        }
-    }
-
-    // Inyectar rutas del plugin
-    httpInject(app);
-
-    // Registrar páginas HTML
-    serveHtmlPage("/dashboard", "dashboard.html");
-    serveHtmlPage("/webchat", "webchat.html");
-    serveHtmlPage("/webreset", "webreset.html");
-    serveHtmlPage("/variables", "variables.html");
-
-    // Servir archivos estáticos
-    app.use("/js", serve(path.join(process.cwd(), "src", "js")));
-    app.use("/style", serve(path.join(process.cwd(), "src", "style")));
-    app.use("/assets", serve(path.join(process.cwd(), "src", "assets")));
-    app.use("/uploads", serve(path.join(process.cwd(), "uploads")));
-
-    // Servir el código QR
-    app.get("/qr.png", (req, res) => {
-        const qrPath = path.join(process.cwd(), 'bot.qr.png');
-        if (fs.existsSync(qrPath)) {
-            res.setHeader('Content-Type', 'image/png');
-            fs.createReadStream(qrPath).pipe(res);
-        } else {
-            res.status(404).send('QR not found');
-        }
-    });
-
-    // 4. API Endpoints
-    app.get('/health', (req, res) => {
-        res.json({ 
-            status: 'ok', 
-            botEnabled, 
-            projectId: process.env.RAILWAY_PROJECT_ID,
-            time: new Date().toISOString()
-        });
-    });
-
-    app.get('/api/assistant-name', (req, res) => {
-        const assistantName = process.env.ASSISTANT_NAME || 'Asistente demo';
-        res.json({ name: assistantName });
-    });
-
-    // --- ENDPOINTS BACKOFFICE ---
-
-    // En Polka, req.query puede estar indefinido, lo parseamos manualmente si es necesario
-    const dummyAuthPlaceholder = () => {}; 
-
-    app.post('/api/backoffice/auth', (req, res) => {
-        const { token } = req.body;
-        if (token === process.env.BACKOFFICE_TOKEN) {
-            res.json({ success: true });
-        } else {
-            res.status(401).json({ success: false, error: "Invalid token" });
-        }
-    });
-
-    app.get('/api/backoffice/chats', backofficeAuth, async (req, res) => {
-        const chats = await HistoryHandler.listChats();
-        res.json(chats);
-    });
-
-    app.get('/api/backoffice/messages/:chatId', backofficeAuth, async (req, res) => {
-        const messages = await HistoryHandler.getMessages(req.params.chatId);
-        res.json(messages);
-    });
-
-    app.get('/api/backoffice/profile-pic/:chatId', async (req, res) => {
-        try {
-            const { chatId } = req.params;
-            const token = req.query.token as string;
-
-            if (token !== process.env.BACKOFFICE_TOKEN) {
-                res.statusCode = 401;
-                return res.end();
-            }
-
-            if (!adapterProvider) {
-                console.error('[ProfilePic] Error: adapterProvider no inicializado');
-                res.statusCode = 500;
-                return res.end();
-            }
-
-            let jid = chatId;
-            if (chatId.match(/^\d+$/) && !chatId.includes('@')) {
-                jid = `${chatId}@s.whatsapp.net`;
-            }
-
-            const vendor = (adapterProvider as any).vendor;
-            if (vendor && typeof vendor.profilePictureUrl === 'function') {
-                try {
-                    const url = await vendor.profilePictureUrl(jid, 'image');
-                    if (url) {
-                        res.writeHead(302, { Location: url });
-                        return res.end();
-                    }
-                } catch (picError) {
-                    // console.log(`[ProfilePic] No se pudo obtener foto para ${jid}:`, picError.message);
-                }
-            }
-            
-            res.statusCode = 404;
-            res.end();
-        } catch (e) {
-            console.error('[ProfilePic] Error excepcional:', e);
+        app.onError = (err: any, _req: any, res: any) => {
+            console.error("🔥 [POLKA ERROR]:", err);
             res.statusCode = 500;
-            res.end();
-        }
+            res.end(JSON.stringify({ success: false, error: err.message || "Internal Server Error" }));
+        };
+    }
+
+    // 8. Register Middlewares
+    app.use(smartBodyParser);
+    app.use(compatibilityLayer);
+    app.use(rootRedirect);
+
+    // 9. Register Routes
+    httpInject(app);
+    
+    // Rutas de Backoffice (Multipart support)
+    registerBackofficeRoutes(app, {
+        adapterProvider,
+        HistoryHandler,
+        openaiMain,
+        upload
     });
 
-    // (Ruta /toggle-bot movida arriba)
+    // Rutas de Railway & Webchat
+    registerRailwayRoutes(app, { RailwayApi: (await import("./Api-RailWay/Railway")).RailwayApi });
+    registerWebchatRoutes(app, { webChatManager, openaiVision, ASSISTANT_ID, processUserMessage: aiManager.processUserMessage });
 
-    // --- Rutas de Etiquetas (Tags) ---
-    app.get('/api/backoffice/tags', backofficeAuth, async (req, res) => {
-        const tags = await HistoryHandler.getTags();
-        res.json(tags);
-    });
+    // Rutas Estáticas & Páginas HTML
+    registerStaticRoutes(app, { __dirname });
 
-    app.post('/api/backoffice/tags', backofficeAuth, async (req, res) => {
-        const { name, color } = req.body;
-        const result = await HistoryHandler.createTag(name, color);
-        res.json(result);
-    });
+    // API Health & Info
+    app.get("/health", (_req: any, res: any) => res.json({ status: "ok", time: new Date().toISOString() }));
+    app.get("/api/assistant-name", (_req: any, res: any) => res.json({ name: process.env.ASSISTANT_NAME || "Bot" }));
+    app.get("/api/dashboard-status", async (_req: any, res: any) => res.json(await hasActiveSession(adapterProvider)));
 
-    app.put('/api/backoffice/tags/:id', backofficeAuth, async (req, res) => {
-        const { name, color } = req.body;
-        const result = await HistoryHandler.updateTag(req.params.id, name, color);
-        res.json(result);
-    });
-
-    app.delete('/api/backoffice/tags/:id', backofficeAuth, async (req, res) => {
-        const result = await HistoryHandler.deleteTag(req.params.id);
-        res.json(result);
-    });
-
-    app.post('/api/backoffice/chats/:chatId/tags', backofficeAuth, async (req, res) => {
-        const { tagId } = req.body;
-        const result = await HistoryHandler.addTagToChat(req.params.chatId, tagId);
-        res.json(result);
-    });
-
-    app.delete('/api/backoffice/chats/:chatId/tags/:tagId', backofficeAuth, async (req, res) => {
-        const result = await HistoryHandler.removeTagFromChat(req.params.chatId, req.params.tagId);
-        res.json(result);
-    });
-
-    // --- Worker de Inactividad Humana ---
-    // Reactiva el bot si el humano no responde en 15 minutos
-    setInterval(async () => {
-        try {
-            const timeoutMinutes = 15;
-            const now = new Date();
-            const threshold = new Date(now.getTime() - timeoutMinutes * 60 * 1000);
-            
-            const { data: inactiveChats, error } = await supabase
-                .from('chats')
-                .select('id, last_human_message_at')
-                .eq('project_id', process.env.RAILWAY_PROJECT_ID || 'default_project')
-                .eq('bot_enabled', false)
-                .or(`last_human_message_at.lte.${threshold.toISOString()},last_human_message_at.is.null`);
-
-            if (error) throw error;
-
-            for (const chat of (inactiveChats || [])) {
-                console.log(`[WORKER] [${new Date().toLocaleTimeString()}] Auto-activando bot para ${chat.id} (Inactividad > ${timeoutMinutes} min)`);
-                await HistoryHandler.toggleBot(chat.id, true);
-                // No es necesario emitir aquí manualmente si toggleBot ya lo hace
-            }
-        } catch (e) {
-            console.error('[WORKER] Error checking human inactivity:', e);
-        }
-    }, 60000); // Revisar cada minuto
-
-    serveHtmlPage("/login", "login.html");
-    serveHtmlPage("/backoffice", "backoffice.html"); // Nueva vista de gestión
-
-    app.get('/api/dashboard-status', async (req, res) => {
-        const status = await hasActiveSession();
-        res.json(status);
-    });
-
-    app.post('/api/delete-session', async (req, res) => {
+    // API Session Control
+    app.post("/api/delete-session", async (_req: any, res: any) => {
         try {
             await deleteSessionFromDb();
             res.json({ success: true });
-        } catch (err) {
-            console.error('Error en /api/delete-session:', err);
-            res.status(500).json({ success: false, error: err instanceof Error ? err.message : String(err) });
-        }
-    });
-
-    app.post("/api/restart-bot", async (req, res) => {
-        console.log('POST /api/restart-bot recibido');
-        try {
-            const result = await RailwayApi.restartActiveDeployment();
-            if (result.success) {
-                res.json({ success: true, message: "Reinicio solicitado correctamente." });
-            } else {
-                res.status(500).json({ success: false, error: result.error || "Error desconocido" });
-            }
         } catch (err: any) {
-            console.error('Error en /api/restart-bot:', err);
             res.status(500).json({ success: false, error: err.message });
         }
     });
 
-    app.get("/api/variables", async (req, res) => {
-        try {
-            const variables = await RailwayApi.getVariables();
-            if (variables) {
-                res.json({ success: true, variables });
-            } else {
-                res.status(500).json({ success: false, error: "No se pudieron obtener las variables de Railway" });
-            }
-        } catch (err: any) {
-            console.error('Error en GET /api/variables:', err);
-            res.status(500).json({ success: false, error: err.message });
-        }
-    });
+    // 10. Workers Initialization
+    startHumanInactivityWorker(15);
 
-    app.post("/api/update-variables", async (req, res) => {
-        try {
-            const { variables } = req.body;
-            if (!variables || typeof variables !== 'object') {
-                return res.status(400).json({ success: false, error: "Variables no proporcionadas o formato inválido" });
-            }
-
-            console.log("[API] Actualizando variables en Railway...");
-            const updateResult = await RailwayApi.updateVariables(variables);
-
-            if (!updateResult.success) {
-                return res.status(500).json({ success: false, error: updateResult.error });
-            }
-
-            console.log("[API] Variables actualizadas. Solicitando reinicio...");
-            const restartResult = await RailwayApi.restartActiveDeployment();
-
-            if (restartResult.success) {
-                res.json({ success: true, message: "Variables actualizadas y reinicio solicitado." });
-            } else {
-                res.json({ success: true, message: "Variables actualizadas, pero falló el reinicio automático.", warning: restartResult.error });
-            }
-        } catch (err: any) {
-            console.error('Error en POST /api/update-variables:', err);
-            res.status(500).json({ success: false, error: err.message });
-        }
-    });
-
-    // Socket.IO initialization function
-    const initSocketIO = (serverInstance) => {
-        try {
-            if (!serverInstance) {
-                console.error('❌ [Socket.IO] No se pudo obtener serverInstance. app.server es null.');
-                return;
-            }
-            console.log('📡 [INFO] Inicializando Socket.IO en el servidor principal...');
-            const io = new Server(serverInstance, { 
-                cors: { origin: '*' },
-                allowEIO3: true // Compatibilidad
-            });
-
-            // Escuchar eventos de la base de datos (HistoryHandler) y retransmitir a Web
-            historyEvents.on('new_message', (payload) => {
-                // console.log(`📡 [Socket] Re-emitiendo new_message: ${payload.chatId}`);
-                io.emit('new_message', payload);
-            });
-
-            historyEvents.on('bot_toggled', (payload) => {
-                // console.log(`📡 [Socket] Re-emitiendo bot_toggled: ${payload.chatId} -> ${payload.bot_enabled}`);
-                io.emit('bot_toggled', payload);
-            });
-
-        io.on('connection', (socket) => {
-            // console.log('💬 Cliente web conectado');
-            socket.on('message', async (msg) => {
-                try {
-                    let ip = '';
-                    const xff = socket.handshake.headers['x-forwarded-for'];
-                    if (typeof xff === 'string') ip = xff.split(',')[0];
-                    else if (Array.isArray(xff)) ip = xff[0];
-                    else ip = socket.handshake.address || '';
-
-                    if (!global.webchatHistories) global.webchatHistories = {};
-                    const historyKey = `webchat_${ip}`;
-                    if (!global.webchatHistories[historyKey]) global.webchatHistories[historyKey] = [];
-                    const _history = global.webchatHistories[historyKey];
-
-                    const state = {
-                        get: (key) => key === 'history' ? _history : undefined,
-                        update: async (msg, role = 'user') => {
-                            _history.push({ role, content: msg });
-                            if (_history.length > 10) _history.shift();
-                        },
-                        clear: async () => { _history.length = 0; }
-                    };
-
-                    let replyText = '';
-                    const flowDynamic = async (arr) => {
-                        if (Array.isArray(arr)) replyText = arr.map(a => a.body).join('\n');
-                        else if (typeof arr === 'string') replyText = arr;
-                    };
-
-                    if (msg.trim().toLowerCase() === "#reset") {
-                        await state.clear();
-                        replyText = "🔄 Chat reiniciado.";
-                    } else {
-                        await processUserMessage({ from: ip, body: msg, type: 'webchat' }, { flowDynamic, state, provider: undefined, gotoFlow: () => { /* no-op */ } });
-                    }
-                    socket.emit('reply', replyText);
-                } catch (err) {
-                    // console.error('Error Socket.IO:', err);
-                    socket.emit('reply', 'Error procesando mensaje.');
-                }
-            });
-        });
-        } catch (e) {
-            // console.error('❌ [Socket.IO] Error durante la inicialización:', e);
-        }
-    };
-
-    app.post('/webchat-api', async (req, res) => {
-        if (!req.body || (!req.body.message && !req.body.file)) {
-            return res.status(400).json({ error: "Falta 'message' o 'file'" });
-        }
-        try {
-            let message = req.body.message || "";
-            let ip = '';
-            const xff = req.headers['x-forwarded-for'];
-            if (typeof xff === 'string') ip = xff.split(',')[0];
-            else ip = req.ip || '';
-
-            if (req.body.file) {
-                const file = req.body.file;
-                const mimetype = file.mime || '';
-                const base64Data = file.base64;
-                const ext = mimetype.split('/')[1] || 'bin';
-                
-                try {
-                    const buffer = Buffer.from(base64Data, 'base64');
-                    
-                    if (mimetype.startsWith('image/')) {
-                        const localDir = path.join("./temp/");
-                        if (!fs.existsSync(localDir)) fs.mkdirSync(localDir, { recursive: true });
-                        const localPath = path.join(localDir, Date.now() + "." + ext);
-                        fs.writeFileSync(localPath, buffer);
-                        // console.log(`[Webchat-API] Imagen guardada en ${localPath}`);
-
-                        const visionResponse = await withRetry(async () => {
-                            return await openaiVision.chat.completions.create({
-                                model: "gpt-4o",
-                                messages: [{
-                                    role: "user",
-                                    content: [
-                                        { type: "text", text: "Describe esta imagen detalladamente para que el asistente pueda entender su contenido y responder al usuario. Si ves texto, transcríbelo." },
-                                        { type: "image_url", image_url: { url: `data:${mimetype};base64,${base64Data}` } }
-                                    ]
-                                }]
-                            });
-                        }, {
-                            maxRetries: 3,
-                            onRetry: (err, attempt) => { 
-                            console.warn(`[Webchat-Vision] Reintento ${attempt} por error: ${err.message}`);
-                        }
-                        });
-                        
-                        const result = visionResponse.choices?.[0]?.message?.content || "No se pudo obtener una descripción de la imagen.";
-                        message = `[Imagen recibida]: ${result} \n${message}`;
-
-                    } else if (mimetype.startsWith('audio/') || mimetype.startsWith('video/')) {
-                        const localDir = path.join("./temp/voiceNote/");
-                        if (!fs.existsSync(localDir)) fs.mkdirSync(localDir, { recursive: true });
-                        const localPath = path.join(localDir, Date.now() + "." + ext);
-                        fs.writeFileSync(localPath, buffer);
-                        // console.log(`[Webchat-API] Audio/Video guardado en ${localPath}`);
-
-                        try {
-                            const transcription = await transcribeAudioFile(localPath);
-                            message = `[Audio/Video transcrito]: ${transcription} \n${message}`;
-                        } catch (err) {
-                            // console.error('[Webchat-API] Error transcribiendo audio/video:', err);
-                            message = `[Error] No se pudo procesar el audio/video. \n${message}`;
-                        }
-                    } else {
-                        // Document
-                        message = `[Archivo adjunto] ${file.name} (no soportado para lectura directa) \n${message}`;
-                    }
-                } catch (e) {
-                    // console.error('[Webchat-API] Error procesando archivo:', e);
-                    message = `[Error al procesar archivo adjunto] \n${message}`;
-                }
-            }
-
-            const session = webChatManager.getSession(ip);
-            let replyText = '';
-
-            if (message.trim().toLowerCase() === "#reset") {
-                await deleteThread(session);
-                session.clear();
-                replyText = "🔄 Chat reiniciado.";
-            } else {
-                const threadId = await getOrCreateThreadId(session);
-                session.addUserMessage(message);
-
-                const state = {
-                    get: (key) => key === 'thread_id' ? session.thread_id : undefined,
-                    update: async () => { /* no-op */ },
-                    clear: async () => session.clear(),
-                };
-
-                const webChatAdapterFn = async (assistantId, message, state, fallback, userId, threadId) => {
-                    return await sendMessageToThread(threadId, message, assistantId);
-                };
-
-                const reply = await webChatAdapterFn(ASSISTANT_ID, message, state, "", ip, threadId);
-
-                const flowDynamic = async (arr) => {
-                    const text = Array.isArray(arr) ? arr.map(a => a.body).join('\n') : arr;
-                    replyText = replyText ? replyText + "\n\n" + text : text;
-                };
-
-                await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
-                    reply,
-                    { type: 'webchat', from: ip, thread_id: threadId, body: message },
-                    flowDynamic,
-                    state,
-                    undefined,
-                    () => { /* no-op */ },
-                    webChatAdapterFn,
-                    ASSISTANT_ID
-                );
-                session.addAssistantMessage(replyText);
-            }
-            res.json({ reply: replyText });
-        } catch (err) {
-            console.error('[Error] History check failed:', err);
-            res.status(500).json({ reply: 'Error interno.' });
-        }
-    });
-
-    // Iniciar servidor
+    // 11. Start Server and Sockets
     try {
-        console.log(`🚀 [INFO] Iniciando servidor en puerto ${PORT}...`);
         httpServer(+PORT);
-        console.log(`✅ [INFO] Servidor escuchando en puerto ${PORT}`);
-        
-        // Esperamos un segundo para asegurar que el servidor subyacente esté listo
         setTimeout(() => {
-            if (app && app.server) {
-                console.log('✅ [INFO] app.server detectado, lanzando initSocketIO');
-                initSocketIO(app.server);
-            } else {
-                console.error('❌ [ERROR] app.server NO DETECTADO después del listen.');
+            if (app?.server) {
+                console.log("✅ [Socket.IO] app.server detected, initializing...");
+                initSocketIO(app.server, { processUserMessage: aiManager.processUserMessage });
             }
         }, 1000);
-        
     } catch (err) {
-        console.error('❌ [ERROR] Error al iniciar servidor:', err);
+        console.error("❌ [FATAL] Error starting server:", err);
     }
-
-    console.log('✅ [INFO] Main function completed');
 };
 
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
-});
-
-process.on('uncaughtException', (error) => {
-    console.error('❌ Uncaught Exception:', error);
-    // process.exit(1);
-});
+main().catch(err => console.error("❌ [FATAL MAIN]:", err));
 
 export {
     welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowVideo, welcomeFlowDoc, locationFlow,
-    handleQueue, userQueues, userLocks,
+    AiManager
 };
-
-main().catch(err => {
-    console.error('❌ [FATAL] Error en la función main:', err);
-});
-
-//ok
-//restored - Commit 210290e

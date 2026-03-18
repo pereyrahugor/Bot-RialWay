@@ -1,0 +1,209 @@
+import path from 'path';
+import fs from 'fs';
+import bodyParser from 'body-parser';
+import { backofficeAuth } from "../middleware/auth";
+
+/**
+ * Registra las rutas del backoffice en la instancia de Polka.
+ */
+export const registerBackofficeRoutes = (app: any, { 
+    adapterProvider, 
+    HistoryHandler, 
+    openaiMain, 
+    upload 
+}: any) => {
+
+    /** Función unificada para procesar el envío de mensajes e historial */
+    const processSendMessage = async (req: any, res: any, chatId: string, message: string, file: any) => {
+        try {
+            if (!adapterProvider) {
+                return res.status(503).json({ success: false, error: 'WhatsApp provider not initialized' });
+            }
+
+            console.log(`[BACKOFFICE] Enviando ${file ? file.mimetype : 'texto'} a ${chatId}...`);
+            const jid = chatId.includes('@') ? chatId : `${chatId}@s.whatsapp.net`;
+            
+            let finalType: 'text' | 'image' | 'video' | 'document' = 'text';
+            if (file) {
+                if (file.mimetype.startsWith('image/')) finalType = 'image';
+                else if (file.mimetype.startsWith('video/')) finalType = 'video';
+                else finalType = 'document';
+            }
+            
+            const fileUrl = file ? `/uploads/${file.filename}` : '';
+            const finalContent = file ? fileUrl : (message || '');
+            
+            await HistoryHandler.saveMessage(chatId, 'assistant', finalContent, finalType);
+            await HistoryHandler.updateLastHumanMessage(chatId);
+
+            // Inyectar en thread OpenAI (silencioso)
+            HistoryHandler.getThreadId(chatId).then(threadId => {
+                if (threadId && (message || file)) {
+                    openaiMain.beta.threads.messages.create(threadId, {
+                        role: 'assistant',
+                        content: `[Backoffice]: ${message || '[Media]'}`
+                    }).catch(() => {});
+                }
+            }).catch(() => {});
+
+            // Envío por WhatsApp
+            if (file) {
+                const absolutePath = path.resolve(file.path);
+                if (finalType === 'image') {
+                    if (typeof adapterProvider.sendImage === 'function') await adapterProvider.sendImage(jid, absolutePath, message || '');
+                    else await adapterProvider.sendMessage(jid, message || '', { media: absolutePath });
+                } else if (finalType === 'video') {
+                    if (typeof (adapterProvider as any).sendVideo === 'function') await (adapterProvider as any).sendVideo(jid, absolutePath, message || '');
+                    else await adapterProvider.sendMessage(jid, message || '', { media: absolutePath });
+                } else {
+                    if (typeof (adapterProvider as any).sendFile === 'function') await (adapterProvider as any).sendFile(jid, absolutePath, message || file.originalname);
+                    else await adapterProvider.sendMessage(jid, message || '', { media: absolutePath, fileName: file.originalname });
+                }
+            } else {
+                await adapterProvider.sendMessage(jid, message, {});
+            }
+            
+            return res.json({ success: true, fileUrl: file ? fileUrl : undefined });
+
+        } catch (e: any) {
+            console.error('❌ Error en processSendMessage:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    };
+
+    // --- AUTH ---
+
+    app.post('/api/backoffice/auth', (req, res) => {
+        const { token } = req.body;
+        if (token === process.env.BACKOFFICE_TOKEN) {
+            res.json({ success: true });
+        } else {
+            res.status(401).json({ success: false, error: "Invalid token" });
+        }
+    });
+
+    // --- CHATS & MESSAGES ---
+
+    app.get('/api/backoffice/chats', backofficeAuth, async (req, res) => {
+        const chats = await HistoryHandler.listChats();
+        res.json(chats);
+    });
+
+    app.get('/api/backoffice/messages/:chatId', backofficeAuth, async (req, res) => {
+        const messages = await HistoryHandler.getMessages(req.params.chatId);
+        res.json(messages);
+    });
+
+    app.get('/api/backoffice/profile-pic/:chatId', async (req, res) => {
+        try {
+            const { chatId } = req.params;
+            const token = req.query.token as string;
+
+            if (token !== process.env.BACKOFFICE_TOKEN) {
+                res.status(401).end();
+                return;
+            }
+
+            if (!adapterProvider) {
+                console.error('[ProfilePic] Error: adapterProvider no inicializado');
+                res.status(500).end();
+                return;
+            }
+
+            let jid = chatId;
+            if (chatId.match(/^\d+$/) && !chatId.includes('@')) {
+                jid = `${chatId}@s.whatsapp.net`;
+            }
+
+            const vendor = (adapterProvider as any).vendor || adapterProvider.globalVendorArgs?.sock;
+            if (vendor && typeof vendor.profilePictureUrl === 'function') {
+                try {
+                    const url = await vendor.profilePictureUrl(jid, 'image');
+                    if (url) {
+                        res.writeHead(302, { Location: url });
+                        return res.end();
+                    }
+                } catch (picError) {
+                    // console.log(`[ProfilePic] No se pudo obtener foto para ${jid}`);
+                }
+            }
+            
+            res.status(404).end();
+        } catch (e) {
+            console.error('[ProfilePic] Error excepcional:', e);
+            res.status(500).end();
+        }
+    });
+
+    // --- SEND MESSAGE & TOGGLE BOT ---
+
+    app.post('/api/backoffice/send-message', backofficeAuth, (req, res, next) => {
+        const contentType = req.headers['content-type'] || '';
+        if (contentType.includes('multipart/form-data')) {
+            return upload.single('file')(req, res, (err) => {
+                if (err) {
+                    return res.status(400).json({ success: false, error: `Error de archivo: ${err.message}` });
+                }
+                next();
+            });
+        }
+        bodyParser.json({ limit: '10mb' })(req, res, next);
+    }, async (req, res) => {
+        const chatId = req.body.chatId;
+        const message = req.body.message;
+        const file = (req as any).file;
+
+        if (!chatId) return res.status(400).json({ success: false, error: 'chatId is required' });
+        await processSendMessage(req, res, chatId, message, file);
+    });
+
+    app.post('/api/backoffice/toggle-bot', backofficeAuth, bodyParser.json(), async (req, res) => {
+        const { chatId, enabled } = req.body;
+        if (!chatId) return res.status(400).json({ success: false, error: 'chatId is required' });
+        
+        try {
+            await HistoryHandler.toggleBot(chatId, enabled);
+            if ((adapterProvider as any).server?.io) {
+                (adapterProvider as any).server.io.emit('bot_toggled', { chatId, enabled });
+            }
+            res.json({ success: true, enabled });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    // --- TAGS ---
+
+    app.get('/api/backoffice/tags', backofficeAuth, async (req, res) => {
+        const tags = await HistoryHandler.getTags();
+        res.json(tags);
+    });
+
+    app.post('/api/backoffice/tags', backofficeAuth, async (req, res) => {
+        const { name, color } = req.body;
+        const result = await HistoryHandler.createTag(name, color);
+        res.json(result);
+    });
+
+    app.put('/api/backoffice/tags/:id', backofficeAuth, async (req, res) => {
+        const { name, color } = req.body;
+        const result = await HistoryHandler.updateTag(req.params.id, name, color);
+        res.json(result);
+    });
+
+    app.delete('/api/backoffice/tags/:id', backofficeAuth, async (req, res) => {
+        const result = await HistoryHandler.deleteTag(req.params.id);
+        res.json(result);
+    });
+
+    app.post('/api/backoffice/chats/:chatId/tags', backofficeAuth, async (req, res) => {
+        const { tagId } = req.body;
+        const result = await HistoryHandler.addTagToChat(req.params.chatId, tagId);
+        res.json(result);
+    });
+
+    app.delete('/api/backoffice/chats/:chatId/tags/:tagId', backofficeAuth, async (req, res) => {
+        const result = await HistoryHandler.removeTagFromChat(req.params.chatId, req.params.tagId);
+        res.json(result);
+    });
+};
