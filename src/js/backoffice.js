@@ -1,0 +1,468 @@
+const token = localStorage.getItem('backoffice_token');
+if (!token) window.location.href = '/login';
+
+let activeChatId = null;
+let chats = [];
+let botTags = [];
+let selectedFile = null;
+let isSending = false;
+
+// Inicializar Socket.IO para tiempo real
+const socket = io();
+
+socket.on('connect', () => {
+    console.log('✅ Conectado al servidor de tiempo real');
+});
+
+socket.on('new_message', (payload) => {
+    console.log('📡 Nuevo mensaje recibido:', payload);
+    if (activeChatId === payload.chatId) {
+        fetchMessages(activeChatId);
+    }
+    fetchChats();
+});
+
+socket.on('bot_toggled', (payload) => {
+    console.log('📡 Bot toggled:', payload);
+    if (activeChatId === payload.chatId) {
+        const toggle = document.getElementById('bot-toggle');
+        toggle.checked = payload.enabled;
+        updateBotStatusText(payload.enabled);
+        updateInputState(payload.enabled);
+    }
+    fetchChats();
+});
+
+async function fetchChats() {
+    try {
+        const res = await fetch(`/api/backoffice/chats?token=${token}`);
+        if (res.status === 401) logout();
+        chats = await res.json();
+        handleSearch();
+        
+        // Si hay un chat activo, actualizar su estado (por si el worker cambió bot_enabled)
+        if (activeChatId) {
+            const activeChat = chats.find(c => c.id === activeChatId);
+            if (activeChat) {
+                updateBotStatusText(activeChat.bot_enabled);
+                updateInputState(activeChat.bot_enabled);
+                const toggle = document.getElementById('bot-toggle');
+                if (toggle) toggle.checked = activeChat.bot_enabled;
+            }
+        }
+    } catch (e) { console.error(e); }
+}
+
+async function fetchBotTags() {
+    try {
+        const res = await fetch(`/api/backoffice/tags?token=${token}`);
+        botTags = await res.json();
+        renderTagManager();
+        renderFilterDropdown();
+    } catch (e) { console.error(e); }
+}
+
+function handleSearch() {
+    const query = document.getElementById('search-input').value.toLowerCase();
+    const tagFilter = document.getElementById('filter-tag').value;
+    
+    const filtered = chats.filter(chat => {
+        const matchesSearch = chat.id.toLowerCase().includes(query) || (chat.name && chat.name.toLowerCase().includes(query));
+        const matchesTag = !tagFilter || (chat.tags && chat.tags.some(t => t.id === tagFilter));
+        return matchesSearch && matchesTag;
+    });
+
+    renderChatList(filtered);
+}
+
+function renderFilterDropdown() {
+    const select = document.getElementById('filter-tag');
+    const currentValue = select.value;
+    select.innerHTML = '<option value="">Todas las etiquetas</option>' + 
+        botTags.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+    select.value = currentValue;
+}
+
+function renderChatList(listToRender = chats) {
+    const list = document.getElementById('chat-list');
+    list.innerHTML = listToRender.map(chat => {
+        const initial = (chat.name || chat.id).charAt(0).toUpperCase();
+        const avatarUrl = `/api/backoffice/profile-pic/${chat.id}?token=${token}`;
+        
+        const tagsHtml = (chat.tags || []).map(t => 
+            `<span class="tag-pill" style="background:${t.color || '#6366f1'}">${t.name}</span>`
+        ).join('');
+
+        const statusBadge = chat.bot_enabled 
+            ? `<span style="color: var(--wa-accent); font-size: 0.75rem;">🤖 Bot</span>`
+            : `<span style="color: #f87171; font-size: 0.75rem;">👤 Humano</span>`;
+
+        return `
+            <div class="chat-item ${activeChatId === chat.id ? 'active' : ''}" onclick="selectChat('${chat.id}')">
+                <div class="chat-avatar">
+                    <span style="position:relative; z-index:1;">${initial}</span>
+                    <img src="${avatarUrl}" onerror="this.style.display='none'">
+                </div>
+                <div class="chat-info">
+                    <div style="display:flex; justify-content:space-between; align-items: baseline;">
+                        <div class="chat-phone">${chat.id.split('@')[0]}</div>
+                        ${statusBadge}
+                    </div>
+                    <div class="chat-name-small">${chat.name || ''}</div>
+                    <div class="chat-tags-list" style="display:flex; flex-wrap:wrap; margin-top:2px;">${tagsHtml}</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+async function selectChat(id) {
+    activeChatId = id;
+    const chat = chats.find(c => c.id === id);
+    
+    document.getElementById('active-chat-phone').innerText = chat.id.split('@')[0];
+    document.getElementById('active-chat-name').innerText = chat.name || 'Sin nombre';
+    
+    const headerAvatar = document.getElementById('active-chat-avatar');
+    const initial = (chat.name || chat.id).charAt(0).toUpperCase();
+    const avatarUrl = `/api/backoffice/profile-pic/${chat.id}?token=${token}`;
+    
+    headerAvatar.innerHTML = `
+        <span style="position:relative; z-index:1;">${initial}</span>
+        <img src="${avatarUrl}" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; z-index:2;" onerror="this.style.display='none'">
+    `;
+    
+    const botToggle = document.getElementById('bot-toggle');
+    botToggle.disabled = false;
+    botToggle.checked = chat.bot_enabled;
+    updateBotStatusText(chat.bot_enabled);
+    updateInputState(chat.bot_enabled);
+
+    renderActiveChatTags();
+    if (document.getElementById('tag-manager').style.display === 'block') {
+        renderTagManager();
+    }
+
+    renderChatList();
+    fetchMessages(id);
+}
+
+function renderActiveChatTags() {
+    const chat = chats.find(c => c.id === activeChatId);
+    const container = document.getElementById('active-chat-tags');
+    if (chat && chat.tags) {
+        container.innerHTML = chat.tags.map(t => 
+            `<span class="tag-pill" style="background:${t.color}">${t.name}</span>`
+        ).join('');
+    } else {
+        container.innerHTML = '';
+    }
+}
+
+function updateBotStatusText(enabled) {
+    const txt = document.getElementById('bot-status-text');
+    if (!txt) return;
+    const isEnabled = enabled === true || enabled === 'true' || enabled === 1;
+    txt.innerText = isEnabled ? 'Bot Activo' : 'Intervención Humana';
+    txt.className = isEnabled ? 'status-bot' : 'status-human';
+}
+
+function updateInputState(botEnabled) {
+    const input = document.getElementById('message-input');
+    const btn = document.getElementById('send-btn');
+    const attachBtn = document.getElementById('attach-btn');
+    if (!input || !btn || !attachBtn) return;
+
+    // Normalización estricta a booleano
+    const isBotEnabled = (botEnabled === true || botEnabled === 'true' || botEnabled === 1 || botEnabled === '1');
+    
+    console.log(`[UI] Actualizando estado de input. Bot habilitado: ${isBotEnabled}`);
+
+    // Bloqueamos el input si el bot está activo para evitar interferencias
+    input.disabled = isBotEnabled;
+    btn.disabled = isBotEnabled;
+    attachBtn.disabled = isBotEnabled;
+    
+    if (isBotEnabled) {
+        input.style.borderBottom = '2px solid var(--wa-accent)';
+        input.style.opacity = '0.6';
+        input.placeholder = "🤖 Bot activo - Desactívalo para intervenir";
+    } else {
+        input.style.borderBottom = '2px solid #f87171';
+        input.style.opacity = '1';
+        input.placeholder = "Escribe un mensaje aquí";
+    }
+}
+
+async function fetchMessages(chatId) {
+    const res = await fetch(`/api/backoffice/messages/${chatId}?token=${token}`);
+    const messages = await res.json();
+    const container = document.getElementById('messages');
+    
+    let html = '';
+    let lastDate = null;
+
+    messages.forEach(m => {
+        const date = new Date(m.created_at);
+        const dateStr = date.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' });
+        
+        if (dateStr !== lastDate) {
+            html += `<div class="date-separator"><span>${dateStr}</span></div>`;
+            lastDate = dateStr;
+        }
+
+        const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        
+        let contentHtml = m.content || '';
+        const type = m.type || 'text';
+        
+        const isImageUrl = type === 'image' || contentHtml.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i) || (contentHtml.includes('/uploads/') && contentHtml.match(/\.(jpeg|jpg|gif|png|webp|svg)/i));
+        const isVideoUrl = type === 'video' || contentHtml.match(/\.(mp4|webm|ogg)$/i) || (contentHtml.includes('/uploads/') && contentHtml.match(/\.(mp4|webm|ogg)/i));
+        const isFileUrl = type === 'document' || (contentHtml.includes('/uploads/') && !isImageUrl && !isVideoUrl);
+
+        if (isImageUrl && contentHtml) {
+            contentHtml = `<div class="msg-media"><img src="${contentHtml}" alt="imagen"></div>`;
+        } else if (isVideoUrl && contentHtml) {
+            contentHtml = `<div class="msg-media"><video src="${contentHtml}" controls></video></div>`;
+        } else if (isFileUrl && contentHtml) {
+            const fileName = contentHtml.split('/').pop();
+            contentHtml = `<div class="msg-file"><a href="${contentHtml}" target="_blank">📄 Documento adjunto (${fileName})</a></div>`;
+        }
+        
+        html += `
+            <div class="msg ${m.role}">
+                <div class="msg-content">${contentHtml}</div>
+                <span class="msg-time">${time}</span>
+            </div>
+        `;
+    });
+
+    container.innerHTML = html;
+    container.scrollTop = container.scrollHeight;
+}
+
+async function toggleBot(enabled) {
+    const res = await fetch('/api/backoffice/toggle-bot', {
+        method: 'POST',
+        headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': 'token=' + token
+        },
+        body: JSON.stringify({ chatId: activeChatId, enabled })
+    });
+
+    if (res.ok) {
+        const chat = chats.find(c => c.id === activeChatId);
+        chat.bot_enabled = enabled;
+        updateBotStatusText(enabled);
+        updateInputState(enabled);
+        renderChatList();
+    }
+}
+
+function handleFileSelect(input) {
+    if (input.files && input.files[0]) {
+        selectedFile = input.files[0];
+        document.getElementById('message-input').placeholder = `Archivo: ${selectedFile.name} (Escribe un comentario opcional)`;
+        document.getElementById('message-input').focus();
+    }
+}
+
+async function sendMessage() {
+    if (isSending) return;
+    isSending = true;
+
+    const input = document.getElementById('message-input');
+    const content = input.value.trim();
+    if (!content && !selectedFile) {
+        console.log('⚠️ Intento de envío vacío ignorado');
+        isSending = false;
+        return;
+    }
+    if (!activeChatId) {
+        console.warn('⚠️ No hay chat activo seleccionado');
+        isSending = false;
+        return;
+    }
+
+    console.log(`📤 Enviando mensaje a ${activeChatId}...`, { hasFile: !!selectedFile });
+    const btn = document.getElementById('send-btn');
+    const originalBtnText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '...';
+
+    try {
+        let res;
+        const token = localStorage.getItem('backoffice_token');
+
+        if (!selectedFile) {
+            // Enviar como JSON simple (más confiable para texto)
+            res = await fetch('/api/backoffice/send-message', {
+                method: 'POST',
+                headers: { 
+                    'Authorization': 'token=' + token,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    chatId: activeChatId,
+                    message: content
+                })
+            });
+        } else {
+            // Enviar como FormData (necesario para archivos)
+            const formData = new FormData();
+            formData.append('chatId', activeChatId);
+            if (content) formData.append('message', content);
+            formData.append('file', selectedFile);
+
+            res = await fetch('/api/backoffice/send-message', {
+                method: 'POST',
+                headers: { 
+                    'Authorization': 'token=' + token
+                },
+                body: formData
+            });
+        }
+
+        if (res.ok) {
+            const data = await res.json();
+            if (data.warning) {
+                console.warn('⚠️ Advertencia del servidor:', data.warning);
+                alert('⚠️ ' + data.warning);
+            } else {
+                console.log('✅ Mensaje enviado exitosamente');
+            }
+            input.value = '';
+            input.placeholder = "Escribe un mensaje aquí";
+            selectedFile = null;
+            document.getElementById('file-input').value = '';
+            fetchMessages(activeChatId);
+        } else {
+            let errorMsg = 'Error desconocido';
+            try {
+                const errorData = await res.json();
+                errorMsg = errorData.error || errorMsg;
+            } catch (e) {
+                // Si no es JSON, intentamos leer como texto
+                const text = await res.text();
+                errorMsg = text || res.statusText || 'Error del servidor';
+            }
+            console.error('❌ Error del servidor:', errorMsg);
+            alert('Error al enviar mensaje: ' + errorMsg);
+        }
+    } catch (err) {
+        console.error('❌ Error de red:', err);
+        alert('Error de conexión al enviar el mensaje');
+    } finally {
+        isSending = false;
+        btn.disabled = false;
+        btn.innerHTML = originalBtnText;
+    }
+}
+
+// Tag Management Functions
+function toggleTagManager() {
+    const panel = document.getElementById('tag-manager');
+    panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+    if (panel.style.display === 'block') {
+        renderTagManager();
+    }
+}
+
+async function createTag() {
+    const name = document.getElementById('new-tag-name').value;
+    const color = document.getElementById('new-tag-color').value;
+    if (!name) return;
+
+    const res = await fetch('/api/backoffice/tags', {
+        method: 'POST',
+        headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': 'token=' + token
+        },
+        body: JSON.stringify({ name, color })
+    });
+
+    if (res.ok) {
+        document.getElementById('new-tag-name').value = '';
+        fetchBotTags();
+    }
+}
+
+async function deleteTag(id) {
+    if (!confirm('¿Eliminar esta etiqueta?')) return;
+    const res = await fetch(`/api/backoffice/tags/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': 'token=' + token }
+    });
+    if (res.ok) fetchBotTags();
+}
+
+async function addTagToChat(tagId) {
+    const res = await fetch(`/api/backoffice/chats/${activeChatId}/tags`, {
+        method: 'POST',
+        headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': 'token=' + token
+        },
+        body: JSON.stringify({ tagId })
+    });
+    if (res.ok) {
+        await fetchChats();
+        renderActiveChatTags();
+        renderTagManager();
+    }
+}
+
+async function removeTagFromChat(tagId) {
+    const res = await fetch(`/api/backoffice/chats/${activeChatId}/tags/${tagId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': 'token=' + token }
+    });
+    if (res.ok) {
+        await fetchChats();
+        renderActiveChatTags();
+        renderTagManager();
+    }
+}
+
+function renderTagManager() {
+    const editorList = document.getElementById('tag-list-editor');
+    if (!editorList) return;
+    editorList.innerHTML = botTags.map(t => `
+        <div class="tag-item-edit">
+            <span class="tag-pill" style="background:${t.color}">${t.name}</span>
+            <button onclick="deleteTag('${t.id}')" style="background:none; border:none; color:#f87171; cursor:pointer;">del</button>
+        </div>
+    `).join('');
+
+    const assignSection = document.getElementById('current-chat-tags-section');
+    if (activeChatId) {
+        assignSection.style.display = 'block';
+        const chat = chats.find(c => c.id === activeChatId);
+        const assignedTagIds = (chat.tags || []).map(t => t.id);
+        
+        const assignList = document.getElementById('available-tags-to-assign');
+        assignList.innerHTML = botTags.map(t => {
+            const isAssigned = assignedTagIds.includes(t.id);
+            return `
+                <div onclick="${isAssigned ? 'removeTagFromChat' : 'addTagToChat'}('${t.id}')" 
+                     class="tag-pill" 
+                     style="background:${t.color}; cursor:pointer; opacity:${isAssigned ? 1 : 0.4}; border:${isAssigned ? '2px solid white' : 'none'}">
+                    ${t.name} ${isAssigned ? '✓' : '+'}
+                </div>
+            `;
+        }).join('');
+    } else {
+        assignSection.style.display = 'none';
+    }
+}
+
+function logout() {
+    localStorage.removeItem('backoffice_token');
+    window.location.href = '/login';
+}
+
+setInterval(fetchChats, 30000);
+fetchChats();
+fetchBotTags();
