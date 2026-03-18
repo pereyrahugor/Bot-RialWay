@@ -702,7 +702,7 @@
 
             try {
                 let res;
-                const token = sessionStorage.getItem('backoffice_token');
+                const token = localStorage.getItem('backoffice_token');
 
                 if (!selectedFile) {
                     // Enviar como JSON simple (más confiable para texto)
