@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 import multer from "multer";
 import OpenAI from "openai";
 import { createBot, createProvider, createFlow, MemoryDB } from "@builderbot/bot";
-import { BaileysProvider } from "builderbot-provider-sherpa";
+import { BaileysProvider } from "@builderbot/provider-baileys";
 import { httpInject } from "@builderbot-plugins/openai-assistants";
 
 // --- Utils & Handlers ---
@@ -87,10 +87,10 @@ const main = async () => {
 
     // 2. Initialize Provider
     adapterProvider = createProvider(BaileysProvider, {
-        version: [2, 3000, 1013950307],
+        version: [2, 3000, 1030817285],
         groupsIgnore: false,
         readStatus: false,
-        disableHttpServer: true
+        disableHttpServer: true,
     });
 
     // 3. Register Provider Events
