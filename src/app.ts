@@ -130,6 +130,7 @@ const main = async () => {
     // 7. Polka/Express Server setup
     const app = adapterProvider.server;
     if (app) {
+        console.log("🛠️ [POLKA MIDDLEWARES - INITIAL]:", app.middlewares?.length || 0);
         app.onError = (err: any, _req: any, res: any) => {
             console.error("🔥 [POLKA ERROR]:", err);
             res.statusCode = 500;
@@ -137,15 +138,11 @@ const main = async () => {
         };
     }
 
-    // 8. Register Middlewares
-    app.use(smartBodyParser);
+    // 8. Register Middlewares (Compatibilidad primero)
     app.use(compatibilityLayer);
     app.use(rootRedirect);
 
-    // 9. Register Routes
-    httpInject(app);
-    
-    // Rutas de Backoffice (Multipart support)
+    // 9. Register Routes (Prioridad Backoffice para evitar conflictos de streams)
     registerBackofficeRoutes(app, {
         adapterProvider,
         HistoryHandler,
@@ -153,7 +150,11 @@ const main = async () => {
         upload
     });
 
-    // Rutas de Railway & Webchat
+    // 10. Plugins y Middlewares Globales de Body-Parsing
+    httpInject(app);
+    app.use(smartBodyParser);
+
+    // 11. Register Other Routes
     registerRailwayRoutes(app, { RailwayApi: (await import("./Api-RailWay/Railway")).RailwayApi });
     registerWebchatRoutes(app, { webChatManager, openaiVision, ASSISTANT_ID, processUserMessage: aiManager.processUserMessage });
 

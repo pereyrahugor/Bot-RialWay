@@ -15,65 +15,84 @@ export const registerBackofficeRoutes = (app: any, {
 
     /** Función unificada para procesar el envío de mensajes e historial */
     const processSendMessage = async (req: any, res: any, chatId: string, message: string, file: any) => {
+        // 1. Determinar tipo y contenido
+        let finalType: 'text' | 'image' | 'video' | 'document' = 'text';
+        if (file) {
+            if (file.mimetype.startsWith('image/')) finalType = 'image';
+            else if (file.mimetype.startsWith('video/')) finalType = 'video';
+            else finalType = 'document';
+        }
+        
+        const fileUrl = file ? `/uploads/${file.filename}` : '';
+        const finalContent = file ? fileUrl : (message || '');
+
         try {
             if (!adapterProvider) {
                 return res.status(503).json({ success: false, error: 'WhatsApp provider not initialized' });
             }
 
-            console.log(`[BACKOFFICE] Enviando ${file ? file.mimetype : 'texto'} a ${chatId}...`);
-            const jid = chatId.includes('@') ? chatId : `${chatId}@s.whatsapp.net`;
+            console.log(`[BACKOFFICE] Procesando envío para ${chatId}...`);
             
-            let finalType: 'text' | 'image' | 'video' | 'document' = 'text';
-            if (file) {
-                if (file.mimetype.startsWith('image/')) finalType = 'image';
-                else if (file.mimetype.startsWith('video/')) finalType = 'video';
-                else finalType = 'document';
-            }
-            
-            const fileUrl = file ? `/uploads/${file.filename}` : '';
-            const finalContent = file ? fileUrl : (message || '');
-            
+            // 2. GUARDAR PRIMERO (Feedback instantáneo)
             await HistoryHandler.saveMessage(chatId, 'assistant', finalContent, finalType);
             await HistoryHandler.updateLastHumanMessage(chatId);
 
-            // Inyectar en thread OpenAI (silencioso)
+            // 3. Inyectar en thread OpenAI (silencioso)
             HistoryHandler.getThreadId(chatId).then(threadId => {
                 if (threadId && (message || file)) {
                     openaiMain.beta.threads.messages.create(threadId, {
                         role: 'assistant',
-                        content: `[Backoffice]: ${message || '[Media]'}`
+                        content: `[Mensaje enviado por operador humano]: ${message || '[Media]'}`
                     }).catch(() => {});
                 }
             }).catch(() => {});
 
-            // Envío por WhatsApp
-            if (file) {
-                const absolutePath = path.resolve(file.path);
-                if (finalType === 'image') {
-                    if (typeof adapterProvider.sendImage === 'function') await adapterProvider.sendImage(jid, absolutePath, message || '');
-                    else await adapterProvider.sendMessage(jid, message || '', { media: absolutePath });
-                } else if (finalType === 'video') {
-                    if (typeof (adapterProvider as any).sendVideo === 'function') await (adapterProvider as any).sendVideo(jid, absolutePath, message || '');
-                    else await adapterProvider.sendMessage(jid, message || '', { media: absolutePath });
+            // 4. ENVIAR A WHATSAPP
+            try {
+                const jid = chatId.includes('@') ? chatId : `${chatId}@s.whatsapp.net`;
+                if (file) {
+                    const absolutePath = path.resolve(file.path);
+                    if (finalType === 'image') {
+                        if (typeof adapterProvider.sendImage === 'function') {
+                            await adapterProvider.sendImage(jid, absolutePath, message || '');
+                        } else {
+                            await adapterProvider.sendMessage(jid, message || '', { media: absolutePath });
+                        }
+                    } else if (finalType === 'video') {
+                        if (typeof (adapterProvider as any).sendVideo === 'function') {
+                            await (adapterProvider as any).sendVideo(jid, absolutePath, message || '');
+                        } else {
+                            await adapterProvider.sendMessage(jid, message || '', { media: absolutePath });
+                        }
+                    } else {
+                        if (typeof (adapterProvider as any).sendFile === 'function') {
+                            await (adapterProvider as any).sendFile(jid, absolutePath, message || file.originalname);
+                        } else {
+                            await adapterProvider.sendMessage(jid, message || '', { media: absolutePath, fileName: file.originalname });
+                        }
+                    }
                 } else {
-                    if (typeof (adapterProvider as any).sendFile === 'function') await (adapterProvider as any).sendFile(jid, absolutePath, message || file.originalname);
-                    else await adapterProvider.sendMessage(jid, message || '', { media: absolutePath, fileName: file.originalname });
+                    await adapterProvider.sendMessage(jid, message, {});
                 }
-            } else {
-                await adapterProvider.sendMessage(jid, message, {});
+                res.json({ success: true, fileUrl: file ? fileUrl : undefined });
+            } catch (waError) {
+                console.error('[BACKOFFICE] Error enviando a Whatsapp:', waError);
+                res.json({ 
+                    success: true, 
+                    fileUrl: file ? fileUrl : undefined,
+                    warning: 'El mensaje se guardó en el historial pero falló el envío a WhatsApp (¿Bot conectado?)' 
+                });
             }
-            
-            return res.json({ success: true, fileUrl: file ? fileUrl : undefined });
 
         } catch (e: any) {
-            console.error('❌ Error en processSendMessage:', e);
+            console.error('❌ Error crítico en processSendMessage:', e);
             res.status(500).json({ success: false, error: e.message });
         }
     };
 
     // --- AUTH ---
 
-    app.post('/api/backoffice/auth', (req, res) => {
+    app.post('/api/backoffice/auth', bodyParser.json(), (req, res) => {
         const { token } = req.body;
         if (token === process.env.BACKOFFICE_TOKEN) {
             res.json({ success: true });
@@ -137,8 +156,15 @@ export const registerBackofficeRoutes = (app: any, {
 
     // --- SEND MESSAGE & TOGGLE BOT ---
 
-    app.post('/api/backoffice/send-message', backofficeAuth, (req, res, next) => {
+    app.use('/api/backoffice/send-message', (req: any, _res: any, next: any) => {
+        if (req.method !== 'POST') return next();
+        return backofficeAuth(req, _res, next);
+    }, (req: any, res: any, next: any) => {
+        if (req.method !== 'POST') return next();
         const contentType = req.headers['content-type'] || '';
+        if (req.body && Object.keys(req.body).length > 0) {
+            console.warn('⚠️ [BACKOFFICE] req.body ya viene poblado ANTES de Multer. Posible consumo de stream previo.');
+        }
         if (contentType.includes('multipart/form-data')) {
             return upload.single('file')(req, res, (err) => {
                 if (err) {
@@ -148,7 +174,8 @@ export const registerBackofficeRoutes = (app: any, {
             });
         }
         bodyParser.json({ limit: '10mb' })(req, res, next);
-    }, async (req, res) => {
+    }, async (req: any, res: any) => {
+        if (req.method !== 'POST') return; // Seguridad extra
         const chatId = req.body.chatId;
         const message = req.body.message;
         const file = (req as any).file;
@@ -179,13 +206,13 @@ export const registerBackofficeRoutes = (app: any, {
         res.json(tags);
     });
 
-    app.post('/api/backoffice/tags', backofficeAuth, async (req, res) => {
+    app.post('/api/backoffice/tags', backofficeAuth, bodyParser.json(), async (req, res) => {
         const { name, color } = req.body;
         const result = await HistoryHandler.createTag(name, color);
         res.json(result);
     });
 
-    app.put('/api/backoffice/tags/:id', backofficeAuth, async (req, res) => {
+    app.put('/api/backoffice/tags/:id', backofficeAuth, bodyParser.json(), async (req, res) => {
         const { name, color } = req.body;
         const result = await HistoryHandler.updateTag(req.params.id, name, color);
         res.json(result);
@@ -196,7 +223,7 @@ export const registerBackofficeRoutes = (app: any, {
         res.json(result);
     });
 
-    app.post('/api/backoffice/chats/:chatId/tags', backofficeAuth, async (req, res) => {
+    app.post('/api/backoffice/chats/:chatId/tags', backofficeAuth, bodyParser.json(), async (req, res) => {
         const { tagId } = req.body;
         const result = await HistoryHandler.addTagToChat(req.params.chatId, tagId);
         res.json(result);
