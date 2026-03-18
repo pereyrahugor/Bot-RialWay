@@ -937,14 +937,15 @@ const main = async () => {
                         }
                     } else if (file.mimetype.startsWith('video/')) {
                         if (typeof adapterProvider.sendVideo === 'function') {
-                            await adapterProvider.sendVideo(jid, absolutePath, message || '');
+                            await (adapterProvider as any).sendVideo(jid, absolutePath, message || '');
                         } else {
-                            await adapterProvider.sendMessage(jid, message || '', { media: absolutePath });
+                            await (adapterProvider as any).sendMessage(jid, message || '', { media: absolutePath });
                         }
+                    } else {
                         // Documentos (PDF, etc.)
                         console.log(`[BACKOFFICE] Enviando documento: ${file.originalname}`);
-                        if (typeof adapterProvider.sendFile === 'function') {
-                            await adapterProvider.sendFile(jid, absolutePath, message || file.originalname);
+                        if (typeof (adapterProvider as any).sendFile === 'function') {
+                            await (adapterProvider as any).sendFile(jid, absolutePath, message || file.originalname);
                         } else {
                             await adapterProvider.sendMessage(jid, message || '', { 
                                 media: absolutePath,
@@ -971,9 +972,15 @@ const main = async () => {
             }
 
             // Guardar en historial
+            let finalType: 'text' | 'image' | 'video' | 'document' = 'text';
+            if (file) {
+                if (file.mimetype.startsWith('image/')) finalType = 'image';
+                else if (file.mimetype.startsWith('video/')) finalType = 'video';
+                else finalType = 'document';
+            }
+            
             const finalContent = file ? fileUrl : (message || '');
-            const finalType = file ? 'media' : 'text';
-            await HistoryHandler.saveMessage(chatId, 'assistant', finalContent, finalType as any);
+            await HistoryHandler.saveMessage(chatId, 'assistant', finalContent, finalType);
             await HistoryHandler.updateLastHumanMessage(chatId);
 
             // Inyectar en thread de OpenAI

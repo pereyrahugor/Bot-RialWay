@@ -247,6 +247,21 @@
             display: block;
             margin-top: 2px;
         }
+        .msg-file {
+            background: rgba(0,0,0,0.2);
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 5px;
+            font-size: 0.85rem;
+        }
+        .msg-file a {
+            color: var(--wa-accent);
+            text-decoration: none;
+            display: block;
+        }
+        .msg-file a:hover {
+            text-decoration: underline;
+        }
 
         .msg-time {
             font-size: 0.65rem;
@@ -634,13 +649,17 @@
                 const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 
                 let contentHtml = m.content;
-                const isImageUrl = m.content.match(/\.(jpeg|jpg|gif|png|webp)$/i) || m.content.includes('/uploads/') && m.content.match(/\.(jpeg|jpg|gif|png|webp)/i);
-                const isVideoUrl = m.content.match(/\.(mp4|webm|ogg)$/i);
+                const isImageUrl = m.content.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i) || (m.content.includes('/uploads/') && m.content.match(/\.(jpeg|jpg|gif|png|webp|svg)/i));
+                const isVideoUrl = m.content.match(/\.(mp4|webm|ogg)$/i) || (m.content.includes('/uploads/') && m.content.match(/\.(mp4|webm|ogg)/i));
+                const isFileUrl = m.content.includes('/uploads/') && !isImageUrl && !isVideoUrl;
 
                 if (isImageUrl) {
                     contentHtml = `<div class="msg-media"><img src="${m.content}" alt="imagen"></div>`;
                 } else if (isVideoUrl) {
                     contentHtml = `<div class="msg-media"><video src="${m.content}" controls></video></div>`;
+                } else if (isFileUrl) {
+                    const fileName = m.content.split('/').pop();
+                    contentHtml = `<div class="msg-file"><a href="${m.content}" target="_blank">📄 Documento adjunto (${fileName})</a></div>`;
                 }
                 
                 html += `

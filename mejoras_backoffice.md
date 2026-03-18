@@ -156,42 +156,58 @@ Intervención Humana:
 Bot Activo → el asistente VE todo lo que se habló y continúa con contexto completo
 ```
 
-## 10. Robustez en Envío de Mensajes
-- Se mejoró el endpoint `/api/backoffice/send-message` para verificar que el proveedor tiene el `vendor` listo antes de intentar enviar.
-- Se implementó un fallback: si `sendMessage` no existe o falla para texto, intenta usar `sendText`.
-- Se agregaron logs detallados en el backend para trazar intentos de envío y errores.
-- Se agregó un estado de carga (loading) en el botón de envío del frontend para mejorar el feedback al usuario.
-- Se incluyó manejo de errores de red y de servidor con alertas descriptivas.
+## 10. Robustez en Envío de Mensajes y Multimedia (Update ✅)
+- Se mejoró el endpoint `/api/backoffice/send-message` para manejar de forma separada solicitudes `application/json` (texto simple) y `multipart/form-data` (archivos). Esto evita el error de Multer `Unexpected end of form`.
+- **Manejo de Multimedia**: Se implementó una lógica de envío inteligente en `processSendMessage` que utiliza métodos específicos del proveedor:
+    - `sendImage(jid, path, caption)` para imágenes.
+    - `sendVideo(jid, path, caption)` para videos.
+    - `sendFile(jid, path, fileName)` para documentos (PDF, etc.).
+- **Fallback de Envío**: Si los métodos específicos no existen, se utiliza `sendMessage(jid, message, { media: absolutePath })` como respaldo universal.
+- **Rutas Absolutas**: Se aplica `path.resolve()` a las rutas de archivos de Multer para asegurar que el sistema de archivos del servidor localice correctamente los adjuntos antes del envío.
+- **Directorios Automáticos**: El servidor crea el directorio `uploads/` al iniciar (`fs.mkdirSync(dir, { recursive: true })`) para prevenir fallos de escritura de Multer.
 
 - **Código del envío mejorado (en `app.ts`):**
 ```typescript
-app.post('/api/backoffice/send-message', upload.single('file'), backofficeAuth, async (req, res) => {
-    try {
-        const { chatId, message } = req.body;
-        const file = req.file;
-
-        if (!adapterProvider || !adapterProvider.vendor) {
-            return res.status(503).json({ success: false, error: 'WhatsApp provider not connected' });
-        }
-
-        const jid = chatId.includes('@') ? chatId : `${chatId}@s.whatsapp.net`;
+const processSendMessage = async (req, res, chatId, message, file) => {
+    const jid = chatId.includes('@') ? chatId : `${chatId}@s.whatsapp.net`;
+    let fileUrl = '';
+    
+    if (file) {
+        const absolutePath = path.resolve(file.path);
+        fileUrl = `/uploads/${file.filename}`;
         
-        if (file) {
-            await adapterProvider.sendMessage(jid, message || '', { media: file.path });
+        // Selección inteligente de método según el MIME type
+        if (file.mimetype.startsWith('image/')) {
+            await adapterProvider.sendImage(jid, absolutePath, message || '');
+        } else if (file.mimetype.startsWith('video/')) {
+            await adapterProvider.sendVideo(jid, absolutePath, message || '');
         } else {
-            if (typeof adapterProvider.sendMessage === 'function') {
-                await adapterProvider.sendMessage(jid, message, {});
-            } else if (typeof (adapterProvider as any).sendText === 'function') {
-                await (adapterProvider as any).sendText(jid, message);
-            }
+            // Documentos (PDF, Word, etc.)
+            await adapterProvider.sendFile(jid, absolutePath, message || file.originalname);
         }
-        // ... persistencia e inyección en thread ...
-        res.json({ success: true });
-    } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
+    } else {
+        await adapterProvider.sendMessage(jid, message, {});
     }
-});
+    
+    // Guardar en historial con tipo específico
+    let finalType: 'text' | 'image' | 'video' | 'document' = 'text';
+    if (file) {
+        if (file.mimetype.startsWith('image/')) finalType = 'image';
+        else if (file.mimetype.startsWith('video/')) finalType = 'video';
+        else finalType = 'document';
+    }
+    
+    const finalContent = file ? fileUrl : (message || '');
+    await HistoryHandler.saveMessage(chatId, 'assistant', finalContent, finalType);
+    await HistoryHandler.updateLastHumanMessage(chatId);
+    // ... inyección en thread de OpenAI ...
+};
 ```
+
+## 11. Visualización de Documentos (UI)
+- Se mejoró el renderizado de mensajes en el Backoffice para detectar archivos que no son imágenes ni videos.
+- Los documentos (PDF, etc.) se muestran con un icono descriptivo y un enlace de descarga directo.
+- Se agregaron estilos CSS para que los archivos adjuntos se vean integrados en las burbujas de chat con un fondo distintivo.
 
 ## Requisitos Técnicos
 - Base de datos: Tablas `tags` y `chat_tags` en Supabase. Columna `last_human_message_at` en `chats`. Campo `thread_id` dentro de `chats.metadata` (JSONB).
