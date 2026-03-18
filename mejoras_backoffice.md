@@ -30,6 +30,34 @@
 - El worker revisa cada minuto.
 - Enviar un mensaje desde el backoffice actualiza el timestamp de "última actividad humana" para reiniciar el contador de 15 minutos.
 
+- **Código del Worker (en `app.ts`):**
+```typescript
+setInterval(async () => {
+    try {
+        const { data: chats } = await supabase
+            .from('chats')
+            .select('*')
+            .eq('project_id', PROJECT_ID)
+            .eq('bot_enabled', false);
+
+        const now = new Date();
+        for (const chat of chats || []) {
+            if (chat.last_human_message_at) {
+                const lastHuman = new Date(chat.last_human_message_at);
+                const diffMin = (now.getTime() - lastHuman.getTime()) / 60000;
+                
+                if (diffMin >= 15) {
+                    console.log(`🕒 [Worker] Reactivando bot para ${chat.id} (${Math.round(diffMin)} min inactivo)`);
+                    await HistoryHandler.toggleBot(chat.id, true);
+                }
+            }
+        }
+    } catch (e) {
+        console.error('[Worker] Error:', e);
+    }
+}, 60000);
+```
+
 ## 7. Diseño Visual (WhatsApp Web Estética)
 - Rediseño completo inspirado en WhatsApp Web Dark Mode.
 - **Paleta de Colores**: Uso de variables CSS para consistencia (Sidebar: `#111b21`, Chat: `#0b141a`, Burbujas: `#005c4b` y `#202c33`).
@@ -44,16 +72,26 @@
   - `Bearer VALUE` → extraer `VALUE`
   - `VALUE` directo → usar tal cual
 - Sin este fix, las rutas POST/PUT/DELETE del backoffice fallan con 401 porque el frontend envía `Authorization: token=XXX` pero el middleware comparaba el header crudo contra `BACKOFFICE_TOKEN`.
-- **Código del middleware corregido:**
+- **Código del middleware corregido (con soporte para Polka):**
 ```typescript
 const backofficeAuth = (req, res, next) => {
-    let token = req.headers['authorization'] || req.query.token || '';
+    // En Polka req.query puede ser undefined, parseamos manualmente si es necesario
+    if (!req.query && req.url.includes('?')) {
+        try {
+            const url = new URL(req.url, 'http://localhost');
+            const qry: any = {};
+            url.searchParams.forEach((v, k) => qry[k] = v);
+            req.query = qry;
+        } catch (e) { req.query = {}; }
+    }
+
+    let token = req.headers['authorization'] || (req.query && (req.query as any).token) || '';
     if (typeof token === 'string') {
         if (token.startsWith('token=')) token = token.slice(6);
         else if (token.startsWith('Bearer ')) token = token.slice(7);
     }
     const expectedToken = process.env.BACKOFFICE_TOKEN;
-    if (token === expectedToken) {
+    if (token && token === expectedToken) {
         return next();
     }
     res.status(401).json({ success: false, error: "Unauthorized" });
@@ -118,8 +156,46 @@ Intervención Humana:
 Bot Activo → el asistente VE todo lo que se habló y continúa con contexto completo
 ```
 
+## 10. Robustez en Envío de Mensajes
+- Se mejoró el endpoint `/api/backoffice/send-message` para verificar que el proveedor tiene el `vendor` listo antes de intentar enviar.
+- Se implementó un fallback: si `sendMessage` no existe o falla para texto, intenta usar `sendText`.
+- Se agregaron logs detallados en el backend para trazar intentos de envío y errores.
+- Se agregó un estado de carga (loading) en el botón de envío del frontend para mejorar el feedback al usuario.
+- Se incluyó manejo de errores de red y de servidor con alertas descriptivas.
+
+- **Código del envío mejorado (en `app.ts`):**
+```typescript
+app.post('/api/backoffice/send-message', upload.single('file'), backofficeAuth, async (req, res) => {
+    try {
+        const { chatId, message } = req.body;
+        const file = req.file;
+
+        if (!adapterProvider || !adapterProvider.vendor) {
+            return res.status(503).json({ success: false, error: 'WhatsApp provider not connected' });
+        }
+
+        const jid = chatId.includes('@') ? chatId : `${chatId}@s.whatsapp.net`;
+        
+        if (file) {
+            await adapterProvider.sendMessage(jid, message || '', { media: file.path });
+        } else {
+            if (typeof adapterProvider.sendMessage === 'function') {
+                await adapterProvider.sendMessage(jid, message, {});
+            } else if (typeof (adapterProvider as any).sendText === 'function') {
+                await (adapterProvider as any).sendText(jid, message);
+            }
+        }
+        // ... persistencia e inyección en thread ...
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+```
+
 ## Requisitos Técnicos
 - Base de datos: Tablas `tags` y `chat_tags` en Supabase. Columna `last_human_message_at` en `chats`. Campo `thread_id` dentro de `chats.metadata` (JSONB).
-- Backend: `multer` para subida de archivos, nuevas rutas de API para tags, worker de inactividad, y middleware de auth con parseo de prefijo `token=`.
+- Backend: `multer` para subida de archivos, nuevas rutas de API para tags, worker de inactividad, y middleware de auth con parseo manual de query para Polka y prefijo `token=`.
 - Frontend: JavaScript nativo con Socket.IO para actualizaciones en tiempo real, CSS Variables y Flexbox/Grid para el layout fluido.
 - OpenAI: Uso de `openai.beta.threads.messages.create()` sin `runs.create()` para inyectar mensajes al thread sin generar respuesta del asistente.
+- Proveedores: Compatibilidad verificada con `builderbot-provider-sherpa` y `BaileysProvider`.

@@ -787,14 +787,23 @@ const main = async () => {
 
     // Middleware de autenticación simple para el backoffice
     const backofficeAuth = (req, res, next) => {
-        let token = req.headers['authorization'] || req.query.token || '';
-        // Soportar formato "token=VALUE" y "Bearer VALUE" además del token directo
+        // En Polka, req.query puede estar indefinido, lo parseamos manualmente si es necesario
+        if (!req.query && req.url.includes('?')) {
+            try {
+                const url = new URL(req.url, 'http://localhost');
+                const q: any = {};
+                url.searchParams.forEach((v, k) => q[k] = v);
+                req.query = q;
+            } catch (e) { req.query = {}; }
+        }
+
+        let token = req.headers['authorization'] || (req.query && (req.query as any).token) || '';
         if (typeof token === 'string') {
             if (token.startsWith('token=')) token = token.slice(6);
             else if (token.startsWith('Bearer ')) token = token.slice(7);
         }
         const expectedToken = process.env.BACKOFFICE_TOKEN;
-        if (token === expectedToken) {
+        if (token && token === expectedToken) {
             return next();
         }
         res.status(401).json({ success: false, error: "Unauthorized" });
@@ -875,8 +884,9 @@ const main = async () => {
 
             if (!chatId) return res.status(400).json({ success: false, error: 'chatId is required' });
 
-            if (!adapterProvider) {
-                return res.status(503).json({ success: false, error: 'WhatsApp provider not ready' });
+            if (!adapterProvider || !adapterProvider.vendor) {
+                console.error('[BACKOFFICE] Error: Proveedor no inicializado o sin vendor');
+                return res.status(503).json({ success: false, error: 'WhatsApp provider not ready (disconnected)' });
             }
 
             const jid = chatId.includes('@') ? chatId : `${chatId}@s.whatsapp.net`;
@@ -886,16 +896,22 @@ const main = async () => {
 
             if (file) {
                 // Enviar archivo multimedia
+                console.log(`[BACKOFFICE] Enviando media: ${file.path}`);
                 if (typeof adapterProvider.sendMessage === 'function') {
                     await adapterProvider.sendMessage(jid, message || '', { media: file.path });
+                } else {
+                    throw new Error('Provider does not support sendMessage for media');
                 }
                 fileUrl = `/uploads/${file.filename}`;
             } else {
                 // Enviar texto
+                console.log(`[BACKOFFICE] Enviando texto a ${jid}`);
                 if (typeof adapterProvider.sendMessage === 'function') {
                     await adapterProvider.sendMessage(jid, message, {});
                 } else if (typeof adapterProvider.sendText === 'function') {
-                    await adapterProvider.sendText(jid, message);
+                    await (adapterProvider as any).sendText(jid, message);
+                } else {
+                    throw new Error('Provider does not support sendText or sendMessage');
                 }
             }
 
