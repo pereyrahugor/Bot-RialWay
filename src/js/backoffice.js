@@ -464,7 +464,7 @@ async function createTag() {
 
     if (res.ok) {
         document.getElementById('new-tag-name').value = '';
-        fetchBotTags();
+        await fetchBotTags();
     }
 }
 
@@ -474,7 +474,14 @@ async function deleteTag(id) {
         method: 'DELETE',
         headers: { 'Authorization': 'token=' + token }
     });
-    if (res.ok) fetchBotTags();
+    if (res.ok) {
+        await fetchBotTags();
+        // Limpiar localmente la etiqueta de todos los chats
+        chats.forEach(c => {
+            if (c.tags) c.tags = c.tags.filter(t => t.id !== id);
+        });
+        handleSearch(); // Re-renderizar lista
+    }
 }
 
 async function addTagToChat(tagId) {
@@ -487,7 +494,15 @@ async function addTagToChat(tagId) {
         body: JSON.stringify({ tagId })
     });
     if (res.ok) {
-        await fetchChats();
+        const tag = botTags.find(t => t.id === tagId);
+        const chat = chats.find(c => c.id === activeChatId);
+        if (chat && tag) {
+            if (!chat.tags) chat.tags = [];
+            if (!chat.tags.find(t => t.id === tagId)) {
+                chat.tags.push(tag);
+            }
+        }
+        handleSearch(); 
         renderActiveChatTags();
         renderTagManager();
     }
@@ -499,7 +514,11 @@ async function removeTagFromChat(tagId) {
         headers: { 'Authorization': 'token=' + token }
     });
     if (res.ok) {
-        await fetchChats();
+        const chat = chats.find(c => c.id === activeChatId);
+        if (chat && chat.tags) {
+            chat.tags = chat.tags.filter(t => t.id !== tagId);
+        }
+        handleSearch();
         renderActiveChatTags();
         renderTagManager();
     }
@@ -510,7 +529,7 @@ function renderTagManager() {
     if (!editorList) return;
     editorList.innerHTML = botTags.map(t => `
         <div class="tag-item-edit">
-            <span class="tag-pill" style="background:${t.color}">${t.name}</span>
+            <span class="tag-pill" style="background:${t.color || '#6366f1'}">${t.name}</span>
             <button onclick="deleteTag('${t.id}')" style="background:none; border:none; color:#f87171; cursor:pointer;">del</button>
         </div>
     `).join('');
@@ -527,7 +546,7 @@ function renderTagManager() {
             return `
                 <div onclick="${isAssigned ? 'removeTagFromChat' : 'addTagToChat'}('${t.id}')" 
                      class="tag-pill" 
-                     style="background:${t.color}; cursor:pointer; opacity:${isAssigned ? 1 : 0.4}; border:${isAssigned ? '2px solid white' : 'none'}">
+                     style="background:${t.color || '#6366f1'}; cursor:pointer; opacity:${isAssigned ? 1 : 0.4}; border:${isAssigned ? '2px solid white' : 'none'}">
                     ${t.name} ${isAssigned ? '✓' : '+'}
                 </div>
             `;
