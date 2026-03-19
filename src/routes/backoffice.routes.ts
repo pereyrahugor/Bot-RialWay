@@ -156,11 +156,7 @@ export const registerBackofficeRoutes = (app: any, {
 
     // --- SEND MESSAGE & TOGGLE BOT ---
 
-    app.use('/api/backoffice/send-message', (req: any, _res: any, next: any) => {
-        if (req.method !== 'POST') return next();
-        return backofficeAuth(req, _res, next);
-    }, (req: any, res: any, next: any) => {
-        if (req.method !== 'POST') return next();
+    app.post('/api/backoffice/send-message', backofficeAuth, (req, res, next) => {
         const contentType = req.headers['content-type'] || '';
         if (req.body && Object.keys(req.body).length > 0) {
             console.warn('⚠️ [BACKOFFICE] req.body ya viene poblado ANTES de Multer. Posible consumo de stream previo.');
@@ -174,8 +170,7 @@ export const registerBackofficeRoutes = (app: any, {
             });
         }
         bodyParser.json({ limit: '10mb' })(req, res, next);
-    }, async (req: any, res: any) => {
-        if (req.method !== 'POST') return; // Seguridad extra
+    }, async (req, res) => {
         const chatId = req.body.chatId;
         const message = req.body.message;
         const file = (req as any).file;

@@ -26,6 +26,7 @@ import { registerProviderEvents, hasActiveSession } from "./providers/provider.m
 import { startHumanInactivityWorker } from "./workers/humanInactivity.worker";
 import { AiManager } from "./utils/ai.manager";
 import { smartBodyParser, compatibilityLayer, rootRedirect } from "./middleware/global";
+import { backofficeAuth } from "./middleware/auth";
 
 // --- Flows ---
 import { welcomeFlowTxt } from "./Flows/welcomeFlowTxt";
@@ -109,11 +110,19 @@ const main = async () => {
             res.end(JSON.stringify({ success: false, error: err.message || "Internal Server Error" }));
         };
 
-        // Aplicamos compatibilidad y redirección al inicio para asegurar el correcto manejo de streams
+        // Aplicamos compatibilidad primero
         app.use(compatibilityLayer);
+        
+        // INTERCEPTOR DE SEGURIDAD PARA STREAMS (CRÍTICO)
+        // Este middleware captura las peticiones de envío antes de que el Bot o Plugins globales consuman el stream.
+        app.use('/api/backoffice/send-message', (req: any, res: any, next: any) => {
+            if (req.method !== 'POST') return next();
+            console.log("🛡️ [STREAM-INTERCEPTOR] Capturando petición de envío para proteger el stream.");
+            return backofficeAuth(req, res, next);
+        });
+
         app.use(rootRedirect);
         
-        // Registramos rutas del Backoffice ANTES de createBot() para ganar prioridad absoluta sobre el stream
         registerBackofficeRoutes(app, {
             adapterProvider,
             HistoryHandler,
@@ -141,11 +150,15 @@ const main = async () => {
     ]);
     const adapterDB = new MemoryDB();
 
+    console.log("🤖 [DEBUG] Antes de createBot, app instance ID:", (app as any)._id || 'new');
+    if (!(app as any)._id) (app as any)._id = Math.random();
+
     const { httpServer } = await createBot({
         flow: adapterFlow,
         provider: adapterProvider,
         database: adapterDB
     });
+    console.log("🤖 [DEBUG] Después de createBot, app instance ID:", (adapterProvider.server as any)._id || 'replaced');
 
     registerSafeErrorHandlers();
     startSessionSync();
