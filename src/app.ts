@@ -17,7 +17,7 @@ import { HistoryHandler } from "./utils/historyHandler";
 import { registerProcessCallback, handleQueue, userQueues, userLocks } from "./utils/queueManager";
 
 // --- Managers & Routes ---
-import { registerBackofficeRoutes } from "./routes/backoffice.routes";
+import { registerBackofficeRoutes, processSendMessage, BackofficeDependencies } from "./routes/backoffice.routes";
 import { registerRailwayRoutes } from "./routes/railway.routes";
 import { registerWebchatRoutes } from "./routes/webchat.routes";
 import { registerStaticRoutes } from "./routes/static.routes";
@@ -27,6 +27,7 @@ import { startHumanInactivityWorker } from "./workers/humanInactivity.worker";
 import { AiManager } from "./utils/ai.manager";
 import { smartBodyParser, compatibilityLayer, rootRedirect } from "./middleware/global";
 import { backofficeAuth } from "./middleware/auth";
+import * as bodyParser from 'body-parser';
 
 // --- Flows ---
 import { welcomeFlowTxt } from "./Flows/welcomeFlowTxt";
@@ -110,19 +111,40 @@ const main = async () => {
             res.end(JSON.stringify({ success: false, error: err.message || "Internal Server Error" }));
         };
 
-        // Aplicamos compatibilidad primero
+        // APLICAR COMPATIBILIDAD AL INICIO
         app.use(compatibilityLayer);
-        
+        app.use(rootRedirect);
+
         // INTERCEPTOR DE SEGURIDAD PARA STREAMS (CRÍTICO)
-        // Este middleware captura las peticiones de envío antes de que el Bot o Plugins globales consuman el stream.
+        // Este interceptor maneja COMPLETAMENTE la petición de envío del backoffice. 
+        // Al NO llamar a next() tras procesarla, garantizamos que ningún middleware global de terceros (como httpInject)
+        // toque o consuma el stream de datos, resolviendo definitivamente el "Unexpected end of form".
         app.use('/api/backoffice/send-message', (req: any, res: any, next: any) => {
             if (req.method !== 'POST') return next();
-            console.log("🛡️ [STREAM-INTERCEPTOR] Capturando petición de envío para proteger el stream.");
-            return backofficeAuth(req, res, next);
+            
+            console.log("🛡️ [STREAM-INTERCEPTOR] Interceptando envío para bypass de middlewares globales.");
+            
+            return backofficeAuth(req, res, () => {
+                const contentType = req.headers['content-type'] || '';
+                const deps: BackofficeDependencies = { adapterProvider, HistoryHandler, openaiMain, upload };
+
+                if (contentType.includes('multipart/form-data')) {
+                    return upload.single('file')(req, res, (err: any) => {
+                        if (err) return res.status(400).end(JSON.stringify({ success: false, error: `Error de archivo: ${err.message}` }));
+                        const { chatId, message } = req.body;
+                        if (!chatId) return res.status(400).end(JSON.stringify({ success: false, error: 'chatId is required' }));
+                        return processSendMessage(req, res, chatId, message, (req as any).file, deps);
+                    });
+                } else {
+                    return bodyParser.json()(req, res, () => {
+                        const { chatId, message } = req.body;
+                        if (!chatId) return res.status(400).end(JSON.stringify({ success: false, error: 'chatId is required' }));
+                        return processSendMessage(req, res, chatId, message, null, deps);
+                    });
+                }
+            });
         });
 
-        app.use(rootRedirect);
-        
         registerBackofficeRoutes(app, {
             adapterProvider,
             HistoryHandler,
