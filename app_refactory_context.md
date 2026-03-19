@@ -49,4 +49,18 @@ El archivo principal actualmente mezcla múltiples capas de la aplicación:
 ## ⚠️ Reglas Estrictas para el Agente
 1. **Paso a paso:** Ejecutar una fase a la vez y confirmar que el proyecto sigue compilando en TypeScript antes de avanzar a la siguiente.
 2. **Preservar el orden:** El orden en que Polka registra los middlewares y las rutas es vital. Asegurar que el refactor no altera la secuencia de ejecución de las peticiones HTTP.
-3. **Manejo de Streams:** Si se encuentra código relacionado con `multer`, `busboy` o parsing manual de formularios, aislarlo con cuidado para no consumir el stream antes de tiempo.
+3. **Manejo de Streams (REGLA DE ORO):** Para rutas que manejan archivos (como `send-message`), NO confiar en el orden de registro de rutas normal de Polka frente a middlewares globales de plugins. 
+   * **SOLUCIÓN DEFINITIVA:** Implementar un **Master Interceptor** global (vía `app.use` sin prefijo de ruta) al principio del servidor que detecte la ruta exacta y procese Multer/BodyParser localmente, finalizando la petición SIN llamar a `next()`. Esto garantiza que plugins posteriores (como `httpInject`) no consuman el stream de datos.
+
+## 🛡️ Patrón de Master Interceptor (Referencia)
+```typescript
+app.use(async (req, res, next) => {
+    if (req.url.startsWith('/api/backoffice/send-message') && req.method === 'POST') {
+        // 1. Auth manual
+        // 2. Multer o BodyParser manual
+        // 3. Procesar y finalizar (NO llamar a next())
+    } else {
+        next();
+    }
+});
+```

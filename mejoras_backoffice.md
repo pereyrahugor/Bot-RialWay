@@ -217,13 +217,31 @@ const processSendMessage = async (req, res, chatId, message, file) => {
 - Se agregaron estilos CSS para que los archivos adjuntos se vean integrados en las burbujas de chat con un fondo distintivo.
 - Se agregaron protecciones contra contenido nulo para evitar que el bucle de renderizado se detenga si hay un mensaje mal formado.
 
-## 12. Priorización de Rutas y Solución Multer (Fix Crítico ✅)
-- **Problema**: Al usar Multer con Polka/Express, si existen middlewares globales como `bodyParser.json()` o `bodyParser.urlencoded()` configurados de forma ingenua, estos "consumen" el flujo de datos (stream) de la solicitud POST antes de que Multer pueda procesar el archivo. Esto causaba el error `Unexpected end of form` en el backoffice al intentar subir imágenes o PDFs.
-- **Solución**: Se reestructuró `app.ts` para que las rutas críticas del backoffice se definan **antes** que cualquier middleware de parsing global.
+## 12. Priorización de Rutas y Master Interceptor (Fix Crítico ✅)
+- **Problema**: El error `Unexpected end of form` persistía incluso intentando registrar la ruta antes que otros middlewares. Plugins internos de BuilderBot (como `httpInject`) actúan como middlewares globales (`app.use`) y consumen el stream de bytes del archivo multimedia antes de que Polka llegue a la definición de la ruta.
+- **Solución Definitiva**: Implementar un **Master Interceptor Early** (el primer `app.use` de todos) que tome control total de la petición.
 - **Implementación**:
-    - Las rutas `/api/backoffice/send-message` y `/api/backoffice/toggle-bot` se movieron al principio de la configuración del servidor.
-    - Se configuró el middleware global de `body-parser` para que ignore explícitamente estas rutas y el content-type `multipart/form-data`, permitiendo que Multer maneje el flujo original de bytes sin interferencias.
-    - El endpoint de envío detecta dinámicamente el `Content-Type`: si es multipart, invoca `upload.single('file')` manualmente; si es JSON, invoca `bodyParser.json()` localmente.
+    1. El interceptor detecta la petición a `/api/backoffice/send-message`.
+    2. Realiza la autenticación localmente (con `backofficeAuth`).
+    3. Detecta el `Content-Type`:
+        - Si es `multipart/form-data`: ejecuta `Multer` manualmente.
+        - Si es `application/json`: ejecuta `bodyParser.json()` regionalmente.
+    4. Procesa y envía el mensaje invocando a `processSendMessage`.
+    5. **CRÍTICO:** Finaliza la respuesta y **NO llama a next()**. Al no llamar a `next()`, el flujo del servidor se corta para esa petición, impidiendo que cualquier otro middleware o plugin global tenga contacto con el stream de datos ya consumido.
+
+- **Diagrama del Flujo:**
+```
+HTTP POST (/api/backoffice/send-message)
+  ↓
+[app.ts] → [Master Interceptor]
+             |
+             ├── Auth Check (PASS)
+             ├── Multer Engine (Parse File Stream)
+             ├── processSendMessage()
+             └── res.end() (Request COMPLETE - no next())
+```
+Este patrón garantiza compatibilidad total con BuilderBot sin interferir en sus propios flujos internos. 🛡️
+
 
 ## 13. Robustez de la Interfaz (UI Improvements ✅)
 - **Bloqueo de Input Estricto**: Se mejoró la lógica de `updateInputState` en el frontend para asegurar que el área de escritura se bloquee visualmente y funcionalmente si el bot está activo.
