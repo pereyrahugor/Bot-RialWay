@@ -113,71 +113,41 @@ const main = async () => {
 
         // APLICAR COMPATIBILIDAD AL INICIO
         app.use(compatibilityLayer);
-        app.use(rootRedirect);
-
-        // INTERCEPTOR DE DIAGNÓSTICO PARA STREAMS (CRÍTICO)
-        app.use('/api/backoffice/send-message', (req: any, res: any, next: any) => {
-            if (req.method !== 'POST') return next();
+        // MASTER-INTERCEPTOR DE STREAMS (CRÍTICO)
+        // Usamos middleware global (sin prefijo en app.use) para tener el req.url ORIGINAL completo.
+        app.use(async (req: any, res: any, next: any) => {
+            const fullUrl = req.url.split('?')[0];
             
-            console.log("🛡️ [STREAM-DIAGNOSTIC] Interceptando /api/backoffice/send-message");
-            console.log("Headers:", JSON.stringify(req.headers));
+            if (fullUrl === '/api/backoffice/send-message' && req.method === 'POST') {
+                console.log("🛡️ [MASTER-INTERCEPTOR] Captura detectada de envío. Procesando bypass total...");
+                
+                return backofficeAuth(req, res, () => {
+                    const deps: BackofficeDependencies = { adapterProvider, HistoryHandler, openaiMain, upload };
+                    const contentType = req.headers['content-type'] || '';
 
-            let dataReceived = 0;
-            let firstBytes = "";
-            let chunkCount = 0;
-
-            // Intentamos leer el stream manualmente para ver si tiene contenido ANTES de dárselo a Multer
-            const timeout = setTimeout(() => {
-                console.warn("⚠️ [STREAM-DIAGNOSTIC] Timeout esperando datos del stream.");
-            }, 5000);
-
-            req.on('data', (chunk: any) => {
-                chunkCount++;
-                dataReceived += chunk.length;
-                if (firstBytes.length < 100) {
-                    firstBytes += chunk.toString('hex').slice(0, 100);
-                }
-            });
-
-            req.on('end', () => {
-                clearTimeout(timeout);
-                console.log(`📡 [STREAM-DIAGNOSTIC] Stream FINALIZADO. Chunks: ${chunkCount}, Total bytes read: ${dataReceived}`);
-                if (dataReceived > 0) {
-                    console.log(`📡 [STREAM-DIAGNOSTIC] Primeros bytes (HEX): ${firstBytes.slice(0, 40)}...`);
-                } else {
-                    console.error("❌ [STREAM-DIAGNOSTIC] ¡STREAM VACÍO! Algo ya lo consumió o llegó vacío.");
-                }
-            });
-
-            // Re-inyectar el stream para Multer (Truco del PassThrough)
-            // En Polka es difícil re-inyectar una vez leído manualmente.
-            // Así que primero validamos Auth y luego devolvemos Multer SIN el logger manual si ya confirmamos que llega vacío.
-            
-            return backofficeAuth(req, res, () => {
-                const contentType = req.headers['content-type'] || '';
-                const deps: BackofficeDependencies = { adapterProvider, HistoryHandler, openaiMain, upload };
-
-                if (contentType.includes('multipart/form-data')) {
-                    // Si el error es "Unexpected end of form", busboy (Multer) cree que el stream terminó antes de leer los campos.
-                    return upload.single('file')(req, res, (err: any) => {
-                        if (err) {
-                            console.error("❌ [MULTER-ERROR]:", err.message);
-                            return res.status(400).end(JSON.stringify({ success: false, error: `Error de archivo: ${err.message}` }));
-                        }
-                        const { chatId, message } = req.body;
-                        if (!chatId) return res.status(400).end(JSON.stringify({ success: false, error: 'chatId is required' }));
-                        return processSendMessage(req, res, chatId, message, (req as any).file, deps);
-                    });
-                } else {
-                     bodyParser.json()(req, res, () => {
-                        const { chatId, message } = req.body;
-                        if (!chatId) return res.status(400).end(JSON.stringify({ success: false, error: 'chatId is required' }));
-                        return processSendMessage(req, res, chatId, message, null, deps);
-                    });
-                }
-            });
+                    if (contentType.includes('multipart/form-data')) {
+                        return upload.single('file')(req, res, (err: any) => {
+                            if (err) {
+                                console.error("❌ [MASTER-INTERCEPTOR] Multer Error:", err.message);
+                                return res.status(400).end(JSON.stringify({ success: false, error: `Error de archivo: ${err.message}` }));
+                            }
+                            const { chatId, message } = req.body;
+                            console.log(`📡 [MASTER-INTERCEPTOR] Datos recibidos: chatId=${chatId}, messageLen=${message?.length || 0}, hasFile=${!!(req as any).file}`);
+                            return processSendMessage(req, res, chatId, message, (req as any).file, deps);
+                        });
+                    } else {
+                        return bodyParser.json()(req, res, () => {
+                            const { chatId, message } = req.body;
+                            return processSendMessage(req, res, chatId || '', message || '', null, deps);
+                        });
+                    }
+                });
+            }
+            next();
         });
 
+        app.use(rootRedirect);
+        
         registerBackofficeRoutes(app, {
             adapterProvider,
             HistoryHandler,
