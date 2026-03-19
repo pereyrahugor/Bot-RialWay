@@ -83,7 +83,7 @@ function registerSafeErrorHandlers() {
  */
 const main = async () => {
     // 1. Storage cleanup and session restoration
-    // await restoreSessionFromDb(); // Comentado temporalmente para limpiar sesión corrupta
+    await restoreSessionFromDb();
     const qrPath = path.join(process.cwd(), "bot.qr.png");
 
     // 2. Initialize Provider
@@ -172,15 +172,11 @@ const main = async () => {
     ]);
     const adapterDB = new MemoryDB();
 
-    console.log("🤖 [DEBUG] Antes de createBot, app instance ID:", (app as any)._id || 'new');
-    if (!(app as any)._id) (app as any)._id = Math.random();
-
     const { httpServer } = await createBot({
         flow: adapterFlow,
         provider: adapterProvider,
         database: adapterDB
     });
-    console.log("🤖 [DEBUG] Después de createBot, app instance ID:", (adapterProvider.server as any)._id || 'replaced');
 
     registerSafeErrorHandlers();
     startSessionSync();
