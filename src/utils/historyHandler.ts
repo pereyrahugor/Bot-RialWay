@@ -287,13 +287,14 @@ export class HistoryHandler {
     /**
      * Lista todos los chats activos (con tags incluidos)
      */
-    static async listChats() {
+    static async listChats(limit: number = 20, offset: number = 0) {
         try {
             const { data, error } = await supabase
                 .from('chats')
                 .select('*, chat_tags(tag_id, tags(*))')
                 .eq('project_id', PROJECT_ID)
-                .order('last_message_at', { ascending: false });
+                .order('last_message_at', { ascending: false })
+                .range(offset, offset + limit - 1);
             
             if (error) throw error;
             
@@ -310,7 +311,7 @@ export class HistoryHandler {
     /**
      * Obtiene los mensajes de un chat específico
      */
-    static async getMessages(chatId: string, limit: number = 50) {
+    static async getMessages(chatId: string, limit: number = 50, offset: number = 0) {
         try {
             const { data, error } = await supabase
                 .from('messages')
@@ -318,7 +319,7 @@ export class HistoryHandler {
                 .eq('chat_id', chatId)
                 .eq('project_id', PROJECT_ID)
                 .order('created_at', { ascending: false }) // Primero los más nuevos para el LIMIT
-                .limit(limit);
+                .range(offset, offset + limit - 1);
             
             if (error) throw error;
             return (data || []).reverse(); // Revertir para orden cronológico

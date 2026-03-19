@@ -8,6 +8,18 @@ let botTags = [];
 let selectedFile = null;
 let isSending = false;
 
+// Paginación de chats
+let chatOffset = 0;
+const CHAT_LIMIT = 20;
+let loadingChats = false;
+let allChatsLoaded = false;
+
+// Paginación de mensajes
+let messageOffset = 0;
+const MSG_LIMIT = 50;
+let loadingMessages = false;
+let allMessagesLoaded = false;
+
 // Inicializar Socket.IO para tiempo real
 const socket = io();
 
@@ -18,9 +30,9 @@ socket.on('connect', () => {
 socket.on('new_message', (payload) => {
     console.log('📡 Nuevo mensaje recibido:', payload);
     if (activeChatId === payload.chatId) {
-        fetchMessages(activeChatId);
+        fetchMessages(activeChatId, true);
     }
-    fetchChats();
+    fetchChats(true);
 });
 
 socket.on('bot_toggled', (payload) => {
@@ -31,17 +43,40 @@ socket.on('bot_toggled', (payload) => {
         updateBotStatusText(payload.enabled);
         updateInputState(payload.enabled);
     }
-    fetchChats();
+    fetchChats(true);
 });
 
-async function fetchChats() {
+async function fetchChats(refresh = false) {
+    if (loadingChats) return;
+    if (refresh) {
+        chatOffset = 0;
+        allChatsLoaded = false;
+    }
+    if (allChatsLoaded && !refresh) return;
+
+    loadingChats = true;
     try {
-        const res = await fetch(`/api/backoffice/chats?token=${token}`);
-        if (res.status === 401) logout();
-        chats = await res.json();
+        const res = await fetch(`/api/backoffice/chats?token=${token}&limit=${CHAT_LIMIT}&offset=${chatOffset}`);
+        if (res.status === 401) {
+            logout();
+            return;
+        }
+        
+        const newChats = await res.json();
+        if (newChats.length < CHAT_LIMIT) allChatsLoaded = true;
+
+        if (refresh) {
+            chats = newChats;
+        } else {
+            // Evitar duplicados si hay mensajes en tiempo real entrando
+            const existingIds = chats.map(c => c.id);
+            const filteredNew = newChats.filter(nc => !existingIds.includes(nc.id));
+            chats = [...chats, ...filteredNew];
+        }
+
+        chatOffset = chats.length;
         handleSearch();
         
-        // Si hay un chat activo, actualizar su estado (por si el worker cambió bot_enabled)
         if (activeChatId) {
             const activeChat = chats.find(c => c.id === activeChatId);
             if (activeChat) {
@@ -51,7 +86,11 @@ async function fetchChats() {
                 if (toggle) toggle.checked = activeChat.bot_enabled;
             }
         }
-    } catch (e) { console.error(e); }
+    } catch (e) { 
+        console.error(e); 
+    } finally {
+        loadingChats = false;
+    }
 }
 
 async function fetchBotTags() {
@@ -145,7 +184,7 @@ async function selectChat(id) {
     }
 
     renderChatList();
-    fetchMessages(id);
+    fetchMessages(id, true);
 }
 
 function renderActiveChatTags() {
@@ -195,15 +234,52 @@ function updateInputState(botEnabled) {
     }
 }
 
-async function fetchMessages(chatId) {
-    const res = await fetch(`/api/backoffice/messages/${chatId}?token=${token}`);
-    const messages = await res.json();
+let allMessages = [];
+
+async function fetchMessages(chatId, reset = false) {
+    if (loadingMessages) return;
+    if (reset) {
+        messageOffset = 0;
+        allMessagesLoaded = false;
+        allMessages = [];
+    }
+    if (allMessagesLoaded && !reset) return;
+
+    loadingMessages = true;
+    try {
+        const res = await fetch(`/api/backoffice/messages/${chatId}?token=${token}&limit=${MSG_LIMIT}&offset=${messageOffset}`);
+        const newMessages = await res.json();
+        
+        if (newMessages.length < MSG_LIMIT) allMessagesLoaded = true;
+
+        const container = document.getElementById('messages');
+        const oldScrollHeight = container.scrollHeight;
+
+        // Concatenar al inicio (los nuevos/viejos mensajes según el offset)
+        allMessages = [...newMessages, ...allMessages];
+        
+        renderMessages();
+
+        if (reset) {
+            container.scrollTop = container.scrollHeight;
+        } else {
+            container.scrollTop = container.scrollHeight - oldScrollHeight;
+        }
+
+        messageOffset += newMessages.length;
+    } catch (e) {
+        console.error(e);
+    } finally {
+        loadingMessages = false;
+    }
+}
+
+function renderMessages() {
     const container = document.getElementById('messages');
-    
     let html = '';
     let lastDate = null;
 
-    messages.forEach(m => {
+    allMessages.forEach(m => {
         const date = new Date(m.created_at);
         const dateStr = date.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' });
         
@@ -211,35 +287,38 @@ async function fetchMessages(chatId) {
             html += `<div class="date-separator"><span>${dateStr}</span></div>`;
             lastDate = dateStr;
         }
-
-        const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        
-        let contentHtml = m.content || '';
-        const type = m.type || 'text';
-        
-        const isImageUrl = type === 'image' || contentHtml.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i) || (contentHtml.includes('/uploads/') && contentHtml.match(/\.(jpeg|jpg|gif|png|webp|svg)/i));
-        const isVideoUrl = type === 'video' || contentHtml.match(/\.(mp4|webm|ogg)$/i) || (contentHtml.includes('/uploads/') && contentHtml.match(/\.(mp4|webm|ogg)/i));
-        const isFileUrl = type === 'document' || (contentHtml.includes('/uploads/') && !isImageUrl && !isVideoUrl);
-
-        if (isImageUrl && contentHtml) {
-            contentHtml = `<div class="msg-media"><img src="${contentHtml}" alt="imagen"></div>`;
-        } else if (isVideoUrl && contentHtml) {
-            contentHtml = `<div class="msg-media"><video src="${contentHtml}" controls></video></div>`;
-        } else if (isFileUrl && contentHtml) {
-            const fileName = contentHtml.split('/').pop();
-            contentHtml = `<div class="msg-file"><a href="${contentHtml}" target="_blank">📄 Documento adjunto (${fileName})</a></div>`;
-        }
-        
-        html += `
-            <div class="msg ${m.role}">
-                <div class="msg-content">${contentHtml}</div>
-                <span class="msg-time">${time}</span>
-            </div>
-        `;
+        html += generateMessageHtml(m);
     });
 
     container.innerHTML = html;
-    container.scrollTop = container.scrollHeight;
+}
+
+function generateMessageHtml(m) {
+    const date = new Date(m.created_at);
+    const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    let contentHtml = m.content || '';
+    const type = m.type || 'text';
+    
+    const isImageUrl = type === 'image' || contentHtml.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i) || (contentHtml.includes('/uploads/') && contentHtml.match(/\.(jpeg|jpg|gif|png|webp|svg)/i));
+    const isVideoUrl = type === 'video' || contentHtml.match(/\.(mp4|webm|ogg)$/i) || (contentHtml.includes('/uploads/') && contentHtml.match(/\.(mp4|webm|ogg)/i));
+    const isFileUrl = type === 'document' || (contentHtml.includes('/uploads/') && !isImageUrl && !isVideoUrl);
+
+    if (isImageUrl && contentHtml) {
+        contentHtml = `<div class="msg-media"><img src="${contentHtml}" alt="imagen"></div>`;
+    } else if (isVideoUrl && contentHtml) {
+        contentHtml = `<div class="msg-media"><video src="${contentHtml}" controls></video></div>`;
+    } else if (isFileUrl && contentHtml) {
+        const fileName = contentHtml.split('/').pop();
+        contentHtml = `<div class="msg-file"><a href="${contentHtml}" target="_blank">📄 Documento adjunto (${fileName})</a></div>`;
+    }
+    
+    return `
+        <div class="msg ${m.role}">
+            <div class="msg-content">${contentHtml}</div>
+            <span class="msg-time">${time}</span>
+        </div>
+    `;
 }
 
 async function toggleBot(enabled) {
@@ -337,7 +416,7 @@ async function sendMessage() {
             input.placeholder = "Escribe un mensaje aquí";
             selectedFile = null;
             document.getElementById('file-input').value = '';
-            fetchMessages(activeChatId);
+            fetchMessages(activeChatId, true);
         } else {
             let errorMsg = 'Error desconocido';
             const text = await res.text();
@@ -463,6 +542,20 @@ function logout() {
     window.location.href = '/login';
 }
 
-setInterval(fetchChats, 30000);
-fetchChats();
+setInterval(() => fetchChats(true), 60000);
+fetchChats(true);
 fetchBotTags();
+
+// Listeners para Infinite Scroll
+document.getElementById('chat-list').addEventListener('scroll', function() {
+    const { scrollTop, scrollHeight, clientHeight } = this;
+    if (scrollTop + clientHeight >= scrollHeight - 20) {
+        if (!loadingChats && !allChatsLoaded) fetchChats();
+    }
+});
+
+document.getElementById('messages').addEventListener('scroll', function() {
+    if (this.scrollTop < 50 && !loadingMessages && !allMessagesLoaded) {
+        fetchMessages(activeChatId);
+    }
+});

@@ -117,13 +117,17 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     // --- CHATS & MESSAGES ---
 
-    app.get('/api/backoffice/chats', backofficeAuth, async (req, res) => {
-        const chats = await HistoryHandler.listChats();
+    app.get('/api/backoffice/chats', backofficeAuth, async (req: any, res: any) => {
+        const limit = parseInt(req.query.limit as string) || 20;
+        const offset = parseInt(req.query.offset as string) || 0;
+        const chats = await HistoryHandler.listChats(limit, offset);
         res.json(chats);
     });
 
-    app.get('/api/backoffice/messages/:chatId', backofficeAuth, async (req, res) => {
-        const messages = await HistoryHandler.getMessages(req.params.chatId);
+    app.get('/api/backoffice/messages/:chatId', backofficeAuth, async (req: any, res: any) => {
+        const limit = parseInt(req.query.limit as string) || 50;
+        const offset = parseInt(req.query.offset as string) || 0;
+        const messages = await HistoryHandler.getMessages(req.params.chatId, limit, offset);
         res.json(messages);
     });
 
