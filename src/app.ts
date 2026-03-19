@@ -99,7 +99,30 @@ const main = async () => {
     errorReporter = new ErrorReporter(adapterProvider, process.env.ID_GRUPO_RESUMEN || "");
     await updateMain();
 
-    // 5. Initialize AI Manager and flows
+    const app = adapterProvider.server;
+    if (app) {
+        // 5. Polka/Express Server setup & Early Middlewares
+        console.log("🛠️ [POLKA MIDDLEWARES - INITIAL]:", app.middlewares?.length || 0);
+        app.onError = (err: any, _req: any, res: any) => {
+            console.error("🔥 [POLKA ERROR]:", err);
+            res.statusCode = 500;
+            res.end(JSON.stringify({ success: false, error: err.message || "Internal Server Error" }));
+        };
+
+        // Aplicamos compatibilidad y redirección al inicio para asegurar el correcto manejo de streams
+        app.use(compatibilityLayer);
+        app.use(rootRedirect);
+        
+        // Registramos rutas del Backoffice ANTES de createBot() para ganar prioridad absoluta sobre el stream
+        registerBackofficeRoutes(app, {
+            adapterProvider,
+            HistoryHandler,
+            openaiMain,
+            upload
+        });
+    }
+
+    // 6. Initialize AI Manager and flows
     const aiManager = new AiManager(openaiMain, ASSISTANT_ID, errorReporter, {
         welcomeFlowTxt, welcomeFlowVoice, welcomeFlowButton
     });
@@ -110,7 +133,7 @@ const main = async () => {
         await aiManager.processUserMessage(ctx, { flowDynamic, state, provider, gotoFlow });
     });
 
-    // 6. Initialize Bot Instance
+    // 7. Initialize Bot Instance
     const adapterFlow = createFlow([
         welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, 
         welcomeFlowVideo, welcomeFlowDoc, locationFlow, 
@@ -127,55 +150,33 @@ const main = async () => {
     registerSafeErrorHandlers();
     startSessionSync();
 
-    // 7. Polka/Express Server setup
-    const app = adapterProvider.server;
+    // 8. Middlewares y Plugins post-Bot
     if (app) {
-        console.log("🛠️ [POLKA MIDDLEWARES - INITIAL]:", app.middlewares?.length || 0);
-        app.onError = (err: any, _req: any, res: any) => {
-            console.error("🔥 [POLKA ERROR]:", err);
-            res.statusCode = 500;
-            res.end(JSON.stringify({ success: false, error: err.message || "Internal Server Error" }));
-        };
-    }
+        // Plugins y Middlewares Globales de Body-Parsing
+        httpInject(app);
+        app.use(smartBodyParser);
 
-    // 8. Register Middlewares (Compatibilidad primero)
-    app.use(compatibilityLayer);
-    app.use(rootRedirect);
+        // 9. Register Other Routes
+        registerRailwayRoutes(app, { RailwayApi: (await import("./Api-RailWay/Railway")).RailwayApi });
+        registerWebchatRoutes(app, { webChatManager, openaiVision, ASSISTANT_ID, processUserMessage: aiManager.processUserMessage });
+        registerStaticRoutes(app, { __dirname });
 
-    // 9. Register Routes (Prioridad Backoffice para evitar conflictos de streams)
-    registerBackofficeRoutes(app, {
-        adapterProvider,
-        HistoryHandler,
-        openaiMain,
-        upload
-    });
+        // API Health & Info
+        app.get("/health", (_req: any, res: any) => res.json({ status: "ok", time: new Date().toISOString() }));
+        app.get("/api/assistant-name", (_req: any, res: any) => res.json({ name: process.env.ASSISTANT_NAME || "Bot" }));
+        app.get("/api/dashboard-status", async (_req: any, res: any) => res.json(await hasActiveSession(adapterProvider)));
 
-    // 10. Plugins y Middlewares Globales de Body-Parsing
-    httpInject(app);
-    app.use(smartBodyParser);
-
-    // 11. Register Other Routes
-    registerRailwayRoutes(app, { RailwayApi: (await import("./Api-RailWay/Railway")).RailwayApi });
-    registerWebchatRoutes(app, { webChatManager, openaiVision, ASSISTANT_ID, processUserMessage: aiManager.processUserMessage });
-
-    // Rutas Estáticas & Páginas HTML
-    registerStaticRoutes(app, { __dirname });
-
-    // API Health & Info
-    app.get("/health", (_req: any, res: any) => res.json({ status: "ok", time: new Date().toISOString() }));
-    app.get("/api/assistant-name", (_req: any, res: any) => res.json({ name: process.env.ASSISTANT_NAME || "Bot" }));
-    app.get("/api/dashboard-status", async (_req: any, res: any) => res.json(await hasActiveSession(adapterProvider)));
-
-    // API Session Control
-    app.post("/api/delete-session", async (_req: any, res: any) => {
-        try {
-            await deleteSessionFromDb();
-            res.json({ success: true });
-        } catch (err: any) {
-            res.status(500).json({ success: false, error: err.message });
-        }
-    });
-
+        // API Session Control
+        app.post("/api/delete-session", async (_req: any, res: any) => {
+            try {
+                await deleteSessionFromDb();
+                res.json({ success: true });
+            } catch (err: any) {
+                res.status(500).json({ success: false, error: err.message });
+            }
+        });
+    };
+        
     // 10. Workers Initialization
     startHumanInactivityWorker(15);
 

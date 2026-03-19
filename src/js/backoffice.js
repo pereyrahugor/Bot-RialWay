@@ -340,12 +340,11 @@ async function sendMessage() {
             fetchMessages(activeChatId);
         } else {
             let errorMsg = 'Error desconocido';
+            const text = await res.text();
             try {
-                const errorData = await res.json();
+                const errorData = JSON.parse(text);
                 errorMsg = errorData.error || errorMsg;
             } catch (e) {
-                // Si no es JSON, intentamos leer como texto
-                const text = await res.text();
                 errorMsg = text || res.statusText || 'Error del servidor';
             }
             console.error('❌ Error del servidor:', errorMsg);
