@@ -27,7 +27,7 @@ import { startHumanInactivityWorker } from "./workers/humanInactivity.worker";
 import { AiManager } from "./utils/ai.manager";
 import { smartBodyParser, compatibilityLayer, rootRedirect } from "./middleware/global";
 import { backofficeAuth } from "./middleware/auth";
-import * as bodyParser from 'body-parser';
+import bodyParser from 'body-parser';
 
 // --- Flows ---
 import { welcomeFlowTxt } from "./Flows/welcomeFlowTxt";
