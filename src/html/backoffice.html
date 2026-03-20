@@ -5,21 +5,35 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🤖 {{BOT_NAME}} - Backoffice</title>
     <link rel="stylesheet" href="/style/backoffice.css">
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="/style/crm-common.css">
+    <link rel="stylesheet" href="/style/backoffice.css">
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 </head>
-<body>
+<body data-theme="light">
+
+    <div id="navbar">
+        <div class="nav-item active" title="Conversaciones" onclick="window.location.href='/backoffice'"><i class="fas fa-comment-dots"></i></div>
+        <div class="nav-item" title="Dashboard" onclick="window.location.href='/dashboard'"><i class="fas fa-th-large"></i></div>
+        <div class="nav-item" title="Variables" onclick="window.location.href='/variables'"><i class="fas fa-code"></i></div>
+        <div class="nav-item" title="Webchat" onclick="window.location.href='/webchat'"><i class="fas fa-desktop"></i></div>
+        <div class="nav-item" title="Contactos"><i class="fas fa-address-book"></i></div>
+        <div class="nav-item" id="theme-toggle" title="Cambiar Tema"><i class="fas fa-moon"></i></div>
+        <div style="flex:1"></div>
+        <div class="nav-item" onclick="logout()" title="Cerrar Sesión" style="color:#f87171;"><i class="fas fa-sign-out-alt"></i></div>
+    </div>
 
     <div id="sidebar">
         <div class="sidebar-header">
-            <div class="chat-avatar" style="width: 40px; height: 40px; background: #6a7175;">
+            <div class="chat-avatar" style="width: 32px; height: 32px; background: var(--accent);">
                 <span>🤖</span>
             </div>
-            <h2 style="margin:0; font-size:1.2rem; flex:1; margin-left:12px;">{{BOT_NAME}}</h2>
-            <div style="display:flex; gap:12px;">
-                <button class="btn-icon" onclick="toggleTagManager()" title="Gestión Etiquetas"><i class="fas fa-tags"></i></button>
-                <button class="btn-icon" onclick="logout()" title="Cerrar Sesión" style="color:#f87171;"><i class="fas fa-sign-out-alt"></i></button>
+            <h3 style="margin:0; font-size:1rem; flex:1; margin-left:12px;">{{BOT_NAME}}</h3>
+            <div style="display:flex; gap:8px;">
+                <button class="btn-icon" onclick="toggleCRMPanel()" title="Detalles del Lead">
+                    <i class="fas fa-user-edit"></i>
+                </button>
             </div>
         </div>
 
@@ -83,32 +97,66 @@
         </div>
     </div>
 
-    <!-- Panel de gestión de etiquetas -->
-    <div id="tag-manager">
-        <div class="tag-manager-header">
-            <button class="btn-icon" onclick="toggleTagManager()"><i class="fas fa-arrow-left"></i></button>
-            <h3 style="margin:0;">Etiquetas del Bot</h3>
+    <!-- Panel CRM Lateral -->
+    <div id="crm-panel">
+        <div class="crm-header">
+            <button class="btn-icon" onclick="toggleCRMPanel()"><i class="fas fa-times"></i></button>
+            <h3 style="margin:0;">Información del Lead</h3>
         </div>
-        <div class="tag-manager-content">
-            <div style="margin-bottom:20px;">
-                <h4 style="margin:0 0 10px 0;">Crear Etiqueta</h4>
-                <div style="display:flex; gap:10px;">
-                    <input type="text" id="new-tag-name" class="search-input" style="background:#202c33; border-radius:8px;" placeholder="Ej: interesado">
-                    <input type="color" id="new-tag-color" value="#6366f1" style="height:35px; width:35px; border:none; background:none;">
-                    <button class="btn-icon" onclick="createTag()"><i class="fas fa-plus"></i></button>
-                </div>
+        
+        <div class="crm-content">
+            <div class="crm-section">
+                <label>Nombre del Contacto</label>
+                <input type="text" id="crm-name" class="crm-input" placeholder="Nombre completo">
+                
+                <label>Correo Electrónico</label>
+                <input type="email" id="crm-email" class="crm-input" placeholder="ejemplo@correo.com">
+                
+                <label>Fuente del Lead</label>
+                <select id="crm-source" class="crm-input">
+                    <option value="">Desconocida</option>
+                    <option value="Instagram">Instagram</option>
+                    <option value="Facebook">Facebook</option>
+                    <option value="WhatsApp">WhatsApp</option>
+                    <option value="Web">Web</option>
+                    <option value="Referido">Referido</option>
+                </select>
+                
+                <label>Notas / Observaciones</label>
+                <textarea id="crm-notes" class="crm-input" rows="4" placeholder="Escribe notas aquí..."></textarea>
+                
+                <button class="btn-primary" onclick="saveCRMDetails()" style="width:100%; margin-top:10px;">
+                    <i class="fas fa-save" style="margin-right:8px;"></i> Guardar Cambios
+                </button>
             </div>
 
-            <h4 style="margin:0 0 10px 0;">Lista de Etiquetas</h4>
-            <div id="tag-list-editor"></div>
+            <div class="crm-divider"></div>
 
-            <div id="current-chat-tags-section" style="margin-top:30px; display:none;">
-                <h4 style="margin:0 0 10px 0;">Asignar a este chat</h4>
-                <div id="available-tags-to-assign" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+            <!-- Gestión de Etiquetas integrada en CRM -->
+            <div class="crm-section">
+                <h4 style="margin:0 0 10px 0;"><i class="fas fa-tags" style="margin-right:8px;"></i> Etiquetas</h4>
+                
+                <div id="current-chat-tags-section">
+                    <div id="available-tags-to-assign" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+                </div>
+
+                <div style="margin-top:20px; padding: 15px; background: var(--bg-sidebar); border-radius: 12px; border: 1px dashed var(--border-color);">
+                    <h5 style="margin:0 0 10px 0;">Crear Nueva Etiqueta</h5>
+                    <div style="display:flex; gap:8px;">
+                        <input type="text" id="new-tag-name" class="crm-input" style="margin:0;" placeholder="Nombre...">
+                        <input type="color" id="new-tag-color" value="#6366f1" style="height:35px; width:35px; border:none; padding:0; background:none; cursor:pointer;">
+                        <button class="btn-icon" onclick="createTag()"><i class="fas fa-plus"></i></button>
+                    </div>
+                </div>
+
+                <div id="tag-list-editor" style="margin-top:20px;">
+                    <!-- Lista de etiquetas globales para editar/eliminar -->
+                </div>
             </div>
         </div>
     </div>
 
+    <script src="/js/crm-common.js"></script>
     <script src="/js/backoffice.js"></script>
 </body>
 </html>

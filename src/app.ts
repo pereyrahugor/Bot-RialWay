@@ -209,7 +209,7 @@ const main = async () => {
                 res.status(500).json({ success: false, error: err.message });
             }
         });
-    };
+    }
         
     // 10. Workers Initialization
     startHumanInactivityWorker(15);

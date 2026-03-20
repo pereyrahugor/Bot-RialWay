@@ -21,6 +21,9 @@ export interface Chat {
     project_id: string;
     type: 'whatsapp' | 'webchat';
     name: string | null;
+    email: string | null;
+    notes: string | null;
+    source: string | null;
     bot_enabled: boolean;
     last_message_at: string;
     last_human_message_at: string | null;
@@ -138,12 +141,19 @@ export class HistoryHandler {
                          }
                     }
 
-                    // Migración para last_human_message_at
+                    // Migración para last_human_message_at y campos CRM
                     if (table.name === 'chats') {
                         const { error: humanMsgErr } = await supabase.from('chats').select('last_human_message_at').limit(1);
                         if (humanMsgErr && humanMsgErr.code === '42703') {
                             console.log(`🔧 Agregando columna last_human_message_at a chats...`);
                             await supabase.rpc('exec_sql', { query: `ALTER TABLE chats ADD COLUMN last_human_message_at TIMESTAMPTZ;` });
+                        }
+
+                        // Verificar campos CRM
+                        const { error: crmErr } = await supabase.from('chats').select('notes, email, source').limit(1);
+                        if (crmErr && crmErr.code === '42703') {
+                            console.log(`🔧 Agregando columnas CRM a chats...`);
+                            await supabase.rpc('exec_sql', { query: `ALTER TABLE chats ADD COLUMN IF NOT EXISTS notes TEXT, ADD COLUMN IF NOT EXISTS email TEXT, ADD COLUMN IF NOT EXISTS source TEXT;` });
                         }
                     }
 
@@ -237,6 +247,25 @@ export class HistoryHandler {
     }
 
     /**
+     * Actualiza los detalles de contacto (CRM)
+     */
+    static async updateContactDetails(chatId: string, details: { name?: string, email?: string, notes?: string, source?: string }) {
+        try {
+            const { error } = await supabase
+                .from('chats')
+                .update(details)
+                .eq('id', chatId)
+                .eq('project_id', PROJECT_ID);
+
+            if (error) throw error;
+            return { success: true };
+        } catch (err: any) {
+            console.error('[HistoryHandler] Error en updateContactDetails:', err);
+            return { success: false, error: err.message };
+        }
+    }
+
+    /**
      * Verifica si el bot está habilitado para un usuario
      */
     static async isBotEnabled(chatId: string): Promise<boolean> {
@@ -287,12 +316,35 @@ export class HistoryHandler {
     /**
      * Lista todos los chats activos (con tags incluidos)
      */
-    static async listChats(limit: number = 20, offset: number = 0) {
+    static async listChats(limit: number = 20, offset: number = 0, search?: string, tagId?: string) {
         try {
-            const { data, error } = await supabase
+            let query = supabase
                 .from('chats')
-                .select('*, chat_tags(tag_id, tags(*))')
-                .eq('project_id', PROJECT_ID)
+                .select('*, chat_tags!inner(tag_id, tags(*))')
+                .eq('project_id', PROJECT_ID);
+
+            if (search) {
+                // Filtro por ID (teléfono) o Nombre
+                query = query.or(`id.ilike.%${search}%,name.ilike.%${search}%`);
+            }
+
+            if (tagId) {
+                // El !inner ya está en el select, así que podemos filtrar por tag_id
+                query = query.eq('chat_tags.tag_id', tagId);
+            } else {
+                // Si no hay filtro por tag, queremos TODOS los chats, tengan tags o no.
+                // Usamos left join (por defecto en PostgREST si no usamos !inner)
+                query = supabase
+                    .from('chats')
+                    .select('*, chat_tags(tag_id, tags(*))')
+                    .eq('project_id', PROJECT_ID);
+                
+                if (search) {
+                    query = query.or(`id.ilike.%${search}%,name.ilike.%${search}%`);
+                }
+            }
+
+            const { data, error } = await query
                 .order('last_message_at', { ascending: false })
                 .range(offset, offset + limit - 1);
             

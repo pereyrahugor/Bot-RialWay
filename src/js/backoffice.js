@@ -8,6 +8,8 @@ let botTags = [];
 let selectedFile = null;
 let isSending = false;
 
+// --- Tema Claro// El tema ahora se maneja en crm-common.js
+
 // Paginación de chats
 let chatOffset = 0;
 const CHAT_LIMIT = 20;
@@ -54,9 +56,13 @@ async function fetchChats(refresh = false) {
     }
     if (allChatsLoaded && !refresh) return;
 
+    const query = document.getElementById('search-input')?.value || '';
+    const tagFilter = document.getElementById('filter-tag')?.value || '';
+
     loadingChats = true;
     try {
-        const res = await fetch(`/api/backoffice/chats?token=${token}&limit=${CHAT_LIMIT}&offset=${chatOffset}`);
+        const url = `/api/backoffice/chats?token=${token}&limit=${CHAT_LIMIT}&offset=${chatOffset}&search=${encodeURIComponent(query)}&tag=${tagFilter}`;
+        const res = await fetch(url);
         if (res.status === 401) {
             logout();
             return;
@@ -75,7 +81,7 @@ async function fetchChats(refresh = false) {
         }
 
         chatOffset = chats.length;
-        handleSearch();
+        renderChatList(); // Ya no llamamos a handleSearch aquí, solo renderizamos lo que vino del server
         
         if (activeChatId) {
             const activeChat = chats.find(c => c.id === activeChatId);
@@ -102,17 +108,13 @@ async function fetchBotTags() {
     } catch (e) { console.error(e); }
 }
 
+let searchTimeout = null;
 function handleSearch() {
-    const query = document.getElementById('search-input').value.toLowerCase();
-    const tagFilter = document.getElementById('filter-tag').value;
-    
-    const filtered = chats.filter(chat => {
-        const matchesSearch = chat.id.toLowerCase().includes(query) || (chat.name && chat.name.toLowerCase().includes(query));
-        const matchesTag = !tagFilter || (chat.tags && chat.tags.some(t => t.id === tagFilter));
-        return matchesSearch && matchesTag;
-    });
-
-    renderChatList(filtered);
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+        console.log('[Search] Disparando búsqueda en servidor...');
+        fetchChats(true);
+    }, 500);
 }
 
 function renderFilterDropdown() {
@@ -134,7 +136,7 @@ function renderChatList(listToRender = chats) {
         ).join('');
 
         const statusBadge = chat.bot_enabled 
-            ? `<span style="color: var(--wa-accent); font-size: 0.75rem;">🤖 Bot</span>`
+            ? `<span style="color: var(--accent); font-size: 0.75rem;">🤖 Bot</span>`
             : `<span style="color: #f87171; font-size: 0.75rem;">👤 Humano</span>`;
 
         return `
@@ -179,7 +181,9 @@ async function selectChat(id) {
     updateInputState(chat.bot_enabled);
 
     renderActiveChatTags();
-    if (document.getElementById('tag-manager').style.display === 'block') {
+    populateCRMFields(chat);
+    
+    if (document.getElementById('crm-panel').classList.contains('active')) {
         renderTagManager();
     }
 
@@ -224,11 +228,11 @@ function updateInputState(botEnabled) {
     attachBtn.disabled = isBotEnabled;
     
     if (isBotEnabled) {
-        input.style.borderBottom = '2px solid var(--wa-accent)';
+        input.parentElement.style.borderColor = 'var(--accent)';
         input.style.opacity = '0.6';
-        input.placeholder = "🤖 Bot activo - Desactívalo para intervenir";
+        input.placeholder = "🤖 Bot activo - Desactiva para intervenir";
     } else {
-        input.style.borderBottom = '2px solid #f87171';
+        input.parentElement.style.borderColor = '#f87171';
         input.style.opacity = '1';
         input.placeholder = "Escribe un mensaje aquí";
     }
@@ -439,13 +443,92 @@ async function sendMessage() {
     }
 }
 
-// Tag Management Functions
-function toggleTagManager() {
-    const panel = document.getElementById('tag-manager');
-    panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
-    if (panel.style.display === 'block') {
+// CRM & Tag Management Functions
+function toggleCRMPanel() {
+    const panel = document.getElementById('crm-panel');
+    panel.classList.toggle('active');
+    if (panel.classList.contains('active')) {
+        const chat = chats.find(c => c.id === activeChatId);
+        if (chat) populateCRMFields(chat);
         renderTagManager();
     }
+}
+
+function populateCRMFields(chat) {
+    if (!chat) return;
+    document.getElementById('crm-name').value = chat.name || '';
+    document.getElementById('crm-email').value = chat.email || '';
+    document.getElementById('crm-source').value = chat.source || '';
+    document.getElementById('crm-notes').value = chat.notes || '';
+}
+
+async function saveCRMDetails() {
+    if (!activeChatId) return;
+
+    const details = {
+        name: document.getElementById('crm-name').value,
+        email: document.getElementById('crm-email').value,
+        source: document.getElementById('crm-source').value,
+        notes: document.getElementById('crm-notes').value
+    };
+
+    try {
+        const res = await fetch(`/api/backoffice/chat/${activeChatId}/contact?token=${token}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(details)
+        });
+
+        if (res.ok) {
+            const chat = chats.find(c => c.id === activeChatId);
+            if (chat) {
+                Object.assign(chat, details);
+                document.getElementById('active-chat-name').innerText = chat.name || 'Sin nombre';
+            }
+            renderChatList();
+            showToast('✅ Información guardada correctamente');
+        } else {
+            showToast('❌ Error al guardar información', 'error');
+        }
+    } catch (e) {
+        console.error(e);
+        showToast('❌ Error de conexión', 'error');
+    }
+}
+
+function showToast(message, type = 'success') {
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `<i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}" style="margin-right:8px;"></i> ${message}`;
+    
+    // Estilos inline rápidos para el toast si no están en CSS
+    Object.assign(toast.style, {
+        position: 'fixed',
+        bottom: '20px',
+        left: '50%',
+        transform: 'translateX(-50%) translateY(100px)',
+        background: type === 'success' ? '#10b981' : '#ef4444',
+        color: 'white',
+        padding: '12px 24px',
+        borderRadius: '12px',
+        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+        zIndex: '10000',
+        transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+        fontWeight: '600'
+    });
+
+    document.body.appendChild(toast);
+    
+    // Animar entrada
+    setTimeout(() => {
+        toast.style.transform = 'translateX(-50%) translateY(0)';
+    }, 10);
+
+    // Salida
+    setTimeout(() => {
+        toast.style.transform = 'translateX(-50%) translateY(100px)';
+        setTimeout(() => toast.remove(), 400);
+    }, 3000);
 }
 
 async function createTag() {
@@ -453,12 +536,9 @@ async function createTag() {
     const color = document.getElementById('new-tag-color').value;
     if (!name) return;
 
-    const res = await fetch('/api/backoffice/tags', {
+    const res = await fetch(`/api/backoffice/tags?token=${token}`, {
         method: 'POST',
-        headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': 'token=' + token
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, color })
     });
 
@@ -470,27 +550,22 @@ async function createTag() {
 
 async function deleteTag(id) {
     if (!confirm('¿Eliminar esta etiqueta?')) return;
-    const res = await fetch(`/api/backoffice/tags/${id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': 'token=' + token }
+    const res = await fetch(`/api/backoffice/tags/${id}?token=${token}`, {
+        method: 'DELETE'
     });
     if (res.ok) {
         await fetchBotTags();
-        // Limpiar localmente la etiqueta de todos los chats
         chats.forEach(c => {
             if (c.tags) c.tags = c.tags.filter(t => t.id !== id);
         });
-        handleSearch(); // Re-renderizar lista
+        handleSearch();
     }
 }
 
 async function addTagToChat(tagId) {
-    const res = await fetch(`/api/backoffice/chats/${activeChatId}/tags`, {
+    const res = await fetch(`/api/backoffice/chats/${activeChatId}/tags?token=${token}`, {
         method: 'POST',
-        headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': 'token=' + token
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tagId })
     });
     if (res.ok) {
@@ -498,9 +573,7 @@ async function addTagToChat(tagId) {
         const chat = chats.find(c => c.id === activeChatId);
         if (chat && tag) {
             if (!chat.tags) chat.tags = [];
-            if (!chat.tags.find(t => t.id === tagId)) {
-                chat.tags.push(tag);
-            }
+            if (!chat.tags.find(t => t.id === tagId)) chat.tags.push(tag);
         }
         handleSearch(); 
         renderActiveChatTags();
@@ -509,9 +582,8 @@ async function addTagToChat(tagId) {
 }
 
 async function removeTagFromChat(tagId) {
-    const res = await fetch(`/api/backoffice/chats/${activeChatId}/tags/${tagId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': 'token=' + token }
+    const res = await fetch(`/api/backoffice/chats/${activeChatId}/tags/${tagId}?token=${token}`, {
+        method: 'DELETE'
     });
     if (res.ok) {
         const chat = chats.find(c => c.id === activeChatId);
@@ -527,32 +599,32 @@ async function removeTagFromChat(tagId) {
 function renderTagManager() {
     const editorList = document.getElementById('tag-list-editor');
     if (!editorList) return;
-    editorList.innerHTML = botTags.map(t => `
-        <div class="tag-item-edit">
-            <span class="tag-pill" style="background:${t.color || '#6366f1'}">${t.name}</span>
-            <button onclick="deleteTag('${t.id}')" style="background:none; border:none; color:#f87171; cursor:pointer;">del</button>
+    
+    editorList.innerHTML = `
+        <div style="max-height: 200px; overflow-y: auto; margin-top: 10px;">
+            ${botTags.map(t => `
+                <div class="tag-item-edit">
+                    <span class="tag-pill" style="background:${t.color || '#6366f1'}">${t.name}</span>
+                    <button class="btn-icon" onclick="deleteTag('${t.id}')" style="color:#f87171;"><i class="fas fa-trash-alt"></i></button>
+                </div>
+            `).join('')}
         </div>
-    `).join('');
+    `;
 
-    const assignSection = document.getElementById('current-chat-tags-section');
-    if (activeChatId) {
-        assignSection.style.display = 'block';
-        const chat = chats.find(c => c.id === activeChatId);
+    const chat = chats.find(c => c.id === activeChatId);
+    if (chat) {
         const assignedTagIds = (chat.tags || []).map(t => t.id);
-        
         const assignList = document.getElementById('available-tags-to-assign');
         assignList.innerHTML = botTags.map(t => {
             const isAssigned = assignedTagIds.includes(t.id);
             return `
                 <div onclick="${isAssigned ? 'removeTagFromChat' : 'addTagToChat'}('${t.id}')" 
                      class="tag-pill" 
-                     style="background:${t.color || '#6366f1'}; cursor:pointer; opacity:${isAssigned ? 1 : 0.4}; border:${isAssigned ? '2px solid white' : 'none'}">
+                     style="background:${t.color || '#6366f1'}; cursor:pointer; opacity:${isAssigned ? 1 : 0.6}; transform:${isAssigned ? 'scale(1.05)' : 'scale(1)'}; border:${isAssigned ? '2px solid white' : '1px solid transparent'}">
                     ${t.name} ${isAssigned ? '✓' : '+'}
                 </div>
             `;
         }).join('');
-    } else {
-        assignSection.style.display = 'none';
     }
 }
 

@@ -120,7 +120,9 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     app.get('/api/backoffice/chats', backofficeAuth, async (req: any, res: any) => {
         const limit = parseInt(req.query.limit as string) || 20;
         const offset = parseInt(req.query.offset as string) || 0;
-        const chats = await HistoryHandler.listChats(limit, offset);
+        const search = req.query.search as string;
+        const tag = req.query.tag as string;
+        const chats = await HistoryHandler.listChats(limit, offset, search, tag);
         res.json(chats);
     });
 
@@ -212,6 +214,17 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     app.get('/api/backoffice/tags', backofficeAuth, async (req, res) => {
         const tags = await HistoryHandler.getTags();
         res.json(tags);
+    });
+
+    app.put('/api/backoffice/chat/:id/contact', backofficeAuth, bodyParser.json(), async (req, res) => {
+        try {
+            const { id } = req.params;
+            const { name, email, notes, source } = req.body;
+            const result = await HistoryHandler.updateContactDetails(id, { name, email, notes, source });
+            res.json(result);
+        } catch (err: any) {
+            res.status(500).json({ success: false, error: err.message });
+        }
     });
 
     app.post('/api/backoffice/tags', backofficeAuth, bodyParser.json(), async (req, res) => {
