@@ -198,10 +198,10 @@ const main = async () => {
         // API Health & Info
         app.get("/health", (_req: any, res: any) => res.json({ status: "ok", time: new Date().toISOString() }));
         app.get("/api/assistant-name", (_req: any, res: any) => res.json({ name: process.env.ASSISTANT_NAME || "Bot" }));
-        app.get("/api/dashboard-status", async (_req: any, res: any) => res.json(await hasActiveSession(adapterProvider)));
+        app.get("/api/dashboard-status", backofficeAuth, async (_req: any, res: any) => res.json(await hasActiveSession(adapterProvider)));
 
         // API Session Control
-        app.post("/api/delete-session", async (_req: any, res: any) => {
+        app.post("/api/delete-session", backofficeAuth, async (_req: any, res: any) => {
             try {
                 await deleteSessionFromDb();
                 res.json({ success: true });

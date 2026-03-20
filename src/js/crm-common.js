@@ -24,6 +24,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Función común de cierre de sesión
 function logout() {
-    localStorage.removeItem('backofficeToken');
+    localStorage.removeItem('backoffice_token');
     window.location.href = '/login';
 }
