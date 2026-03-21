@@ -324,8 +324,8 @@ export class HistoryHandler {
                 .eq('project_id', PROJECT_ID);
 
             if (search) {
-                // Filtro por ID (teléfono) o Nombre
-                query = query.or(`id.ilike.%${search}%,name.ilike.%${search}%`);
+                // Filtro por nombre, ID, email, notas o fuente
+                query = query.or(`name.ilike.%${search}%,id.ilike.%${search}%,email.ilike.%${search}%,notes.ilike.%${search}%,source.ilike.%${search}%`);
             }
 
             if (tagId) {
@@ -340,7 +340,8 @@ export class HistoryHandler {
                     .eq('project_id', PROJECT_ID);
                 
                 if (search) {
-                    query = query.or(`id.ilike.%${search}%,name.ilike.%${search}%`);
+                    // Filtro por nombre, ID, email, notas o fuente
+                    query = query.or(`name.ilike.%${search}%,id.ilike.%${search}%,email.ilike.%${search}%,notes.ilike.%${search}%,source.ilike.%${search}%`);
                 }
             }
 
