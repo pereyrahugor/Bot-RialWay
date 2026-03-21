@@ -611,7 +611,7 @@ export class HistoryHandler {
      */
     static async listTickets(limit: number = 50, offset: number = 0, estado?: string) {
         try {
-            // Unir con la tabla chats para traer el nombre
+            // Unir con la tabla chats para traer el nombre del contacto
             let query = supabase
                 .from('tickets')
                 .select('*, chats(name, id)')
@@ -619,13 +619,36 @@ export class HistoryHandler {
 
             if (estado) {
                 query = query.eq('estado', estado);
+            } else {
+                query = query.in('estado', ['Abierto', 'En progreso']);
             }
 
             const { data, error } = await query
                 .order('created_at', { ascending: false })
                 .range(offset, offset + limit - 1);
             
-            if (error) throw error;
+            if (error) {
+                // Si falla por problemas de relación (JOIN), intentamos sin join
+                if (error.code === 'PGRST200' || error.message.includes('relationship')) {
+                    console.warn('[HistoryHandler] Reintentando listTickets sin JOIN debido a:', error.message);
+                    let fallbackQuery = supabase
+                        .from('tickets')
+                        .select('*')
+                        .eq('project_id', PROJECT_ID);
+                    
+                    if (estado) fallbackQuery = fallbackQuery.eq('estado', estado);
+                    else fallbackQuery = fallbackQuery.in('estado', ['Abierto', 'En progreso']);
+
+                    const { data: fallbackData, error: fallbackError } = await fallbackQuery
+                        .order('created_at', { ascending: false })
+                        .range(offset, offset + limit - 1);
+                    
+                    if (fallbackError) throw fallbackError;
+                    return fallbackData || [];
+                }
+                throw error;
+            }
+            
             return data || [];
         } catch (err) {
             console.error('[HistoryHandler] Error en listTickets:', err);

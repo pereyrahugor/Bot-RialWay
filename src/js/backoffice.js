@@ -683,13 +683,14 @@ async function fetchTickets() {
 
         list.innerHTML = tickets.map(t => {
             const date = new Date(t.created_at).toLocaleDateString();
+            const contactName = t.chats?.name || (t.chat_id ? t.chat_id.split('@')[0] : 'Sin contacto');
             return `
-                <div class="ticket-item" onclick="goToTicketChat('${t.chat_id}')">
+                <div class="ticket-item" onclick="${t.chat_id ? `goToTicketChat('${t.chat_id}')` : ''}" style="${!t.chat_id ? 'cursor:default; opacity:0.8;' : ''}">
                     <div class="ticket-header">
                         <div class="ticket-title">${t.titulo}</div>
                         <div class="ticket-badge priority-${t.prioridad}">${t.prioridad}</div>
                     </div>
-                    <div style="font-size:0.85rem; color:var(--text-main); margin-bottom:4px;">${t.chats?.name || t.chat_id.split('@')[0]}</div>
+                    <div style="font-size:0.85rem; color:var(--text-main); margin-bottom:4px;">${contactName}</div>
                     <div class="ticket-meta">
                         <span><i class="far fa-calendar-alt"></i> ${date}</span>
                         <span><i class="fas fa-tag"></i> ${t.tipo}</span>
