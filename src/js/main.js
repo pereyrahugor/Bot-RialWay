@@ -1,3 +1,4 @@
+/* global logout */
 // Obtener el nombre del asistente dinámicamente y actualizar el div
 window.addEventListener('DOMContentLoaded', function () {
     fetch('/api/assistant-name')

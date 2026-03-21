@@ -254,4 +254,26 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         const result = await HistoryHandler.removeTagFromChat(req.params.chatId, req.params.tagId);
         res.json(result);
     });
+
+    // --- TICKETS ---
+
+    app.get('/api/backoffice/tickets/pending-count', backofficeAuth, async (req, res) => {
+        const count = await HistoryHandler.getPendingTicketsCount();
+        res.json({ count });
+    });
+
+    app.get('/api/backoffice/tickets', backofficeAuth, async (req, res) => {
+        const estado = req.query.estado as string;
+        const limit = parseInt(req.query.limit as string) || 50;
+        const offset = parseInt(req.query.offset as string) || 0;
+        const result = await HistoryHandler.listTickets(limit, offset, estado);
+        res.json(result);
+    });
+
+    app.post('/api/backoffice/tickets', backofficeAuth, bodyParser.json(), async (req, res) => {
+        const { chatId, titulo, descripcion, tipo, prioridad } = req.body;
+        if (!chatId || !titulo) return res.status(400).json({ success: false, error: 'chatId and titulo are required' });
+        const result = await HistoryHandler.createTicket(chatId, titulo, descripcion, tipo, prioridad);
+        res.json(result);
+    });
 };

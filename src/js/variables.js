@@ -1,3 +1,4 @@
+/* global logout */
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('Variables panel loaded');
     

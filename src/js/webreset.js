@@ -1,3 +1,4 @@
+/* global logout */
 // Archivo JS para funcionalidades de webreset.html
 console.log('webreset.js cargado');
 

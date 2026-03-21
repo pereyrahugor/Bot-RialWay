@@ -94,6 +94,22 @@ export class HistoryHandler {
                     created_at TIMESTAMPTZ DEFAULT NOW(),
                     FOREIGN KEY (chat_id, project_id) REFERENCES chats(id, project_id)
                 );`
+            },
+            {
+                name: 'tickets',
+                sql: `CREATE TABLE IF NOT EXISTS tickets (
+                    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+                    project_id TEXT,
+                    chat_id TEXT,
+                    titulo TEXT NOT NULL,
+                    descripcion TEXT,
+                    tipo TEXT DEFAULT 'Soporte',
+                    estado TEXT DEFAULT 'Abierto',
+                    prioridad TEXT DEFAULT 'Media',
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW(),
+                    FOREIGN KEY (chat_id, project_id) REFERENCES chats(id, project_id)
+                );`
             }
         ];
 
@@ -537,6 +553,83 @@ export class HistoryHandler {
         } catch (err) {
             console.error('[HistoryHandler] Error en getThreadId:', err);
             return null;
+        }
+    }
+
+    /**
+     * Crea un nuevo ticket
+     */
+    static async createTicket(chatId: string, titulo: string, descripcion: string, tipo: string = 'Soporte', prioridad: string = 'Media') {
+        try {
+            const { data, error } = await supabase
+                .from('tickets')
+                .insert({
+                    chat_id: chatId,
+                    project_id: PROJECT_ID,
+                    titulo,
+                    descripcion,
+                    tipo,
+                    prioridad,
+                    estado: 'Abierto'
+                })
+                .select()
+                .single();
+
+            if (error) throw error;
+            
+            // Emitir evento para WebSockets
+            historyEvents.emit('ticket_updated', { chatId, ticket: data });
+            
+            return { success: true, ticket: data };
+        } catch (err: any) {
+            console.error('[HistoryHandler] Error en createTicket:', err);
+            return { success: false, error: err.message };
+        }
+    }
+
+    /**
+     * Obtiene el conteo de tickets pendientes (Abiertos o En progreso)
+     */
+    static async getPendingTicketsCount() {
+        try {
+            const { count, error } = await supabase
+                .from('tickets')
+                .select('*', { count: 'exact', head: true })
+                .eq('project_id', PROJECT_ID)
+                .in('estado', ['Abierto', 'En progreso']);
+
+            if (error) throw error;
+            return count || 0;
+        } catch (err) {
+            console.error('[HistoryHandler] Error en getPendingTicketsCount:', err);
+            return 0;
+        }
+    }
+
+    /**
+     * Lista los tickets del proyecto
+     */
+    static async listTickets(limit: number = 50, offset: number = 0, estado?: string) {
+        try {
+            // Unir con la tabla chats para traer el nombre
+            let query = supabase
+                .from('tickets')
+                .select('*, chats(name, id)')
+                .eq('project_id', PROJECT_ID);
+
+            if (estado) {
+                query = query.eq('estado', estado);
+            }
+
+            const { data, error } = await query
+                .order('created_at', { ascending: false })
+                .range(offset, offset + limit - 1);
+            
+            if (error) throw error;
+            return data || [];
+        } catch (err) {
+            console.error('[HistoryHandler] Error en listTickets:', err);
+            return [];
         }
     }
 }

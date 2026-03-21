@@ -634,6 +634,147 @@ function logout() {
 }
 
 setInterval(() => fetchChats(true), 60000);
+socket.on('ticket_updated', (payload) => {
+    console.log('📡 Ticket actualizado:', payload);
+    fetchPendingTicketsCount();
+    if (document.getElementById('tickets-panel').classList.contains('active')) {
+        fetchTickets();
+    }
+});
+
+// --- TICKETS LOGIC ---
+
+async function fetchPendingTicketsCount() {
+    try {
+        const res = await fetch(`/api/backoffice/tickets/pending-count?token=${token}`);
+        const { count } = await res.json();
+        const badge = document.getElementById('tickets-count');
+        if (count > 0) {
+            badge.innerText = count;
+            badge.style.display = 'block';
+        } else {
+            badge.style.display = 'none';
+        }
+    } catch (e) {
+        console.error('Error fetching tickets count:', e);
+    }
+}
+
+function toggleTicketsPanel() {
+    const panel = document.getElementById('tickets-panel');
+    panel.classList.toggle('active');
+    if (panel.classList.contains('active')) {
+        fetchTickets();
+    }
+}
+
+async function fetchTickets() {
+    const list = document.getElementById('tickets-list');
+    list.innerHTML = '<div style="text-align:center; padding:20px; opacity:0.5;">Cargando tickets...</div>';
+    
+    try {
+        const res = await fetch(`/api/backoffice/tickets?token=${token}&estado=Abierto`);
+        const tickets = await res.json();
+        
+        if (tickets.length === 0) {
+            list.innerHTML = '<div style="text-align:center; padding:20px; opacity:0.5;">No hay tickets pendientes</div>';
+            return;
+        }
+
+        list.innerHTML = tickets.map(t => {
+            const date = new Date(t.created_at).toLocaleDateString();
+            return `
+                <div class="ticket-item" onclick="goToTicketChat('${t.chat_id}')">
+                    <div class="ticket-header">
+                        <div class="ticket-title">${t.titulo}</div>
+                        <div class="ticket-badge priority-${t.prioridad}">${t.prioridad}</div>
+                    </div>
+                    <div style="font-size:0.85rem; color:var(--text-main); margin-bottom:4px;">${t.chats?.name || t.chat_id.split('@')[0]}</div>
+                    <div class="ticket-meta">
+                        <span><i class="far fa-calendar-alt"></i> ${date}</span>
+                        <span><i class="fas fa-tag"></i> ${t.tipo}</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } catch (e) {
+        console.error('Error fetching tickets:', e);
+        list.innerHTML = '<div style="color:#f87171; text-align:center; padding:20px;">Error al cargar tickets</div>';
+    }
+}
+
+function goToTicketChat(chatId) {
+    toggleTicketsPanel();
+    const chat = chats.find(c => c.id === chatId);
+    if (chat) {
+        selectChat(chatId);
+    } else {
+        // Si el chat no está en la lista actual (paginación), forzamos búsqueda
+        document.getElementById('search-input').value = chatId.split('@')[0];
+        fetchChats(true).then(() => {
+            selectChat(chatId);
+        });
+    }
+}
+
+function openTicketModal() {
+    if (!activeChatId) {
+        showToast('⚠️ Selecciona un chat primero', 'error');
+        return;
+    }
+    document.getElementById('ticket-modal').classList.add('active');
+    document.getElementById('ticket-title').focus();
+}
+
+function closeTicketModal() {
+    document.getElementById('ticket-modal').classList.remove('active');
+}
+
+async function createTicket() {
+    const titulo = document.getElementById('ticket-title').value.trim();
+    const descripcion = document.getElementById('ticket-desc').value.trim();
+    const tipo = document.getElementById('ticket-type').value;
+    const prioridad = document.getElementById('ticket-priority').value;
+
+    if (!titulo) {
+        showToast('⚠️ El título es obligatorio', 'error');
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/backoffice/tickets?token=${token}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                chatId: activeChatId,
+                titulo,
+                descripcion,
+                tipo,
+                prioridad
+            })
+        });
+
+        if (res.ok) {
+            showToast('✅ Ticket generado correctamente');
+            closeTicketModal();
+            fetchPendingTicketsCount();
+            
+            // Limpiar campos
+            document.getElementById('ticket-title').value = '';
+            document.getElementById('ticket-desc').value = '';
+        } else {
+            showToast('❌ Error al generar ticket', 'error');
+        }
+    } catch (e) {
+        console.error(e);
+        showToast('❌ Error de conexión', 'error');
+    }
+}
+
+// Inicialización
+fetchPendingTicketsCount();
+setInterval(fetchPendingTicketsCount, 30000);
+
 fetchChats(true);
 fetchBotTags();
 

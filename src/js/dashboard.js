@@ -1,3 +1,4 @@
+/* global logout */
 async function fetchStatus() {
     const token = localStorage.getItem('backoffice_token');
     try {
