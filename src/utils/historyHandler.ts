@@ -655,6 +655,30 @@ export class HistoryHandler {
             return [];
         }
     }
+    /**
+     * Actualiza el estado de un ticket
+     */
+    static async updateTicketStatus(ticketId: string, nuevoEstado: string) {
+        try {
+            const { data, error } = await supabase
+                .from('tickets')
+                .update({ estado: nuevoEstado, updated_at: new Date().toISOString() })
+                .eq('id', ticketId)
+                .eq('project_id', PROJECT_ID)
+                .select()
+                .maybeSingle();
+
+            if (error) throw error;
+            
+            // Notificar cambios
+            historyEvents.emit('ticket_updated', data);
+            
+            return { success: true, data };
+        } catch (err: any) {
+            console.error('[HistoryHandler] Error en updateTicketStatus:', err);
+            return { success: false, error: err.message };
+        }
+    }
 }
 
 // Inicializar base de datos al cargar el modulo

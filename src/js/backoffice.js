@@ -644,13 +644,16 @@ socket.on('ticket_updated', (payload) => {
 
 // --- TICKETS LOGIC ---
 
+let currentTicketsFilter = 'pending';
+
 async function fetchPendingTicketsCount() {
     try {
         const res = await fetch(`/api/backoffice/tickets/pending-count?token=${token}`);
         const { count } = await res.json();
-        const badge = document.getElementById('tickets-count');
+        
+        const badge = document.getElementById('tickets-badge');
         if (count > 0) {
-            badge.innerText = count;
+            badge.innerText = count > 99 ? '99+' : count;
             badge.style.display = 'block';
         } else {
             badge.style.display = 'none';
@@ -664,8 +667,18 @@ function toggleTicketsPanel() {
     const panel = document.getElementById('tickets-panel');
     panel.classList.toggle('active');
     if (panel.classList.contains('active')) {
-        fetchTickets();
+        setTicketsFilter('pending'); // Default to pending when opening
     }
+}
+
+function setTicketsFilter(filter) {
+    currentTicketsFilter = filter;
+    
+    // Update tabs UI
+    document.getElementById('tab-pending').classList.toggle('active', filter === 'pending');
+    document.getElementById('tab-closed').classList.toggle('active', filter === 'Cerrado');
+    
+    fetchTickets();
 }
 
 async function fetchTickets() {
@@ -673,27 +686,41 @@ async function fetchTickets() {
     list.innerHTML = '<div style="text-align:center; padding:20px; opacity:0.5;">Cargando tickets...</div>';
     
     try {
-        const res = await fetch(`/api/backoffice/tickets?token=${token}&estado=Abierto`);
+        // Enviar estado=Cerrado o nada para pendientes
+        const estadoParam = currentTicketsFilter === 'pending' ? '' : `&estado=${currentTicketsFilter}`;
+        const res = await fetch(`/api/backoffice/tickets?token=${token}${estadoParam}`);
         const tickets = await res.json();
-        
-        if (tickets.length === 0) {
-            list.innerHTML = '<div style="text-align:center; padding:20px; opacity:0.5;">No hay tickets pendientes</div>';
+
+        if (!Array.isArray(tickets) || tickets.length === 0) {
+            list.innerHTML = `<div style="text-align:center; padding:20px; opacity:0.5;">No hay tickets ${currentTicketsFilter === 'pending' ? 'pendientes' : 'cerrados'}</div>`;
             return;
         }
 
         list.innerHTML = tickets.map(t => {
             const date = new Date(t.created_at).toLocaleDateString();
             const contactName = t.chats?.name || (t.chat_id ? t.chat_id.split('@')[0] : 'Sin contacto');
+            
             return `
-                <div class="ticket-item" onclick="${t.chat_id ? `goToTicketChat('${t.chat_id}')` : ''}" style="${!t.chat_id ? 'cursor:default; opacity:0.8;' : ''}">
-                    <div class="ticket-header">
-                        <div class="ticket-title">${t.titulo}</div>
-                        <div class="ticket-badge priority-${t.prioridad}">${t.prioridad}</div>
+                <div class="ticket-item">
+                    <div onclick="${t.chat_id ? `goToTicketChat('${t.chat_id}')` : ''}" style="cursor:pointer;">
+                        <div class="ticket-header">
+                            <div class="ticket-title">${t.titulo}</div>
+                            <div class="ticket-badge priority-${t.prioridad}">${t.prioridad}</div>
+                        </div>
+                        <div style="font-size:0.85rem; color:var(--text-main); margin-bottom:4px;">${contactName}</div>
+                        <div class="ticket-meta">
+                            <span><i class="far fa-calendar-alt"></i> ${date}</span>
+                            <span><i class="fas fa-tag"></i> ${t.tipo}</span>
+                        </div>
                     </div>
-                    <div style="font-size:0.85rem; color:var(--text-main); margin-bottom:4px;">${contactName}</div>
-                    <div class="ticket-meta">
-                        <span><i class="far fa-calendar-alt"></i> ${date}</span>
-                        <span><i class="fas fa-tag"></i> ${t.tipo}</span>
+                    
+                    <div class="ticket-status-row">
+                        <span style="font-size:0.75rem; color:var(--text-muted);">Estado:</span>
+                        <select class="status-select" onchange="updateTicketStatus('${t.id}', this.value)">
+                            <option value="Abierto" ${t.estado === 'Abierto' ? 'selected' : ''}>Abierto</option>
+                            <option value="En progreso" ${t.estado === 'En progreso' ? 'selected' : ''}>En progreso</option>
+                            <option value="Cerrado" ${t.estado === 'Cerrado' ? 'selected' : ''}>Cerrado</option>
+                        </select>
                     </div>
                 </div>
             `;
@@ -701,6 +728,28 @@ async function fetchTickets() {
     } catch (e) {
         console.error('Error fetching tickets:', e);
         list.innerHTML = '<div style="color:#f87171; text-align:center; padding:20px;">Error al cargar tickets</div>';
+    }
+}
+
+async function updateTicketStatus(ticketId, nuevoEstado) {
+    try {
+        const res = await fetch(`/api/backoffice/tickets/${ticketId}?token=${token}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ estado: nuevoEstado })
+        });
+        
+        const result = await res.json();
+        if (result.success) {
+            showToast(`Ticket ${nuevoEstado === 'Cerrado' ? 'cerrado' : 'actualizado'} correctamente`);
+            fetchPendingTicketsCount();
+            fetchTickets(); // Refresh list to remove if closed
+        } else {
+            showToast('❌ Error al actualizar ticket: ' + (result.error || 'Desconocido'));
+        }
+    } catch (e) {
+        console.error('Error updating ticket status:', e);
+        showToast('❌ Error de conexión al actualizar ticket');
     }
 }
 

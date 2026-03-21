@@ -276,4 +276,11 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         const result = await HistoryHandler.createTicket(chatId, titulo, descripcion, tipo, prioridad);
         res.json(result);
     });
+
+    app.put('/api/backoffice/tickets/:id', backofficeAuth, bodyParser.json(), async (req, res) => {
+        const { id } = req.params;
+        const { estado } = req.body;
+        const result = await HistoryHandler.updateTicketStatus(id, estado);
+        res.json(result);
+    });
 };

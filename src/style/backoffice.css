@@ -596,3 +596,55 @@ input:checked + .slider:before { transform: translateX(20px); background-color: 
     margin-top: 8px;
 }
 
+.panel-tabs {
+    display: flex;
+    padding: 10px 20px;
+    background: var(--bg-header);
+    border-bottom: 1px solid var(--border);
+    gap: 10px;
+}
+
+.tab-btn {
+    flex: 1;
+    padding: 8px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+}
+
+.tab-btn:hover {
+    color: var(--text-main);
+}
+
+.tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+
+.ticket-status-row {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.status-select {
+    padding: 4px 8px;
+    font-size: 0.8rem;
+    background: var(--bg-main);
+    color: var(--text-main);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    outline: none;
+}
+
+.status-select:focus {
+    border-color: var(--accent);
+}

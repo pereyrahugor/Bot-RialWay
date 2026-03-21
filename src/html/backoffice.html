@@ -17,15 +17,14 @@
     <div id="navbar">
         <div class="nav-item active" title="Conversaciones" onclick="window.location.href='/backoffice'"><i class="fas fa-comment-dots"></i></div>
         <div class="nav-item" title="Dashboard" onclick="window.location.href='/dashboard'"><i class="fas fa-th-large"></i></div>
-
         <div class="nav-item" title="Webchat" onclick="window.location.href='/webchat'"><i class="fas fa-desktop"></i></div>
         <div class="nav-item" title="Contactos"><i class="fas fa-address-book"></i></div>
-        <div class="nav-item" id="theme-toggle" title="Cambiar Tema"><i class="fas fa-moon"></i></div>
         <div class="nav-item badge-container" title="Tickets Pendientes" onclick="toggleTicketsPanel()">
             <i class="fas fa-ticket-alt"></i>
-            <span class="badge" id="tickets-count" style="display:none;">0</span>
+            <span class="badge" id="tickets-badge" style="display:none;">0</span>
         </div>
         <div style="flex:1"></div>
+        <div class="nav-item" id="theme-toggle" title="Cambiar Tema" style="margin-bottom: 10px;"><i class="fas fa-moon"></i></div>
         <div class="nav-item" onclick="logout()" title="Cerrar Sesión" style="color:#f87171;"><i class="fas fa-sign-out-alt"></i></div>
     </div>
 
@@ -206,13 +205,17 @@
     </div>
 
     <!-- Panel de Tickets Lateral -->
-    <div id="tickets-panel" class="side-panel">
-        <div class="side-panel-header">
-            <h3 style="margin:0;"><i class="fas fa-ticket-alt" style="margin-right:8px;"></i> Tickets Pendientes</h3>
-            <button class="btn-icon" onclick="toggleTicketsPanel()"><i class="fas fa-times"></i></button>
+    <div id="tickets-panel" class="tickets-panel">
+        <div class="panel-header">
+            <h3><i class="fas fa-ticket-alt"></i> Tickets</h3>
+            <button class="icon-btn" onclick="toggleTicketsPanel()"><i class="fas fa-times"></i></button>
         </div>
-        <div id="tickets-list" class="side-panel-content">
-            <!-- Cargando tickets... -->
+        <div class="panel-tabs">
+            <button id="tab-pending" class="tab-btn active" onclick="setTicketsFilter('pending')">Pendientes</button>
+            <button id="tab-closed" class="tab-btn" onclick="setTicketsFilter('Cerrado')">Cerrados</button>
+        </div>
+        <div id="tickets-list" class="tickets-list">
+            <div style="text-align:center; padding:20px; opacity:0.5;">Cargando tickets...</div>
         </div>
     </div>
 
