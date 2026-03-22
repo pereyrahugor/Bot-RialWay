@@ -1,4 +1,3 @@
-/* global logout */
 async function fetchStatus() {
     const token = localStorage.getItem('backoffice_token');
     try {
@@ -11,63 +10,64 @@ async function fetchStatus() {
         const sessionInfo = document.getElementById('session-info');
         const sessionError = document.getElementById('session-error');
         const wsLinkContainer = document.getElementById('whatsapp-link-container');
-        const wsLink = document.getElementById('whatsapp-link');
 
-        if (data.active) {
-            qrSection.style.display = 'none';
-            sessionInfo.style.display = '';
-            
-            if (data.source === 'connected') {
-                statusEl.textContent = '✅ Conectado y Operativo';
-                sessionInfo.textContent = 'El bot está vinculado a WhatsApp y funcionando correctamente.';
-                sessionInfo.style.color = '#28a745';
-                
-                // Mostrar botón de WhatsApp si tenemos el número
-                if (data.phoneNumber) {
-                    wsLinkContainer.style.display = 'block';
-                    wsLink.href = `https://wa.me/${data.phoneNumber}`;
-                } else {
-                    wsLinkContainer.style.display = 'none';
-                }
-            } else {
-                statusEl.textContent = '✅ Sesión Local Detectada';
-                sessionInfo.textContent = 'El bot tiene archivos de sesión. Si no responde en WhatsApp, intenta reiniciar.';
-                sessionInfo.style.color = ''; 
-                wsLinkContainer.style.display = 'none';
-            }
-        } else {
-            qrSection.style.display = '';
-            wsLinkContainer.style.display = 'none';
-            
-            if (data.hasRemote) {
-                statusEl.textContent = '⏳ Restaurando...';
-                sessionInfo.style.display = '';
-                sessionInfo.textContent = data.message || 'Intentando recuperar sesión de la nube...';
-                sessionInfo.style.color = '#ffc107';
-            } else {
-                statusEl.textContent = '⏳ Esperando Escaneo';
-                sessionInfo.style.display = 'none';
-            }
-            
-            // Intentar recargar el QR
-            const qrImg = document.querySelector('.qr');
-            qrImg.src = '/qr.png?t=' + Date.now();
-            qrImg.style.display = 'inline-block';
-            qrImg.nextElementSibling.style.display = 'none';
+        // Limpiar
+        qrSection.style.display = 'none';
+        sessionInfo.style.display = 'none';
+        wsLinkContainer.style.display = 'none';
+        sessionError.innerHTML = '';
+
+        if (!data.adapter) {
+            statusEl.textContent = '❌ Error de sistema';
+            return;
         }
 
-        if (data.error) {
-            sessionError.innerHTML = `<div class='error-box'>⚠️ Error al verificar sesión: ${data.error}</div>`;
-        } else {
-            sessionError.innerHTML = '';
+        // Caso 1: Solo Adapter (Modo Estándar Baileys o Meta sin Grupos)
+        if (!data.group) {
+            renderProviderStatus(data.adapter, 'Principal');
+        } 
+        // Caso 2: Modo Dual
+        else {
+            renderProviderStatus(data.adapter, 'Mensajes Privados (Meta)');
+            renderProviderStatus(data.group, 'Mensajes de Grupo (Baileys)', true);
         }
     } catch (e) {
         document.getElementById('session-status').textContent = 'Error';
         document.getElementById('session-error').innerHTML = `<div class='error-box'>No se pudo obtener el estado del bot.</div>`;
     }
 }
+
+function renderProviderStatus(status, label, isGroup = false) {
+    const statusEl = document.getElementById('session-status');
+    const qrSection = document.getElementById('qr-section');
+    const sessionInfo = document.getElementById('session-info');
+    const sessionError = document.getElementById('session-error');
+
+    if (status.active) {
+        statusEl.textContent = `✅ ${label}: ${status.message || 'Conectado'}`;
+        statusEl.style.color = '#10b981';
+        sessionInfo.style.display = 'block';
+        sessionInfo.innerHTML += `<div><strong>${label}:</strong> ${status.message || 'Operativo'}</div>`;
+    } else if (status.qr) {
+        statusEl.textContent = `⏳ ${label}: Esperando vinculación`;
+        statusEl.style.color = '#f59e0b';
+        qrSection.style.display = 'block';
+        
+        const qrImg = document.querySelector('.qr');
+        if (status.qrImage) {
+            qrImg.src = status.qrImage;
+        } else {
+            qrImg.src = isGroup ? '/bot.groups.qr.png' : '/qr.png';
+        }
+        qrImg.style.display = 'inline-block';
+        qrImg.nextElementSibling.style.display = 'none';
+    } else {
+        statusEl.textContent = `⏳ ${label}: ${status.message || 'Cargando...'}`;
+    }
+}
+
 fetchStatus();
-setInterval(fetchStatus, 10000);
+setInterval(fetchStatus, 15000);
 
 // Redirigir a /webreset al hacer click en el botón de reinicio
 document.getElementById('go-reset').addEventListener('click', function() {

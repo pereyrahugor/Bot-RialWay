@@ -1,4 +1,4 @@
-/* global io */
+/* global io, metaAppId, FB */
 const token = localStorage.getItem('backoffice_token');
 if (!token) window.location.href = '/login';
 
@@ -687,8 +687,10 @@ async function fetchTickets() {
     list.innerHTML = '<div style="text-align:center; padding:20px; opacity:0.5;">Cargando tickets...</div>';
     
     try {
-        // Enviar estado=Cerrado o nada para pendientes
-        const estadoParam = currentTicketsFilter === 'pending' ? '' : `&estado=${currentTicketsFilter}`;
+        // Enviar estado=Cerrado/* global metaAppId, FB, token, selectChat, showToast */
+/**
+ * Lógica del panel de control del asistente.
+ */       const estadoParam = currentTicketsFilter === 'pending' ? '' : `&estado=${currentTicketsFilter}`;
         const res = await fetch(`/api/backoffice/tickets?token=${token}${estadoParam}`);
         const tickets = await res.json();
 
@@ -875,6 +877,63 @@ async function fetchLeads() {
 function selectLead(chatId) {
     toggleLeadsPanel();
     selectChat(chatId);
+}
+
+function toggleMetaPanel(e) {
+    if (e) e.stopPropagation();
+    const panel = document.getElementById('meta-panel');
+    panel.classList.toggle('active');
+}
+
+function launchMetaOnboarding() {
+    if (!metaAppId || metaAppId === 'AQUI_TU_ID_DE_APP') {
+        showToast('⚠️ Meta App ID no configurado en el .env');
+        return;
+    }
+
+    // Opciones del flujo de registro incrustado
+    const signupOptions = {
+        config_id: '', // Se recomienda configurar un config_id en Meta for Business
+        response_type: 'code',
+        override_default_response_mode: 'manual',
+        scope: 'whatsapp_business_management,whatsapp_business_messaging,business_management'
+    };
+
+    FB.login(function(response) {
+        if (response.authResponse) {
+            const code = response.authResponse.code;
+            console.log('✅ Código de Meta recibido:', code);
+            
+            // Enviar el código al backend para canjearlo por el token
+            fetch('/api/backoffice/whatsapp/onboard?token=' + localStorage.getItem('backoffice_token'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code: code })
+            })
+            .then(res => res.json())
+            .then(result => {
+                if (result.success) {
+                    showToast('🎉 ¡WhatsApp conectado correctamente con Meta!');
+                    toggleMetaPanel();
+                } else {
+                    showToast('❌ Error al vincular: ' + result.error, 'error');
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                showToast('❌ Error de conexión con el servidor', 'error');
+            });
+
+        } else {
+            console.log('User cancelled login or did not fully authorize.');
+            showToast('⚠️ El registro fue cancelado o no se otorgaron los permisos.', 'error');
+        }
+    }, {
+        config_id: signupOptions.config_id,
+        response_type: signupOptions.response_type,
+        override_default_response_mode: signupOptions.override_default_response_mode,
+        scope: signupOptions.scope
+    });
 }
 
 // Inicialización

@@ -7,6 +7,9 @@ import OpenAI from "openai";
 import { BaileysProvider } from "builderbot-provider-sherpa";
 import { createBot, createProvider, createFlow, MemoryDB } from "@builderbot/bot";
 import { httpInject } from "@builderbot-plugins/openai-assistants";
+import { SupabaseBaileysProvider } from "./providers/SupabaseBaileysProvider";
+import { MetaCloudProvider } from "./providers/MetaCloudProvider";
+import { setAdapterProvider, setGroupProvider, getAdapterProvider, getGroupProvider } from "./providers/instances";
 
 // --- Utils & Handlers ---
 import { restoreSessionFromDb, startSessionSync, deleteSessionFromDb } from "./utils/sessionSync";
@@ -43,6 +46,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Global instances
 export let adapterProvider: any;
+export let groupProvider: any;
 export let errorReporter: any;
 export let aiManagerInstance: AiManager;
 const webChatManager = new WebChatManager();
@@ -86,16 +90,50 @@ const main = async () => {
     await restoreSessionFromDb();
     const qrPath = path.join(process.cwd(), "bot.qr.png");
 
-    // 2. Initialize Provider
-    adapterProvider = createProvider(BaileysProvider, {
-        version: [2, 3000, 1030817285],
-        groupsIgnore: false,
-        readStatus: false,
-        disableHttpServer: true,
-    });
+    // 2. Initialize Providers
+    const metaConfig = await HistoryHandler.getMetaOnboardingData();
+    const useMeta = metaConfig && metaConfig.status === 'active' && metaConfig.access_token && metaConfig.phone_number_id;
+
+    if (useMeta) {
+        console.log('🚀 [App] Modo Dual detectado (Meta API + Baileys Grupos)');
+        adapterProvider = createProvider(MetaCloudProvider, {
+            waba_id: metaConfig.waba_id,
+            phone_number_id: metaConfig.phone_number_id,
+            access_token: metaConfig.access_token
+        });
+        
+        groupProvider = createProvider(SupabaseBaileysProvider, {
+            version: [2, 3000, 1030817285],
+            groupsIgnore: false,
+            readStatus: false,
+            disableHttpServer: true,
+        });
+        setGroupProvider(groupProvider);
+    } else {
+        console.log('🚀 [App] Modo Estándar detectado (Baileys para todo)');
+        adapterProvider = createProvider(SupabaseBaileysProvider, {
+            version: [2, 3000, 1030817285],
+            groupsIgnore: false,
+            readStatus: false,
+            disableHttpServer: true,
+        });
+        groupProvider = null;
+        setGroupProvider(null);
+    }
+    
+    setAdapterProvider(adapterProvider);
 
     // 3. Register Provider Events
     registerProviderEvents(adapterProvider);
+    if (groupProvider) {
+        registerProviderEvents(groupProvider, true);
+        
+        // Iniciar motor de grupos asíncronamente
+        setTimeout(async () => {
+            console.log('📡 [GroupSync] Iniciando motor secundario de grupos...');
+            if (groupProvider.initVendor) await groupProvider.initVendor();
+        }, 5000);
+    }
 
     // 4. Initialize Data and Error Reporter
     errorReporter = new ErrorReporter(adapterProvider, process.env.ID_GRUPO_RESUMEN || "");
@@ -122,7 +160,7 @@ const main = async () => {
                 console.log("🛡️ [MASTER-INTERCEPTOR] Captura detectada de envío. Procesando bypass total...");
                 
                 return backofficeAuth(req, res, () => {
-                    const deps: BackofficeDependencies = { adapterProvider, HistoryHandler, openaiMain, upload };
+                    const deps: BackofficeDependencies = { adapterProvider, groupProvider, HistoryHandler, openaiMain, upload };
                     const contentType = req.headers['content-type'] || '';
 
                     if (contentType.includes('multipart/form-data')) {
@@ -150,6 +188,7 @@ const main = async () => {
         
         registerBackofficeRoutes(app, {
             adapterProvider,
+            groupProvider,
             HistoryHandler,
             openaiMain,
             upload
@@ -198,7 +237,7 @@ const main = async () => {
         // API Health & Info
         app.get("/health", (_req: any, res: any) => res.json({ status: "ok", time: new Date().toISOString() }));
         app.get("/api/assistant-name", (_req: any, res: any) => res.json({ name: process.env.ASSISTANT_NAME || "Bot" }));
-        app.get("/api/dashboard-status", backofficeAuth, async (_req: any, res: any) => res.json(await hasActiveSession(adapterProvider)));
+        app.get("/api/dashboard-status", backofficeAuth, async (_req: any, res: any) => res.json(await hasActiveSession(adapterProvider, groupProvider)));
 
         // API Session Control
         app.post("/api/delete-session", backofficeAuth, async (_req: any, res: any) => {

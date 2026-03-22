@@ -699,6 +699,51 @@ export class HistoryHandler {
             return [];
         }
     }
+    /**
+     * Guarda o actualiza los datos de onboarding de Meta
+     */
+    static async saveMetaOnboardingData(wabaId: string, phoneId: string, token: string, extra: any = {}) {
+        try {
+            const { data, error } = await supabase
+                .from('meta_onboarding')
+                .upsert({
+                    project_id: PROJECT_ID,
+                    waba_id: wabaId,
+                    phone_number_id: phoneId,
+                    access_token: token,
+                    onboarding_data: extra,
+                    status: 'active',
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'project_id' })
+                .select()
+                .single();
+
+            if (error) throw error;
+            return { success: true, data };
+        } catch (err: any) {
+            console.error('[HistoryHandler] Error en saveMetaOnboardingData:', err);
+            return { success: false, error: err.message };
+        }
+    }
+
+    /**
+     * Obtiene los datos de onboarding configurados
+     */
+    static async getMetaOnboardingData() {
+        try {
+            const { data, error } = await supabase
+                .from('meta_onboarding')
+                .select('*')
+                .eq('project_id', PROJECT_ID)
+                .maybeSingle();
+
+            if (error) throw error;
+            return data;
+        } catch (err) {
+            console.error('[HistoryHandler] Error en getMetaOnboardingData:', err);
+            return null;
+        }
+    }
 }
 
 // Inicializar base de datos al cargar el modulo

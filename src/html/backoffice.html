@@ -25,7 +25,12 @@
             <i class="fas fa-ticket-alt"></i>
             <span class="badge" id="tickets-badge" style="display:none;">0</span>
         </div>
+        
         <div style="flex:1"></div>
+
+        <div class="nav-item" title="Coexistencia Meta" id="nav-meta-btn" onclick="toggleMetaPanel(event)" style="color: #0668E1; font-size: 1.4rem;">
+            <i class="fas fa-infinity"></i>
+        </div>
         <div class="nav-item" id="theme-toggle" title="Cambiar Tema" style="margin-bottom: 10px;"><i class="fas fa-moon"></i></div>
         <div class="nav-item" onclick="logout()" title="Cerrar Sesión" style="color:#f87171;"><i class="fas fa-sign-out-alt"></i></div>
     </div>
@@ -235,3 +240,65 @@
             <div style="text-align:center; padding:20px; opacity:0.5;">Cargando leads...</div>
         </div>
     </div>
+
+    <!-- Panel de Onboarding Meta Lateral -->
+    <div id="meta-panel" class="tickets-panel">
+        <div class="panel-header">
+            <h3><i class="fab fa-meta" style="color:#0668E1; margin-right:8px;"></i> Onboarding Meta</h3>
+            <button class="btn-icon" onclick="toggleMetaPanel(event)"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="tickets-list" style="padding: 30px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; text-align: center; gap: 24px;">
+            <div style="background: linear-gradient(135deg, #0668E1, #00F2FE); width: 100px; height: 100px; border-radius: 24px; display: flex; align-items: center; justify-content: center; font-size: 3rem; color: white; box-shadow: 0 15px 30px rgba(6, 104, 225, 0.4); margin-top: 40px;">
+                <i class="fab fa-meta"></i>
+            </div>
+            <div>
+                <h2 style="margin: 0; color: var(--text-main); font-size: 1.6rem; font-weight: 700;">Coming Soon</h2>
+                <div style="height: 3px; width: 50px; background: #0668E1; margin: 10px auto; border-radius: 10px;"></div>
+                <p style="color: var(--text-muted); font-size: 1rem; margin-top: 15px; line-height: 1.6;">
+                    Estamos desarrollando la integración oficial con la <strong>API de WhatsApp Business</strong> mediante el flujo de registro incrustado de Meta.
+                </p>
+            </div>
+            
+            <div style="background: var(--bg-header); padding: 24px; border-radius: 20px; border: 1px solid var(--border); width: 100%; text-align: left;">
+                <h4 style="margin: 0 0 15px 0; color: #0668E1; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700;">Lo que se viene:</h4>
+                <ul style="font-size: 0.9rem; padding-left: 20px; color: var(--text-main); line-height: 2.2;">
+                    <li>Integración por <strong>Coexistencia</strong> (App móvil + API).</li>
+                    <li>Registro rápido Cloud via <strong>Popup de Meta</strong>.</li>
+                    <li>Sincronización histórica de chats.</li>
+                    <li>Envío de HSM (High Structure Messages).</li>
+                </ul>
+            </div>
+
+            <p style="font-size: 0.8rem; color: var(--text-muted); opacity: 0.8; margin-top: 20px;">
+                Escala tu negocio con el respaldo oficial de Meta y las nuevas capacidades de coexistencia.
+            </p>
+
+            <button class="btn-primary" onclick="launchMetaOnboarding()" style="width:100%; height:45px; display:flex; align-items:center; justify-content:center; gap:10px; background:#0668E1; border:none; border-radius:12px; font-weight:600; cursor:pointer; color:white;">
+                <i class="fab fa-meta"></i> Conectar con Meta
+            </button>
+        </div>
+    </div>
+
+    <!-- SDK de Meta -->
+    <script async defer crossorigin="anonymous" src="https://connect.facebook.net/es_LA/sdk.js"></script>
+    <script>
+      let metaAppId = '';
+      
+      window.fbAsyncInit = function() {
+        // Obtenemos el AppID desde el servidor para no exponerlo en duro
+        fetch('/api/backoffice/whatsapp/config?token=' + localStorage.getItem('backoffice_token'))
+          .then(res => res.json())
+          .then(data => {
+            metaAppId = data.appId;
+            if (metaAppId && metaAppId !== 'AQUI_TU_ID_DE_APP') {
+              FB.init({
+                appId      : metaAppId,
+                cookie     : true,
+                xfbml      : true,
+                version    : 'v20.0'
+              });
+              console.log('✅ SDK de Meta inicializado con AppID:', metaAppId);
+            }
+          });
+      };
+    </script>

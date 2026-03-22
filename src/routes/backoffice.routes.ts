@@ -1,6 +1,7 @@
 import path from 'path';
 import fs from 'fs';
 import bodyParser from 'body-parser';
+import axios from 'axios';
 import { backofficeAuth } from "../middleware/auth";
 
 /**
@@ -8,6 +9,7 @@ import { backofficeAuth } from "../middleware/auth";
  */
 export interface BackofficeDependencies {
     adapterProvider: any;
+    groupProvider?: any; // Añadido para soporte dual
     HistoryHandler: any;
     openaiMain: any;
     upload: any;
@@ -57,30 +59,35 @@ export const processSendMessage = async (
 
         // 4. ENVIAR A WHATSAPP
         try {
+            const isGroup = chatId.includes('@g.us');
+            const providerToSend = (isGroup && deps.groupProvider) ? deps.groupProvider : adapterProvider;
+            
+            console.log(`[BACKOFFICE] Enviando via ${providerToSend.constructor.name} a ${chatId}`);
+
             const jid = chatId.includes('@') ? chatId : `${chatId}@s.whatsapp.net`;
             if (file) {
                 const absolutePath = path.resolve(file.path);
                 if (finalType === 'image') {
-                    if (typeof adapterProvider.sendImage === 'function') {
-                        await adapterProvider.sendImage(jid, absolutePath, message || '');
+                    if (typeof providerToSend.sendImage === 'function') {
+                        await providerToSend.sendImage(jid, absolutePath, message || '');
                     } else {
-                        await adapterProvider.sendMessage(jid, message || '', { media: absolutePath });
+                        await providerToSend.sendMessage(jid, message || '', { media: absolutePath });
                     }
                 } else if (finalType === 'video') {
-                    if (typeof (adapterProvider as any).sendVideo === 'function') {
-                        await (adapterProvider as any).sendVideo(jid, absolutePath, message || '');
+                    if (typeof (providerToSend as any).sendVideo === 'function') {
+                        await (providerToSend as any).sendVideo(jid, absolutePath, message || '');
                     } else {
-                        await adapterProvider.sendMessage(jid, message || '', { media: absolutePath });
+                        await providerToSend.sendMessage(jid, message || '', { media: absolutePath });
                     }
                 } else {
-                    if (typeof (adapterProvider as any).sendFile === 'function') {
-                        await (adapterProvider as any).sendFile(jid, absolutePath, message || file.originalname);
+                    if (typeof (providerToSend as any).sendFile === 'function') {
+                        await (providerToSend as any).sendFile(jid, absolutePath, message || file.originalname);
                     } else {
-                        await adapterProvider.sendMessage(jid, message || '', { media: absolutePath, fileName: file.originalname });
+                        await providerToSend.sendMessage(jid, message || '', { media: absolutePath, fileName: file.originalname });
                     }
                 }
             } else {
-                await adapterProvider.sendMessage(jid, message, {});
+                await providerToSend.sendMessage(jid, message, {});
             }
             res.json({ success: true, fileUrl: file ? fileUrl : undefined });
         } catch (waError) {
@@ -289,5 +296,57 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         const offset = parseInt(req.query.offset as string) || 0;
         const result = await HistoryHandler.listEditedLeads(limit, offset);
         res.json(result);
+    });
+
+    // --- ONBOARDING META ---
+
+    app.get('/api/backoffice/whatsapp/config', backofficeAuth, async (req, res) => {
+        const config = await HistoryHandler.getMetaOnboardingData();
+        res.json({
+            appId: process.env.META_APP_ID,
+            config: config
+        });
+    });
+
+    app.post('/api/backoffice/whatsapp/onboard', backofficeAuth, bodyParser.json(), async (req, res) => {
+        const { code } = req.body;
+        if (!code) return res.status(400).json({ success: false, error: 'Code is required' });
+
+        try {
+            // 1. Intercambiar código por token de acceso del usuario
+            const tokenResponse = await axios.get(`https://graph.facebook.com/v20.0/oauth/access_token`, {
+                params: {
+                    client_id: process.env.META_APP_ID,
+                    client_secret: process.env.META_APP_SECRET,
+                    code: code
+                }
+            });
+
+            const userAccessToken = tokenResponse.data.access_token;
+
+            // 2. Obtener los WABA IDs compartidos con esta App
+            const debugResponse = await axios.get(`https://graph.facebook.com/debug_token`, {
+                params: {
+                    input_token: userAccessToken,
+                    access_token: `${process.env.META_APP_ID}|${process.env.META_APP_SECRET}`
+                }
+            });
+
+            // Nota: Aquí se extraen los IDs según lo que devuelve Meta en el flujo de login
+            // Para simplificar esta etapa de "Coming Soon", guardamos el token principal
+            // El proceso real requiere mapear el granular_scopes para obtener el WABA ID.
+            
+            const result = await HistoryHandler.saveMetaOnboardingData(
+                "PENDING", // Se llenará con la lógica granular de Meta
+                "PENDING", 
+                userAccessToken,
+                { raw: debugResponse.data.data }
+            );
+
+            res.json(result);
+        } catch (error: any) {
+            console.error('Error in Meta Onboarding:', error.response?.data || error.message);
+            res.status(500).json({ success: false, error: error.response?.data?.error?.message || error.message });
+        }
     });
 };
