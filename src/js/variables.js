@@ -1,4 +1,13 @@
-/* global logout */
+/* global logout, CodeMirror */
+
+// Lógica de colapso fuera del DOMContentLoaded para acceso global
+window.togglePromptCollapse = () => {
+    const header = document.querySelector('.prompt-header');
+    const content = document.getElementById('prompt-content');
+    header.classList.toggle('collapsed');
+    content.classList.toggle('collapsed');
+};
+
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('Variables panel loaded');
     
@@ -7,6 +16,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     const updateBtn = document.getElementById('update-btn');
     
     let initialVariables = {};
+
+    // Inicialización de CodeMirror
+    const promptTextarea = document.getElementById('ASSISTANT_PROMPT');
+    let editor = null;
+    
+    if (promptTextarea) {
+        editor = CodeMirror.fromTextArea(promptTextarea, {
+            lineNumbers: true,
+            mode: "markdown",
+            theme: "dracula",
+            lineWrapping: true,
+            scrollbarStyle: "native"
+        });
+    }
 
     // Cargar variables actuales
     async function loadVariables() {
@@ -25,6 +48,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                         input.value = initialVariables[key];
                     }
                 });
+
+                // Actualizar editor si existe valor en variables de entorno inicialmente
+                if (initialVariables['ASSISTANT_PROMPT'] && editor) {
+                    editor.setValue(initialVariables['ASSISTANT_PROMPT']);
+                }
             } else {
                 alert('Error al cargar variables: ' + (data.error || 'Error desconocido'));
             }
@@ -69,6 +97,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         const changedKeys = [];
         
         formData.forEach((value, key) => {
+            // Caso especial para CodeMirror
+            if (key === 'ASSISTANT_PROMPT' && editor) {
+                value = editor.getValue();
+            }
+
             // Solo agregar si el valor es diferente al inicial
             if (value !== initialVariables[key]) {
                 changedVariables[key] = value;
@@ -90,9 +123,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateBtn.disabled = true;
         updateBtn.textContent = 'Actualizando...';
         
-        // Incluimos explícitamente el prompt si existe en el formulario
-        if (formData.get('ASSISTANT_PROMPT')) {
-             changedVariables['ASSISTANT_PROMPT'] = formData.get('ASSISTANT_PROMPT');
+        // Incluimos explícitamente el prompt si existe CodeMirror
+        if (editor) {
+             changedVariables['ASSISTANT_PROMPT'] = editor.getValue();
         }
 
         try {
@@ -156,7 +189,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const data = await response.json();
             if (data.success) {
-                promptTextarea.value = data.instructions;
+                if (editor) editor.setValue(data.instructions);
                 syncStatus.textContent = '✅ Sincronizado correctamente.';
                 syncStatus.style.color = '#10b981';
             } else {
@@ -176,7 +209,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- Guardar Prompt sin reiniciar (Hot-update) ---
     const hotSaveBtn = document.getElementById('save-prompt-hot-btn');
     hotSaveBtn.addEventListener('click', async () => {
-        const prompt = promptTextarea.value;
+        const prompt = editor ? editor.getValue() : promptTextarea.value;
         hotSaveBtn.disabled = true;
         syncStatus.textContent = '⏳ Guardando en base de datos...';
         syncStatus.style.color = 'inherit';
@@ -217,7 +250,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const response = await fetch(`/api/backoffice/get-prompt?token=${token}`);
             const data = await response.json();
             if (data.success && data.prompt) {
-                promptTextarea.value = data.prompt;
+                if (editor) editor.setValue(data.prompt);
                 initialVariables['ASSISTANT_PROMPT'] = data.prompt;
             }
         } catch (err) {

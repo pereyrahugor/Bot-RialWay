@@ -9,6 +9,41 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="/style/crm-common.css">
     <link rel="stylesheet" href="/style/variables.css">
+    
+    <!-- CodeMirror for Prompt Editor -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/dracula.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/markdown/markdown.min.js"></script>
+    <style>
+        .CodeMirror {
+            height: 400px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-family: 'Fira Code', 'Roboto Mono', monospace;
+            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        [data-theme="light"] .CodeMirror {
+            background: #ffffff;
+            color: #1e293b;
+            border-color: #e2e8f0;
+        }
+        .prompt-container {
+            transition: all 0.3s ease;
+        }
+        .prompt-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            padding: 10px 0;
+        }
+        .prompt-header:hover { opacity: 0.8; }
+        .collapse-icon { transition: transform 0.3s ease; }
+        .prompt-content.collapsed { display: none; }
+        .prompt-header.collapsed .collapse-icon { transform: rotate(-90deg); }
+    </style>
 </head>
 <body data-theme="light">
     <!-- Navbar -->
@@ -69,17 +104,28 @@
                     <input type="text" name="ID_GRUPO_RESUMEN" id="ID_GRUPO_RESUMEN">
                 </div>
                 <div class="variable-group" style="grid-column: span 2;">
-                    <h3>ASSISTANT_PROMPT (Instrucciones)</h3>
-                    <p class="description">Prompt principal del sistema. Si está vacío, usará el definido en el Assistant ID.</p>
-                    <div class="textarea-wrapper">
-                        <textarea name="ASSISTANT_PROMPT" id="ASSISTANT_PROMPT" style="height: 200px; font-family: monospace; font-size: 13px;"></textarea>
-                        <button type="button" id="sync-prompt-btn" class="btn btn-secondary" style="margin-top: 10px; width: auto; font-size: 12px;">
-                            <i class="fas fa-sync"></i> Sincronizar desde OpenAI
-                        </button>
-                        <button type="button" id="save-prompt-hot-btn" class="btn btn-secondary" style="margin-top: 10px; margin-left:8px; width: auto; font-size: 12px; border-color: #10b981; color: #10b981;">
-                            <i class="fas fa-save"></i> Guardar (Sin reiniciar)
-                        </button>
-                        <span id="sync-status" style="font-size: 12px; margin-left: 10px; opacity: 0.8;"></span>
+                    <div class="prompt-header" onclick="togglePromptCollapse()">
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <i class="fas fa-chevron-down collapse-icon"></i>
+                            <h3 style="margin:0;">ASSISTANT_PROMPT (Instrucciones de Lógica)</h3>
+                        </div>
+                        <p class="description" style="margin:0;">Prompt principal del sistema. Sobreescribe al asistente de OpenAI si no está vacío.</p>
+                    </div>
+                    
+                    <div class="prompt-content" id="prompt-content">
+                        <div class="textarea-wrapper" style="margin-top:10px;">
+                            <textarea name="ASSISTANT_PROMPT" id="ASSISTANT_PROMPT"></textarea>
+                            
+                            <div style="display:flex; gap:10px; margin-top: 15px; flex-wrap: wrap;">
+                                <button type="button" id="sync-prompt-btn" class="btn btn-secondary" style="width: auto; font-size: 13px;">
+                                    <i class="fas fa-sync"></i> Sincronizar desde OpenAI
+                                </button>
+                                <button type="button" id="save-prompt-hot-btn" class="btn" style="width: auto; font-size: 13px; background: #10b981; border:none;">
+                                    <i class="fas fa-bolt"></i> Guardar (Sin reiniciar)
+                                </button>
+                                <span id="sync-status" style="font-size: 13px; align-self: center; opacity: 0.8;"></span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

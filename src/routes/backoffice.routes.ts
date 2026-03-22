@@ -394,9 +394,23 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         try {
             console.log(`📡 [HOT-UPDATE] Actualizando prompt en base de datos...`);
             await HistoryHandler.saveSetting('ASSISTANT_PROMPT', prompt);
-            res.json({ success: true, message: 'Prompt actualizado correctamente (Hot-update)' });
+
+            // Sincronizar hacia OpenAI (Empujar cambio al dashboard de OpenAI)
+            const assistantId = process.env.ASSISTANT_ID;
+            if (assistantId && openaiMain) {
+                console.log(`📡 [SYNC] Empujando nuevo prompt hacia OpenAI Assistant: ${assistantId}`);
+                await openaiMain.beta.assistants.update(assistantId, {
+                    instructions: prompt
+                });
+                console.log('✅ [SYNC] Prompt actualizado en OpenAI exitosamente.');
+            }
+
+            res.json({ 
+                success: true, 
+                message: 'Prompt actualizado correctamente en local y en OpenAI (Hot-update)' 
+            });
         } catch (error: any) {
-            console.error('Error updating prompt:', error.message);
+            console.error('Error updating prompt and syncing to OpenAI:', error.message);
             res.status(500).json({ success: false, error: error.message });
         }
     });
