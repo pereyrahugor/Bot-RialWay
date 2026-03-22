@@ -87,6 +87,7 @@ function registerSafeErrorHandlers() {
  */
 const main = async () => {
     // 1. Storage cleanup and session restoration
+    await HistoryHandler.initDatabase();
     await restoreSessionFromDb();
     const qrPath = path.join(process.cwd(), "bot.qr.png");
 

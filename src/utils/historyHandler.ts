@@ -110,6 +110,19 @@ export class HistoryHandler {
                     updated_at TIMESTAMPTZ DEFAULT NOW(),
                     FOREIGN KEY (chat_id, project_id) REFERENCES chats(id, project_id)
                 );`
+            },
+            {
+                name: 'meta_onboarding',
+                sql: `CREATE TABLE IF NOT EXISTS meta_onboarding (
+                    project_id TEXT PRIMARY KEY,
+                    waba_id TEXT,
+                    phone_number_id TEXT,
+                    access_token TEXT,
+                    onboarding_data JSONB DEFAULT '{}'::jsonb,
+                    status TEXT DEFAULT 'active',
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                );`
             }
         ];
 
@@ -746,5 +759,5 @@ export class HistoryHandler {
     }
 }
 
-// Inicializar base de datos al cargar el modulo
-HistoryHandler.initDatabase();
+// Inicializar base de datos al cargar el modulo (Quitado para evitar race condition, se llama en app.ts main)
+// HistoryHandler.initDatabase();
