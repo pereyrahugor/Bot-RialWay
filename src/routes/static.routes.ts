@@ -55,7 +55,7 @@ export const registerStaticRoutes = (app: any, { __dirname }: { __dirname: strin
     serveHtmlPage("/dashboard", "dashboard.html");
     serveHtmlPage("/webchat", "webchat.html");
     serveHtmlPage("/webreset", "webreset.html");
-    serveHtmlPage("/variables", "variables.html");
+    serveHtmlPage("/system-config", "system-config.html");
     serveHtmlPage("/login", "login.html");
     serveHtmlPage("/backoffice", "backoffice.html");
 

@@ -1,7 +1,42 @@
 /* global logout, CodeMirror */
 
+// Función de validación de acceso centralizada
+window.checkAdminAccess = () => {
+    const passInput = document.getElementById('admin-pass');
+    const overlay = document.getElementById('config-auth-overlay');
+    const content = document.getElementById('main-config-content');
+    
+    // LA CLAVE HARDCODEADA
+    if (passInput.value === 'neuroadmin25') {
+        overlay.style.display = 'none';
+        content.style.display = 'flex';
+        setTimeout(() => content.style.opacity = '1', 10);
+        // Guardar en local storage para persistencia persistente (entre reinicios de navegador)
+        localStorage.setItem('config_authenticated', 'true');
+        
+        // Disparar refresh si el editor ya existe
+        if (window.cmEditor) window.cmEditor.refresh();
+    } else {
+        passInput.style.borderColor = '#ef4444';
+        passInput.style.boxShadow = '0 0 0 4px rgba(239, 68, 68, 0.1)';
+        alert('❌ Clave incorrecta. Acceso denegado.');
+        passInput.value = '';
+    }
+};
+
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('Variables panel loaded');
+
+    // Verificar si ya está autenticado en este dispositivo
+    if (localStorage.getItem('config_authenticated') === 'true') {
+        const overlay = document.getElementById('config-auth-overlay');
+        const content = document.getElementById('main-config-content');
+        if (overlay) overlay.style.display = 'none';
+        if (content) {
+            content.style.display = 'flex';
+            content.style.opacity = '1';
+        }
+    }
     
     // Inicialización de CodeMirror
     const promptTextarea = document.getElementById('ASSISTANT_PROMPT');
@@ -15,6 +50,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             lineWrapping: true,
             scrollbarStyle: "native"
         });
+        window.cmEditor = editor; // Hacerlo accesible globalmente para refrescarlo
     }
 
     // Lógica del Panel Lateral (Hot-update)
