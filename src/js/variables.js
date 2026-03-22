@@ -1,22 +1,8 @@
 /* global logout, CodeMirror */
 
-// Lógica de colapso fuera del DOMContentLoaded para acceso global
-window.togglePromptCollapse = () => {
-    const header = document.querySelector('.prompt-header');
-    const content = document.getElementById('prompt-content');
-    header.classList.toggle('collapsed');
-    content.classList.toggle('collapsed');
-};
-
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('Variables panel loaded');
     
-    const cancelBtn = document.getElementById('cancel-btn');
-    const variablesForm = document.getElementById('variables-form');
-    const updateBtn = document.getElementById('update-btn');
-    
-    let initialVariables = {};
-
     // Inicialización de CodeMirror
     const promptTextarea = document.getElementById('ASSISTANT_PROMPT');
     let editor = null;
@@ -30,6 +16,29 @@ document.addEventListener('DOMContentLoaded', async () => {
             scrollbarStyle: "native"
         });
     }
+
+    // Lógica del Panel Lateral (Hot-update)
+    window.togglePromptPanel = () => {
+        const panel = document.getElementById('prompt-panel');
+        const overlay = document.getElementById('panel-overlay');
+        const isActive = panel.classList.toggle('active');
+        overlay.classList.toggle('active');
+
+        // IMPORTANTE: Refrescar CodeMirror cuando el panel se abre
+        // de lo contrario, puede no renderizar correctamente si estaba oculto.
+        if (isActive && editor) {
+            setTimeout(() => {
+                editor.refresh();
+                editor.focus();
+            }, 300); // Dar tiempo a la animación de entrada
+        }
+    };
+
+    const cancelBtn = document.getElementById('cancel-btn');
+    const variablesForm = document.getElementById('variables-form');
+    const updateBtn = document.getElementById('update-btn');
+    
+    let initialVariables = {};
 
     // Cargar variables actuales
     async function loadVariables() {

@@ -43,6 +43,78 @@
         .collapse-icon { transition: transform 0.3s ease; }
         .prompt-content.collapsed { display: none; }
         .prompt-header.collapsed .collapse-icon { transform: rotate(-90deg); }
+
+        /* Panel Lateral de Prompt (Estilo Tickets) */
+        .prompt-panel {
+            position: fixed;
+            top: 0;
+            right: -80%;
+            width: 80%;
+            height: 100vh;
+            background: var(--bg-main);
+            backdrop-filter: blur(20px);
+            z-index: 2000;
+            transition: right 0.5s cubic-bezier(0.19, 1, 0.22, 1);
+            display: flex;
+            flex-direction: column;
+            box-shadow: -15px 0 50px rgba(0,0,0,0.2);
+            border-left: 1px solid var(--border-color);
+        }
+        .prompt-panel.active {
+            right: 0;
+        }
+        .panel-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.4);
+            backdrop-filter: blur(4px);
+            z-index: 1999;
+            display: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .panel-overlay.active {
+            display: block;
+            opacity: 1;
+        }
+        .prompt-panel-header {
+            padding: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            background: rgba(255,255,255,0.05);
+        }
+        .prompt-panel-content {
+            flex: 1;
+            padding: 24px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+        .prompt-panel .CodeMirror {
+            flex: 1;
+            height: calc(100vh - 250px) !important;
+            font-size: 15px;
+        }
+        .trigger-card {
+            background: rgba(99, 102, 241, 0.05);
+            border: 1px dashed #6366f1;
+            padding: 20px;
+            border-radius: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .trigger-card:hover {
+            background: rgba(99, 102, 241, 0.1);
+            transform: translateY(-2px);
+        }
     </style>
 </head>
 <body data-theme="light">
@@ -104,28 +176,14 @@
                     <input type="text" name="ID_GRUPO_RESUMEN" id="ID_GRUPO_RESUMEN">
                 </div>
                 <div class="variable-group" style="grid-column: span 2;">
-                    <div class="prompt-header" onclick="togglePromptCollapse()">
-                        <div style="display:flex; align-items:center; gap:10px;">
-                            <i class="fas fa-chevron-down collapse-icon"></i>
-                            <h3 style="margin:0;">ASSISTANT_PROMPT (Instrucciones de Lógica)</h3>
+                    <div class="trigger-card" onclick="togglePromptPanel()">
+                        <div>
+                            <h3 style="margin:0; color: #6366f1;"><i class="fas fa-terminal" style="margin-right:10px;"></i> ASSISTANT_PROMPT</h3>
+                            <p class="description" style="margin:5px 0 0 0;">Configuración de la lógica maestra e instrucciones del sistema.</p>
                         </div>
-                        <p class="description" style="margin:0;">Prompt principal del sistema. Sobreescribe al asistente de OpenAI si no está vacío.</p>
-                    </div>
-                    
-                    <div class="prompt-content" id="prompt-content">
-                        <div class="textarea-wrapper" style="margin-top:10px;">
-                            <textarea name="ASSISTANT_PROMPT" id="ASSISTANT_PROMPT"></textarea>
-                            
-                            <div style="display:flex; gap:10px; margin-top: 15px; flex-wrap: wrap;">
-                                <button type="button" id="sync-prompt-btn" class="btn btn-secondary" style="width: auto; font-size: 13px;">
-                                    <i class="fas fa-sync"></i> Sincronizar desde OpenAI
-                                </button>
-                                <button type="button" id="save-prompt-hot-btn" class="btn" style="width: auto; font-size: 13px; background: #10b981; border:none;">
-                                    <i class="fas fa-bolt"></i> Guardar (Sin reiniciar)
-                                </button>
-                                <span id="sync-status" style="font-size: 13px; align-self: center; opacity: 0.8;"></span>
-                            </div>
-                        </div>
+                        <button type="button" class="btn" style="width:auto; padding: 10px 20px; background: #6366f1; font-size: 13px;">
+                            <i class="fas fa-expand-alt" style="margin-right:8px;"></i> Editar Instrucciones
+                        </button>
                     </div>
                 </div>
             </div>
@@ -264,7 +322,37 @@
             </div>
         </form>
     </div>
+    <div id="panel-overlay" class="panel-overlay" onclick="togglePromptPanel()"></div>
+    <div id="prompt-panel" class="prompt-panel">
+        <div class="prompt-panel-header">
+            <div>
+                <h3 style="margin:0; font-size: 1.4rem;"><i class="fas fa-magic" style="color: #6366f1; margin-right:12px;"></i> Editor de Lógica Maestra</h3>
+                <p style="margin:5px 0 0 0; font-size: 0.85rem; opacity: 0.7;">Define el comportamiento, personalidad y reglas del bot con precisión quirúrgica.</p>
+            </div>
+            <button class="btn-icon" onclick="togglePromptPanel()" style="font-size: 1.5rem;"><i class="fas fa-times"></i></button>
+        </div>
+        
+        <div class="prompt-panel-content">
+            <textarea id="ASSISTANT_PROMPT" name="ASSISTANT_PROMPT"></textarea>
+            
+            <div style="margin-top:24px; display:flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.03); padding: 15px; border-radius: 16px;">
+                <div style="display:flex; gap:12px;">
+                    <button type="button" id="sync-prompt-btn" class="btn btn-secondary" style="width: auto; font-size: 14px;">
+                        <i class="fas fa-sync"></i> Sincronizar desde OpenAI
+                    </button>
+                    <button type="button" id="save-prompt-hot-btn" class="btn" style="width: auto; font-size: 14px; background: #10b981; border:none; padding: 0 25px;">
+                        <i class="fas fa-bolt"></i> Publicar Cambios (Hot-update)
+                    </button>
+                </div>
+                <div id="sync-status" style="font-weight: 600; font-size: 14px;"></div>
+            </div>
+            
+            <p style="margin-top:15px; font-size: 0.8rem; opacity: 0.5; text-align: center;">
+                <i class="fas fa-info-circle"></i> Al publicar, los cambios se envían a la base de datos y a OpenAI automáticamente.
+            </p>
+        </div>
     </div>
+
     <script src="/js/crm-common.js"></script>
     <script src="/js/variables.js"></script>
 </body>
