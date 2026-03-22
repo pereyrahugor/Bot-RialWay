@@ -663,7 +663,8 @@ async function fetchPendingTicketsCount() {
     }
 }
 
-function toggleTicketsPanel() {
+function toggleTicketsPanel(e) {
+    if (e) e.stopPropagation();
     const panel = document.getElementById('tickets-panel');
     panel.classList.toggle('active');
     if (panel.classList.contains('active')) {
