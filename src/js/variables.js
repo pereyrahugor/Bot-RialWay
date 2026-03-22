@@ -163,7 +163,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- Sincronizar Prompt ---
     const syncBtn = document.getElementById('sync-prompt-btn');
     const syncStatus = document.getElementById('sync-status');
-    const promptTextarea = document.getElementById('ASSISTANT_PROMPT');
     const assistantIdInput = document.getElementById('ASSISTANT_ID');
 
     syncBtn.addEventListener('click', async () => {
