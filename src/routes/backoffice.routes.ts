@@ -283,4 +283,11 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         const result = await HistoryHandler.updateTicketStatus(id, estado);
         res.json(result);
     });
+
+    app.get('/api/backoffice/leads', backofficeAuth, async (req, res) => {
+        const limit = parseInt(req.query.limit as string) || 50;
+        const offset = parseInt(req.query.offset as string) || 0;
+        const result = await HistoryHandler.listEditedLeads(limit, offset);
+        res.json(result);
+    });
 };

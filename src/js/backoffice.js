@@ -822,6 +822,61 @@ async function createTicket() {
     }
 }
 
+// --- LEADS LOGIC ---
+
+function toggleLeadsPanel(e) {
+    if (e) e.stopPropagation();
+    const panel = document.getElementById('leads-panel');
+    panel.classList.toggle('active');
+    if (panel.classList.contains('active')) {
+        fetchLeads();
+    }
+}
+
+async function fetchLeads() {
+    const list = document.getElementById('leads-list');
+    list.innerHTML = '<div style="text-align:center; padding:20px; opacity:0.5;">Cargando leads editados...</div>';
+    
+    try {
+        const res = await fetch(`/api/backoffice/leads?token=${token}`);
+        const leads = await res.json();
+
+        if (!Array.isArray(leads) || leads.length === 0) {
+            list.innerHTML = '<div style="text-align:center; padding:20px; opacity:0.5;">No hay leads editados (con notas, email o fuente)</div>';
+            return;
+        }
+
+        list.innerHTML = leads.map(l => {
+            const date = l.last_human_message_at ? new Date(l.last_human_message_at).toLocaleDateString() : 'Sin actividad';
+            const name = l.name || l.id.split('@')[0];
+            
+            return `
+                <div class="ticket-item" onclick="selectLead('${l.id}')" style="cursor:pointer;">
+                    <div class="ticket-header">
+                        <div class="ticket-title">${name}</div>
+                        <div style="font-size:0.7rem; opacity:0.6;">${l.source || 'Sin fuente'}</div>
+                    </div>
+                    <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:8px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">
+                        ${l.notes || 'Sin notas'}
+                    </div>
+                    <div class="ticket-meta">
+                        <span><i class="far fa-envelope"></i> ${l.email || 'Sin email'}</span>
+                        <span><i class="far fa-clock"></i> ${date}</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } catch (e) {
+        console.error('Error fetching leads:', e);
+        list.innerHTML = '<div style="color:#f87171; text-align:center; padding:20px;">Error al cargar leads</div>';
+    }
+}
+
+function selectLead(chatId) {
+    toggleLeadsPanel();
+    selectChat(chatId);
+}
+
 // Inicialización
 fetchPendingTicketsCount();
 setInterval(fetchPendingTicketsCount, 30000);

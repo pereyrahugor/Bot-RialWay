@@ -679,6 +679,26 @@ export class HistoryHandler {
             return { success: false, error: err.message };
         }
     }
+    /**
+     * Lista los leads que tienen datos de CRM (editados)
+     */
+    static async listEditedLeads(limit: number = 50, offset: number = 0) {
+        try {
+            const { data, error } = await supabase
+                .from('chats')
+                .select('*')
+                .eq('project_id', PROJECT_ID)
+                .or('notes.neq."",email.neq."",source.neq.""')
+                .order('last_human_message_at', { ascending: false })
+                .range(offset, offset + limit - 1);
+
+            if (error) throw error;
+            return data || [];
+        } catch (err) {
+            console.error('[HistoryHandler] Error en listEditedLeads:', err);
+            return [];
+        }
+    }
 }
 
 // Inicializar base de datos al cargar el modulo
