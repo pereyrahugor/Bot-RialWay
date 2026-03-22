@@ -15,6 +15,8 @@ export const historyEvents = new EventEmitter();
 
 // Identificador único para este bot específico
 const PROJECT_ID = process.env.RAILWAY_PROJECT_ID || "default_project";
+const PROJECT_NAME = process.env.RAILWAY_SERVICE_NAME || "Bot-RialWay";
+const PROJECT_IDENTIFIER = process.env.RAILWAY_PROJECT_NAME ? `${process.env.RAILWAY_PROJECT_NAME}-${PROJECT_NAME}` : PROJECT_ID;
 
 export interface Chat {
     id: string;
@@ -122,6 +124,16 @@ export class HistoryHandler {
                     status TEXT DEFAULT 'active',
                     created_at TIMESTAMPTZ DEFAULT NOW(),
                     updated_at TIMESTAMPTZ DEFAULT NOW()
+                );`
+            },
+            {
+                name: 'settings',
+                sql: `CREATE TABLE IF NOT EXISTS settings (
+                    project_id TEXT,
+                    key TEXT,
+                    value TEXT,
+                    updated_at TIMESTAMPTZ DEFAULT NOW(),
+                    PRIMARY KEY (project_id, key)
                 );`
             }
         ];
@@ -756,6 +768,35 @@ export class HistoryHandler {
             console.error('[HistoryHandler] Error en getMetaOnboardingData:', err);
             return null;
         }
+    }
+
+    static async saveSetting(key: string, value: string) {
+        if (!supabase) return;
+        const { error } = await supabase
+            .from('settings')
+            .upsert({ 
+                project_id: PROJECT_IDENTIFIER, 
+                key, 
+                value, 
+                updated_at: new Date().toISOString() 
+            }, { onConflict: 'project_id,key' });
+
+        if (error) console.error(`❌ [HistoryHandler] Error guardando setting ${key}:`, error);
+    }
+
+    static async getSetting(key: string): Promise<string | null> {
+        if (!supabase) return null;
+        const { data, error } = await supabase
+            .from('settings')
+            .select('value')
+            .eq('project_id', PROJECT_IDENTIFIER)
+            .eq('key', key)
+            .single();
+
+        if (error && error.code !== 'PGRST116') {
+            console.error(`❌ [HistoryHandler] Error obteniendo setting ${key}:`, error);
+        }
+        return data ? data.value : null;
     }
 }
 

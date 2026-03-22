@@ -89,6 +89,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         updateBtn.disabled = true;
         updateBtn.textContent = 'Actualizando...';
+        
+        // Incluimos explícitamente el prompt si existe en el formulario
+        if (formData.get('ASSISTANT_PROMPT')) {
+             changedVariables['ASSISTANT_PROMPT'] = formData.get('ASSISTANT_PROMPT');
+        }
 
         try {
             const token = localStorage.getItem('backoffice_token');
@@ -121,4 +126,105 @@ document.addEventListener('DOMContentLoaded', async () => {
             updateBtn.textContent = 'Actualizar y Reiniciar';
         }
     });
+
+    // --- Sincronizar Prompt ---
+    const syncBtn = document.getElementById('sync-prompt-btn');
+    const syncStatus = document.getElementById('sync-status');
+    const promptTextarea = document.getElementById('ASSISTANT_PROMPT');
+    const assistantIdInput = document.getElementById('ASSISTANT_ID');
+
+    syncBtn.addEventListener('click', async () => {
+        const assistantId = assistantIdInput.value;
+        if (!assistantId) {
+            alert('Debes ingresar un ASSISTANT_ID para sincronizar.');
+            return;
+        }
+
+        syncBtn.disabled = true;
+        syncStatus.textContent = '⏳ Obteniendo instrucciones...';
+        syncStatus.style.color = 'inherit';
+
+        try {
+            const token = localStorage.getItem('backoffice_token');
+            const response = await fetch(`/api/backoffice/sync-assistant-prompt?token=${token}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ assistantId })
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                promptTextarea.value = data.instructions;
+                syncStatus.textContent = '✅ Sincronizado correctamente.';
+                syncStatus.style.color = '#10b981';
+            } else {
+                syncStatus.textContent = '❌ Error sincronizando.';
+                syncStatus.style.color = '#ef4444';
+                alert('Error: ' + data.error);
+            }
+        } catch (err) {
+            console.error('Error syncing prompt:', err);
+            syncStatus.textContent = '❌ Error de conexión.';
+            syncStatus.style.color = '#ef4444';
+        } finally {
+            syncBtn.disabled = false;
+        }
+    });
+
+    // --- Guardar Prompt sin reiniciar (Hot-update) ---
+    const hotSaveBtn = document.getElementById('save-prompt-hot-btn');
+    hotSaveBtn.addEventListener('click', async () => {
+        const prompt = promptTextarea.value;
+        hotSaveBtn.disabled = true;
+        syncStatus.textContent = '⏳ Guardando en base de datos...';
+        syncStatus.style.color = 'inherit';
+
+        try {
+            const token = localStorage.getItem('backoffice_token');
+            const response = await fetch(`/api/backoffice/update-prompt?token=${token}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ prompt })
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                syncStatus.textContent = '✅ Guardado correctamente (Hot-update).';
+                syncStatus.style.color = '#10b981';
+                // Actualizar initialVariables para evitar que el form principal crea que hay cambios
+                initialVariables['ASSISTANT_PROMPT'] = prompt;
+            } else {
+                syncStatus.textContent = '❌ Error al guardar.';
+                syncStatus.style.color = '#ef4444';
+                alert('Error: ' + data.error);
+            }
+        } catch (err) {
+            console.error('Error saving hot prompt:', err);
+            syncStatus.textContent = '❌ Error de conexión.';
+        } finally {
+            hotSaveBtn.disabled = false;
+        }
+    });
+
+    // --- Cargar Prompt actual desde DB ---
+    async function loadAssistantPrompt() {
+        try {
+            const token = localStorage.getItem('backoffice_token');
+            const response = await fetch(`/api/backoffice/get-prompt?token=${token}`);
+            const data = await response.json();
+            if (data.success && data.prompt) {
+                promptTextarea.value = data.prompt;
+                initialVariables['ASSISTANT_PROMPT'] = data.prompt;
+            }
+        } catch (err) {
+            console.error('Error loading stored prompt:', err);
+        }
+    }
+    
+    // Llamar a la carga del prompt
+    await loadAssistantPrompt();
 });

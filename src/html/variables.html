@@ -68,10 +68,19 @@
                     <p class="description">ID del grupo principal para reportes de ventas.</p>
                     <input type="text" name="ID_GRUPO_RESUMEN" id="ID_GRUPO_RESUMEN">
                 </div>
-                <div class="variable-group">
-                    <h3>ID_GRUPO_RESUMEN_2</h3>
-                    <p class="description">ID del segundo grupo para reportes de ventas.</p>
-                    <input type="text" name="ID_GRUPO_RESUMEN_2" id="ID_GRUPO_RESUMEN_2">
+                <div class="variable-group" style="grid-column: span 2;">
+                    <h3>ASSISTANT_PROMPT (Instrucciones)</h3>
+                    <p class="description">Prompt principal del sistema. Si está vacío, usará el definido en el Assistant ID.</p>
+                    <div class="textarea-wrapper">
+                        <textarea name="ASSISTANT_PROMPT" id="ASSISTANT_PROMPT" style="height: 200px; font-family: monospace; font-size: 13px;"></textarea>
+                        <button type="button" id="sync-prompt-btn" class="btn btn-secondary" style="margin-top: 10px; width: auto; font-size: 12px;">
+                            <i class="fas fa-sync"></i> Sincronizar desde OpenAI
+                        </button>
+                        <button type="button" id="save-prompt-hot-btn" class="btn btn-secondary" style="margin-top: 10px; margin-left:8px; width: auto; font-size: 12px; border-color: #10b981; color: #10b981;">
+                            <i class="fas fa-save"></i> Guardar (Sin reiniciar)
+                        </button>
+                        <span id="sync-status" style="font-size: 12px; margin-left: 10px; opacity: 0.8;"></span>
+                    </div>
                 </div>
             </div>
 

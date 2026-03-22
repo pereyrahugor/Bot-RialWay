@@ -349,4 +349,55 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             res.status(500).json({ success: false, error: error.response?.data?.error?.message || error.message });
         }
     });
+
+    // --- SYNC ASSISTANT PROMPT ---
+
+    app.post('/api/backoffice/sync-assistant-prompt', backofficeAuth, bodyParser.json(), async (req, res) => {
+        const { assistantId } = req.body;
+        if (!assistantId) return res.status(400).json({ success: false, error: 'assistantId is required' });
+
+        try {
+            console.log(`📡 [SYNC] Obteniendo instrucciones para el asistente: ${assistantId}`);
+            const assistant = await openaiMain.beta.assistants.retrieve(assistantId);
+            
+            if (assistant && assistant.instructions) {
+                res.json({ 
+                    success: true, 
+                    instructions: assistant.instructions,
+                    name: assistant.name,
+                    model: assistant.model
+                });
+            } else {
+                res.status(404).json({ success: false, error: 'Assistant not found or has no instructions' });
+            }
+        } catch (error: any) {
+            console.error('Error syncing assistant prompt:', error.message);
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
+    // --- GET STORED PROMPT ---
+    app.get('/api/backoffice/get-prompt', backofficeAuth, async (req, res) => {
+        try {
+            const prompt = await HistoryHandler.getSetting('ASSISTANT_PROMPT');
+            res.json({ success: true, prompt: prompt || process.env.ASSISTANT_PROMPT || '' });
+        } catch (error: any) {
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
+    // --- UPDATE PROMPT WITHOUT RESTART ---
+    app.post('/api/backoffice/update-prompt', backofficeAuth, bodyParser.json(), async (req, res) => {
+        const { prompt } = req.body;
+        if (prompt === undefined) return res.status(400).json({ success: false, error: 'prompt is required' });
+
+        try {
+            console.log(`📡 [HOT-UPDATE] Actualizando prompt en base de datos...`);
+            await HistoryHandler.saveSetting('ASSISTANT_PROMPT', prompt);
+            res.json({ success: true, message: 'Prompt actualizado correctamente (Hot-update)' });
+        } catch (error: any) {
+            console.error('Error updating prompt:', error.message);
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
 };

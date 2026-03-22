@@ -687,10 +687,7 @@ async function fetchTickets() {
     list.innerHTML = '<div style="text-align:center; padding:20px; opacity:0.5;">Cargando tickets...</div>';
     
     try {
-        // Enviar estado=Cerrado/* global metaAppId, FB, token, selectChat, showToast */
-/**
- * Lógica del panel de control del asistente.
- */       const estadoParam = currentTicketsFilter === 'pending' ? '' : `&estado=${currentTicketsFilter}`;
+        const estadoParam = currentTicketsFilter === 'pending' ? '' : `&estado=${currentTicketsFilter}`;
         const res = await fetch(`/api/backoffice/tickets?token=${token}${estadoParam}`);
         const tickets = await res.json();
 

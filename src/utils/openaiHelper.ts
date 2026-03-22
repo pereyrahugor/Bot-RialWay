@@ -88,9 +88,19 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
         }
     };
 
-    const run = await openai.beta.threads.runs.createAndPoll(threadId, {
+    const runOptions: any = {
         assistant_id: assistantId
-    });
+    };
+
+    // Prioridad: 1. Base de Datos (Hot-Update) | 2. Environment Variable | 3. OpenAI Dashboard (default)
+    const dbPrompt = await HistoryHandler.getSetting('ASSISTANT_PROMPT');
+    const localPrompt = dbPrompt || process.env.ASSISTANT_PROMPT;
+
+    if (localPrompt) {
+        runOptions.instructions = localPrompt;
+    }
+
+    const run = await openai.beta.threads.runs.createAndPoll(threadId, runOptions);
 
     return await handleRunStatus(run);
 };

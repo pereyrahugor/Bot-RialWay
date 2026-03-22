@@ -126,10 +126,20 @@ export class AiManager {
             // Comandos Globales y Sheet Update
             if (body === "#ACTUALIZAR#") {
                 try {
+                    console.log('📡 [SYNC] Sincronizando datos de Google y Prompt de OpenAI...');
                     await updateMain();
-                    await flowDynamic([{ body: "🔄 Datos actualizados desde Google." }]);
-                } catch (err) {
-                    await flowDynamic([{ body: "❌ Error al actualizar datos desde Google." }]);
+                    
+                    // Sincronización del Prompt del asistente (Hot-update)
+                    const assistant = await this.openaiMain.beta.assistants.retrieve(this.assistantId);
+                    if (assistant && assistant.instructions) {
+                        await HistoryHandler.saveSetting('ASSISTANT_PROMPT', assistant.instructions);
+                        console.log('✅ [SYNC] Prompt del asistente sincronizado en base de datos.');
+                    }
+
+                    await flowDynamic([{ body: "🔄 Datos actualizados desde Google y Assistant Prompt sincronizado (Hot-update)." }]);
+                } catch (err: any) {
+                    console.error("[AiManager] Error en #ACTUALIZAR#:", err.message);
+                    await flowDynamic([{ body: "❌ Error al actualizar datos operativos." }]);
                 }
                 return state;
             }
