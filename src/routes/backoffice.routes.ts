@@ -313,39 +313,33 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         if (!code) return res.status(400).json({ success: false, error: 'Code is required' });
 
         try {
-            // 1. Intercambiar código por token de acceso del usuario
-            const tokenResponse = await axios.get(`https://graph.facebook.com/v20.0/oauth/access_token`, {
-                params: {
-                    client_id: process.env.META_APP_ID,
-                    client_secret: process.env.META_APP_SECRET,
-                    code: code
-                }
-            });
-
-            const userAccessToken = tokenResponse.data.access_token;
-
-            // 2. Obtener los WABA IDs compartidos con esta App
-            const debugResponse = await axios.get(`https://graph.facebook.com/debug_token`, {
-                params: {
-                    input_token: userAccessToken,
-                    access_token: `${process.env.META_APP_ID}|${process.env.META_APP_SECRET}`
-                }
-            });
-
-            // Nota: Aquí se extraen los IDs según lo que devuelve Meta en el flujo de login
-            // Para simplificar esta etapa de "Coming Soon", guardamos el token principal
-            // El proceso real requiere mapear el granular_scopes para obtener el WABA ID.
+            console.log(`📡 [META-ONBOARD] Llamando a DuskCodes para validación externa...`);
             
+            // 1. Llamar al endpoint de DuskCodes pasando credenciales y el código
+            const response = await axios.post('https://duskcodes.com.ar/meta-auth', {
+                code,
+                railwayProjectId: process.env.RAILWAY_PROJECT_ID,
+                metaAppId: process.env.META_APP_ID,
+                metaAppSecret: process.env.META_APP_SECRET
+            });
+
+            const data = response.data;
+
+            if (data.error) {
+                throw new Error(data.error || 'La validación en DuskCodes falló');
+            }
+
+            // 2. Guardar los datos recibidos (WABA, Phone ID, Token) en la base de datos
             const result = await HistoryHandler.saveMetaOnboardingData(
-                "PENDING", // Se llenará con la lógica granular de Meta
-                "PENDING", 
-                userAccessToken,
-                { raw: debugResponse.data.data }
+                data.wabaId || "PENDING", 
+                data.phoneNumberId || "PENDING", 
+                data.accessToken || data.access_token,
+                { ...data, syncedBy: 'duskcodes' }
             );
 
             res.json(result);
         } catch (error: any) {
-            console.error('Error in Meta Onboarding:', error.response?.data || error.message);
+            console.error('Error in Meta Onboarding (External):', error.response?.data || error.message);
             res.status(500).json({ success: false, error: error.response?.data?.error?.message || error.message });
         }
     });

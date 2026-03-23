@@ -17,6 +17,7 @@ async function fetchStatus() {
         sessionInfo.style.display = 'none';
         wsLinkContainer.style.display = 'none';
         sessionError.innerHTML = '';
+        sessionInfo.innerHTML = '';
 
         if (!data.adapter) {
             statusEl.textContent = '❌ Error de sistema';
