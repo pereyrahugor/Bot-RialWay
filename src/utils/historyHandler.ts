@@ -14,9 +14,10 @@ export { supabase };
 export const historyEvents = new EventEmitter();
 
 // Identificador único para este bot específico
+// Identificador único para este bot específico (Usamos el UUID para consistencia total)
 const PROJECT_ID = process.env.RAILWAY_PROJECT_ID || "default_project";
+const PROJECT_IDENTIFIER = PROJECT_ID; // Unificamos para evitar discrepancias entre tablas
 const PROJECT_NAME = process.env.RAILWAY_SERVICE_NAME || "Bot-RialWay";
-const PROJECT_IDENTIFIER = process.env.RAILWAY_PROJECT_NAME ? `${process.env.RAILWAY_PROJECT_NAME}-${PROJECT_NAME}` : PROJECT_ID;
 
 export interface Chat {
     id: string; // WAID (Teléfono) o identificador de Webchat
@@ -690,19 +691,21 @@ export class HistoryHandler {
     static async listTickets(limit: number = 50, offset: number = 0, estado?: string, tipo?: string) {
         console.log(`[HistoryHandler] listTickets -> req: estado=${estado}, tipo=${tipo}, project=${PROJECT_ID}`);
         try {
-            // Unir con la tabla chats para traer el nombre del contacto
             let query = supabase
                 .from('tickets')
                 .select('*, chats(name, id)')
                 .eq('project_id', PROJECT_ID);
 
-            if (estado && estado !== 'null' && estado !== 'undefined') {
+            // Filtro de estado robusto
+            if (estado && estado !== 'null' && estado !== 'undefined' && estado !== '') {
+                // Forzamos comparación exacta
                 query = query.eq('estado', estado);
             } else {
+                // Por defecto, solo lo que no esté cerrado
                 query = query.in('estado', ['Abierto', 'En progreso']);
             }
 
-            if (tipo && tipo !== 'null' && tipo !== 'undefined') {
+            if (tipo && tipo !== 'null' && tipo !== 'undefined' && tipo !== '') {
                 query = query.eq('tipo', tipo);
             }
 
