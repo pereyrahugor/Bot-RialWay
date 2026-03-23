@@ -891,13 +891,19 @@ function launchMetaOnboarding() {
               return;
           }
           
-          // Redirigir a DuskCodes con los parámetros requeridos
+          // Abrir DuskCodes en una sub-ventana (popup)
           const url = new URL('https://duskcodes.com.ar/meta-auth');
           url.searchParams.append('railwayProjectId', data.railwayProjectId);
           url.searchParams.append('metaAppId', data.appId);
           url.searchParams.append('metaAppSecret', data.appSecret);
           
-          window.location.href = url.toString();
+          const width = 600;
+          const height = 800;
+          const left = (window.screen.width / 2) - (width / 2);
+          const top = (window.screen.height / 2) - (height / 2);
+
+          window.open(url.toString(), 'MetaOnboarding', 
+            `width=${width},height=${height},top=${top},left=${left},scrollbars=yes,status=no,menubar=no`);
       })
       .catch(err => {
           console.error(err);
