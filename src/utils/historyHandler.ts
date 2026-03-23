@@ -688,6 +688,7 @@ export class HistoryHandler {
      * Lista los tickets del proyecto
      */
     static async listTickets(limit: number = 50, offset: number = 0, estado?: string, tipo?: string) {
+        console.log(`[HistoryHandler] listTickets -> req: estado=${estado}, tipo=${tipo}, project=${PROJECT_ID}`);
         try {
             // Unir con la tabla chats para traer el nombre del contacto
             let query = supabase
@@ -695,13 +696,13 @@ export class HistoryHandler {
                 .select('*, chats(name, id)')
                 .eq('project_id', PROJECT_ID);
 
-            if (estado) {
+            if (estado && estado !== 'null' && estado !== 'undefined') {
                 query = query.eq('estado', estado);
             } else {
                 query = query.in('estado', ['Abierto', 'En progreso']);
             }
 
-            if (tipo) {
+            if (tipo && tipo !== 'null' && tipo !== 'undefined') {
                 query = query.eq('tipo', tipo);
             }
 

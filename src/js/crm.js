@@ -62,7 +62,7 @@ async function syncCRM() {
     try {
         const [resLeads, resTickets] = await Promise.all([
             fetch(`/api/backoffice/leads?token=${activeToken}&limit=300`),
-            fetch(`/api/backoffice/tickets?token=${activeToken}`)
+            fetch(`/api/backoffice/tickets?token=${activeToken}&estado=Abierto`) // Forzamos solo abiertos para el tablero
         ]);
 
         allLeads = await resLeads.json();
@@ -450,7 +450,7 @@ window.confirmCloseTicket = async (ticketId) => {
         await saveCRMMetadata();
 
         // 2. Actualizar estado del ticket
-        await fetch(`/api/backoffice/tickets/${ticketId}/status?token=${activeToken}`, {
+        await fetch(`/api/backoffice/tickets/${ticketId}?token=${activeToken}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ estado: 'Cerrado' })
