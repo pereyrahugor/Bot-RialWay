@@ -17,7 +17,7 @@ export const registerWebchatRoutes = (app: any, {
     processUserMessage 
 }: any) => {
 
-    app.post('/webchat-api', backofficeAuth, async (req: any, res: any) => {
+    app.post('/webchat-api', async (req: any, res: any) => {
         if (!req.body || (!req.body.message && !req.body.file)) {
             return res.status(400).json({ error: "Falta 'message' o 'file'" });
         }
