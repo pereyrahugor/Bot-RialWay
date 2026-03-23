@@ -21,7 +21,6 @@ let crmData = {}; // Para guardar metadatos (alertas, notas adicionales) de cada
 document.addEventListener('DOMContentLoaded', () => {
     loadCRMState();
     syncCRM();
-    initTheme();
     
     // Auto-check de alertas cada minuto
     setInterval(checkAlertsVisual, 60000);
@@ -117,11 +116,9 @@ function renderBoard() {
 }
 
 function distributeCards() {
-    // Limpiar contenedores
     const containers = document.querySelectorAll('.kanban-cards');
     containers.forEach(c => c.innerHTML = '');
 
-    // Primero los tickets abiertos. Si un ticket no tiene columna asignada (metadata), va a UNASSIGNED.
     allTickets.forEach(ticket => {
         const lead = allLeads.find(l => l.id === ticket.chat_id);
         const metadata = crmData[ticket.id] || {};
@@ -143,26 +140,40 @@ function createCardElement(ticket, lead, metadata) {
     card.dataset.id = ticket.id;
     card.id = `card-${ticket.id}`;
     
+    // Al hacer clic en la card, vamos al chat en el backoffice
+    card.onclick = (e) => {
+        // Evitar que el clic en botones internos (como editar) dispare esto
+        if (e.target.closest('button') || e.target.closest('.card-modal')) return;
+        localStorage.setItem('activeChat', ticket.chat_id);
+        window.location.href = '/backoffice';
+    };
+    
     const tags = (lead?.tags || []).map(t => 
         `<span class="card-tag" style="background:${t.color}">${t.name}</span>`
     ).join('');
 
     const phone = ticket.chat_id ? ticket.chat_id.split('@')[0] : 'Desconocido';
+    const email = lead?.email || '';
+    const source = lead?.source || '';
     const alertDateStr = metadata.alertDate ? formatDate(metadata.alertDate) : 'Sin alerta';
-    const hasAlert = !!metadata.alertDate;
 
     card.innerHTML = `
         <div class="priority-indicator" style="background:${getPriorityColor(metadata.priority)}"></div>
         <div class="card-tags">${tags}</div>
         <div class="card-title">${ticket.titulo || 'Sin título'}</div>
-        <div class="card-lead">
-            <i class="fas fa-user-circle"></i> ${lead?.name || phone}
+        <div class="card-lead-main">
+            <i class="fas fa-user-circle"></i> ${lead?.name || 'Lead sin nombre'}
+        </div>
+        <div class="card-lead-details">
+            <div class="detail-item"><i class="fas fa-phone"></i> ${phone}</div>
+            ${email ? `<div class="detail-item"><i class="fas fa-envelope"></i> ${email}</div>` : ''}
+            ${source ? `<div class="detail-item"><i class="fas fa-bullseye"></i> ${source}</div>` : ''}
         </div>
         <div class="card-footer">
             <div class="card-alert ${getAlertClass(metadata.alertDate)}" id="alert-card-${ticket.id}">
                 <i class="fas fa-bell"></i> ${alertDateStr}
             </div>
-            <button class="btn-icon" onclick="openCardModal('${ticket.id}')">
+            <button class="btn-icon" onclick="event.stopPropagation(); openCardModal('${ticket.id}')">
                 <i class="fas fa-external-link-alt"></i>
             </button>
         </div>
@@ -172,6 +183,7 @@ function createCardElement(ticket, lead, metadata) {
 }
 
 function initDragAndDrop() {
+    // 1. Arrastre de tarjetas entre columnas
     const containers = document.querySelectorAll('.kanban-cards');
     containers.forEach(container => {
         new Sortable(container, {
@@ -181,19 +193,36 @@ function initDragAndDrop() {
             onEnd: async (evt) => {
                 const ticketId = evt.item.dataset.id;
                 const newColumnId = evt.to.id.replace('cards-', '');
-                
-                showToast(`Moviendo a ${newColumnId}...`);
-                
-                // Actualizar metadatos localmente
                 if (!crmData[ticketId]) crmData[ticketId] = {};
                 crmData[ticketId].columnId = newColumnId;
-                
-                // Persistir el cambio de columna
                 saveCRMMetadata();
                 updateCounters();
             }
         });
     });
+
+    // 2. Arrastre de columnas (Reordenar etapas)
+    const boardInner = document.querySelector('.kanban-board-inner');
+    if (boardInner) {
+        new Sortable(boardInner, {
+            animation: 150,
+            draggable: '.kanban-column',
+            handle: '.column-header',
+            ghostClass: 'sortable-ghost',
+            onEnd: () => {
+                // Leer el nuevo orden de los IDs de las columnas y guardar
+                const newOrder = [];
+                document.querySelectorAll('.kanban-column').forEach(col => {
+                    const colId = col.dataset.id;
+                    const existingCol = columns.find(c => c.id === colId);
+                    if (existingCol) newOrder.push(existingCol);
+                });
+                columns = newOrder;
+                saveCRMState();
+                showToast('Etapas reordenadas');
+            }
+        });
+    }
 }
 
 async function saveCRMMetadata() {
@@ -345,11 +374,6 @@ function formatDate(dateStr) {
     return d.toLocaleDateString([], { day: '2-digit', month: '2-digit' });
 }
 
-function logout() {
-    localStorage.removeItem('backoffice_token');
-    localStorage.removeItem('system_config_token');
-    window.location.href = '/login';
-}
 
 function showToast(message, type = 'success') {
     const toast = document.createElement('div');
@@ -379,15 +403,3 @@ function showToast(message, type = 'success') {
     }, 3000);
 }
 
-function initTheme() {
-    const toggle = document.getElementById('theme-toggle');
-    if (!toggle) return;
-    
-    // El tema ya viene pre-cargado por crm-common.js
-    toggle.onclick = () => {
-        const newTheme = document.body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-        document.body.setAttribute('data-theme', newTheme);
-        localStorage.setItem('theme', newTheme);
-        toggle.innerHTML = newTheme === 'dark' ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
-    };
-}
