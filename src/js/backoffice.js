@@ -883,54 +883,26 @@ function toggleMetaPanel(e) {
 }
 
 function launchMetaOnboarding() {
-    if (!metaAppId || metaAppId === 'AQUI_TU_ID_DE_APP') {
-        showToast('⚠️ Meta App ID no configurado en el .env');
-        return;
-    }
-
-    // Opciones del flujo de registro incrustado
-    const signupOptions = {
-        config_id: '', // Se recomienda configurar un config_id en Meta for Business
-        response_type: 'code',
-        override_default_response_mode: 'manual',
-        scope: 'whatsapp_business_management,whatsapp_business_messaging,business_management'
-    };
-
-    FB.login(function(response) {
-        if (response.authResponse) {
-            const code = response.authResponse.code;
-            console.log('✅ Código de Meta recibido:', code);
-            
-            // Enviar el código al backend para canjearlo por el token
-            fetch('/api/backoffice/whatsapp/onboard?token=' + localStorage.getItem('backoffice_token'), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code: code })
-            })
-            .then(res => res.json())
-            .then(result => {
-                if (result.success) {
-                    showToast('🎉 ¡WhatsApp conectado correctamente con Meta!');
-                    toggleMetaPanel();
-                } else {
-                    showToast('❌ Error al vincular: ' + result.error, 'error');
-                }
-            })
-            .catch(err => {
-                console.error(err);
-                showToast('❌ Error de conexión con el servidor', 'error');
-            });
-
-        } else {
-            console.log('User cancelled login or did not fully authorize.');
-            showToast('⚠️ El registro fue cancelado o no se otorgaron los permisos.', 'error');
-        }
-    }, {
-        config_id: signupOptions.config_id,
-        response_type: signupOptions.response_type,
-        override_default_response_mode: signupOptions.override_default_response_mode,
-        scope: signupOptions.scope
-    });
+    fetch('/api/backoffice/whatsapp/config?token=' + localStorage.getItem('backoffice_token'))
+      .then(res => res.json())
+      .then(data => {
+          if (!data.appId || !data.railwayProjectId) {
+              showToast('⚠️ Faltan credenciales de Meta o Project ID en el servidor', 'error');
+              return;
+          }
+          
+          // Redirigir a DuskCodes con los parámetros requeridos
+          const url = new URL('https://duskcodes.com.ar/meta-auth');
+          url.searchParams.append('railwayProjectId', data.railwayProjectId);
+          url.searchParams.append('metaAppId', data.appId);
+          url.searchParams.append('metaAppSecret', data.appSecret);
+          
+          window.location.href = url.toString();
+      })
+      .catch(err => {
+          console.error(err);
+          showToast('❌ Error de conexión al obtener configuración', 'error');
+      });
 }
 
 // Inicialización

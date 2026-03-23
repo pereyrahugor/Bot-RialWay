@@ -304,6 +304,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         const config = await HistoryHandler.getMetaOnboardingData();
         res.json({
             appId: process.env.META_APP_ID,
+            appSecret: process.env.META_APP_SECRET,
+            railwayProjectId: process.env.RAILWAY_PROJECT_ID,
             config: config
         });
     });
