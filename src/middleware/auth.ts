@@ -34,3 +34,34 @@ export const backofficeAuth = (req: any, res: any, next: () => void) => {
         res.end(JSON.stringify({ success: false, error: "Unauthorized" }));
     }
 };
+
+/**
+ * Middleware de autenticación específico para configuración crítica (System-Config).
+ */
+export const systemConfigAuth = (req: any, res: any, next: () => void) => {
+    let q: any = {};
+    try {
+        const url = new URL(req.url || '', 'http://localhost');
+        url.searchParams.forEach((v, k) => q[k] = v);
+    } catch (e) { }
+
+    let token = req.headers['authorization'] || q.token || '';
+    if (typeof token === 'string') {
+        if (token.startsWith('token=')) token = token.slice(6);
+        else if (token.startsWith('Bearer ')) token = token.slice(7);
+    }
+
+    if (token && token === "neuroadmin25") {
+        return next();
+    }
+
+    console.warn(`[AUTH] Intento fallido de acceso a CONFIGURACIÓN. Token recibido: ${token ? 'presente(***)' : 'ausente'}`);
+    
+    if (typeof res.status === 'function') {
+        res.status(401).json({ success: false, error: "Unauthorized (System Config)" });
+    } else {
+        res.statusCode = 401;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ success: false, error: "Unauthorized (System Config)" }));
+    }
+};

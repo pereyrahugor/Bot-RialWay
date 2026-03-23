@@ -78,7 +78,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Cargar variables actuales
     async function loadVariables() {
-        const token = localStorage.getItem('backoffice_token');
+        const token = localStorage.getItem('system_config_token');
         try {
             const response = await fetch(`/api/variables?token=${token}`);
             if (response.status === 401) return logout();
@@ -174,7 +174,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         try {
-            const token = localStorage.getItem('backoffice_token');
+            const token = localStorage.getItem('system_config_token');
             const response = await fetch(`/api/update-variables?token=${token}`, {
                 method: 'POST',
                 headers: {
@@ -222,7 +222,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         syncStatus.style.color = 'inherit';
 
         try {
-            const token = localStorage.getItem('backoffice_token');
+            const token = localStorage.getItem('system_config_token');
             const response = await fetch(`/api/backoffice/sync-assistant-prompt?token=${token}`, {
                 method: 'POST',
                 headers: {
@@ -259,7 +259,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         syncStatus.style.color = 'inherit';
 
         try {
-            const token = localStorage.getItem('backoffice_token');
+            const token = localStorage.getItem('system_config_token');
             const response = await fetch(`/api/backoffice/update-prompt?token=${token}`, {
                 method: 'POST',
                 headers: {
@@ -290,7 +290,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- Cargar Prompt actual desde DB ---
     async function loadAssistantPrompt() {
         try {
-            const token = localStorage.getItem('backoffice_token');
+            const token = localStorage.getItem('system_config_token');
             const response = await fetch(`/api/backoffice/get-prompt?token=${token}`);
             const data = await response.json();
             if (data.success && data.prompt) {
