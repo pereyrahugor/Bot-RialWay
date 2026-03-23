@@ -33,7 +33,10 @@
             </div>
             <div class="header-actions">
                 <button class="btn btn-primary" onclick="addNewColumn()">
-                    <i class="fas fa-plus"></i> Nueva Columna
+                    <i class="fas fa-plus"></i> Nueva Etapa
+                </button>
+                <button class="btn btn-secondary" onclick="openClosedLeadsModal()">
+                    <i class="fas fa-archive"></i> Leads Cerrados
                 </button>
                 <div class="divider-v"></div>
                 <button class="btn btn-secondary" onclick="syncCRM()">
@@ -128,6 +131,21 @@
                     <button class="btn btn-primary" onclick="saveColumnName()" style="flex:2;">
                         <i class="fas fa-check"></i> Guardar
                     </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Leads Cerrados -->
+    <div id="closed-leads-modal" class="modal-overlay">
+        <div class="modal-content animate-pop" style="max-width: 800px; max-height: 80vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h3><i class="fas fa-check-double" style="color:var(--accent); margin-right:10px;"></i> Histórico de Leads Cerrados</h3>
+                <button class="btn-icon" onclick="closeClosedLeadsModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <div id="closed-leads-list" class="closed-list-container">
+                    <!-- Se llena desde JS -->
                 </div>
             </div>
         </div>

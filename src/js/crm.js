@@ -46,13 +46,12 @@ async function loadCRMState() {
 
 async function saveCRMState() {
     try {
-        await fetch(`/api/backoffice/save-setting`, {
+        await fetch(`/api/backoffice/save-setting?token=${activeToken}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 key: 'CRM_COLUMNS',
-                value: JSON.stringify(columns),
-                token: activeToken
+                value: JSON.stringify(columns)
             })
         });
     } catch (e) { console.error('Error guardando estado:', e); }
@@ -140,8 +139,8 @@ function createCardElement(ticket, lead, metadata) {
     
     // Al hacer clic en la card, vamos al chat en el backoffice
     card.onclick = (e) => {
-        // Evitar que el clic en botones internos (como editar) dispare esto
-        if (e.target.closest('button') || e.target.closest('.card-modal')) return;
+        // Evitar que el clic en botones internos dispare esto
+        if (e.target.closest('button')) return;
         localStorage.setItem('activeChat', ticket.chat_id);
         window.location.href = '/backoffice';
     };
@@ -152,7 +151,6 @@ function createCardElement(ticket, lead, metadata) {
 
     const phone = ticket.chat_id ? ticket.chat_id.split('@')[0] : 'Desconocido';
     const email = lead?.email || '';
-    const source = lead?.source || '';
     const alertDateStr = metadata.alertDate ? formatDate(metadata.alertDate) : 'Sin alerta';
 
     card.innerHTML = `
@@ -165,15 +163,19 @@ function createCardElement(ticket, lead, metadata) {
         <div class="card-lead-details">
             <div class="detail-item"><i class="fas fa-phone"></i> ${phone}</div>
             ${email ? `<div class="detail-item"><i class="fas fa-envelope"></i> ${email}</div>` : ''}
-            ${source ? `<div class="detail-item"><i class="fas fa-bullseye"></i> ${source}</div>` : ''}
         </div>
         <div class="card-footer">
             <div class="card-alert ${getAlertClass(metadata.alertDate)}" id="alert-card-${ticket.id}">
                 <i class="fas fa-bell"></i> ${alertDateStr}
             </div>
-            <button class="btn-icon" onclick="event.stopPropagation(); openCardModal('${ticket.id}')">
-                <i class="fas fa-external-link-alt"></i>
-            </button>
+            <div style="display:flex; gap:5px;">
+                <button class="btn-icon" title="Cerrar Lead" onclick="event.stopPropagation(); confirmCloseTicket('${ticket.id}')" style="color:#10b981; font-size:1.1rem;">
+                    <i class="fas fa-check-circle"></i>
+                </button>
+                <button class="btn-icon" title="Ver Detalles" onclick="event.stopPropagation(); openCardModal('${ticket.id}')">
+                    <i class="fas fa-external-link-alt"></i>
+                </button>
+            </div>
         </div>
     `;
 
@@ -224,13 +226,12 @@ function initDragAndDrop() {
 
 async function saveCRMMetadata() {
     try {
-        await fetch(`/api/backoffice/save-setting`, {
+        await fetch(`/api/backoffice/save-setting?token=${activeToken}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 key: 'CRM_METADATA',
-                value: JSON.stringify(crmData),
-                token: activeToken
+                value: JSON.stringify(crmData)
             })
         });
     } catch (e) { console.error('Error guardando metadatos:', e); }
@@ -301,13 +302,10 @@ document.getElementById('card-edit-form').onsubmit = async (e) => {
         
         // Guardar datos de contacto (Lead)
         if (chatId) {
-            await fetch(`/api/backoffice/chat/${chatId}/contact`, {
+            await fetch(`/api/backoffice/chat/${chatId}/contact?token=${activeToken}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    ...leadData,
-                    token: activeToken 
-                })
+                body: JSON.stringify(leadData)
             });
         }
         
@@ -406,6 +404,7 @@ function checkAlertsVisual() {
 }
 
 function formatDate(dateStr) {
+    if (!dateStr) return '';
     const d = new Date(dateStr);
     return d.toLocaleDateString([], { day: '2-digit', month: '2-digit' });
 }
@@ -438,4 +437,75 @@ function showToast(message, type = 'success') {
         setTimeout(() => toast.remove(), 400);
     }, 3000);
 }
+
+// --- Cierre de Leads ---
+window.confirmCloseTicket = async (ticketId) => {
+    if (!confirm('¿Seguro quieres cerrar este lead? Se moverá al historial de cerrados.')) return;
+    
+    showToast('🔏 Cerrando lead...', 'success');
+    try {
+        // 1. Guardar metadatos con fecha de cierre
+        if (!crmData[ticketId]) crmData[ticketId] = {};
+        crmData[ticketId].closedAt = new Date().toISOString();
+        await saveCRMMetadata();
+
+        // 2. Actualizar estado del ticket
+        await fetch(`/api/backoffice/tickets/${ticketId}/status?token=${activeToken}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ estado: 'Cerrado' })
+        });
+
+        await syncCRM(); // Refrescar tablero
+        showToast('Lead cerrado con éxito');
+    } catch (e) {
+        console.error('Error cerrando ticket:', e);
+        showToast('Error al cerrar ticket', 'error');
+    }
+};
+
+window.openClosedLeadsModal = async () => {
+    const list = document.getElementById('closed-leads-list');
+    list.innerHTML = '<div style="text-align:center; padding:20px;"><i class="fas fa-spinner fa-spin"></i> Cargando historial...</div>';
+    document.getElementById('closed-leads-modal').classList.add('active');
+    
+    try {
+        const res = await fetch(`/api/backoffice/tickets?token=${activeToken}&estado=Cerrado`);
+        const closedTickets = await res.json();
+        
+        if (!closedTickets || closedTickets.length === 0) {
+            list.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-muted);">No hay leads cerrados por ahora.</div>';
+            return;
+        }
+
+        list.innerHTML = closedTickets.map(t => {
+            const metadata = crmData[t.id] || {};
+            const closedDate = metadata.closedAt ? new Date(metadata.closedAt).toLocaleString() : 'Fecha no registrada';
+            const lead = allLeads.find(l => l.id === t.chat_id);
+            
+            return `
+                <div class="closed-item" style="display:flex; justify-content:space-between; align-items:center; padding:15px; border-bottom:1px solid var(--border); background:var(--bg-card); border-radius:12px; margin-bottom:10px;">
+                    <div>
+                        <div style="font-weight:700; color:var(--text-main); font-size:1.1rem;">${t.titulo || 'Sin título'}</div>
+                        <div style="font-size:0.9rem; color:var(--text-muted);"><i class="fas fa-user"></i> ${lead?.name || 'Sin nombre'} | <i class="fas fa-phone"></i> ${t.chat_id?.split('@')[0]}</div>
+                        <div style="font-size:0.8rem; color:var(--accent); margin-top:5px;"><i class="fas fa-calendar-check"></i> Cerrado el: ${closedDate}</div>
+                    </div>
+                    <div style="display:flex; gap:10px;">
+                        <button class="btn-icon" onclick="localStorage.setItem('activeChat', '${t.chat_id}'); window.location.href='/backoffice'" title="Ver Chat">
+                            <i class="fas fa-comment-dots"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+    } catch (e) {
+        console.error(e);
+        list.innerHTML = '<div style="color:#ef4444; text-align:center; padding:20px;">Error cargando historial de cerrados.</div>';
+    }
+};
+
+window.closeClosedLeadsModal = () => {
+    document.getElementById('closed-leads-modal').classList.remove('active');
+};
 
