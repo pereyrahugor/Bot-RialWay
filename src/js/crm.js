@@ -1,7 +1,6 @@
 /* global Sortable, FB, metaAppId */
-const token = localStorage.getItem('backoffice_token');
-const configToken = localStorage.getItem('system_config_token');
-const activeToken = configToken || token;
+const backofficeToken = localStorage.getItem('backoffice_token');
+const activeToken = backofficeToken;
 
 if (!activeToken) window.location.href = '/login';
 
