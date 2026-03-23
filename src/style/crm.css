@@ -177,13 +177,14 @@
     gap: 6px;
     margin-bottom: 10px;
     font-size: 0.85rem;
-    color: var(--text-muted);
+    color: var(--text-muted); /* Esto ahora se adaptará al tema */
 }
 
 .detail-item {
     display: flex;
     align-items: center;
     gap: 8px;
+    color: inherit; /* Hereda de .card-lead-details */
 }
 
 .detail-item i {

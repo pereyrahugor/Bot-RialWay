@@ -67,7 +67,9 @@ async function syncCRM() {
         ]);
 
         allLeads = await resLeads.json();
-        allTickets = await resTickets.json();
+        const ticketsData = await resTickets.json();
+        // El CRM solo muestra los tickets que NO son Asistencia Externa
+        allTickets = (ticketsData || []).filter(t => t.tipo !== 'Asistencia Externa');
 
         const resSettings = await fetch(`/api/backoffice/get-setting?key=CRM_METADATA&token=${activeToken}`);
         const setJson = await resSettings.json();
@@ -252,6 +254,7 @@ let currentEditId = null;
 function openCardModal(ticketId) {
     currentEditId = ticketId;
     const ticket = allTickets.find(t => t.id === ticketId);
+    const lead = allLeads.find(l => l.id === ticket.chat_id);
     const metadata = crmData[ticketId] || {};
 
     document.getElementById('edit-lead-id').value = ticketId;
@@ -259,6 +262,11 @@ function openCardModal(ticketId) {
     document.getElementById('edit-alert-date').value = metadata.alertDate || '';
     document.getElementById('edit-priority').value = metadata.priority || 'Media';
     document.getElementById('edit-custom-notes').value = metadata.customNotes || '';
+    
+    // Nuevos campos del Lead
+    document.getElementById('edit-lead-name').value = lead?.name || '';
+    document.getElementById('edit-lead-email').value = lead?.email || '';
+    document.getElementById('edit-lead-source').value = lead?.source || '';
 
     document.getElementById('card-modal').classList.add('active');
 }
@@ -271,17 +279,50 @@ document.getElementById('card-edit-form').onsubmit = async (e) => {
     e.preventDefault();
     if (!currentEditId) return;
 
+    const ticket = allTickets.find(t => t.id === currentEditId);
+    const chatId = ticket?.chat_id;
+
+    // 1. Datos de Contacto (Lead)
+    const leadData = {
+        name: document.getElementById('edit-lead-name').value,
+        email: document.getElementById('edit-lead-email').value,
+        source: document.getElementById('edit-lead-source').value,
+        notes: document.getElementById('edit-custom-notes').value // Duplicamos notas en contacto para consistencia
+    };
+
+    // 2. Metadatos del CRM (Tablero)
     const metadata = crmData[currentEditId] || { columnId: 'UNASSIGNED' };
     metadata.alertDate = document.getElementById('edit-alert-date').value;
     metadata.priority = document.getElementById('edit-priority').value;
-    metadata.customNotes = document.getElementById('edit-custom-notes').value;
+    metadata.customNotes = leadData.notes;
     
     crmData[currentEditId] = metadata;
 
-    showToast('💾 Guardando cambios...');
-    await saveCRMMetadata();
-    closeCardModal();
-    syncCRM();
+    showToast('💾 Guardando...', 'success');
+
+    try {
+        // Guardar metadatos (Tablero)
+        await saveCRMMetadata();
+        
+        // Guardar datos de contacto (Lead)
+        if (chatId) {
+            await fetch(`/api/backoffice/chat/${chatId}/contact`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    ...leadData,
+                    token: activeToken 
+                })
+            });
+        }
+        
+        closeCardModal();
+        await syncCRM(); // Recargar todo para reflejar cambios
+        showToast('Cambios guardados con éxito');
+    } catch (e) {
+        console.error('Error al guardar:', e);
+        showToast('Error al guardar algunos datos', 'error');
+    }
 };
 
 // --- Gestión de Columnas ---

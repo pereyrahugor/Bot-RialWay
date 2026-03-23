@@ -83,22 +83,38 @@
 
                     <div class="modal-section-row">
                         <div style="flex:1;">
+                            <label><i class="fas fa-user"></i> Nombre del Lead</label>
+                            <input type="text" id="edit-lead-name" class="crm-input" placeholder="Nombre completo">
+                        </div>
+                        <div style="flex:1;">
+                            <label><i class="fas fa-envelope"></i> Correo Electrónico</label>
+                            <input type="email" id="edit-lead-email" class="crm-input" placeholder="ejemplo@correo.com">
+                        </div>
+                    </div>
+
+                    <div class="modal-section-row">
+                        <div style="flex:1;">
+                            <label><i class="fas fa-bullseye"></i> Origen (Source)</label>
+                            <input type="text" id="edit-lead-source" class="crm-input" placeholder="Ej: Meta, Orgánico">
+                        </div>
+                        <div style="flex:1;">
                             <label><i class="fas fa-bell"></i> Fecha de Alerta</label>
                             <input type="date" id="edit-alert-date" class="crm-input">
-                        </div>
-                        <div style="flex:0.5;">
-                            <label><i class="fas fa-tag"></i> Prioridad</label>
-                            <select id="edit-priority" class="crm-input">
-                                <option value="Baja">Baja</option>
-                                <option value="Media" selected>Media</option>
-                                <option value="Alta">Alta</option>
-                            </select>
                         </div>
                     </div>
 
                     <div class="modal-section">
+                        <label><i class="fas fa-tag"></i> Prioridad</label>
+                        <select id="edit-priority" class="crm-input">
+                            <option value="Baja">Baja</option>
+                            <option value="Media" selected>Media</option>
+                            <option value="Alta">Alta</option>
+                        </select>
+                    </div>
+
+                    <div class="modal-section">
                         <label><i class="fas fa-sticky-note"></i> Notas Adicionales</label>
-                        <textarea id="edit-custom-notes" class="crm-input" rows="4" placeholder="Agrega detalles o recordatorios..."></textarea>
+                        <textarea id="edit-custom-notes" class="crm-input" rows="3" placeholder="Agrega detalles o recordatorios..."></textarea>
                     </div>
 
                     <div id="alert-status-info" style="margin-top:10px;"></div>

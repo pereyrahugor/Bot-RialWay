@@ -267,15 +267,17 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     // --- TICKETS ---
 
     app.get('/api/backoffice/tickets/pending-count', backofficeAuth, async (req, res) => {
-        const count = await HistoryHandler.getPendingTicketsCount();
+        const tipo = req.query.tipo as string;
+        const count = await HistoryHandler.getPendingTicketsCount(tipo);
         res.json({ count });
     });
 
     app.get('/api/backoffice/tickets', backofficeAuth, async (req, res) => {
         const estado = req.query.estado as string;
+        const tipo = req.query.tipo as string;
         const limit = parseInt(req.query.limit as string) || 50;
         const offset = parseInt(req.query.offset as string) || 0;
-        const result = await HistoryHandler.listTickets(limit, offset, estado);
+        const result = await HistoryHandler.listTickets(limit, offset, estado, tipo);
         res.json(result);
     });
 

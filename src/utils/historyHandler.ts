@@ -663,14 +663,19 @@ export class HistoryHandler {
     /**
      * Obtiene el conteo de tickets pendientes (Abiertos o En progreso)
      */
-    static async getPendingTicketsCount() {
+    static async getPendingTicketsCount(tipo?: string) {
         try {
-            const { count, error } = await supabase
+            let query = supabase
                 .from('tickets')
                 .select('*', { count: 'exact', head: true })
                 .eq('project_id', PROJECT_ID)
                 .in('estado', ['Abierto', 'En progreso']);
 
+            if (tipo) {
+                query = query.eq('tipo', tipo);
+            }
+
+            const { count, error } = await query;
             if (error) throw error;
             return count || 0;
         } catch (err) {
@@ -682,7 +687,7 @@ export class HistoryHandler {
     /**
      * Lista los tickets del proyecto
      */
-    static async listTickets(limit: number = 50, offset: number = 0, estado?: string) {
+    static async listTickets(limit: number = 50, offset: number = 0, estado?: string, tipo?: string) {
         try {
             // Unir con la tabla chats para traer el nombre del contacto
             let query = supabase
@@ -694,6 +699,10 @@ export class HistoryHandler {
                 query = query.eq('estado', estado);
             } else {
                 query = query.in('estado', ['Abierto', 'En progreso']);
+            }
+
+            if (tipo) {
+                query = query.eq('tipo', tipo);
             }
 
             const { data, error } = await query
@@ -711,6 +720,8 @@ export class HistoryHandler {
                     
                     if (estado) fallbackQuery = fallbackQuery.eq('estado', estado);
                     else fallbackQuery = fallbackQuery.in('estado', ['Abierto', 'En progreso']);
+
+                    if (tipo) fallbackQuery = fallbackQuery.eq('tipo', tipo);
 
                     const { data: fallbackData, error: fallbackError } = await fallbackQuery
                         .order('created_at', { ascending: false })

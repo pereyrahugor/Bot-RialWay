@@ -81,7 +81,19 @@ async function fetchChats(refresh = false) {
         }
 
         chatOffset = chats.length;
-        renderChatList(); // Ya no llamamos a handleSearch aquí, solo renderizamos lo que vino del server
+        renderChatList();
+        
+        // Auto-abrir chat si venimos desde el CRM
+        if (!activeChatId) {
+            const pendingChatId = localStorage.getItem('activeChat');
+            if (pendingChatId) {
+                localStorage.removeItem('activeChat');
+                console.log('[CRM] Auto-abriendo chat:', pendingChatId);
+                // Esperar un breve instante para asegurar que el DOM está listo
+                setTimeout(() => selectChat(pendingChatId), 100);
+                return;
+            }
+        }
         
         if (activeChatId) {
             const activeChat = chats.find(c => c.id === activeChatId);
@@ -648,7 +660,7 @@ let currentTicketsFilter = 'pending';
 
 async function fetchPendingTicketsCount() {
     try {
-        const res = await fetch(`/api/backoffice/tickets/pending-count?token=${token}`);
+        const res = await fetch(`/api/backoffice/tickets/pending-count?token=${token}&tipo=Asistencia Externa`);
         const { count } = await res.json();
         
         const badge = document.getElementById('tickets-badge');
@@ -688,7 +700,7 @@ async function fetchTickets() {
     
     try {
         const estadoParam = currentTicketsFilter === 'pending' ? '' : `&estado=${currentTicketsFilter}`;
-        const res = await fetch(`/api/backoffice/tickets?token=${token}${estadoParam}`);
+        const res = await fetch(`/api/backoffice/tickets?token=${token}${estadoParam}&tipo=Asistencia Externa`);
         const tickets = await res.json();
 
         if (!Array.isArray(tickets) || tickets.length === 0) {
