@@ -1,13 +1,14 @@
 import path from 'path';
 import fs from 'fs';
 import serve from 'serve-static';
+import { backofficeAuth } from '../middleware/auth';
 
 /**
  * Registra las rutas de servicio de HTML y archivos estáticos.
  */
 export const registerStaticRoutes = (app: any, { __dirname }: { __dirname: string }) => {
 
-    const serveHtmlPage = (route: string, filename: string) => {
+    const serveHtmlPage = (route: string, filename: string, middlewares: any[] = []) => {
         const handler = (req: any, res: any) => {
             try {
                 const possiblePaths = [
@@ -47,8 +48,15 @@ export const registerStaticRoutes = (app: any, { __dirname }: { __dirname: strin
                 res.status(500).send('Error interno al servir HTML');
             }
         };
-        app.get(route, handler);
-        if (route !== "/") app.get(route + '/', handler);
+        
+        // Registrar rutas con opcionalmente middlewares
+        if (middlewares.length > 0) {
+            app.get(route, ...middlewares, handler);
+            if (route !== "/") app.get(route + '/', ...middlewares, handler);
+        } else {
+            app.get(route, handler);
+            if (route !== "/") app.get(route + '/', handler);
+        }
     };
 
     // Registrar páginas HTML
@@ -58,6 +66,7 @@ export const registerStaticRoutes = (app: any, { __dirname }: { __dirname: strin
     serveHtmlPage("/system-config", "system-config.html");
     serveHtmlPage("/login", "login.html");
     serveHtmlPage("/backoffice", "backoffice.html");
+    serveHtmlPage("/crm", "crm.html");
 
     // Servir archivos estáticos
     app.use("/js", serve(path.join(process.cwd(), "src", "js")));

@@ -1,8 +1,8 @@
 (function() {
     const path = window.location.pathname;
     
-    // 1. Protección de Backoffice (Solo lectura de chats)
-    if (path.startsWith('/backoffice')) {
+    // 1. Protección de Backoffice y CRM (Lectura de datos y chats)
+    if (path.startsWith('/backoffice') || path.startsWith('/crm')) {
         const token = localStorage.getItem('backoffice_token');
         if (!token) window.location.href = '/login';
     }

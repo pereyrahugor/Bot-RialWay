@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <script src="/js/auth-check.js"></script>
+    <meta charset="UTF-8">
+    <title>Tablero CRM | {{BOT_NAME}}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="/style/crm-common.css">
+    <link rel="stylesheet" href="/style/crm.css">
+    <!-- SortableJS for Drag and Drop -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+</head>
+<body data-theme="light">
+    <!-- Navbar -->
+    <div id="navbar" class="glass">
+        <div class="nav-item" title="Conversaciones" onclick="window.location.href='/backoffice'"><i class="fas fa-comment-dots"></i></div>
+        <div class="nav-item" title="Dashboard" onclick="window.location.href='/dashboard'"><i class="fas fa-th-large"></i></div>
+        <div class="nav-item" title="Webchat" onclick="window.location.href='/webchat'"><i class="fas fa-desktop"></i></div>
+        <div class="nav-item active" title="CRM" onclick="window.location.href='/crm'"><i class="fas fa-user-friends"></i></div>
+        <div class="nav-item" title="Configuración" onclick="window.location.href='/system-config'"><i class="fas fa-cog"></i></div>
+        <div id="theme-toggle" class="nav-item" title="Cambiar Tema"><i class="fas fa-moon"></i></div>
+        <div style="flex:1"></div>
+        <div class="nav-item" onclick="logout()" title="Cerrar Sesión" style="color:#f87171;"><i class="fas fa-sign-out-alt"></i></div>
+    </div>
+
+    <div class="crm-main-container">
+        <div class="kanban-header animate-fade">
+            <div class="header-info">
+                <h1><i class="fas fa-layer-group" style="color:var(--accent); margin-right:12px;"></i> CRM {{BOT_NAME}}</h1>
+                <p>Gestión visual de oportunidades y seguimiento de clientes.</p>
+            </div>
+            <div class="header-actions">
+                <button class="btn btn-primary" onclick="addNewColumn()">
+                    <i class="fas fa-plus"></i> Nueva Columna
+                </button>
+                <div class="divider-v"></div>
+                <button class="btn btn-secondary" onclick="syncCRM()">
+                    <i class="fas fa-sync"></i> Sincronizar
+                </button>
+            </div>
+        </div>
+
+        <!-- Kanban Board Area -->
+        <div id="kanban-board" class="kanban-scroll-area">
+            <div class="kanban-board-inner">
+                <!-- Columna: Tickets Nuevos (Fija en primer lugar) -->
+                <div class="kanban-column" id="col-new-tickets" data-id="UNASSIGNED">
+                    <div class="column-header">
+                        <div class="column-title-group">
+                            <i class="fas fa-star" style="color:#f59e0b;"></i>
+                            <span class="column-title">Tickets Nuevos</span>
+                        </div>
+                        <span class="column-badge" id="badge-UNASSIGNED">0</span>
+                    </div>
+                    <div class="kanban-cards" id="cards-UNASSIGNED">
+                        <!-- Cards will be populated here -->
+                    </div>
+                </div>
+
+                <!-- Contenedor para columnas dinámicas -->
+                <div id="dynamic-columns" style="display:contents;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Editar Tarjeta -->
+    <div id="card-modal" class="modal-overlay">
+        <div class="modal-content animate-pop" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-clipboard-list" style="color:var(--accent); margin-right:10px;"></i> Detalle del Lead</h3>
+                <button class="btn-icon" onclick="closeCardModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="card-edit-form">
+                    <input type="hidden" id="edit-lead-id">
+                    
+                    <div class="modal-section">
+                        <label><i class="fas fa-envelope-open-text"></i> Titulo del Ticket</label>
+                        <input type="text" id="edit-ticket-title" class="crm-input" placeholder="Ej: Consulta por preventa">
+                    </div>
+
+                    <div class="modal-section-row">
+                        <div style="flex:1;">
+                            <label><i class="fas fa-bell"></i> Fecha de Alerta</label>
+                            <input type="date" id="edit-alert-date" class="crm-input">
+                        </div>
+                        <div style="flex:0.5;">
+                            <label><i class="fas fa-tag"></i> Prioridad</label>
+                            <select id="edit-priority" class="crm-input">
+                                <option value="Baja">Baja</option>
+                                <option value="Media" selected>Media</option>
+                                <option value="Alta">Alta</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="modal-section">
+                        <label><i class="fas fa-sticky-note"></i> Notas Adicionales</label>
+                        <textarea id="edit-custom-notes" class="crm-input" rows="4" placeholder="Agrega detalles o recordatorios..."></textarea>
+                    </div>
+
+                    <div id="alert-status-info" style="margin-top:10px;"></div>
+
+                    <button type="submit" class="btn btn-primary" style="width:100%; margin-top:20px;">
+                        <i class="fas fa-save" style="margin-right:8px;"></i> Guardar y Sincronizar
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Editar Nombre Columna -->
+    <div id="column-modal" class="modal-overlay">
+        <div class="modal-content animate-pop" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3>✏️ Editar Etapa</h3>
+                <button class="btn-icon" onclick="closeColumnModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <input type="text" id="column-name-input" class="crm-input" placeholder="Nombre de la etapa...">
+                <div style="display:flex; gap:10px; margin-top:15px;">
+                    <button class="btn btn-danger" onclick="deleteCurrentColumn()" id="btn-delete-col" style="flex:1;">
+                        <i class="fas fa-trash-alt"></i> Eliminar
+                    </button>
+                    <button class="btn btn-primary" onclick="saveColumnName()" style="flex:2;">
+                        <i class="fas fa-check"></i> Guardar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/crm-common.js"></script>
+    <script src="/js/crm.js"></script>
+</body>
+</html>

@@ -10,7 +10,7 @@ export const backofficeAuth = (req: any, res: any, next: () => void) => {
     try {
         const url = new URL(req.url || '', 'http://localhost');
         url.searchParams.forEach((v, k) => q[k] = v);
-    } catch (e) { /* fallback a vacío */ }
+    } catch (e) { /* fallback empty */ }
     req.query = q;
 
     let token = req.headers['authorization'] || q.token || '';
@@ -39,11 +39,11 @@ export const backofficeAuth = (req: any, res: any, next: () => void) => {
  * Middleware de autenticación específico para configuración crítica (System-Config).
  */
 export const systemConfigAuth = (req: any, res: any, next: () => void) => {
-    let q: any = {};
+    const q: any = {};
     try {
         const url = new URL(req.url || '', 'http://localhost');
         url.searchParams.forEach((v, k) => q[k] = v);
-    } catch (e) { }
+    } catch (e) { /* fallback empty */ }
 
     let token = req.headers['authorization'] || q.token || '';
     if (typeof token === 'string') {

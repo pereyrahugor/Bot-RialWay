@@ -305,7 +305,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     app.get('/api/backoffice/whatsapp/config', async (req, res) => {
         // Validación manual híbrida
         const q: any = {};
-        try { const url = new URL(req.url || '', 'http://localhost'); url.searchParams.forEach((v, k) => q[k] = v); } catch (e) {}
+        try { const url = new URL(req.url || '', 'http://localhost'); url.searchParams.forEach((v, k) => q[k] = v); } catch (e) { /* fallback empty */ }
         let token = req.headers['authorization'] || q.token || '';
         if (typeof token === 'string') {
             if (token.startsWith('token=')) token = token.slice(6);
@@ -404,7 +404,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                     // Si tenemos el code, la función de Supabase podría intercambiarlo
                     meta_code: code 
                 });
-            } catch (e) {}
+            } catch (e) { /* silent fail on master router sync */ }
 
             res.send('<html><body style="font-family: Arial; text-align:center; padding-top:50px;">' +
                      '<h2>✅ ¡Conexión con Meta Exitosa!</h2>' +
@@ -438,6 +438,29 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             }
         } catch (error: any) {
             console.error('Error syncing assistant prompt:', error.message);
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
+    // --- GENERIC SETTINGS (Used by CRM) ---
+    app.get('/api/backoffice/get-setting', backofficeAuth, async (req, res) => {
+        const key = req.query.key as string;
+        if (!key) return res.status(400).json({ success: false, error: 'key is required' });
+        try {
+            const value = await HistoryHandler.getSetting(key);
+            res.json({ success: true, value });
+        } catch (error: any) {
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
+    app.post('/api/backoffice/save-setting', backofficeAuth, bodyParser.json(), async (req, res) => {
+        const { key, value } = req.body;
+        if (!key) return res.status(400).json({ success: false, error: 'key is required' });
+        try {
+            await HistoryHandler.saveSetting(key, value);
+            res.json({ success: true });
+        } catch (error: any) {
             res.status(500).json({ success: false, error: error.message });
         }
     });
