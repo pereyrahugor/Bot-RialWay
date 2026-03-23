@@ -286,8 +286,8 @@
       let metaAppId = '';
       
       window.fbAsyncInit = function() {
-        // Obtenemos el AppID desde el servidor para no exponerlo en duro
-        fetch('/api/backoffice/whatsapp/config?token=' + localStorage.getItem('backoffice_token'))
+        const activeToken = localStorage.getItem('system_config_token') || localStorage.getItem('backoffice_token');
+        fetch('/api/backoffice/whatsapp/config?token=' + activeToken)
           .then(res => res.json())
           .then(data => {
             metaAppId = data.appId;

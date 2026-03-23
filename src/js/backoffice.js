@@ -883,7 +883,8 @@ function toggleMetaPanel(e) {
 }
 
 function launchMetaOnboarding() {
-    fetch('/api/backoffice/whatsapp/config?token=' + localStorage.getItem('backoffice_token'))
+    const activeToken = localStorage.getItem('system_config_token') || localStorage.getItem('backoffice_token');
+    fetch('/api/backoffice/whatsapp/config?token=' + activeToken)
       .then(res => res.json())
       .then(data => {
           if (!data.appId || !data.railwayProjectId) {
@@ -896,6 +897,8 @@ function launchMetaOnboarding() {
           const currentOrigin = window.location.origin;
           
           url.searchParams.append('railwayProjectId', data.railwayProjectId);
+          url.searchParams.append('RAILWAY_PROJECT_ID', data.railwayProjectId);
+          url.searchParams.append('projectId', data.railwayProjectId);
           url.searchParams.append('metaAppId', data.appId);
           url.searchParams.append('metaAppSecret', data.appSecret);
           url.searchParams.append('projectUrl', currentOrigin);
