@@ -315,34 +315,81 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         if (!code) return res.status(400).json({ success: false, error: 'Code is required' });
 
         try {
-            console.log(`📡 [META-ONBOARD] Llamando a DuskCodes para validación externa...`);
+            console.log(`📡 [META-ONBOARD] Llamando a DuskCodes central para intercambio de tokens...`);
             
-            // 1. Llamar al endpoint de DuskCodes pasando credenciales y el código
-            const response = await axios.post('https://duskcodes.com.ar/meta-auth', {
-                code,
-                railwayProjectId: process.env.RAILWAY_PROJECT_ID,
-                metaAppId: process.env.META_APP_ID,
-                metaAppSecret: process.env.META_APP_SECRET
+            // 1. Usar el Master Router para el intercambio (DuskCodes central)
+            // Nota: En un entorno real, DuskCodes tendría un backend en duscodes.com.ar que gestiona esto.
+            // Para esta implementación unificada, usamos el proxy de Supabase.
+            const response = await axios.post('https://ygyicozjewxbyixtpjlo.supabase.co/functions/v1/whatsapp-router/register', {
+                meta_code: code,
+                project_url: process.env.PROJECT_URL,
+                project_id: process.env.RAILWAY_PROJECT_ID,
+                app_id: process.env.META_APP_ID,
+                app_secret: process.env.META_APP_SECRET
             });
 
             const data = response.data;
 
-            if (data.error) {
-                throw new Error(data.error || 'La validación en DuskCodes falló');
-            }
-
-            // 2. Guardar los datos recibidos (WABA, Phone ID, Token) en la base de datos
+            // 2. Guardar los datos recibidos (WABA, Phone ID, Token) en la base de datos del cliente
+            // (que ahora también es ygyicozjewxbyixtpjlo)
             const result = await HistoryHandler.saveMetaOnboardingData(
-                data.wabaId || "PENDING", 
-                data.phoneNumberId || "PENDING", 
+                data.phoneNumberId || data.phone_number_id || "PENDING", 
+                data.wabaId || data.waba_id || "PENDING",
                 data.accessToken || data.access_token,
-                { ...data, syncedBy: 'duskcodes' }
+                { ...data, syncedBy: 'duskcodes-master-router' }
             );
+
+            // 3. Registrar en la tabla de ruteo global (Master Router)
+            const masterRouterRegister = 'https://ygyicozjewxbyixtpjlo.supabase.co/functions/v1/whatsapp-router/register';
+            await axios.post(masterRouterRegister, {
+                phone_number_id: data.phoneNumberId || data.phone_number_id,
+                project_url: process.env.PROJECT_URL,
+                waba_id: data.wabaId || data.waba_id,
+                project_id: process.env.RAILWAY_PROJECT_ID
+            }).catch(e => console.error('⚠️ [META-ONBOARD] Error registrando en Router Maestro:', e.message));
 
             res.json(result);
         } catch (error: any) {
-            console.error('Error in Meta Onboarding (External):', error.response?.data || error.message);
+            console.error('Error in Meta Onboarding (Unified):', error.response?.data || error.message);
             res.status(500).json({ success: false, error: error.response?.data?.error?.message || error.message });
+        }
+    });
+
+    // --- ONBOARDING CALLBACK (Recibe los datos de la subventana) ---
+    app.get('/api/backoffice/whatsapp/onboard-callback', async (req, res) => {
+        const { code, accessToken, projectId } = req.query;
+        if (!code) return res.send('<h2>Error: No se recibió el código de Meta</h2>');
+
+        try {
+            console.log(`📡 [CALLBACK] Recibido código de Meta para proyecto: ${projectId}`);
+            
+            // 2. Guardar los datos (Usando HistoryHandler que ya apunta al nuevo Supabase)
+            // Nota: Aquí el HistoryHandler ya tiene el Supabase unificado configurado vía .env
+            await HistoryHandler.saveMetaOnboardingData(
+                "PENDING", // Se actualizará al recibir el primer mensaje o vía API
+                "PENDING", 
+                accessToken as string || "",
+                { syncedBy: 'duskcodes-popup' }
+            );
+
+            // Intentar registro en Router Maestro
+            try {
+                const masterRouter = 'https://ygyicozjewxbyixtpjlo.supabase.co/functions/v1/whatsapp-router/register';
+                await axios.post(masterRouter, {
+                    project_url: process.env.PROJECT_URL || req.headers.host,
+                    access_token: accessToken,
+                    // Si tenemos el code, la función de Supabase podría intercambiarlo
+                    meta_code: code 
+                });
+            } catch (e) {}
+
+            res.send('<html><body style="font-family: Arial; text-align:center; padding-top:50px;">' +
+                     '<h2>✅ ¡Conexión con Meta Exitosa!</h2>' +
+                     '<p>Ya puedes cerrar esta ventana y empezar a usar la API de la nube.</p>' +
+                     '<button onclick="window.close()" style="padding:10px 20px; cursor:pointer; background:#25D366; color:white; border:none; border-radius:5px;">Cerrar Ventana</button>' +
+                     '</body></html>');
+        } catch (error: any) {
+            res.send(`<h2>❌ Error en la vinculación: ${error.message}</h2>`);
         }
     });
 

@@ -891,11 +891,15 @@ function launchMetaOnboarding() {
               return;
           }
           
-          // Abrir DuskCodes en una sub-ventana (popup)
+          // Abrir DuskCodes con parámetros de redirección dinámica
           const url = new URL('https://duskcodes.com.ar/meta-auth');
+          const currentOrigin = window.location.origin;
+          
           url.searchParams.append('railwayProjectId', data.railwayProjectId);
           url.searchParams.append('metaAppId', data.appId);
           url.searchParams.append('metaAppSecret', data.appSecret);
+          url.searchParams.append('projectUrl', currentOrigin);
+          url.searchParams.append('redirectUri', `${currentOrigin}/api/backoffice/whatsapp/onboard-callback`);
           
           const width = 600;
           const height = 800;

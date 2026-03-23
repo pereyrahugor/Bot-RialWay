@@ -73,26 +73,27 @@ export class AiManager {
             // COMANDOS DE CONTROL (WhatsApp Admin)
             if (body === "#ON#") {
                 await HistoryHandler.toggleBot(ctx.from, true);
-                if (ctx.pushName) await HistoryHandler.getOrCreateChat(ctx.from, 'whatsapp', ctx.pushName);
+                if (ctx.pushName) await HistoryHandler.getOrCreateChat(ctx.from, 'whatsapp', ctx.pushName, ctx.userId);
                 const msg = "🤖 Bot activado para este chat.";
                 await flowDynamic([{ body: msg }]);
-                await HistoryHandler.saveMessage(ctx.from, 'assistant', msg, 'text');
+                await HistoryHandler.saveMessage(ctx.from, 'assistant', msg, 'text', null, ctx.userId);
                 return state;
             }
 
             if (body === "#OFF#") {
                 await HistoryHandler.toggleBot(ctx.from, false);
-                if (ctx.pushName) await HistoryHandler.getOrCreateChat(ctx.from, 'whatsapp', ctx.pushName);
+                if (ctx.pushName) await HistoryHandler.getOrCreateChat(ctx.from, 'whatsapp', ctx.pushName, ctx.userId);
                 const msg = "🛑 Bot desactivado. (Intervención humana activa)";
                 await flowDynamic([{ body: msg }]);
-                await HistoryHandler.saveMessage(ctx.from, 'assistant', msg, 'text');
+                await HistoryHandler.saveMessage(ctx.from, 'assistant', msg, 'text', null, ctx.userId);
                 return state;
             }
 
-            // Filtro de Eco
+            // Filtro de Eco (Mejorado para BSUID)
             const botNumber = (process.env.YCLOUD_WABA_NUMBER || '').replace(/\D/g, '');
             const senderNumber = (ctx.from || '').replace(/\D/g, '');
-            if (ctx.key?.fromMe || (botNumber && senderNumber === botNumber)) {
+            // Si el botNumber coincide con el sender o con el userId, lo ignoramos
+            if (ctx.key?.fromMe || (botNumber && (senderNumber === botNumber || ctx.userId === botNumber))) {
                 stop(ctx);
                 return;
             }
@@ -104,7 +105,8 @@ export class AiManager {
                 'user', 
                 body || (ctx.type === EVENTS.VOICE_NOTE ? "[Audio]" : "[Media]"), 
                 ctx.type,
-                ctx.pushName || null
+                ctx.pushName || null,
+                ctx.userId
             );
 
             const isBotActiveForUser = await HistoryHandler.isBotEnabled(ctx.from);

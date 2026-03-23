@@ -388,7 +388,7 @@ export class AssistantResponseProcessor {
         } else if (cleanTextResponse.length > 0 || pdfPaths.length > 0) {
             // Guardar en Supabase antes de fragmentar
             if (ctx && ctx.from) {
-                await HistoryHandler.saveMessage(ctx.from, 'assistant', cleanTextResponse, 'text');
+                await HistoryHandler.saveMessage(ctx.from, 'assistant', cleanTextResponse, 'text', null, ctx.userId);
             }
             
             const chunks = cleanTextResponse.split(/\n\n+/);

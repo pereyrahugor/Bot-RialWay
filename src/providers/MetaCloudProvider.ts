@@ -157,6 +157,8 @@ class MetaCloudProvider extends ProviderClass {
 
                         const contact = value.contacts?.[0];
                         const wa_id = contact?.wa_id;
+                        // Extraer el BSUID (Business-Scoped User ID)
+                        const bsuid = contact?.user_id || value.messages?.[0]?.from_user_id;
 
                         value.messages.forEach((msg: any) => {
                             const formatedMessage = {
@@ -166,6 +168,7 @@ class MetaCloudProvider extends ProviderClass {
                                       msg.button?.text || '',
                                 from: wa_id || msg.from,
                                 phoneNumber: msg.from,
+                                userId: bsuid, // Añadimos el BSUID al contexto
                                 name: contact?.profile?.name || 'User',
                                 type: msg.type,
                                 payload: msg

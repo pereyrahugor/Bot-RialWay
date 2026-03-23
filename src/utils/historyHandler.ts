@@ -19,7 +19,8 @@ const PROJECT_NAME = process.env.RAILWAY_SERVICE_NAME || "Bot-RialWay";
 const PROJECT_IDENTIFIER = process.env.RAILWAY_PROJECT_NAME ? `${process.env.RAILWAY_PROJECT_NAME}-${PROJECT_NAME}` : PROJECT_ID;
 
 export interface Chat {
-    id: string;
+    id: string; // WAID (Teléfono) o identificador de Webchat
+    user_id?: string | null; // BSUID (Meta Business-Scoped User ID)
     project_id: string;
     type: 'whatsapp' | 'webchat';
     name: string | null;
@@ -54,6 +55,7 @@ export class HistoryHandler {
                 name: 'chats',
                 sql: `CREATE TABLE IF NOT EXISTS chats (
                     id TEXT,
+                    user_id TEXT,
                     project_id TEXT,
                     type TEXT NOT NULL,
                     name TEXT,
@@ -196,6 +198,13 @@ export class HistoryHandler {
                             console.log(`🔧 Agregando columnas CRM a chats...`);
                             await supabase.rpc('exec_sql', { query: `ALTER TABLE chats ADD COLUMN IF NOT EXISTS notes TEXT, ADD COLUMN IF NOT EXISTS email TEXT, ADD COLUMN IF NOT EXISTS source TEXT;` });
                         }
+
+                        // Migración para user_id (Meta BSUID)
+                        const { error: bsuidErr } = await supabase.from('chats').select('user_id').limit(1);
+                        if (bsuidErr && bsuidErr.code === '42703') {
+                            console.log(`🔧 Agregando columna user_id (BSUID) a chats...`);
+                            await supabase.rpc('exec_sql', { query: `ALTER TABLE chats ADD COLUMN IF NOT EXISTS user_id TEXT;` });
+                        }
                     }
 
                     console.log(`✅ Tabla '${table.name}' verificada.`);
@@ -209,21 +218,60 @@ export class HistoryHandler {
     
     /**
      * Obtiene o crea un registro de chat
+     * 
+     * @param chatId - ID tradicional (wa_id o número de teléfono)
+     * @param type - Tipo de chat
+     * @param name - Nombre del contacto
+     * @param userId - El nuevo BSUID (Business-Scoped User ID) de Meta
      */
-    static async getOrCreateChat(chatId: string, type: 'whatsapp' | 'webchat', name: string | null = null): Promise<Chat | null> {
+    static async getOrCreateChat(chatId: string, type: 'whatsapp' | 'webchat', name: string | null = null, userId: string | null = null): Promise<Chat | null> {
         try {
-            const { data, error } = await supabase
-                .from('chats')
-                .select('*')
-                .eq('id', chatId)
-                .eq('project_id', PROJECT_ID)
-                .maybeSingle();
+            let data: Chat | null = null;
+            let error: any = null;
 
+            // 1. Intentar buscar por user_id (BSUID) si está presente
+            if (userId) {
+                const { data: byUserId, error: errUser } = await supabase
+                    .from('chats')
+                    .select('*')
+                    .eq('user_id', userId)
+                    .eq('project_id', PROJECT_ID)
+                    .maybeSingle();
+                
+                data = byUserId;
+                error = errUser;
+            }
+
+            // 2. Si no se encontró por BSUID (o no venía), buscar por el ID tradicional (Phone)
+            if (!data && !error) {
+                const { data: byChatId, error: errChat } = await supabase
+                    .from('chats')
+                    .select('*')
+                    .eq('id', chatId)
+                    .eq('project_id', PROJECT_ID)
+                    .maybeSingle();
+                
+                data = byChatId;
+                error = errChat;
+
+                // Si lo encontramos por Phone pero no tiene el user_id guardado, lo actualizamos ahora
+                if (data && userId && !data.user_id) {
+                    console.log(`🔗 Mapeando BSUID ${userId} al chat existente ${chatId}`);
+                    await supabase.from('chats')
+                        .update({ user_id: userId })
+                        .eq('id', chatId)
+                        .eq('project_id', PROJECT_ID);
+                    data.user_id = userId;
+                }
+            }
+
+            // 3. Si sigue sin existir, lo creamos
             if (!data) {
                 const { data: newData, error: insertError } = await supabase
                     .from('chats')
                     .insert({
                         id: chatId,
+                        user_id: userId,
                         project_id: PROJECT_ID,
                         type,
                         name,
@@ -254,10 +302,10 @@ export class HistoryHandler {
     /**
      * Guarda un mensaje en la base de datos
      */
-    static async saveMessage(chatId: string, role: 'user' | 'assistant' | 'system', content: string, type: string = 'text', contactName: string | null = null) {
+    static async saveMessage(chatId: string, role: 'user' | 'assistant' | 'system', content: string, type: string = 'text', contactName: string | null = null, userId: string | null = null) {
         try {
-            // Asegurar que el chat existe
-            await this.getOrCreateChat(chatId, chatId.includes('@') ? 'whatsapp' : 'webchat', contactName);
+            // Asegurar que el chat existe (pasamos el userId para el mapeo o creación)
+            await this.getOrCreateChat(chatId, chatId.includes('@') ? 'whatsapp' : 'webchat', contactName, userId);
 
             const { error } = await supabase
                 .from('messages')
