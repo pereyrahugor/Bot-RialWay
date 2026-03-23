@@ -18,12 +18,18 @@ let allTickets = [];
 let crmData = {}; // Para guardar metadatos (alertas, notas adicionales) de cada prospecto
 
 // --- Inicialización ---
-document.addEventListener('DOMContentLoaded', () => {
-    loadCRMState();
-    syncCRM();
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('🚀 Iniciando CRM...');
+    showToast('🚀 Iniciando CRM...');
+    
+    // Cargamos primero el estado (columnas)
+    await loadCRMState();
+    // Luego sincronizamos los datos (tickets, leads y metadatos de posicionamiento)
+    await syncCRM();
     
     // Auto-check de alertas cada minuto
     setInterval(checkAlertsVisual, 60000);
+    console.log('✅ CRM Listo');
 });
 
 // Exportar globalmente para botones HTML
@@ -253,12 +259,13 @@ function openCardModal(ticketId) {
     const ticket = allTickets.find(t => t.id === ticketId);
     const lead = allLeads.find(l => l.id === ticket.chat_id);
     const metadata = crmData[ticketId] || {};
-
+    const notes = lead?.notes || metadata.customNotes || ''; // Prioridad a la nota del contacto
+    
     document.getElementById('edit-lead-id').value = ticketId;
     document.getElementById('edit-ticket-title').value = ticket.titulo || '';
     document.getElementById('edit-alert-date').value = metadata.alertDate || '';
     document.getElementById('edit-priority').value = metadata.priority || 'Media';
-    document.getElementById('edit-custom-notes').value = metadata.customNotes || '';
+    document.getElementById('edit-custom-notes').value = notes;
     
     // Nuevos campos del Lead
     document.getElementById('edit-lead-name').value = lead?.name || '';
@@ -284,14 +291,14 @@ document.getElementById('card-edit-form').onsubmit = async (e) => {
         name: document.getElementById('edit-lead-name').value,
         email: document.getElementById('edit-lead-email').value,
         source: document.getElementById('edit-lead-source').value,
-        notes: document.getElementById('edit-custom-notes').value // Duplicamos notas en contacto para consistencia
+        notes: document.getElementById('edit-custom-notes').value
     };
 
     // 2. Metadatos del CRM (Tablero)
     const metadata = crmData[currentEditId] || { columnId: 'UNASSIGNED' };
     metadata.alertDate = document.getElementById('edit-alert-date').value;
     metadata.priority = document.getElementById('edit-priority').value;
-    metadata.customNotes = leadData.notes;
+    metadata.customNotes = leadData.notes; // Sincronizamos para retrocompatibilidad
     
     crmData[currentEditId] = metadata;
 
