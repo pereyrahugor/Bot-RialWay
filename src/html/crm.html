@@ -44,23 +44,8 @@
 
         <!-- Kanban Board Area -->
         <div id="kanban-board" class="kanban-scroll-area">
-            <div class="kanban-board-inner">
-                <!-- Columna: Tickets Nuevos (Fija en primer lugar) -->
-                <div class="kanban-column" id="col-new-tickets" data-id="UNASSIGNED">
-                    <div class="column-header">
-                        <div class="column-title-group">
-                            <i class="fas fa-star" style="color:#f59e0b;"></i>
-                            <span class="column-title">Tickets Nuevos</span>
-                        </div>
-                        <span class="column-badge" id="badge-UNASSIGNED">0</span>
-                    </div>
-                    <div class="kanban-cards" id="cards-UNASSIGNED">
-                        <!-- Cards will be populated here -->
-                    </div>
-                </div>
-
-                <!-- Contenedor para columnas dinámicas -->
-                <div id="dynamic-columns" style="display:contents;"></div>
+            <div class="kanban-board-inner" id="kanban-board-inner">
+                <!-- Las columnas se renderizan dinámicamente desde crm.js -->
             </div>
         </div>
     </div>

@@ -86,21 +86,20 @@ async function syncCRM() {
 window.syncCRM = syncCRM; // Exportar globalmente
 
 function renderBoard() {
-    const board = document.getElementById('dynamic-columns');
+    const board = document.getElementById('kanban-board-inner');
+    if (!board) return;
     board.innerHTML = '';
 
-    // Renderizar solo las dinámicas aquí. La fija está en el HTML
     columns.forEach((col, index) => {
-        if (col.fixed) return; 
-
         const columnEl = document.createElement('div');
         columnEl.className = 'kanban-column animate-fade';
         columnEl.style.animationDelay = `${index * 0.1}s`;
         columnEl.dataset.id = col.id;
         
         columnEl.innerHTML = `
-            <div class="column-header" onclick="editColumn('${col.id}')">
+            <div class="column-header" ${col.fixed ? '' : `onclick="editColumn('${col.id}')"`}>
                 <div class="column-title-group">
+                    ${col.fixed ? '<i class="fas fa-star" style="color:#f59e0b;"></i>' : ''}
                     <span class="column-title">${col.title}</span>
                 </div>
                 <span class="column-badge" id="badge-${col.id}">0</span>
@@ -110,10 +109,7 @@ function renderBoard() {
         board.appendChild(columnEl);
     });
 
-    // Repartir tarjetas
     distributeCards();
-
-    // Inicializar Drag & Drop en todas las columnas
     initDragAndDrop();
 }
 
@@ -204,7 +200,7 @@ function initDragAndDrop() {
     });
 
     // 2. Arrastre de columnas (Reordenar etapas)
-    const boardInner = document.querySelector('.kanban-board-inner');
+    const boardInner = document.getElementById('kanban-board-inner');
     if (boardInner) {
         new Sortable(boardInner, {
             animation: 150,
@@ -212,7 +208,6 @@ function initDragAndDrop() {
             handle: '.column-header',
             ghostClass: 'sortable-ghost',
             onEnd: () => {
-                // Leer el nuevo orden de los IDs de las columnas y guardar
                 const newOrder = [];
                 document.querySelectorAll('.kanban-column').forEach(col => {
                     const colId = col.dataset.id;
@@ -221,7 +216,7 @@ function initDragAndDrop() {
                 });
                 columns = newOrder;
                 saveCRMState();
-                showToast('Etapas reordenadas');
+                showToast('CRM Actualizado', 'success');
             }
         });
     }

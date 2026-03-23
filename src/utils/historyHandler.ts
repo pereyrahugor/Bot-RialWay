@@ -772,7 +772,6 @@ export class HistoryHandler {
                 .from('chats')
                 .select('*')
                 .eq('project_id', PROJECT_ID)
-                .or('notes.neq."",email.neq."",source.neq.""')
                 .order('last_human_message_at', { ascending: false })
                 .range(offset, offset + limit - 1);
 
