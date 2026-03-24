@@ -1,6 +1,6 @@
 {
-  "name": "base-bailey-json",
-  "version": "1.0.0",
+  "name": "Bot-Neurolinks-CRM",
+  "version": "7.0.0",
   "description": "",
   "main": "dist/app.js",
   "type": "module",

@@ -70,6 +70,7 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 ENV PNPM_HOME=/usr/local/bin
 RUN mkdir /app/tmp
 RUN npm install --production --legacy-peer-deps \
+    && npm install @ffmpeg-installer/linux-x64 -f \
     && npm install polka @types/polka --legacy-peer-deps \
     && rm -rf /root/.npm
 
