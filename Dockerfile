@@ -69,9 +69,12 @@ COPY --from=builder /app/src/style ./src/style
 RUN corepack enable && corepack prepare pnpm@latest --activate
 ENV PNPM_HOME=/usr/local/bin
 RUN mkdir /app/tmp
-RUN npm cache clean --force && pnpm install --production --ignore-scripts \
-    && npm install polka @types/polka --legacy-peer-deps \
+RUN pnpm install --production --ignore-scripts --shamefully-hoist \
+    && pnpm add polka @types/polka --ignore-scripts \
     && rm -rf $PNPM_HOME/.npm $PNPM_HOME/.node-gyp
+
+# Parchear la versión de Baileys automáticamente
+RUN sed -i 's/version: \[[0-9, ]*\]/version: [2, 3000, 1023223821]/' node_modules/@builderbot/provider-baileys/dist/index.cjs
 
 RUN groupadd -g 1001 nodejs && useradd -u 1001 -g nodejs -m nodejs
 
