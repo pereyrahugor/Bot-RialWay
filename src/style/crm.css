@@ -429,3 +429,54 @@ input[type="date"].crm-input::-webkit-calendar-picker-indicator {
     from { opacity: 0; transform: translateY(-20px); }
     to { opacity: 1; transform: translateY(0); }
 }
+
+/* ========================================================
+   RESPONSIVO / MOBILE CRM KANBAN
+   ======================================================== */
+@media (max-width: 768px) {
+    .kanban-header {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 15px 20px;
+        gap: 15px;
+        position: relative; /* Libera el sticky para ahorrar espacio */
+    }
+    
+    .kanban-header h1 {
+        font-size: 1.3rem;
+    }
+
+    .header-actions {
+        width: 100%;
+        flex-wrap: wrap;
+        justify-content: space-between;
+    }
+    
+    .kanban-scroll-area {
+        padding: 15px;
+        height: calc(100vh - 210px); /* Se ajusta con la flexión del header */
+    }
+    
+    .kanban-column {
+        min-width: 280px;
+        max-width: 280px;
+    }
+
+    .modal-section-row {
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    .btn {
+        height: 48px;
+    }
+
+    .crm-input {
+        padding: 12px 14px;
+    }
+    
+    .modal-header h3 {
+        font-size: 1.2rem;
+    }
+}
+

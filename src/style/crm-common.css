@@ -303,3 +303,53 @@ body {
 .animate-fade {
     animation: fadeIn 0.5s ease forwards;
 }
+
+/* ========================================================
+   RESPONSIVO / MOBILE (Tablets & Phones)
+   ======================================================== */
+@media (max-width: 768px) {
+    body {
+        flex-direction: column-reverse; /* El navbar pasa abajo como una app móvil */
+    }
+
+    #navbar {
+        width: 100%;
+        height: 65px;
+        min-height: 65px;
+        flex-direction: row;
+        justify-content: space-around;
+        padding: 5px 10px;
+        border-right: none;
+        border-top: 1px solid var(--border);
+        box-shadow: 0 -4px 10px rgba(0,0,0,0.05);
+    }
+
+    .nav-item {
+        width: 44px;
+        height: 44px;
+        margin-bottom: 0;
+        font-size: 1.1rem;
+    }
+
+    .nav-item::after {
+        display: none !important; /* Deshabilitar tooltips en móvil */
+    }
+
+    .crm-main-container {
+        padding: 15px;
+        height: calc(100vh - 65px); /* Restamos el navbar de abajo */
+        overflow-y: auto;
+    }
+
+    .crm-grid {
+        grid-template-columns: 1fr; /* Una sola columna en móvil */
+        gap: 16px;
+    }
+
+    .modal-content {
+        width: 95%;
+        padding: 20px 15px;
+        max-height: 85vh;
+    }
+}
+
