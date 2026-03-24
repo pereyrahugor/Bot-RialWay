@@ -6,6 +6,7 @@ import { addToSheet } from '~/utils/googleSheetsResumen';
 import fs from 'fs';
 import path from 'path';// Import the new logic
 import { ReconectionFlow } from './reconectionFlow';
+import { HistoryHandler } from '../utils/historyHandler'; // Integración con CRM
 
 //** Variables de entorno para el envio de msj de resumen a grupo de WS */
 const ASSISTANT_ID = process.env.ASSISTANT_ID ?? '';
@@ -89,6 +90,37 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                 // console.warn("⚠️ El resumen no es JSON. Se extraerán los datos manualmente.");
                 data = extraerDatosResumen(resumen);
             }
+
+            // --- LÓGICA DE AUTOMATIZACIÓN DE NUEVO LEAD ---
+            try {
+                const cleanNombre = (data.Nombre || data.nombre || data.contactName || '').trim();
+                const cleanEmail = (data.Correo || data.correo || data.Email || data.email || '').trim();
+                const cleanSource = (data.Origen || data.origen || data.Source || data.source || 'Asistente AI').trim();
+
+                // 1. Actualizar detalles del contacto en el CRM
+                if (cleanNombre || cleanEmail) {
+                    await HistoryHandler.updateContactDetails(userId, {
+                        name: cleanNombre || null,
+                        email: cleanEmail || null,
+                        source: cleanSource
+                    });
+                    // console.log(`✅ CRM Actualizado para ${userId}: ${cleanNombre}`);
+                }
+
+                // 2. Crear Ticket de "Nuevo Lead" automáticamente
+                await HistoryHandler.createTicket(
+                    userId, 
+                    `Nuevo Lead: ${cleanNombre || userId}`, 
+                    resumen, 
+                    'Nuevo Lead', 
+                    'Alta'
+                );
+                // console.log(`🚀 Ticket "Nuevo Lead" creado automáticamente para ${userId}`);
+
+            } catch (leadError) {
+                // console.error("❌ Error en automatización de Nuevo Lead:", leadError.message);
+            }
+            // ----------------------------------------------
 
             // Log para depuración del valor real de tipo
             // console.log('Valor de tipo:', JSON.stringify(data.tipo), '| Longitud:', data.tipo?.length);

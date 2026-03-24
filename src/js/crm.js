@@ -163,6 +163,9 @@ function createCardElement(ticket, lead, metadata) {
     card.innerHTML = `
         <div class="priority-indicator" style="background:${getPriorityColor(metadata.priority)}"></div>
         <div class="card-tags">${tags}</div>
+        <div class="card-type-badge">
+            <i class="fas fa-tag"></i> ${ticket.tipo || 'Sin tipo'}
+        </div>
         <div class="card-title">${ticket.titulo || 'Sin título'}</div>
         <div class="card-lead-main">
             <i class="fas fa-user-circle"></i> ${lead?.name || 'Lead sin nombre'}
@@ -175,12 +178,12 @@ function createCardElement(ticket, lead, metadata) {
             <div class="card-alert ${getAlertClass(metadata.alertDate)}" id="alert-card-${ticket.id}">
                 <i class="fas fa-bell"></i> ${alertDateStr}
             </div>
-            <div style="display:flex; gap:5px;">
-                <button class="btn-icon" title="Cerrar Lead" onclick="event.stopPropagation(); confirmCloseTicket('${ticket.id}')" style="color:#10b981; font-size:1.1rem;">
-                    <i class="fas fa-check-circle"></i>
+            <div style="display:flex; gap:8px;">
+                <button class="btn-action btn-action-success" title="Cerrar Lead" onclick="event.stopPropagation(); confirmCloseTicket('${ticket.id}')">
+                    <i class="fas fa-check"></i>
                 </button>
-                <button class="btn-icon" title="Ver Detalles" onclick="event.stopPropagation(); openCardModal('${ticket.id}')">
-                    <i class="fas fa-external-link-alt"></i>
+                <button class="btn-action btn-action-primary" title="Ver Detalles/Editar" onclick="event.stopPropagation(); openCardModal('${ticket.id}')">
+                    <i class="fas fa-pen"></i>
                 </button>
             </div>
         </div>
@@ -271,8 +274,37 @@ function openCardModal(ticketId) {
     document.getElementById('edit-lead-name').value = lead?.name || '';
     document.getElementById('edit-lead-email').value = lead?.email || '';
     document.getElementById('edit-lead-source').value = lead?.source || '';
+    document.getElementById('edit-lead-phone').value = ticket.chat_id ? ticket.chat_id.split('@')[0] : 'Desconocido';
+
+    // Limpiar notas adicionales dinámicas al abrir
+    document.getElementById('additional-notes-list').innerHTML = '';
 
     document.getElementById('card-modal').classList.add('active');
+}
+
+window.addNewNoteUI = () => {
+    const container = document.getElementById('additional-notes-list');
+    const date = new Date().toLocaleDateString();
+    const noteDiv = document.createElement('div');
+    noteDiv.className = 'modal-section';
+    noteDiv.innerHTML = `
+        <label style="color:var(--primary); font-size:0.8rem; font-weight:600;">
+            <i class="fas fa-plus"></i> Nota Adicional ${date}
+        </label>
+        <textarea class="crm-input additional-note-box" rows="2" placeholder="Escribe aquí la nota adicional..."></textarea>
+    `;
+    container.appendChild(noteDiv);
+}
+
+window.openWhatsAppDirect = () => {
+    const phone = document.getElementById('edit-lead-phone').value;
+    if (!phone || phone === 'Desconocido') {
+        showToast('❌ No hay un número válido registrado.', 'error');
+        return;
+    }
+    // Limpiar el número de cualquier caracter no numérico (especialmente para wa.me)
+    const cleanPhone = phone.replace(/\D/g, '');
+    window.open(`https://wa.me/${cleanPhone}`, '_blank');
 }
 
 function closeCardModal() {
@@ -287,11 +319,22 @@ document.getElementById('card-edit-form').onsubmit = async (e) => {
     const chatId = ticket?.chat_id;
 
     // 1. Datos de Contacto (Lead)
+    let mainNotes = document.getElementById('edit-custom-notes').value;
+    const additionalNotes = Array.from(document.querySelectorAll('.additional-note-box'))
+        .map(box => box.value.trim())
+        .filter(val => val !== '');
+
+    // Consolidar notas adicionales al final de la principal
+    if (additionalNotes.length > 0) {
+        const date = new Date().toLocaleDateString();
+        mainNotes += '\n\n--- Notas Añadidas Hoy (' + date + ') ---\n' + additionalNotes.join('\n');
+    }
+
     const leadData = {
         name: document.getElementById('edit-lead-name').value,
         email: document.getElementById('edit-lead-email').value,
         source: document.getElementById('edit-lead-source').value,
-        notes: document.getElementById('edit-custom-notes').value
+        notes: mainNotes
     };
 
     // 2. Metadatos del CRM (Tablero)
@@ -482,11 +525,22 @@ window.openClosedLeadsModal = async () => {
         const closedTickets = await res.json();
         
         if (!closedTickets || closedTickets.length === 0) {
-            list.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-muted);">No hay leads cerrados por ahora.</div>';
+            list.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-muted);">No hay leads cerrados.</div>';
             return;
         }
 
-        list.innerHTML = closedTickets.map(t => {
+        // Filtro estricto: Solo mostrar si el estado es 'Cerrado' y TIENE fecha de cierre en metadata
+        const validClosed = closedTickets.filter(t => {
+            const metadata = crmData[t.id] || {};
+            return t.estado === 'Cerrado' && metadata.closedAt;
+        });
+
+        if (validClosed.length === 0) {
+            list.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-muted);">No hay registros completos de cierre todavía.</div>';
+            return;
+        }
+
+        list.innerHTML = validClosed.map(t => {
             const metadata = crmData[t.id] || {};
             const closedDate = metadata.closedAt ? new Date(metadata.closedAt).toLocaleString() : 'Fecha no registrada';
             const lead = allLeads.find(l => l.id === t.chat_id);
@@ -499,8 +553,8 @@ window.openClosedLeadsModal = async () => {
                         <div style="font-size:0.8rem; color:var(--accent); margin-top:5px;"><i class="fas fa-calendar-check"></i> Cerrado el: ${closedDate}</div>
                     </div>
                     <div style="display:flex; gap:10px;">
-                        <button class="btn-icon" onclick="localStorage.setItem('activeChat', '${t.chat_id}'); window.location.href='/backoffice'" title="Ver Chat">
-                            <i class="fas fa-comment-dots"></i>
+                        <button class="btn-action btn-action-primary" onclick="localStorage.setItem('activeChat', '${t.chat_id}'); window.location.href='/backoffice'" title="Ver Chat">
+                            <i class="fas fa-comments"></i>
                         </button>
                     </div>
                 </div>

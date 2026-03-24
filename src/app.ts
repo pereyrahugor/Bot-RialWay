@@ -53,7 +53,7 @@ const webChatManager = new WebChatManager();
 const openaiMain = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const openaiVision = new OpenAI({ apiKey: process.env.OPENAI_API_KEY_IMG });
 const ASSISTANT_ID = process.env.ASSISTANT_ID!;
-const PORT = process.env.PORT || 3008;
+const PORT = process.env.PORT || 8080;
 
 // Multer config
 const upload = multer({ 

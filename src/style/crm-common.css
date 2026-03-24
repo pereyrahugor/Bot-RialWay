@@ -1,26 +1,75 @@
 :root {
-    /* Colores CRM Moderno - Light Mode */
     --primary: #6366f1;
     --primary-hover: #4f46e5;
+    --accent: #0668E1;
     --bg-main: #f8fafc;
-    --bg-sidebar: #ffffff;
+    --bg-sidebar: #ffffff; /* Retained from original */
     --bg-card: #ffffff;
     --text-main: #1e293b;
     --text-muted: #64748b;
-    --border: #e2e8f0;
-    --accent: #10b981;
-    --danger: #ef4444;
-    --sidebar-width: 70px;
+    --border: rgba(0, 0, 0, 0.08);
+    --glass-bg: rgba(255, 255, 255, 0.7);
+    --danger: #ef4444; /* Retained from original */
+    --sidebar-width: 70px; /* Retained from original */
 }
 
 [data-theme="dark"] {
     --bg-main: #0f172a;
-    --bg-sidebar: #1e293b;
+    --bg-sidebar: #1e293b; /* Retained from original */
     --bg-card: #1e293b;
     --text-main: #f1f5f9;
     --text-muted: #94a3b8;
-    --border: #334155;
-    --sidebar-width: 70px;
+    --border: rgba(255, 255, 255, 0.1);
+    --glass-bg: rgba(15, 23, 42, 0.8);
+    --sidebar-width: 70px; /* Retained from original */
+}
+
+/* Custom Scrollbar - Diseño Minimalista y Premium */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(99, 102, 241, 0.2); /* Color primario suave por defecto */
+    border-radius: 20px;
+    border: none;
+    transition: background 0.3s;
+}
+
+/* Ocultar botones de flecha (Los de tu imagen) */
+::-webkit-scrollbar-button {
+    display: none;
+    width: 0;
+    height: 0;
+}
+
+/* Esquinas de la barra */
+::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+    background: rgba(99, 102, 241, 0.3); /* Un poco más visible en oscuro */
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--primary); /* Se vuelve sólido al pasar el ratón */
+    box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);
+}
+
+/* Soporte para Firefox (Scrollbar-width y color) */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(99, 102, 241, 0.3) transparent;
+}
+
+[data-theme="dark"], [data-theme="dark"] * {
+    scrollbar-color: rgba(99, 102, 241, 0.4) transparent;
 }
 
 * {
@@ -119,6 +168,33 @@ body {
     margin: 0 auto;
 }
 
+.modal-content {
+    background: var(--bg-card);
+    border-radius: 20px;
+    width: 90%;
+    max-width: 500px;
+    max-height: 90vh; /* Limitar altura al 90% de la pantalla */
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4);
+    position: relative;
+}
+
+.modal-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-body {
+    padding: 24px;
+    overflow-y: auto; /* Scroll interno si el contenido es largo */
+    flex: 1;
+}
+
 /* Generic Card Style */
 .card {
     background: var(--bg-card);
@@ -151,6 +227,72 @@ body {
 
 .btn-primary { background: var(--primary); color: white; }
 .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+
+/* Card & Modal Action Buttons */
+.btn-action {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    background: var(--bg-card);
+    color: var(--text-muted);
+}
+
+.btn-action:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.btn-action-success {
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.05);
+}
+
+.btn-action-success:hover {
+    background: #10b981;
+    color: white;
+    border-color: #10b981;
+}
+
+.btn-action-primary {
+    color: var(--primary);
+    background: rgba(99, 102, 241, 0.05);
+}
+
+.btn-action-primary:hover {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+.btn-close-modal {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: rgba(0,0,0,0.05);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-close-modal:hover {
+    background: #ef4444;
+    color: white;
+    transform: rotate(90deg);
+}
+
+[data-theme="dark"] .btn-close-modal {
+    background: rgba(255,255,255,0.05);
+}
 
 /* Animations */
 @keyframes fadeIn {

@@ -675,14 +675,16 @@ async function fetchPendingTicketsCount() {
     }
 }
 
-function toggleTicketsPanel(e) {
+function realToggleTickets(e) {
     if (e) e.stopPropagation();
     const panel = document.getElementById('tickets-panel');
+    if (!panel) return;
     panel.classList.toggle('active');
     if (panel.classList.contains('active')) {
         setTicketsFilter('pending'); // Default to pending when opening
     }
 }
+window.realToggleTickets = realToggleTickets;
 
 function setTicketsFilter(filter) {
     currentTicketsFilter = filter;
@@ -766,7 +768,7 @@ async function updateTicketStatus(ticketId, nuevoEstado) {
 }
 
 function goToTicketChat(chatId) {
-    toggleTicketsPanel();
+    realToggleTickets();
     const chat = chats.find(c => c.id === chatId);
     if (chat) {
         selectChat(chatId);
@@ -835,14 +837,16 @@ async function createTicket() {
 
 // --- LEADS LOGIC ---
 
-function toggleLeadsPanel(e) {
+function realToggleLeads(e) {
     if (e) e.stopPropagation();
     const panel = document.getElementById('leads-panel');
+    if (!panel) return;
     panel.classList.toggle('active');
     if (panel.classList.contains('active')) {
         fetchLeads();
     }
 }
+window.realToggleLeads = realToggleLeads;
 
 async function fetchLeads() {
     const list = document.getElementById('leads-list');
@@ -884,15 +888,17 @@ async function fetchLeads() {
 }
 
 function selectLead(chatId) {
-    toggleLeadsPanel();
+    realToggleLeads();
     selectChat(chatId);
 }
 
-function toggleMetaPanel(e) {
+function realToggleMeta(e) {
     if (e) e.stopPropagation();
     const panel = document.getElementById('meta-panel');
+    if (!panel) return;
     panel.classList.toggle('active');
 }
+window.realToggleMeta = realToggleMeta;
 
 function launchMetaOnboarding() {
     const activeToken = localStorage.getItem('system_config_token') || localStorage.getItem('backoffice_token');

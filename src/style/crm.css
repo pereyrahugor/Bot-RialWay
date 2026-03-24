@@ -164,6 +164,26 @@
     text-transform: uppercase;
 }
 
+.card-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    background: rgba(0, 0, 0, 0.05);
+    padding: 2px 10px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    border: 1px solid var(--border);
+    letter-spacing: 0.5px;
+}
+
+[data-theme="dark"] .card-type-badge {
+    background: rgba(255, 255, 255, 0.05);
+}
+
 .card-title {
     font-weight: 700;
     font-size: 1rem;
