@@ -1,4 +1,4 @@
-import typescript from 'rollup-plugin-typescript2'
+import typescript from '@rollup/plugin-typescript'
 
 export default {
     input: ['src/app.ts'],
@@ -15,5 +15,5 @@ export default {
     onwarn: (warning) => {
         if (warning.code === 'UNRESOLVED_IMPORT') return
     },
-    plugins: [typescript({ check: false })],
+    plugins: [typescript({ compilerOptions: { outDir: './dist', declaration: false } })],
 }
