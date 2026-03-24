@@ -69,9 +69,10 @@ COPY --from=builder /app/src/style ./src/style
 RUN corepack enable && corepack prepare pnpm@latest --activate
 ENV PNPM_HOME=/usr/local/bin
 RUN mkdir /app/tmp
-RUN pnpm install --production --ignore-scripts --shamefully-hoist \
-    && pnpm add polka @types/polka --ignore-scripts \
-    && rm -rf $PNPM_HOME/.npm $PNPM_HOME/.node-gyp
+# Copiar node_modules funcional del builder (Evita que ffmpeg o scripts binarios se rompan en producción)
+COPY --from=builder /app/node_modules ./node_modules
+
+RUN pnpm add polka @types/polka
 
 # Parchear la versión de Baileys automáticamente
 RUN sed -i 's/version: \[[0-9, ]*\]/version: [2, 3000, 1023223821]/' node_modules/@builderbot/provider-baileys/dist/index.cjs
