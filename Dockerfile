@@ -13,7 +13,6 @@ ENV PNPM_HOME=/usr/local/bin
 
 # Copiar archivos de configuración y dependencias primero para aprovechar la cache
 COPY package*.json ./
-COPY *-lock.yaml ./
 COPY rollup.config.js ./
 COPY tsconfig.json ./
 
@@ -57,7 +56,6 @@ COPY --from=builder /app/src/assets ./src/assets
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/*.json ./
-COPY --from=builder /app/*-lock.yaml ./
 COPY --from=builder /app/README.md ./
 COPY --from=builder /app/nodemon.json ./
 COPY --from=builder /app/railway.json ./
