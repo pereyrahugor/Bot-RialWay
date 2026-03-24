@@ -1,5 +1,5 @@
 {
-  "name": "Bot-Neurolinks-CRM",
+  "name": "bot_neurolinks_crm",
   "version": "7.0.0",
   "description": "",
   "main": "dist/app.js",
