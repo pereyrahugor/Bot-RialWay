@@ -200,6 +200,7 @@ async function selectChat(id) {
     }
 
     renderChatList();
+    loadCRMJump(id); // Cargamos los datos para el "Salto al CRM"
     fetchMessages(id, true);
 }
 
@@ -464,6 +465,43 @@ function toggleCRMPanel() {
         if (chat) populateCRMFields(chat);
         renderTagManager();
     }
+}
+
+async function loadCRMJump(chatId) {
+    const container = document.getElementById('crm-jump-container');
+    const select = document.getElementById('crm-lead-jump');
+    if (!container || !select) return;
+
+    try {
+        // Buscamos TODOS los tickets para este chat_id (de cualquier estado)
+        const res = await fetch(`/api/backoffice/tickets?token=${token}&chatId=${chatId}&limit=50&estado=null`);
+        const tickets = await res.json();
+
+        if (Array.isArray(tickets) && tickets.length > 0) {
+            container.style.display = 'flex';
+            select.innerHTML = '<option value="">🚀 Ver en CRM...</option>' + 
+                tickets.map(t => `<option value="${t.id}" data-chat="${t.chat_id}">${t.titulo} (${t.tipo})</option>`).join('');
+        } else {
+            container.style.display = 'none';
+        }
+    } catch (e) {
+        console.error('[loadCRMJump] Error:', e);
+        container.style.display = 'none';
+    }
+}
+
+function jumpToCRM() {
+    const select = document.getElementById('crm-lead-jump');
+    const ticketId = select.value;
+    if (!ticketId) return;
+
+    const option = select.options[select.selectedIndex];
+    const chatId = option.getAttribute('data-chat');
+
+    // Guardamos ambos IDs para que el CRM abra el modal específico
+    localStorage.setItem('activeChat', chatId);
+    localStorage.setItem('pendingTicket', ticketId);
+    window.location.href = '/crm';
 }
 
 function populateCRMFields(chat) {

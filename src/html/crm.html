@@ -68,8 +68,11 @@
     <!-- Modal Editar Tarjeta -->
     <div id="card-modal" class="modal-overlay">
         <div class="modal-content animate-pop" style="max-width: 500px;">
-            <div class="modal-header">
-                <h3><i class="fas fa-clipboard-list" style="color:var(--accent); margin-right:10px;"></i> Detalle del Lead</h3>
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: flex-start;">
+                <div>
+                    <h3 style="margin: 0;"><i class="fas fa-clipboard-list" style="color:var(--accent); margin-right:10px;"></i> Detalle del Lead</h3>
+                    <div id="modal-ticket-ref" style="font-size: 0.8rem; font-family: monospace; color: var(--text-muted); margin-left: 32px; margin-top: 5px;"></div>
+                </div>
                 <button class="btn-close-modal" onclick="closeCardModal()"><i class="fas fa-times"></i></button>
             </div>
             <div class="modal-body">

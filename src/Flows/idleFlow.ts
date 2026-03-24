@@ -98,11 +98,12 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                 const cleanSource = (data.Origen || data.origen || data.Source || data.source || 'Asistente AI').trim();
 
                 // 1. Actualizar detalles del contacto en el CRM
-                if (cleanNombre || cleanEmail) {
+                if (cleanNombre || cleanEmail || resumen) {
                     await HistoryHandler.updateContactDetails(userId, {
                         name: cleanNombre || null,
                         email: cleanEmail || null,
-                        source: cleanSource
+                        source: cleanSource,
+                        notes: resumen // Guardamos el resumen en las notas principales del Lead
                     });
                     // console.log(`✅ CRM Actualizado para ${userId}: ${cleanNombre}`);
                 }

@@ -43,14 +43,6 @@
                 <span>🤖</span>
             </div>
             <h3 style="margin:0; font-size:1rem; flex:1; margin-left:12px;">{{BOT_NAME}}</h3>
-            <div style="display:flex; gap:8px;">
-                <button class="btn-icon" onclick="toggleCRMPanel()" title="Detalles del Lead">
-                    <i class="fas fa-user-edit"></i>
-                </button>
-                <button class="btn-icon" onclick="openTicketModal()" title="Generar Ticket" style="color: var(--accent);">
-                    <i class="fas fa-plus-circle"></i>
-                </button>
-            </div>
         </div>
 
         <div class="search-container">
@@ -80,6 +72,24 @@
             </div>
 
             <div class="switch-container">
+                <!-- Botones Móvidos y Nuevo Desplegable -->
+                <div style="display:flex; gap:12px; align-items:center; margin-right: 15px;">
+                    <button class="btn-icon" onclick="toggleCRMPanel()" title="Detalles del Lead">
+                        <i class="fas fa-user-edit"></i>
+                    </button>
+                    <button class="btn-icon" onclick="openTicketModal()" title="Generar Ticket" style="color: var(--accent);">
+                        <i class="fas fa-plus-circle"></i>
+                    </button>
+                    
+                    <div id="crm-jump-container" style="display:none; align-items:center; gap:8px; padding: 4px 10px; border-radius: 10px; background: #1e293b; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 4px 10px rgba(0,0,0,0.2);">
+                        <i class="fas fa-rocket" style="font-size: 0.8rem; color: var(--accent);"></i>
+                        <select id="crm-lead-jump" class="search-input" style="width:160px; margin:0; font-size:0.75rem; font-weight:600; background: transparent; border: none; color: white !important; cursor:pointer;" 
+                                onchange="jumpToCRM(this.value)">
+                            <option value="" style="background: #1e293b; color: white;">🚀 Ver en CRM...</option>
+                        </select>
+                    </div>
+                </div>
+
                 <span id="bot-status-text">Sin chat seleccionado</span>
                 <label class="switch">
                     <input type="checkbox" id="bot-toggle" disabled onchange="toggleBot(this.checked)">

@@ -275,9 +275,10 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     app.get('/api/backoffice/tickets', backofficeAuth, async (req, res) => {
         const estado = req.query.estado as string;
         const tipo = req.query.tipo as string;
+        const chatId = req.query.chatId as string;
         const limit = parseInt(req.query.limit as string) || 50;
         const offset = parseInt(req.query.offset as string) || 0;
-        const result = await HistoryHandler.listTickets(limit, offset, estado, tipo);
+        const result = await HistoryHandler.listTickets(limit, offset, estado, tipo, chatId);
         res.json(result);
     });
 

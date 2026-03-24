@@ -26,6 +26,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadCRMState();
     // Luego sincronizamos los datos (tickets, leads y metadatos de posicionamiento)
     await syncCRM();
+
+    // Verificamos si hay un ticket pendiente de abrir (viniendo del Backoffice)
+    const pendingId = localStorage.getItem('pendingTicket');
+    if (pendingId) {
+        localStorage.removeItem('pendingTicket');
+        localStorage.removeItem('activeChat'); // Limpiamos también el de chat
+        console.log('[CRM] Apertura automática de ticket:', pendingId);
+        // Pequeño delay para asegurar que distributeCards terminó de renderizar
+        setTimeout(() => openCardModal(pendingId), 300);
+    }
     
     // Auto-check de alertas cada minuto
     setInterval(checkAlertsVisual, 60000);
@@ -162,7 +172,12 @@ function createCardElement(ticket, lead, metadata) {
 
     card.innerHTML = `
         <div class="priority-indicator" style="background:${getPriorityColor(metadata.priority)}"></div>
-        <div class="card-tags">${tags}</div>
+        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+            <div class="card-tags">${tags}</div>
+            <div style="font-size:0.6rem; font-family:monospace; opacity:0.5; background:var(--bg-header); padding:2px 6px; border-radius:4px; margin-top:8px; margin-right:8px;">
+                REF: ${ticket.id.slice(-8).toUpperCase()}
+            </div>
+        </div>
         <div class="card-type-badge">
             <i class="fas fa-tag"></i> ${ticket.tipo || 'Sin tipo'}
         </div>
@@ -265,6 +280,9 @@ function openCardModal(ticketId) {
     const notes = lead?.notes || metadata.customNotes || ''; // Prioridad a la nota del contacto
     
     document.getElementById('edit-lead-id').value = ticketId;
+    const refElement = document.getElementById('modal-ticket-ref');
+    if (refElement) refElement.innerText = `REF: ${ticketId.slice(-8).toUpperCase()}`;
+    
     document.getElementById('edit-ticket-title').value = ticket.titulo || '';
     document.getElementById('edit-alert-date').value = metadata.alertDate || '';
     document.getElementById('edit-priority').value = metadata.priority || 'Media';

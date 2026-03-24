@@ -688,13 +688,17 @@ export class HistoryHandler {
     /**
      * Lista los tickets del proyecto
      */
-    static async listTickets(limit: number = 50, offset: number = 0, estado?: string, tipo?: string) {
-        console.log(`[HistoryHandler] listTickets -> req: estado=${estado}, tipo=${tipo}, project=${PROJECT_ID}`);
+    static async listTickets(limit: number = 50, offset: number = 0, estado?: string, tipo?: string, chatId?: string) {
+        console.log(`[HistoryHandler] listTickets -> req: estado=${estado}, tipo=${tipo}, chatId=${chatId}, project=${PROJECT_ID}`);
         try {
             let query = supabase
                 .from('tickets')
                 .select('*, chats(name, id)')
                 .eq('project_id', PROJECT_ID);
+
+            if (chatId && chatId !== 'null' && chatId !== 'undefined' && chatId !== '') {
+                query = query.eq('chat_id', chatId);
+            }
 
             // Filtro de estado robusto
             if (estado && estado !== 'null' && estado !== 'undefined' && estado !== '') {
@@ -722,6 +726,7 @@ export class HistoryHandler {
                         .select('*')
                         .eq('project_id', PROJECT_ID);
                     
+                    if (chatId) fallbackQuery = fallbackQuery.eq('chat_id', chatId);
                     if (estado) fallbackQuery = fallbackQuery.eq('estado', estado);
                     else fallbackQuery = fallbackQuery.in('estado', ['Abierto', 'En progreso']);
 
