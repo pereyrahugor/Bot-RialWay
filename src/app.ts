@@ -28,6 +28,7 @@ import { initSocketIO } from "./sockets/socket.manager";
 import { registerProviderEvents, hasActiveSession } from "./providers/provider.manager";
 import { startHumanInactivityWorker } from "./workers/humanInactivity.worker";
 import { AiManager } from "./utils/ai.manager";
+import { registerDashboardRoutes } from "./routes/dashboard.routes";
 import { smartBodyParser, compatibilityLayer, rootRedirect } from "./middleware/global";
 import { backofficeAuth } from "./middleware/auth";
 import bodyParser from 'body-parser';
@@ -194,6 +195,7 @@ const main = async () => {
             openaiMain,
             upload
         });
+        registerDashboardRoutes(app);
     }
 
     // 6. Initialize AI Manager and flows

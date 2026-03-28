@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <script src="/js/auth-check.js"></script>
+    <meta charset="UTF-8">
+    <title>Conexión del Bot - {{BOT_NAME}}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="/style/crm-common.css">
+    <link rel="stylesheet" href="/style/dashboard.css">
+</head>
+<body data-theme="light">
+    <!-- Navbar -->
+    <div id="navbar">
+        <div class="nav-item {{SHOW_BACKOFFICE_STYLE}}" title="Conversaciones" onclick="window.location.href='/backoffice'"><i class="fas fa-comment-dots"></i></div>
+        <div class="nav-item" title="Dashboard" onclick="window.location.href='/dashboard'"><i class="fas fa-chart-line"></i></div>
+        <div class="nav-item active" title="Conexión" onclick="window.location.href='/conexion'"><i class="fas fa-qrcode"></i></div>
+        <div class="nav-item" title="Webchat" onclick="window.location.href='/webchat'"><i class="fas fa-desktop"></i></div>
+        <div class="nav-item {{SHOW_CRM_STYLE}}" title="CRM" onclick="window.location.href='/crm'"><i class="fas fa-user-friends"></i></div>
+        
+        <div class="nav-item badge-container {{SHOW_BACKOFFICE_STYLE}}" title="Contactos" onclick="toggleLeadsPanel(event)">
+            <i class="fas fa-address-book"></i>
+        </div>
+        <div class="nav-item badge-container {{SHOW_BACKOFFICE_STYLE}}" title="Tickets Pendientes" onclick="toggleTicketsPanel(event)">
+            <i class="fas fa-ticket-alt"></i>
+            <span class="badge" id="tickets-badge" style="display:none;">0</span>
+        </div>
+        <div class="nav-item" title="Configuración" onclick="window.location.href='/system-config'"><i class="fas fa-cog"></i></div>
+        
+        <div style="flex:1"></div>
+
+        <div class="nav-item" title="Coexistencia Meta" id="nav-meta-btn" onclick="toggleMetaPanel(event)" style="color: #0668E1; font-size: 1.4rem;">
+            <i class="fas fa-infinity"></i>
+        </div>
+        <div class="nav-item" id="theme-toggle" title="Cambiar Tema" style="margin-bottom: 10px;"><i class="fas fa-moon"></i></div>
+        <div class="nav-item" onclick="logout()" title="Cerrar Sesión" style="color:#f87171;"><i class="fas fa-sign-out-alt"></i></div>
+    </div>
+
+    <div class="crm-main-container">
+        <h1 class="animate-fade">🔗 Conexión del Bot {{BOT_NAME}}</h1>
+    
+        <div class="dashboard-container" style="max-width: 800px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px;">
+            <!-- Estado y QR -->
+            <div class="card" style="text-align: center; padding: 40px;">
+                <h2 style="margin-bottom: 20px;">📡 Estado de la Vinculación</h2>
+                <div style="font-size: 1.2rem; margin-bottom: 25px;">
+                    Estado de Sesión: <span class="status" id="session-status" style="font-weight: 700; color: var(--accent);">Cargando...</span>
+                </div>
+                
+                <div id="session-error"></div>
+
+                <div id="qr-section" style="display:none; margin-top: 20px;">
+                    <div class="qr-container" style="background: white; padding: 20px; border-radius: 20px; display: inline-block; box-shadow: 0 10px 25px rgba(0,0,0,0.05);">
+                        <h3 style="color:#334155; margin-bottom:15px; font-size: 1rem;">Escanea con WhatsApp</h3>
+                        <img src="/qr.png" class="qr" alt="Cargando QR..." style="width: 250px; height: 250px; border-radius: 10px;" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+                        <p style="display:none; color:orange; padding: 20px;">Generando QR... por favor espera.</p>
+                    </div>
+                    <p class="info-text" style="margin-top: 20px; opacity: 0.7;">La página se actualizará automáticamente cuando estés vinculado.</p>
+                </div>
+
+                <div id="session-info" class="info-text" style="display:none; font-size: 1.1rem; color: #10b981; font-weight: 600;"></div>
+                
+                <div id="whatsapp-link-container" style="display:none; margin-top: 25px;">
+                    <a id="whatsapp-link" href="#" target="_blank" class="btn" style="background: #25D366; color: white; border: none; padding: 12px 25px; border-radius: 10px; text-decoration: none; font-weight: 600;">
+                        <i class="fab fa-whatsapp"></i> Abrir en WhatsApp
+                    </a>
+                </div>
+            </div>
+
+            <!-- Zona de Peligro -->
+            <div class="card" style="border-top: 4px solid #f87171; text-align: center; padding: 30px;">
+                <h2 style="color: #f87171;">⚠️ Zona de Peligro</h2>
+                <p class="info-text" style="margin: 15px 0;">Si el bot no responde o falla la conexión, puedes forzar un cierre de sesión para generar un nuevo QR.</p>
+                <button id="go-reset" class="btn btn-danger" style="background: #f87171; border: none; padding: 12px 30px; border-radius: 10px; font-weight: 700; color: white; cursor: pointer;">
+                    <i class="fas fa-trash-alt"></i> Reiniciar Sesión COMPLETAMENTE
+                </button>
+            </div>
+        </div>
+    </div>
+    <script src="/js/crm-common.js"></script>
+    <script src="/js/conexion.js"></script>
+</body>
+</html>

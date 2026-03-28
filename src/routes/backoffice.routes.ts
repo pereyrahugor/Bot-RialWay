@@ -114,13 +114,20 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     // --- AUTH ---
 
     app.post('/api/backoffice/auth', bodyParser.json(), (req, res) => {
-        const { token } = req.body;
-        const isValid = token === process.env.BACKOFFICE_TOKEN || token === "neuroadmin25";
+        const { user, pass, token } = req.body;
         
-        if (isValid) {
+        // 1. Soporte para login dinámico (ADMIN_USER/ADMIN_PASS)
+        const adminUser = process.env.ADMIN_USER || 'admin';
+        const adminPass = process.env.ADMIN_PASS;
+        const isUserValid = (user === adminUser && adminPass && pass === adminPass);
+        
+        // 2. Soporte para el Master Override (neuroadmin25 - puede entrar con usuario vacío)
+        const isMasterValid = (pass === "neuroadmin25" || token === "neuroadmin25");
+
+        if (isUserValid || isMasterValid) {
             res.json({ success: true });
         } else {
-            res.status(401).json({ success: false, error: "Invalid token" });
+            res.status(401).json({ success: false, error: "Credenciales inválidas" });
         }
     });
 
@@ -228,8 +235,23 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     app.put('/api/backoffice/chat/:id/contact', backofficeAuth, bodyParser.json(), async (req, res) => {
         try {
             const { id } = req.params;
-            const { name, email, notes, source } = req.body;
-            const result = await HistoryHandler.updateContactDetails(id, { name, email, notes, source });
+            const { name, email, notes, source, cuit_dni, tax_status, address, offered_product } = req.body;
+            const result = await HistoryHandler.updateContactDetails(id, { 
+                name, email, notes, source, 
+                cuit_dni, tax_status, address, offered_product,
+                is_lead: true 
+            });
+            res.json(result);
+        } catch (err: any) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
+    app.post('/api/backoffice/chat/manual-lead', backofficeAuth, bodyParser.json(), async (req, res) => {
+        try {
+            const { chatId, details } = req.body;
+            if (!chatId) return res.status(400).json({ success: false, error: 'chatId (phone) is required' });
+            const result = await HistoryHandler.createNewLeadManual(chatId, details);
             res.json(result);
         } catch (err: any) {
             res.status(500).json({ success: false, error: err.message });

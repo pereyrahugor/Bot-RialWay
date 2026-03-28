@@ -361,8 +361,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             const dataCrm = await resCrm.json();
 
             if (dataBack.success && dataCrm.success) {
-                navSyncStatus.textContent = '✅ Visibilidad actualizada correctamente.';
+                navSyncStatus.textContent = '✅ Visibilidad actualizada correctamente. Recargando...';
                 navSyncStatus.style.color = '#10b981';
+                // Recargar página después de un momento para ver cambios en el nav actual
+                setTimeout(() => window.location.reload(), 1500);
             } else {
                 navSyncStatus.textContent = '❌ Error al guardar.';
                 navSyncStatus.style.color = '#ef4444';

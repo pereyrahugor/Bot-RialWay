@@ -137,6 +137,19 @@ function renderFilterDropdown() {
     select.value = currentValue;
 }
 
+function formatLastMessageTime(dateStr) {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    const now = new Date();
+    const isToday = date.toDateString() === now.toDateString();
+    if (isToday) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const yesterday = new Date();
+    yesterday.setDate(now.getDate() - 1);
+    const isYesterday = date.toDateString() === yesterday.toDateString();
+    if (isYesterday) return 'Ayer';
+    return date.toLocaleDateString([], { day: '2-digit', month: '2-digit' });
+}
+
 function renderChatList(listToRender = chats) {
     const list = document.getElementById('chat-list');
     list.innerHTML = listToRender.map(chat => {
@@ -147,9 +160,10 @@ function renderChatList(listToRender = chats) {
             `<span class="tag-pill" style="background:${t.color || '#6366f1'}">${t.name}</span>`
         ).join('');
 
+        const timeStr = formatLastMessageTime(chat.last_message_at);
         const statusBadge = chat.bot_enabled 
-            ? `<span style="color: var(--accent); font-size: 0.75rem;">🤖 Bot</span>`
-            : `<span style="color: #f87171; font-size: 0.75rem;">👤 Humano</span>`;
+            ? `<div style="text-align:right;"><span style="color: var(--accent); font-size: 0.75rem;">🤖 Bot</span><br/><span style="font-size:0.65rem; opacity:0.7;">${timeStr}</span></div>`
+            : `<div style="text-align:right;"><span style="color: #f87171; font-size: 0.75rem;">👤 Humano</span><br/><span style="font-size:0.65rem; opacity:0.7;">${timeStr}</span></div>`;
 
         return `
             <div class="chat-item ${activeChatId === chat.id ? 'active' : ''}" onclick="selectChat('${chat.id}')">
@@ -510,6 +524,11 @@ function populateCRMFields(chat) {
     document.getElementById('crm-email').value = chat.email || '';
     document.getElementById('crm-source').value = chat.source || '';
     document.getElementById('crm-notes').value = chat.notes || '';
+    // Nuevos campos
+    document.getElementById('crm-cuit').value = chat.cuit_dni || '';
+    document.getElementById('crm-address').value = chat.address || '';
+    document.getElementById('crm-tax-status').value = chat.tax_status || 'Cons. Final';
+    document.getElementById('crm-product').value = chat.offered_product || '';
 }
 
 async function saveCRMDetails() {
@@ -519,7 +538,11 @@ async function saveCRMDetails() {
         name: document.getElementById('crm-name').value,
         email: document.getElementById('crm-email').value,
         source: document.getElementById('crm-source').value,
-        notes: document.getElementById('crm-notes').value
+        notes: document.getElementById('crm-notes').value,
+        cuit_dni: document.getElementById('crm-cuit').value,
+        address: document.getElementById('crm-address').value,
+        tax_status: document.getElementById('crm-tax-status').value,
+        offered_product: document.getElementById('crm-product').value
     };
 
     try {

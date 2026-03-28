@@ -339,7 +339,17 @@ export class HistoryHandler {
     /**
      * Actualiza los detalles de contacto (CRM)
      */
-    static async updateContactDetails(chatId: string, details: { name?: string, email?: string, notes?: string, source?: string }) {
+    static async updateContactDetails(chatId: string, details: { 
+        name?: string, 
+        email?: string, 
+        notes?: string, 
+        source?: string, 
+        is_lead?: boolean,
+        cuit_dni?: string,
+        tax_status?: string,
+        address?: string,
+        offered_product?: string
+    }) {
         try {
             const { error } = await supabase
                 .from('chats')
@@ -351,6 +361,48 @@ export class HistoryHandler {
             return { success: true };
         } catch (err: any) {
             console.error('[HistoryHandler] Error en updateContactDetails:', err);
+            return { success: false, error: err.message };
+        }
+    }
+
+    /**
+     * Crea un lead manualmente desde la interfaz (sin necesidad de chat previo)
+     */
+    static async createNewLeadManual(chatId: string, details: any) {
+        try {
+            // 1. Crear o actualizar el chat (Lead)
+            const { error: chatErr } = await supabase
+                .from('chats')
+                .upsert({
+                    id: chatId,
+                    project_id: PROJECT_ID,
+                    ...details,
+                    is_lead: true,
+                    created_at: new Date().toISOString()
+                }, { onConflict: 'id,project_id' });
+
+            if (chatErr) throw chatErr;
+
+            // 2. Crear un ticket inicial "NUEVO LEAD" para que aparezca en el CRM
+            const { data: ticket, error: ticketErr } = await supabase
+                .from('tickets')
+                .insert({
+                    chat_id: chatId,
+                    project_id: PROJECT_ID,
+                    titulo: `Lead: ${details.name || chatId}`,
+                    descripcion: details.notes || 'Lead creado manualmente',
+                    tipo: details.offered_product || 'Nuevo Lead',
+                    prioridad: 'Media',
+                    estado: 'Abierto',
+                    created_at: new Date().toISOString()
+                })
+                .select()
+                .single();
+
+            if (ticketErr) throw ticketErr;
+            return { success: true, ticket };
+        } catch (err: any) {
+            console.error('[HistoryHandler] Error en createNewLeadManual:', err);
             return { success: false, error: err.message };
         }
     }
@@ -773,14 +825,17 @@ export class HistoryHandler {
         }
     }
     /**
-     * Lista los leads que tienen datos de CRM (editados)
+     * Lista los leads que tienen datos de CRM (editados y marcados explicitamente como leads)
      */
     static async listEditedLeads(limit: number = 50, offset: number = 0) {
         try {
+            // Filtramos para obtener solo chats marcados como leads (is_lead = true)
+            // Esto asegura que la Agenda/Contactos solo tenga contactos generados o validados por alguien.
             const { data, error } = await supabase
                 .from('chats')
                 .select('*')
                 .eq('project_id', PROJECT_ID)
+                .eq('is_lead', true)
                 .order('last_human_message_at', { ascending: false })
                 .range(offset, offset + limit - 1);
 

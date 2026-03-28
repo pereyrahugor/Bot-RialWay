@@ -3,24 +3,69 @@
 <head>
     <script src="/js/auth-check.js"></script>
     <meta charset="UTF-8">
-    <title>Bot Dashboard - {{BOT_NAME}}</title>
+    <title>KPI Dashboard - {{BOT_NAME}}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="/style/crm-common.css">
-    <link rel="stylesheet" href="/style/dashboard.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .kpi-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .kpi-card {
+            background: var(--bg-card);
+            padding: 25px;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            text-align: center;
+            border: 1px solid var(--border);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .kpi-card:hover { transform: translateY(-5px); box-shadow: 0 15px 35px rgba(0,0,0,0.1); }
+        .kpi-value { font-size: 2.2rem; font-weight: 700; color: var(--primary); margin: 10px 0; }
+        .kpi-label { color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+        .kpi-icon { font-size: 1.4rem; color: var(--accent); margin-bottom: 12px; opacity: 0.8; }
+        
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 30px;
+            margin-top: 40px;
+        }
+        .chart-card {
+            background: var(--bg-card);
+            padding: 30px;
+            border-radius: 24px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            border: 1px solid var(--border);
+        }
+        .chart-header { margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 15px; display: flex; align-items: center; gap: 10px; }
+        .chart-header i { color: var(--accent); }
+        
+        @media (max-width: 768px) {
+            .charts-grid { grid-template-columns: 1fr; }
+        }
+    </style>
 </head>
 <body data-theme="light">
     <!-- Navbar -->
     <div id="navbar">
-        <div class="nav-item" style="display: {{SHOW_BACKOFFICE_STYLE}};" title="Conversaciones" onclick="window.location.href='/backoffice'"><i class="fas fa-comment-dots"></i></div>
-        <div class="nav-item" title="Dashboard" onclick="window.location.href='/dashboard'"><i class="fas fa-th-large"></i></div>
+        <div class="nav-item {{SHOW_BACKOFFICE_STYLE}}" title="Conversaciones" onclick="window.location.href='/backoffice'"><i class="fas fa-comment-dots"></i></div>
+        <div class="nav-item active" title="Dashboard" onclick="window.location.href='/dashboard'"><i class="fas fa-chart-line"></i></div>
+        <div class="nav-item" title="Conexión" onclick="window.location.href='/conexion'"><i class="fas fa-qrcode"></i></div>
         <div class="nav-item" title="Webchat" onclick="window.location.href='/webchat'"><i class="fas fa-desktop"></i></div>
-        <div class="nav-item" style="display: {{SHOW_CRM_STYLE}};" title="CRM" onclick="window.location.href='/crm'"><i class="fas fa-user-friends"></i></div>
-        <div class="nav-item badge-container" title="Contactos" onclick="toggleLeadsPanel(event)">
+        <div class="nav-item {{SHOW_CRM_STYLE}}" title="CRM" onclick="window.location.href='/crm'"><i class="fas fa-user-friends"></i></div>
+        
+        <div class="nav-item badge-container {{SHOW_BACKOFFICE_STYLE}}" title="Contactos" onclick="toggleLeadsPanel(event)">
             <i class="fas fa-address-book"></i>
         </div>
-        <div class="nav-item badge-container" title="Tickets Pendientes" onclick="toggleTicketsPanel(event)">
+        <div class="nav-item badge-container {{SHOW_BACKOFFICE_STYLE}}" title="Tickets Pendientes" onclick="toggleTicketsPanel(event)">
             <i class="fas fa-ticket-alt"></i>
             <span class="badge" id="tickets-badge" style="display:none;">0</span>
         </div>
@@ -36,47 +81,135 @@
     </div>
 
     <div class="crm-main-container">
-        <h1 class="animate-fade">🤖 Panel de Control {{BOT_NAME}}</h1>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <h1 class="animate-fade">📊 Dashboard de Performance</h1>
+            <div id="last-update" style="font-size: 0.8rem; opacity: 0.5;"></div>
+        </div>
+        <p style="opacity:0.7; margin-bottom: 30px;">Análisis detallado de métricas y efectividad del Bot {{BOT_NAME}}</p>
     
-        <div class="dashboard-container" style="max-width: 800px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px;">
-            <!-- Estado y QR -->
-            <div class="card" style="text-align: center; padding: 40px;">
-                <h2 style="margin-bottom: 20px;">📈 Estado del Bot</h2>
-                <div style="font-size: 1.2rem; margin-bottom: 25px;">
-                    Estado de Sesión: <span class="status" id="session-status" style="font-weight: 700; color: var(--accent);">Cargando...</span>
-                </div>
-                
-                <div id="session-error"></div>
-
-                <div id="qr-section" style="display:none; margin-top: 20px;">
-                    <div class="qr-container" style="background: white; padding: 20px; border-radius: 20px; display: inline-block; box-shadow: 0 10px 25px rgba(0,0,0,0.05);">
-                        <h3 style="color:#334155; margin-bottom:15px; font-size: 1rem;">Escanea con WhatsApp</h3>
-                        <img src="/qr.png" class="qr" alt="Cargando QR..." style="width: 250px; height: 250px; border-radius: 10px;" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
-                        <p style="display:none; color:orange; padding: 20px;">Generando QR... por favor espera.</p>
-                    </div>
-                    <p class="info-text" style="margin-top: 20px; opacity: 0.7;">La página se actualizará automáticamente cuando estés vinculado.</p>
-                </div>
-
-                <div id="session-info" class="info-text" style="display:none; font-size: 1.1rem; color: #10b981; font-weight: 600;"></div>
-                
-                <div id="whatsapp-link-container" style="display:none; margin-top: 25px;">
-                    <a id="whatsapp-link" href="#" target="_blank" class="btn" style="background: #25D366; color: white; border: none; padding: 12px 25px; border-radius: 10px; text-decoration: none; font-weight: 600;">
-                        <i class="fab fa-whatsapp"></i> Abrir en WhatsApp
-                    </a>
-                </div>
+        <div class="kpi-container">
+            <div class="kpi-card">
+                <div class="kpi-icon"><i class="fas fa-percentage"></i></div>
+                <div class="kpi-label">Conversión Leads</div>
+                <div class="kpi-value" id="kpi-conversion">--%</div>
             </div>
+            <div class="kpi-card">
+                <div class="kpi-icon"><i class="fas fa-paper-plane"></i></div>
+                <div class="kpi-label">Msjs (24h)</div>
+                <div class="kpi-value" id="kpi-msgs">--</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon"><i class="fas fa-robot"></i></div>
+                <div class="kpi-label">Proactividad Bot</div>
+                <div class="kpi-value" id="kpi-bot">--%</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon"><i class="fas fa-bolt"></i></div>
+                <div class="kpi-label">T. Respuesta</div>
+                <div class="kpi-value" id="kpi-resp">--m</div>
+            </div>
+        </div>
 
-            <!-- Zona de Peligro -->
-            <div class="card" style="border-top: 4px solid #f87171; text-align: center; padding: 30px;">
-                <h2 style="color: #f87171;">⚠️ Zona de Peligro</h2>
-                <p class="info-text" style="margin: 15px 0;">Si el bot no responde o falla la conexión, puedes forzar un cierre de sesión para generar un nuevo QR.</p>
-                <button id="go-reset" class="btn btn-danger" style="background: #f87171; border: none; padding: 12px 30px; border-radius: 10px; font-weight: 700; color: white; cursor: pointer;">
-                    <i class="fas fa-trash-alt"></i> Reiniciar Sesión COMPLETAMENTE
-                </button>
+        <div class="charts-grid">
+            <!-- Gráfico Funnel -->
+            <div class="chart-card">
+                <div class="chart-header"><i class="fas fa-filter"></i> <h3>Estado del Funnel (Tickets)</h3></div>
+                <div style="height: 300px;"><canvas id="chart-funnel"></canvas></div>
+            </div>
+            <!-- Gráfico Categorías -->
+            <div class="chart-card">
+                <div class="chart-header"><i class="fas fa-shapes"></i> <h3>Categorización de Consultas</h3></div>
+                <div style="height: 300px;"><canvas id="chart-categories"></canvas></div>
+            </div>
+            <!-- Productividad Operadores -->
+            <div class="chart-card">
+                <div class="chart-header"><i class="fas fa-user-edit"></i> <h3>Acciones por Operador (7d)</h3></div>
+                <div style="height: 300px;"><canvas id="chart-productivity"></canvas></div>
+            </div>
+            <!-- Origen de Leads -->
+            <div class="chart-card">
+                <div class="chart-header"><i class="fas fa-share-nodes"></i> <h3>Origen de Contactos</h3></div>
+                <div style="height: 300px;"><canvas id="chart-sources"></canvas></div>
             </div>
         </div>
     </div>
+
     <script src="/js/crm-common.js"></script>
-    <script src="/js/dashboard.js"></script>
+    <script>
+        const token = localStorage.getItem('backoffice_token');
+        let charts = {};
+
+        async function initDashboard() {
+            try {
+                const res = await fetch(`/api/dashboard/stats?token=${token}`);
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error);
+
+                renderStats(data.stats);
+            } catch (e) {
+                console.error('Error cargando KPIs:', e);
+            }
+        }
+
+        function renderStats(stats) {
+            // KPIs Simples
+            document.getElementById('kpi-conversion').textContent = stats.conversionRate + '%';
+            document.getElementById('kpi-msgs').textContent = stats.msgCountLast24h;
+            document.getElementById('kpi-bot').textContent = stats.proactivity + '%';
+            document.getElementById('kpi-resp').textContent = stats.avgResponseTime + 'm';
+            document.getElementById('last-update').textContent = 'Última actualización: ' + new Date().toLocaleTimeString();
+
+            // Gráfico Funnel (Doughnut)
+            createChart('chart-funnel', 'doughnut', stats.funnel, ['#10b981', '#f59e0b', '#ef4444']);
+            
+            // Categorías (Bar)
+            createChart('chart-categories', 'bar', stats.categories, ['#6366f1']);
+            
+            // Productividad (Pie)
+            createChart('chart-productivity', 'pie', stats.productivity);
+            
+            // Fuentes (PolarArea)
+            createChart('chart-sources', 'polarArea', stats.sources);
+        }
+
+        function createChart(id, type, dataMap, colors = []) {
+            if (charts[id]) charts[id].destroy();
+            
+            const ctx = document.getElementById(id).getContext('2d');
+            const labels = Object.keys(dataMap || {});
+            const values = Object.values(dataMap || {});
+            
+            const backgroundColors = colors.length > 0 ? colors : [
+                '#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'
+            ];
+
+            charts[id] = new Chart(ctx, {
+                type: type,
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: values,
+                        backgroundColor: backgroundColors,
+                        borderWidth: 0,
+                        hoverOffset: 15
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { usePointStyle: true, font: { family: 'Outfit', size: 12 } } }
+                    },
+                    scales: type === 'bar' ? {
+                        y: { beginAtZero: true, grid: { display: false } },
+                        x: { grid: { display: false } }
+                    } : {}
+                }
+            });
+        }
+
+        initDashboard();
+        setInterval(initDashboard, 60000); // Actualizar cada minuto
+    </script>
 </body>
 </html>

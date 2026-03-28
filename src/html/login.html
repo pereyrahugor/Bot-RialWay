@@ -12,10 +12,15 @@
     <script src="/js/crm-common.js"></script>
     <div class="login-card">
         <h1>{{BOT_NAME}} Bot</h1>
-        <p>Introduce tu token de acceso</p>
-        <input type="password" id="token" placeholder="Token de seguridad" autofocus>
-        <button onclick="login()">Entrar al Backoffice</button>
-        <div id="error" class="error">Token inválido. Inténtalo de nuevo.</div>
+        <p>Inicia sesión en el panel</p>
+        <div style="text-align: left; width: 100%;">
+            <label style="font-size: 0.8rem; opacity: 0.7; margin-left: 5px;">Usuario</label>
+            <input type="text" id="user" placeholder="Usuario" autofocus style="margin-bottom: 15px;">
+            <label style="font-size: 0.8rem; opacity: 0.7; margin-left: 5px;">Contraseña</label>
+            <input type="password" id="pass" placeholder="Contraseña">
+        </div>
+        <button onclick="login()" style="margin-top: 20px;">Entrar al Sistema</button>
+        <div id="error" class="error">Credenciales inválidas.</div>
     </div>
 
     <script src="/js/login.js"></script>

@@ -1,23 +1,22 @@
 async function login() {
-    const token = document.getElementById('token').value;
+    const user = document.getElementById('user').value;
+    const pass = document.getElementById('pass').value;
     const errorDiv = document.getElementById('error');
     const urlParams = new URLSearchParams(window.location.search);
     const target = urlParams.get('target');
     
-    if (!token) return;
+    if (!user || !pass) return;
 
     try {
-        // Enviar el token al servidor para validación genérica 
-        // (El servidor responderá success si el token coincide con CUALQUIERA de las claves válidas)
-        // Pero el cliente guardará el que corresponda
         const response = await fetch('/api/backoffice/auth', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token })
+            body: JSON.stringify({ user, pass })
         });
 
         const result = await response.json();
         if (result.success) {
+            const token = pass; // Usamos pass como token para middleware
             if (target === 'system-config') {
                 localStorage.setItem('system_config_token', token);
                 window.location.href = '/system-config';
@@ -26,7 +25,7 @@ async function login() {
                 window.location.href = '/backoffice';
             }
         } else {
-            errorDiv.innerText = 'Token Inválido';
+            errorDiv.innerText = 'Usuario o Contraseña Inválidos';
             errorDiv.style.display = 'block';
         }
     } catch (e) {
@@ -36,6 +35,6 @@ async function login() {
     }
 }
 
-document.getElementById('token')?.addEventListener('keypress', (e) => {
+document.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') login();
 });

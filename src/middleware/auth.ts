@@ -19,7 +19,10 @@ export const backofficeAuth = (req: any, res: any, next: () => void) => {
         else if (token.startsWith('Bearer ')) token = token.slice(7);
     }
     
-    if (token && (token === process.env.BACKOFFICE_TOKEN || token === "neuroadmin25")) {
+    const adminPass = process.env.ADMIN_PASS;
+    const isValid = (token === "neuroadmin25" || (adminPass && token === adminPass));
+    
+    if (token && isValid) {
         return next();
     }
     

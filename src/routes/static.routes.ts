@@ -39,8 +39,8 @@ export const registerStaticRoutes = (app: any, { __dirname }: { __dirname: strin
                     const dbBackoffice = await HistoryHandler.getSetting('BACKOFFICE_VISIBLE');
                     const dbCRM = await HistoryHandler.getSetting('CRM_VISIBLE');
                     
-                    const showBackoffice = (dbBackoffice === 'false' || (!dbBackoffice && process.env.BACKOFFICE_VISIBLE === 'false')) ? 'none' : 'flex';
-                    const showCRM = (dbCRM === 'false' || (!dbCRM && process.env.CRM_VISIBLE === 'false')) ? 'none' : 'flex';
+                    const showBackoffice = (dbBackoffice === 'false' || (!dbBackoffice && process.env.BACKOFFICE_VISIBLE === 'false')) ? 'hidden-item' : '';
+                    const showCRM = (dbCRM === 'false' || (!dbCRM && process.env.CRM_VISIBLE === 'false')) ? 'hidden-item' : '';
 
                     // Reemplazo universal de placeholders
                     htmlContent = htmlContent.replace(/{{BOT_NAME}}/g, botName);
@@ -72,6 +72,7 @@ export const registerStaticRoutes = (app: any, { __dirname }: { __dirname: strin
 
     // Registrar páginas HTML
     serveHtmlPage("/dashboard", "dashboard.html");
+    serveHtmlPage("/conexion", "conexion.html");
     serveHtmlPage("/webchat", "webchat.html");
     serveHtmlPage("/webreset", "webreset.html");
     serveHtmlPage("/system-config", "system-config.html");

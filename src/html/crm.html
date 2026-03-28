@@ -15,14 +15,15 @@
 <body data-theme="light">
     <!-- Navbar -->
     <div id="navbar">
-        <div class="nav-item" style="display: {{SHOW_BACKOFFICE_STYLE}};" title="Conversaciones" onclick="window.location.href='/backoffice'"><i class="fas fa-comment-dots"></i></div>
-        <div class="nav-item" title="Dashboard" onclick="window.location.href='/dashboard'"><i class="fas fa-th-large"></i></div>
+        <div class="nav-item {{SHOW_BACKOFFICE_STYLE}}" title="Conversaciones" onclick="window.location.href='/backoffice'"><i class="fas fa-comment-dots"></i></div>
+        <div class="nav-item" title="Dashboard" onclick="window.location.href='/dashboard'"><i class="fas fa-chart-line"></i></div>
+        <div class="nav-item" title="Conexión" onclick="window.location.href='/conexion'"><i class="fas fa-qrcode"></i></div>
         <div class="nav-item" title="Webchat" onclick="window.location.href='/webchat'"><i class="fas fa-desktop"></i></div>
-        <div class="nav-item" style="display: {{SHOW_CRM_STYLE}};" title="CRM" onclick="window.location.href='/crm'"><i class="fas fa-user-friends"></i></div>
-        <div class="nav-item badge-container" title="Contactos" onclick="toggleLeadsPanel(event)">
+        <div class="nav-item active {{SHOW_CRM_STYLE}}" title="CRM" onclick="window.location.href='/crm'"><i class="fas fa-user-friends"></i></div>
+        <div class="nav-item badge-container {{SHOW_BACKOFFICE_STYLE}}" title="Contactos" onclick="toggleLeadsPanel(event)">
             <i class="fas fa-address-book"></i>
         </div>
-        <div class="nav-item badge-container" title="Tickets Pendientes" onclick="toggleTicketsPanel(event)">
+        <div class="nav-item badge-container {{SHOW_BACKOFFICE_STYLE}}" title="Tickets Pendientes" onclick="toggleTicketsPanel(event)">
             <i class="fas fa-ticket-alt"></i>
             <span class="badge" id="tickets-badge" style="display:none;">0</span>
         </div>
@@ -50,10 +51,14 @@
                 <button class="btn btn-secondary" onclick="openClosedLeadsModal()">
                     <i class="fas fa-archive"></i> Leads Cerrados
                 </button>
-                <div class="divider-v"></div>
-                <button class="btn btn-secondary" onclick="syncCRM()">
-                    <i class="fas fa-sync"></i> Sincronizar
-                </button>
+                <div style="display: flex; gap: 15px; align-items: center;">
+            <button class="btn-primary" onclick="window.syncCRM()" title="Sincronizar">
+                <i class="fas fa-sync-alt"></i> Sincronizar
+            </button>
+            <button class="btn-primary" style="background:#059669;" onclick="openNewLeadModal()" title="Crear Lead">
+                <i class="fas fa-plus-circle"></i> Crear Lead Card
+            </button>
+        </div>
             </div>
         </div>
 
@@ -84,37 +89,64 @@
                         <input type="text" id="edit-ticket-title" class="crm-input" placeholder="Ej: Consulta por preventa">
                     </div>
 
-                    <div class="modal-section-row">
-                        <div style="flex:1;">
-                            <label><i class="fas fa-user"></i> Nombre del Lead</label>
-                            <input type="text" id="edit-lead-name" class="crm-input" placeholder="Nombre completo">
-                        </div>
-                        <div style="flex:1;">
-                            <label><i class="fas fa-envelope"></i> Correo Electrónico</label>
-                            <input type="email" id="edit-lead-email" class="crm-input" placeholder="ejemplo@correo.com">
-                        </div>
-                    </div>
-
-                    <div class="modal-section-row">
-                        <div style="flex:1;">
-                            <label><i class="fas fa-bullseye"></i> Origen (Source)</label>
-                            <input type="text" id="edit-lead-source" class="crm-input" placeholder="Ej: Meta, Orgánico">
-                        </div>
-                        <div style="flex:1;">
-                            <label><i class="fas fa-bell"></i> Fecha de Alerta</label>
-                            <input type="date" id="edit-alert-date" class="crm-input">
-                        </div>
-                    </div>
-
+                    <div class="modal-grid">
                     <div class="modal-section">
-                        <label><i class="fas fa-phone"></i> Número de Contacto (WhatsApp)</label>
-                        <div style="display:flex; gap:10px;">
-                            <input type="text" id="edit-lead-phone" class="crm-input" readonly style="opacity: 0.7; background: rgba(0,0,0,0.05); flex:1;">
-                            <button type="button" class="btn-action btn-action-success" title="Iniciar Chat en WhatsApp" onclick="openWhatsAppDirect()">
-                                <i class="fab fa-whatsapp" style="font-size:1.2rem;"></i>
+                        <label><i class="fas fa-user"></i> Nombre Completo / Razón Social</label>
+                        <input type="text" id="edit-lead-name" class="crm-input" placeholder="Nombre completo...">
+                    </div>
+                    <div class="modal-section">
+                        <label><i class="fas fa-phone"></i> Teléfono</label>
+                        <div style="display:flex; gap:8px;">
+                            <input type="text" id="edit-lead-phone" class="crm-input" readonly>
+                            <button type="button" class="btn-action btn-action-success" onclick="openWhatsAppDirect()" title="Enviar WhatsApp">
+                                <i class="fab fa-whatsapp"></i>
                             </button>
                         </div>
                     </div>
+                </div>
+
+                <div class="modal-grid">
+                    <div class="modal-section">
+                        <label><i class="fas fa-id-card"></i> Cuil / Cuit / DNI</label>
+                        <input type="text" id="edit-lead-cuit" class="crm-input" placeholder="00-00000000-0">
+                    </div>
+                    <div class="modal-section">
+                        <label><i class="fas fa-envelope"></i> Email</label>
+                        <input type="email" id="edit-lead-email" class="crm-input" placeholder="email@ejemplo.com">
+                    </div>
+                </div>
+
+                <div class="modal-grid">
+                    <div class="modal-section">
+                        <label><i class="fas fa-map-marker-alt"></i> Domicilio</label>
+                        <input type="text" id="edit-lead-address" class="crm-input" placeholder="Calle, Nro, Localidad...">
+                    </div>
+                    <div class="modal-section">
+                        <label><i class="fas fa-file-invoice-dollar"></i> Situación Impositiva</label>
+                        <select id="edit-lead-tax-status" class="crm-input">
+                            <option value="Cons. Final">Cons. Final</option>
+                            <option value="Responsable Inscripto">Responsable Inscripto</option>
+                            <option value="Monotributo">Monotributo</option>
+                            <option value="Exento">Exento</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="modal-grid">
+                    <div class="modal-section">
+                        <label><i class="fas fa-shopping-bag"></i> Producto Ofrecido</label>
+                        <input type="text" id="edit-lead-offered-product" class="crm-input" placeholder="Servicio/Producto...">
+                    </div>
+                    <div class="modal-section">
+                        <label><i class="fas fa-bullhorn"></i> Fuente / Canal</label>
+                        <input type="text" id="edit-lead-source" class="crm-input" placeholder="Ej: Instagram, Web, Referido">
+                    </div>
+                </div>
+
+                <div class="modal-section">
+                    <label><i class="fas fa-sticky-note"></i> Historial de Notas / Comentarios</label>
+                    <textarea id="edit-custom-notes" class="crm-input" rows="4" placeholder="Observaciones generales..."></textarea>
+                </div>
 
                     <div class="modal-section">
                         <label><i class="fas fa-tag"></i> Prioridad</label>
@@ -125,7 +157,6 @@
                         </select>
                     </div>
 
-                    <div class="modal-section">
                         <label><i class="fas fa-sticky-note"></i> Notas Principales</label>
                         <textarea id="edit-custom-notes" class="crm-input" rows="2" placeholder="Notas base del lead..."></textarea>
                     </div>
@@ -186,5 +217,32 @@
 
     <script src="/js/crm-common.js"></script>
     <script src="/js/crm.js"></script>
-</body>
+<div id="new-lead-modal" class="modal">
+    <div class="modal-content animate-pop">
+        <div class="modal-header">
+            <h3><i class="fas fa-user-plus"></i> Crear Nuevo Lead</h3>
+            <button class="btn-close" onclick="closeNewLeadModal()">&times;</button>
+        </div>
+        <form id="new-lead-form">
+            <div class="modal-body">
+                <div class="modal-section">
+                    <label>Teléfono / ID (WhatsApp)</label>
+                    <input type="text" id="new-lead-id" class="crm-input" placeholder="54911..." required>
+                </div>
+                <div class="modal-section">
+                    <label>Nombre Completo / Razón Social</label>
+                    <input type="text" id="new-lead-name" class="crm-input" placeholder="Juan Perez" required>
+                </div>
+                <div class="modal-section">
+                    <label>Producto Ofrecido</label>
+                    <input type="text" id="new-lead-product" class="crm-input" placeholder="Seguro de vida...">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-primary" style="background:#64748b" onclick="closeNewLeadModal()">Cancelar</button>
+                <button type="submit" class="btn-primary">Crear Card</button>
+            </div>
+        </form>
+    </div>
+</div>
 </html>

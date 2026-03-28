@@ -154,9 +154,7 @@ function createCardElement(ticket, lead, metadata) {
     card.dataset.id = ticket.id;
     card.id = `card-${ticket.id}`;
     
-    // Al hacer clic en la card, vamos al chat en el backoffice
     card.onclick = (e) => {
-        // Evitar que el clic en botones internos dispare esto
         if (e.target.closest('button')) return;
         localStorage.setItem('activeChat', ticket.chat_id);
         window.location.href = '/backoffice';
@@ -168,6 +166,8 @@ function createCardElement(ticket, lead, metadata) {
 
     const phone = ticket.chat_id ? ticket.chat_id.split('@')[0] : 'Desconocido';
     const email = lead?.email || '';
+    const cuit = lead?.cuit_dni || '';
+    const product = lead?.offered_product || ticket.tipo || '';
     const alertDateStr = metadata.alertDate ? formatDate(metadata.alertDate) : 'Sin alerta';
 
     card.innerHTML = `
@@ -179,9 +179,9 @@ function createCardElement(ticket, lead, metadata) {
             </div>
         </div>
         <div class="card-type-badge">
-            <i class="fas fa-tag"></i> ${ticket.tipo || 'Sin tipo'}
+            <i class="fas fa-shopping-bag"></i> ${product}
         </div>
-        <div class="card-title">${ticket.titulo || 'Sin título'}</div>
+        <div class="card-title">${ticket.titulo || 'Sin título'} ${cuit ? `<span style="font-size:0.7rem; opacity:0.6;">(${cuit})</span>` : ''}</div>
         <div class="card-lead-main">
             <i class="fas fa-user-circle"></i> ${lead?.name || 'Lead sin nombre'}
         </div>
@@ -277,7 +277,7 @@ function openCardModal(ticketId) {
     const ticket = allTickets.find(t => t.id === ticketId);
     const lead = allLeads.find(l => l.id === ticket.chat_id);
     const metadata = crmData[ticketId] || {};
-    const notes = lead?.notes || metadata.customNotes || ''; // Prioridad a la nota del contacto
+    const notes = lead?.notes || metadata.customNotes || '';
     
     document.getElementById('edit-lead-id').value = ticketId;
     const refElement = document.getElementById('modal-ticket-ref');
@@ -288,15 +288,17 @@ function openCardModal(ticketId) {
     document.getElementById('edit-priority').value = metadata.priority || 'Media';
     document.getElementById('edit-custom-notes').value = notes;
     
-    // Nuevos campos del Lead
+    // Campos del Lead Expandidos
     document.getElementById('edit-lead-name').value = lead?.name || '';
     document.getElementById('edit-lead-email').value = lead?.email || '';
     document.getElementById('edit-lead-source').value = lead?.source || '';
     document.getElementById('edit-lead-phone').value = ticket.chat_id ? ticket.chat_id.split('@')[0] : 'Desconocido';
+    document.getElementById('edit-lead-cuit').value = lead?.cuit_dni || '';
+    document.getElementById('edit-lead-address').value = lead?.address || '';
+    document.getElementById('edit-lead-tax-status').value = lead?.tax_status || 'Cons. Final';
+    document.getElementById('edit-lead-offered-product').value = lead?.offered_product || ticket.tipo || '';
 
-    // Limpiar notas adicionales dinámicas al abrir
     document.getElementById('additional-notes-list').innerHTML = '';
-
     document.getElementById('card-modal').classList.add('active');
 }
 
@@ -335,6 +337,8 @@ document.getElementById('card-edit-form').onsubmit = async (e) => {
 
     const ticket = allTickets.find(t => t.id === currentEditId);
     const chatId = ticket?.chat_id;
+    const metadata = crmData[currentEditId] || { columnId: 'UNASSIGNED' };
+    const columnTitle = columns.find(c => c.id === metadata.columnId)?.title || 'CRM';
 
     // 1. Datos de Contacto (Lead)
     let mainNotes = document.getElementById('edit-custom-notes').value;
@@ -342,34 +346,34 @@ document.getElementById('card-edit-form').onsubmit = async (e) => {
         .map(box => box.value.trim())
         .filter(val => val !== '');
 
-    // Consolidar notas adicionales al final de la principal
     if (additionalNotes.length > 0) {
         const date = new Date().toLocaleDateString();
-        mainNotes += '\n\n--- Notas Añadidas Hoy (' + date + ') ---\n' + additionalNotes.join('\n');
+        mainNotes += `\n\n--- [${columnTitle}] Added on ${date} ---\n` + additionalNotes.join('\n');
     }
 
     const leadData = {
         name: document.getElementById('edit-lead-name').value,
         email: document.getElementById('edit-lead-email').value,
         source: document.getElementById('edit-lead-source').value,
+        cuit_dni: document.getElementById('edit-lead-cuit').value,
+        address: document.getElementById('edit-lead-address').value,
+        tax_status: document.getElementById('edit-lead-tax-status').value,
+        offered_product: document.getElementById('edit-lead-offered-product').value,
         notes: mainNotes
     };
 
     // 2. Metadatos del CRM (Tablero)
-    const metadata = crmData[currentEditId] || { columnId: 'UNASSIGNED' };
     metadata.alertDate = document.getElementById('edit-alert-date').value;
     metadata.priority = document.getElementById('edit-priority').value;
-    metadata.customNotes = leadData.notes; // Sincronizamos para retrocompatibilidad
+    metadata.customNotes = leadData.notes;
     
     crmData[currentEditId] = metadata;
 
     showToast('💾 Guardando...', 'success');
 
     try {
-        // Guardar metadatos (Tablero)
         await saveCRMMetadata();
         
-        // Guardar datos de contacto (Lead)
         if (chatId) {
             await fetch(`/api/backoffice/chat/${chatId}/contact?token=${activeToken}`, {
                 method: 'PUT',
@@ -379,11 +383,49 @@ document.getElementById('card-edit-form').onsubmit = async (e) => {
         }
         
         closeCardModal();
-        await syncCRM(); // Recargar todo para reflejar cambios
-        showToast('Cambios guardados con éxito');
+        await syncCRM();
+        showToast('Ficha de cliente actualizada');
     } catch (e) {
         console.error('Error al guardar:', e);
-        showToast('Error al guardar algunos datos', 'error');
+        showToast('Error al guardar ficha', 'error');
+    }
+};
+
+// --- Creación Manual de Leads ---
+window.openNewLeadModal = () => document.getElementById('new-lead-modal').classList.add('active');
+window.closeNewLeadModal = () => document.getElementById('new-lead-modal').classList.remove('active');
+
+document.getElementById('new-lead-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const chatId = document.getElementById('new-lead-id').value.trim();
+    const name = document.getElementById('new-lead-name').value.trim();
+    const product = document.getElementById('new-lead-product').value.trim();
+
+    showToast('🚀 Creando Lead Card...', 'success');
+    try {
+        const res = await fetch(`/api/backoffice/chat/manual-lead?token=${activeToken}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                chatId,
+                details: {
+                    name,
+                    offered_product: product,
+                    source: 'Manual CRM',
+                    notes: `Lead creado manualmente: ${product}`
+                }
+            })
+        });
+        const data = await res.json();
+        if (data.success) {
+            closeNewLeadModal();
+            await syncCRM();
+            showToast('✅ Lead Card creada con éxito');
+            // Abrir automáticamente la ficha para completar datos
+            if (data.ticket?.id) setTimeout(() => openCardModal(data.ticket.id), 500);
+        } else throw new Error(data.error);
+    } catch (err) {
+        showToast('❌ Error: ' + err.message, 'error');
     }
 };
 
