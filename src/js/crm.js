@@ -63,6 +63,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Exportar globalmente para botones HTML
 window.syncCRM = syncCRM;
 window.addNewColumn = addNewColumn;
+window.openCardModal = openCardModal;
+window.closeCardModal = closeCardModal;
+window.editColumn = editColumn;
+window.closeColumnModal = closeColumnModal;
+window.deleteCurrentColumn = deleteCurrentColumn;
+window.saveColumnName = saveColumnName;
 
 async function loadCRMState() {
     // Intentar cargar el orden de las columnas desde el servidor
@@ -71,6 +77,10 @@ async function loadCRMState() {
         const data = await res.json();
         if (data.success && data.value) {
             columns = JSON.parse(data.value);
+            // Asegurarse de que UNASSIGNED siempre esté presente primero
+            if (!columns.some(c => c.id === 'UNASSIGNED')) {
+                columns.unshift({ id: 'UNASSIGNED', title: 'Tickets Nuevos', fixed: true });
+            }
         }
     } catch (e) {
         console.log('Usando columnas por defecto');
@@ -99,16 +109,22 @@ async function syncCRM() {
             fetch(`/api/backoffice/tickets?token=${activeToken}&estado=Abierto`) // Forzamos solo abiertos para el tablero
         ]);
 
-        allLeads = await resLeads.json();
-        const ticketsData = await resTickets.json();
+        const leadsData = await resLeads.json();
+        allLeads = Array.isArray(leadsData) ? leadsData : [];
+        
+        const ticketsRaw = await resTickets.json();
+        const ticketsData = Array.isArray(ticketsRaw) ? ticketsRaw : [];
+        
         // El CRM solo muestra los tickets que NO son Asistencia Externa y que NO estén cerrados
-        allTickets = (ticketsData || []).filter(t => t.tipo !== 'Asistencia Externa' && t.estado !== 'Cerrado');
-        console.log(`[CRM] Tickets activos: ${allTickets.length} (excluidos cerrados y externos)`);
+        allTickets = ticketsData.filter(t => t.tipo !== 'Asistencia Externa' && t.estado !== 'Cerrado');
+        console.log(`[CRM] Tickets activos: ${allTickets.length}`);
 
         const resSettings = await fetch(`/api/backoffice/get-setting?key=CRM_METADATA&token=${activeToken}`);
         const setJson = await resSettings.json();
-        if (setJson.success && setJson.value) {
+        if (setJson && setJson.success && setJson.value) {
             crmData = JSON.parse(setJson.value);
+        } else {
+            crmData = {};
         }
 
         renderBoard();
@@ -663,5 +679,92 @@ window.openClosedLeadsModal = async () => {
 
 window.closeClosedLeadsModal = () => {
     document.getElementById('closed-leads-modal').classList.remove('active');
+};
+
+// --- Gestión de Usuarios (Equipo) ---
+
+async function loadTeam() {
+    if (!isAdmin) return;
+    try {
+        const res = await fetch(`/api/backoffice/users?token=${activeToken}`);
+        teamUsers = await res.json();
+        renderUsersList();
+        renderAssigneeSelect();
+    } catch (e) {
+        console.error('Error al cargar equipo:', e);
+    }
+}
+
+function renderUsersList() {
+    const list = document.getElementById('users-list');
+    if (!list) return;
+    list.innerHTML = teamUsers.map(u => `
+        <div style="padding: 12px 15px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+            <div style="display:flex; align-items:center; gap:12px;">
+                <div style="width:32px; height:32px; background:var(--bg); border-radius:50%; display:flex; align-items:center; justify-content:center; color:var(--accent);">
+                    <i class="fas fa-user"></i>
+                </div>
+                <div>
+                    <strong style="color:var(--text); font-size: 0.95rem;">${u.username}</strong>
+                    <div style="font-size: 11px; color: var(--text-dim);">${u.role === 'admin' ? 'Administrador' : 'Operador'}</div>
+                </div>
+            </div>
+            <span class="status-badge" style="background: ${u.role === 'admin' ? '#6366f1' : '#059669'}; color: white; border: none; font-size: 10px; padding: 4px 8px;">
+                ${u.role.toUpperCase()}
+            </span>
+        </div>
+    `).join('') || '<div style="padding: 30px; text-align: center; color: var(--text-dim);">No hay usuarios registrados</div>';
+}
+
+function renderAssigneeSelect() {
+    const select = document.getElementById('edit-lead-assignee');
+    if (!select) return;
+    const currentVal = select.value;
+    select.innerHTML = '<option value="">Sin asignar (Libre)</option>' + 
+        teamUsers.map(u => `<option value="${u.id}">${u.username} (${u.role})</option>`).join('');
+    select.value = currentVal;
+}
+
+window.openNewUserModal = () => {
+    document.getElementById('modal-users').classList.add('active');
+    loadTeam();
+};
+
+window.saveNewUser = async () => {
+    const username = document.getElementById('new-user-name').value.trim();
+    const password = document.getElementById('new-user-pass').value.trim();
+    const role = document.getElementById('new-user-role').value;
+    const status = document.getElementById('user-creation-status');
+
+    if (!username || !password) {
+        showToast('⚠️ Completa usuario y contraseña', 'error');
+        return;
+    }
+
+    status.textContent = '⏳ Creando...';
+    status.style.color = 'var(--text-dim)';
+    
+    try {
+        const res = await fetch(`/api/backoffice/users?token=${activeToken}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password, role })
+        });
+        const data = await res.json();
+        if (data.success) {
+            status.textContent = '✅ Usuario creado con éxito';
+            status.style.color = '#10b981';
+            document.getElementById('new-user-name').value = '';
+            document.getElementById('new-user-pass').value = '';
+            await loadTeam();
+            showToast('✅ Equipo actualizado');
+        } else {
+            status.textContent = '❌ Error: ' + data.error;
+            status.style.color = '#ef4444';
+        }
+    } catch (e) {
+        status.textContent = '❌ Error de conexión';
+        status.style.color = '#ef4444';
+    }
 };
 
