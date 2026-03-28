@@ -149,6 +149,11 @@
                     <textarea id="edit-custom-notes" class="crm-input" rows="4" placeholder="Observaciones generales..."></textarea>
                 </div>
 
+                <div class="modal-grid">
+                    <div class="modal-section">
+                        <label><i class="fas fa-bell"></i> Fecha Alerta / Seguimiento</label>
+                        <input type="date" id="edit-alert-date" class="crm-input">
+                    </div>
                     <div class="modal-section">
                         <label><i class="fas fa-tag"></i> Prioridad</label>
                         <select id="edit-priority" class="crm-input">
@@ -157,6 +162,7 @@
                             <option value="Alta">Alta</option>
                         </select>
                     </div>
+                </div>
 
                     <div id="additional-notes-list" style="margin-top: 10px; display: flex; flex-direction: column; gap: 10px;">
                         <!-- Aquí se inyectarán las notas dinámicas -->
@@ -220,8 +226,7 @@
         </div>
     </div>
 
-    <script src="/js/crm-common.js"></script>
-    <script src="/js/crm.js"></script>
+
     <!-- Modal Crear Nuevo Lead -->
     <div id="new-lead-modal" class="modal-overlay">
         <div class="modal-content animate-pop" style="max-width: 450px;">
@@ -253,4 +258,39 @@
             </form>
         </div>
     </div>
+
+    <!-- Modal Equipo (Gestionar Usuarios) -->
+    <div id="modal-users" class="modal-overlay">
+        <div class="modal-content animate-pop" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-users-cog" style="color:var(--accent); margin-right:10px;"></i> Gestión de Equipo</h3>
+                <button class="btn-close-modal" onclick="document.getElementById('modal-users').classList.remove('active')"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <div style="background: rgba(99, 102, 241, 0.05); padding: 15px; border-radius: 12px; margin-bottom: 20px;">
+                    <h4 style="margin-bottom:10px; font-size:0.9rem; color:var(--accent);">REGISTRAR NUEVO SUB-USUARIO</h4>
+                    <div class="modal-section">
+                        <input type="text" id="new-user-name" class="crm-input" placeholder="Nombre completo" style="margin-bottom:10px;">
+                        <input type="text" id="new-user-user" class="crm-input" placeholder="Usuario (Ej: juan_vendedor)" style="margin-bottom:10px;">
+                        <input type="password" id="new-user-pass" class="crm-input" placeholder="Contraseña" style="margin-bottom:10px;">
+                        <select id="new-user-role" class="crm-input" style="margin-bottom:15px;">
+                            <option value="subuser">Vendedor / Operador (Limitado)</option>
+                            <option value="admin">Administrador (Total)</option>
+                        </select>
+                        <button class="btn btn-primary" style="width:100%; height:44px;" onclick="window.saveNewUser()">
+                            <i class="fas fa-user-plus"></i> Crear Usuario
+                        </button>
+                    </div>
+                </div>
+
+                <h4 style="margin-bottom:10px; font-size:0.9rem; color:var(--text-muted); text-transform:uppercase;">Usuarios en el equipo</h4>
+                <div id="team-list-container" style="max-height: 200px; overflow-y: auto;">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/crm-common.js"></script>
+    <script src="/js/crm.js"></script>
+</body>
 </html>
