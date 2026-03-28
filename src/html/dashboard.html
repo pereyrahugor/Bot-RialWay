@@ -107,8 +107,8 @@
         <div class="nav-item" title="Coexistencia Meta" id="nav-meta-btn" onclick="toggleMetaPanel(event)" style="color: #0668E1; font-size: 1.4rem;">
             <i class="fas fa-infinity"></i>
         </div>
-        <div class="nav-item" id="theme-toggle" title="Cambiar Tema" style="margin-bottom: 10px;"><i class="fas fa-moon"></i></div>
-        <div class="nav-item" onclick="logout()" title="Cerrar Sesión" style="color:#f87171;"><i class="fas fa-sign-out-alt"></i></div>
+        <div id="theme-toggle" class="nav-item" title="Cambiar Tema" style="margin-bottom: 10px;"><i class="fas fa-moon"></i></div>
+        <div id="auth-btn" class="nav-item" onclick="handleAuthAction()" title="Cerrar Sesión" style="color:#f87171;"><i class="fas fa-sign-out-alt"></i></div>
     </div>
 
     <div class="crm-main-container">
@@ -178,9 +178,33 @@
         const token = localStorage.getItem('backoffice_token');
         let charts = {};
 
+        function handleAuthAction() {
+            if (token) {
+                logout();
+            } else {
+                window.location.href = '/login';
+            }
+        }
+
+        function updateAuthUI() {
+            const authBtn = document.getElementById('auth-btn');
+            if (authBtn) {
+                if (!token) {
+                    authBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i>';
+                    authBtn.title = 'Iniciar Sesión';
+                    authBtn.style.color = 'var(--primary)';
+                } else {
+                    authBtn.innerHTML = '<i class="fas fa-sign-out-alt"></i>';
+                    authBtn.title = 'Cerrar Sesión';
+                    authBtn.style.color = '#f87171';
+                }
+            }
+        }
+
         async function initDashboard() {
             try {
-                const res = await fetch(`/api/dashboard/stats?token=${token}`);
+                const url = token ? `/api/dashboard/stats?token=${token}` : `/api/dashboard/stats`;
+                const res = await fetch(url);
                 const data = await res.json();
                 if (!data.success) throw new Error(data.error);
 
@@ -247,6 +271,7 @@
             });
         }
 
+        updateAuthUI();
         initDashboard();
         setInterval(initDashboard, 60000); // Actualizar cada minuto
     </script>

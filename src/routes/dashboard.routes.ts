@@ -6,7 +6,7 @@ import { backofficeAuth } from '../middleware/auth';
  */
 export const registerDashboardRoutes = (app: any) => {
     
-    app.get('/api/dashboard/stats', backofficeAuth, async (req: any, res: any) => {
+    app.get('/api/dashboard/stats', async (req: any, res: any) => {
         try {
             const PROJECT_ID = process.env.RAILWAY_PROJECT_ID || "default_project";
 
