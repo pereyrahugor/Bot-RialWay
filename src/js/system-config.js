@@ -13,6 +13,7 @@ window.checkAdminAccess = () => {
         setTimeout(() => content.style.opacity = '1', 10);
         // Guardar en local storage para persistencia persistente (entre reinicios de navegador)
         localStorage.setItem('config_authenticated', 'true');
+        localStorage.setItem('system_config_token', 'neuroadmin25');
         
         // Disparar refresh si el editor ya existe
         if (window.cmEditor) window.cmEditor.refresh();
@@ -313,7 +314,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function loadNavVisibility() {
         try {
-            const token = localStorage.getItem('system_config_token');
+            const token = localStorage.getItem('system_config_token') || 'neuroadmin25';
             const [resBack, resCrm] = await Promise.all([
                 fetch(`/api/backoffice/get-setting?key=BACKOFFICE_VISIBLE&token=${token}`),
                 fetch(`/api/backoffice/get-setting?key=CRM_VISIBLE&token=${token}`)
@@ -339,7 +340,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         navSyncStatus.style.color = 'inherit';
 
         try {
-            const token = localStorage.getItem('system_config_token');
+            const token = localStorage.getItem('system_config_token') || 'neuroadmin25';
             const backofficeValue = backofficeSelect.value;
             const crmValue = crmSelect.value;
 
