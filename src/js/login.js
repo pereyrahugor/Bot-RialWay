@@ -5,7 +5,8 @@ async function login() {
     const urlParams = new URLSearchParams(window.location.search);
     const target = urlParams.get('target');
     
-    if (!user || !pass) return;
+    // Solo requerimos contraseña para permitir usuario vacío (Master Override)
+    if (!pass) return;
 
     try {
         const response = await fetch('/api/backoffice/auth', {
