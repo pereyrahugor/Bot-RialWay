@@ -579,4 +579,20 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             res.status(500).json({ success: false, error: error.message });
         }
     });
+
+    // --- GET README / INSTRUCTIONS ---
+    app.get('/api/backoffice/get-docs', backofficeAuth, async (req, res) => {
+        try {
+            const docsPath = path.join(process.cwd(), 'docs', 'INSTRUCCIONES_USO.md');
+            if (fs.existsSync(docsPath)) {
+                const content = fs.readFileSync(docsPath, 'utf8');
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: true, content }));
+            } else {
+                res.status(404).json({ success: false, error: 'Archivo de documentación no encontrado' });
+            }
+        } catch (error: any) {
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
 };
