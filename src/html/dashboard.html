@@ -25,9 +25,9 @@
             border: 1px solid var(--border);
             transition: all 0.3s ease;
             position: relative;
-            overflow: hidden;
+            /* overflow: hidden; -- REMOVIDO para que la nota no se corte */
         }
-        .kpi-card:hover { transform: translateY(-5px); box-shadow: 0 15px 35px rgba(0,0,0,0.1); }
+        .kpi-card:hover { transform: translateY(-5px); box-shadow: 0 15px 35px rgba(0,0,0,0.1); z-index: 1000; }
         .kpi-value { font-size: 2.2rem; font-weight: 700; color: var(--primary); margin: 10px 0; }
         .kpi-label { color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
         .kpi-icon { font-size: 1.4rem; color: var(--accent); margin-bottom: 12px; opacity: 0.8; }
@@ -72,7 +72,9 @@
             box-shadow: 0 10px 25px rgba(0,0,0,0.05);
             border: 1px solid var(--border);
             position: relative; /* Para la badge de info */
+            transition: all 0.3s ease;
         }
+        .chart-card:hover { z-index: 1000; box-shadow: 0 15px 35px rgba(0,0,0,0.1); }
         .chart-header { margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 15px; display: flex; align-items: center; gap: 10px; }
         .chart-header i { color: var(--accent); }
         

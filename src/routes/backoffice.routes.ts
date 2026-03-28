@@ -1,5 +1,6 @@
 import path from 'path';
 import fs from 'fs';
+import url from 'url';
 import bodyParser from 'body-parser';
 import axios from 'axios';
 import { backofficeAuth, systemConfigAuth } from "../middleware/auth";
@@ -583,13 +584,27 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     // --- GET README / INSTRUCTIONS ---
     app.get('/api/backoffice/get-docs', backofficeAuth, async (req, res) => {
         try {
-            const docsPath = path.join(process.cwd(), 'docs', 'INSTRUCCIONES_USO.md');
+            // Buscamos la ruta absoluta real
+            const rootDir = process.cwd();
+            const docsPath = path.join(rootDir, 'docs', 'INSTRUCCIONES_USO.md');
+            
+            console.log(`📂 [Docs] Intentando cargar: ${docsPath}`);
+
             if (fs.existsSync(docsPath)) {
                 const content = fs.readFileSync(docsPath, 'utf8');
                 res.setHeader('Content-Type', 'application/json');
                 res.end(JSON.stringify({ success: true, content }));
             } else {
-                res.status(404).json({ success: false, error: 'Archivo de documentación no encontrado' });
+                console.error(`❌ [Docs] Archivo no encontrado en: ${docsPath}`);
+                // Intentar ruta alternativa por si acaso (dist/../docs)
+                const altPath = path.join(path.dirname(url.fileURLToPath(import.meta.url)), '..', '..', 'docs', 'INSTRUCCIONES_USO.md');
+                if (fs.existsSync(altPath)) {
+                    const content = fs.readFileSync(altPath, 'utf8');
+                    res.setHeader('Content-Type', 'application/json');
+                    res.end(JSON.stringify({ success: true, content }));
+                } else {
+                    res.status(404).json({ success: false, error: `Archivo no encontrado en root o alt. Path: ${docsPath}` });
+                }
             }
         } catch (error: any) {
             res.status(500).json({ success: false, error: error.message });
