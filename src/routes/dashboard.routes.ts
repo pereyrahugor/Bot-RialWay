@@ -8,10 +8,13 @@ export const registerDashboardRoutes = (app: any) => {
     
     app.get('/api/dashboard/stats', backofficeAuth, async (req: any, res: any) => {
         try {
+            const PROJECT_ID = process.env.RAILWAY_PROJECT_ID || "default_project";
+
             // 1. Tasa de Conversión y Distribución de Leads
             const { data: chats } = await supabase
                 .from('chats')
-                .select('is_lead, source, bot_enabled');
+                .select('is_lead, source, bot_enabled')
+                .eq('project_id', PROJECT_ID);
             
             // 2. Volumen de Mensajes (Últimas 24h)
             const yesterday = new Date();
@@ -19,17 +22,20 @@ export const registerDashboardRoutes = (app: any) => {
             const { count: msgCountLast24h } = await supabase
                 .from('messages')
                 .select('*', { count: 'exact', head: true })
+                .eq('project_id', PROJECT_ID)
                 .gt('created_at', yesterday.toISOString());
 
             // 3. Proactividad del Bot (Total histórico)
             const { data: roleStats } = await supabase
                 .from('messages')
-                .select('role');
+                .select('role')
+                .eq('project_id', PROJECT_ID);
             
             // 4. Estado del Funnel y Categorización
             const { data: tickets } = await supabase
                 .from('tickets')
-                .select('estado, tipo');
+                .select('estado, tipo')
+                .eq('project_id', PROJECT_ID);
 
             // 5. Productividad (Acciones de auditoría en 7 días)
             const lastWeek = new Date();
@@ -37,13 +43,14 @@ export const registerDashboardRoutes = (app: any) => {
             const { data: auditoria } = await supabase
                 .from('auditoria_acciones')
                 .select('usuario, created_at')
+                .eq('project_id', PROJECT_ID)
                 .gt('created_at', lastWeek.toISOString());
 
             // 6. Tiempo de Respuesta Aproximado (Sampling)
-            // Tomamos los últimos 50 mensajes y calculamos el gap promedio entre user y assistant
             const { data: recentMsgs } = await supabase
                 .from('messages')
                 .select('chat_id, role, created_at')
+                .eq('project_id', PROJECT_ID)
                 .order('created_at', { ascending: false })
                 .limit(100);
 
