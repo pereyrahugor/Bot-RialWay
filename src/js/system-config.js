@@ -379,4 +379,87 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     await loadNavVisibility();
+
+    // --- Gestión de Usuario Admin (Hot-update) ---
+    const adminSyncStatus = document.getElementById('admin-sync-status');
+    const adminUserHot = document.getElementById('ADMIN_USER');
+    const adminPassHot = document.getElementById('ADMIN_PASS');
+    const saveAdminBtn = document.getElementById('save-admin-hot-btn');
+
+    async function loadAdminConfig() {
+        try {
+            const token = localStorage.getItem('system_config_token') || 'neuroadmin25';
+            const [resUser, resPass] = await Promise.all([
+                fetch(`/api/backoffice/get-setting?key=ADMIN_USER&token=${token}`),
+                fetch(`/api/backoffice/get-setting?key=ADMIN_PASS&token=${token}`)
+            ]);
+            
+            const dataUser = await resUser.json();
+            const dataPass = await resPass.json();
+
+            if (dataUser.success && dataUser.value) {
+                adminUserHot.value = dataUser.value;
+                initialVariables['ADMIN_USER'] = dataUser.value;
+            }
+            if (dataPass.success && dataPass.value) {
+                adminPassHot.value = dataPass.value;
+                initialVariables['ADMIN_PASS'] = dataPass.value;
+            }
+        } catch (err) {
+            console.error('Error loading admin config:', err);
+        }
+    }
+
+    saveAdminBtn.addEventListener('click', async () => {
+        saveAdminBtn.disabled = true;
+        adminSyncStatus.textContent = '⏳ Guardando...';
+        adminSyncStatus.style.color = 'inherit';
+
+        try {
+            const token = localStorage.getItem('system_config_token') || 'neuroadmin25';
+            const userValue = adminUserHot.value;
+            const passValue = adminPassHot.value;
+
+            if (!passValue) {
+                alert('La contraseña no puede estar vacía para el guardado Hot-update.');
+                saveAdminBtn.disabled = false;
+                adminSyncStatus.textContent = '';
+                return;
+            }
+
+            const [resUser, resPass] = await Promise.all([
+                fetch(`/api/backoffice/save-setting?token=${token}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key: 'ADMIN_USER', value: userValue })
+                }),
+                fetch(`/api/backoffice/save-setting?token=${token}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key: 'ADMIN_PASS', value: passValue })
+                })
+            ]);
+
+            const dataUser = await resUser.json();
+            const dataPass = await resPass.json();
+
+            if (dataUser.success && dataPass.success) {
+                adminSyncStatus.textContent = '✅ Usuario/Pass actualizados (Hot-update).';
+                adminSyncStatus.style.color = '#10b981';
+                // Actualizar initialVariables para evitar que el form principal detecte cambios
+                initialVariables['ADMIN_USER'] = userValue;
+                initialVariables['ADMIN_PASS'] = passValue;
+            } else {
+                adminSyncStatus.textContent = '❌ Error al guardar.';
+                adminSyncStatus.style.color = '#ef4444';
+            }
+        } catch (err) {
+            console.error('Error saving admin config:', err);
+            adminSyncStatus.textContent = '❌ Error de conexión.';
+        } finally {
+            saveAdminBtn.disabled = false;
+        }
+    });
+
+    await loadAdminConfig();
 });

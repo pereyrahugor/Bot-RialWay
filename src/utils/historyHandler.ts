@@ -138,6 +138,18 @@ export class HistoryHandler {
                     updated_at TIMESTAMPTZ DEFAULT NOW(),
                     PRIMARY KEY (project_id, key)
                 );`
+            },
+            {
+                name: 'users',
+                sql: `CREATE TABLE IF NOT EXISTS users (
+                    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+                    project_id TEXT,
+                    username TEXT NOT NULL,
+                    password TEXT NOT NULL,
+                    role TEXT DEFAULT 'subuser',
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    UNIQUE (project_id, username)
+                );`
             }
         ];
 
@@ -205,6 +217,13 @@ export class HistoryHandler {
                         if (bsuidErr && bsuidErr.code === '42703') {
                             console.log(`🔧 Agregando columna user_id (BSUID) a chats...`);
                             await supabase.rpc('exec_sql', { query: `ALTER TABLE chats ADD COLUMN IF NOT EXISTS user_id TEXT;` });
+                        }
+
+                        // Migración para assigned_to
+                        const { error: assignedErr } = await supabase.from('chats').select('assigned_to').limit(1);
+                        if (assignedErr && assignedErr.code === '42703') {
+                            console.log(`🔧 Agregando columna assigned_to a chats...`);
+                            await supabase.rpc('exec_sql', { query: `ALTER TABLE chats ADD COLUMN IF NOT EXISTS assigned_to uuid REFERENCES users(id);` });
                         }
                     }
 
@@ -458,12 +477,18 @@ export class HistoryHandler {
     /**
      * Lista todos los chats activos (con tags incluidos)
      */
-    static async listChats(limit: number = 20, offset: number = 0, search?: string, tagId?: string) {
+    static async listChats(limit: number = 20, offset: number = 0, search?: string, tagId?: string, assignedTo?: string | null) {
         try {
             let query = supabase
                 .from('chats')
-                .select('*, chat_tags!inner(tag_id, tags(*))')
+                .select('*, chat_tags(tag_id, tags(*))')
                 .eq('project_id', PROJECT_ID);
+
+            // Filtro por asignación (si se solicita)
+            if (assignedTo) {
+                // El subusuario ve lo suyo O lo que no tiene nadie asignado
+                query = query.or(`assigned_to.eq.${assignedTo},assigned_to.is.null`);
+            }
 
             if (search) {
                 // Filtro por nombre, ID, email, notas o fuente
@@ -471,20 +496,7 @@ export class HistoryHandler {
             }
 
             if (tagId) {
-                // El !inner ya está en el select, así que podemos filtrar por tag_id
                 query = query.eq('chat_tags.tag_id', tagId);
-            } else {
-                // Si no hay filtro por tag, queremos TODOS los chats, tengan tags o no.
-                // Usamos left join (por defecto en PostgREST si no usamos !inner)
-                query = supabase
-                    .from('chats')
-                    .select('*, chat_tags(tag_id, tags(*))')
-                    .eq('project_id', PROJECT_ID);
-                
-                if (search) {
-                    // Filtro por nombre, ID, email, notas o fuente
-                    query = query.or(`name.ilike.%${search}%,id.ilike.%${search}%,email.ilike.%${search}%,notes.ilike.%${search}%,source.ilike.%${search}%`);
-                }
             }
 
             const { data, error } = await query
@@ -919,6 +931,69 @@ export class HistoryHandler {
             console.error(`❌ [HistoryHandler] Error obteniendo setting ${key}:`, error);
         }
         return data ? data.value : null;
+    }
+
+    // --- User Management ---
+
+    static async createUser(username: string, pass: string, role: string = 'subuser') {
+        try {
+            const { data, error } = await supabase
+                .from('users')
+                .insert({ project_id: PROJECT_ID, username, password: pass, role })
+                .select()
+                .single();
+            if (error) throw error;
+            return { success: true, user: data };
+        } catch (err: any) {
+            console.error('[HistoryHandler] Error en createUser:', err);
+            return { success: false, error: err.message };
+        }
+    }
+
+    static async listUsers() {
+        try {
+            const { data, error } = await supabase
+                .from('users')
+                .select('id, username, role, created_at')
+                .eq('project_id', PROJECT_ID);
+            if (error) throw error;
+            return data || [];
+        } catch (err) {
+            console.error('[HistoryHandler] Error en listUsers:', err);
+            return [];
+        }
+    }
+
+    static async verifyUser(username: string, pass: string) {
+        try {
+            const { data, error } = await supabase
+                .from('users')
+                .select('*')
+                .eq('project_id', PROJECT_ID)
+                .eq('username', username)
+                .eq('password', pass)
+                .maybeSingle();
+            if (error) throw error;
+            return data || null;
+        } catch (err) {
+            console.error('[HistoryHandler] Error en verifyUser:', err);
+            return null;
+        }
+    }
+
+    static async assignChatToUser(chatId: string, userId: string | null) {
+        try {
+            const { error } = await supabase
+                .from('chats')
+                .update({ assigned_to: userId })
+                .eq('id', chatId)
+                .eq('project_id', PROJECT_ID);
+            if (error) throw error;
+            return { success: true };
+        } catch (err: any) {
+            console.error('[HistoryHandler] Error en assignChatToUser:', err);
+            return { success: false, error: err.message };
+        }
     }
 }
 

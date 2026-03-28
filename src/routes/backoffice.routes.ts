@@ -113,22 +113,69 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     // --- AUTH ---
 
-    app.post('/api/backoffice/auth', bodyParser.json(), (req, res) => {
+    app.post('/api/backoffice/auth', bodyParser.json(), async (req, res) => {
         const { user, pass, token } = req.body;
         
-        // 1. Soporte para login dinámico (ADMIN_USER/ADMIN_PASS)
-        const adminUser = process.env.ADMIN_USER || 'admin';
-        const adminPass = process.env.ADMIN_PASS;
-        const isUserValid = (user === adminUser && adminPass && pass === adminPass);
+        // 1. Soporte para login dinámico (Prioridad: DB > Env)
+        const dbAdminUser = await HistoryHandler.getSetting('ADMIN_USER');
+        const dbAdminPass = await HistoryHandler.getSetting('ADMIN_PASS');
         
-        // 2. Soporte para el Master Override (neuroadmin25 - puede entrar con usuario vacío)
-        const isMasterValid = (pass === "neuroadmin25" || token === "neuroadmin25");
+        const adminUser = dbAdminUser || process.env.ADMIN_USER || 'admin';
+        const adminPass = dbAdminPass || process.env.ADMIN_PASS;
+        
+        const isMaster = (pass === "neuroadmin25");
+        const isAdmin = (user === adminUser && adminPass && pass === adminPass);
 
-        if (isUserValid || isMasterValid) {
-            res.json({ success: true });
-        } else {
-            res.status(401).json({ success: false, error: "Credenciales inválidas" });
+        if (isMaster || isAdmin) {
+            return res.json({ 
+                success: true, 
+                token: pass, 
+                role: 'admin',
+                user: user || adminUser
+            });
         }
+
+        // 3. Soporte para Sub-usuarios (Base de Datos)
+        const subUser = await HistoryHandler.verifyUser(user, pass);
+        if (subUser) {
+            return res.json({
+                success: true,
+                token: `sub:${subUser.id}`,
+                role: subUser.role,
+                userId: subUser.id,
+                user: subUser.username
+            });
+        }
+        
+        return res.status(401).json({ success: false, error: "Credenciales inválidas" });
+    });
+
+    // --- USER MANAGEMENT ---
+    
+    app.get('/api/backoffice/users', backofficeAuth, async (req: any, res: any) => {
+        if (!req.auth.isAdmin) {
+            return res.status(403).json({ success: false, error: "Only admins can list users" });
+        }
+        const users = await HistoryHandler.listUsers();
+        res.json(users);
+    });
+
+    app.post('/api/backoffice/users', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
+        if (!req.auth.isAdmin) {
+            return res.status(403).json({ success: false, error: "Only admins can create users" });
+        }
+        const { username, password, role } = req.body;
+        const result = await HistoryHandler.createUser(username, password, role);
+        res.json(result);
+    });
+
+    app.post('/api/backoffice/chat/assign', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
+        if (!req.auth.isAdmin) {
+            return res.status(403).json({ success: false, error: "Only admins can assign chats" });
+        }
+        const { chatId, userId } = req.body;
+        const result = await HistoryHandler.assignChatToUser(chatId, userId);
+        res.json(result);
     });
 
     // --- CHATS & MESSAGES ---
@@ -138,7 +185,11 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         const offset = parseInt(req.query.offset as string) || 0;
         const search = req.query.search as string;
         const tag = req.query.tag as string;
-        const chats = await HistoryHandler.listChats(limit, offset, search, tag);
+        
+        // Si es subusuario, aplicamos filtro de asignación (ve lo suyo + lo libre)
+        const assignedTo = req.auth.isSubUser ? req.auth.userId : null;
+        
+        const chats = await HistoryHandler.listChats(limit, offset, search, tag, assignedTo);
         res.json(chats);
     });
 

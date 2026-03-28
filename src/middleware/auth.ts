@@ -1,10 +1,11 @@
+import { HistoryHandler } from "../utils/historyHandler";
 
 /**
  * Middleware de autenticación robusto para el backoffice.
 
  * Verifica el token en los headers o en la query string.
  */
-export const backofficeAuth = (req: any, res: any, next: () => void) => {
+export const backofficeAuth = async (req: any, res: any, next: () => void) => {
     // Asegurar parsing de query si Polka/Node no lo ha expuesto aún
     const q: any = {};
     try {
@@ -19,10 +20,26 @@ export const backofficeAuth = (req: any, res: any, next: () => void) => {
         else if (token.startsWith('Bearer ')) token = token.slice(7);
     }
     
-    const adminPass = process.env.ADMIN_PASS;
-    const isValid = (token === "neuroadmin25" || (adminPass && token === adminPass));
+    // Prioridad: Database Setting > Environment Variable
+    const dbAdminPass = await HistoryHandler.getSetting('ADMIN_PASS');
+    const adminPass = dbAdminPass || process.env.ADMIN_PASS;
+    
+    let isValid = (token === "neuroadmin25" || (adminPass && token === adminPass));
+    let isSubUser = false;
+    let userId = null;
+
+    if (!isValid && token?.startsWith('sub:')) {
+        userId = token.split(':')[1];
+        isValid = true;
+        isSubUser = true;
+    }
     
     if (token && isValid) {
+        req.auth = {
+            isAdmin: !isSubUser,
+            isSubUser,
+            userId
+        };
         return next();
     }
     

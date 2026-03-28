@@ -32,6 +32,33 @@
         .kpi-label { color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
         .kpi-icon { font-size: 1.4rem; color: var(--accent); margin-bottom: 12px; opacity: 0.8; }
         
+        /* Tooltip simple */
+        .tooltip { position: relative; display: inline-block; cursor: help; }
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 200px;
+            background-color: var(--bg-header);
+            color: var(--text-main);
+            text-align: center;
+            border-radius: 12px;
+            padding: 12px;
+            position: absolute;
+            z-index: 100;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -100px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            font-size: 0.75rem;
+            line-height: 1.4;
+            border: 1px solid var(--border);
+            pointer-events: none;
+        }
+        .tooltip:hover .tooltiptext { visibility: visible; opacity: 1; }
+        .kpi-card .info-badge { position: absolute; top: 15px; right: 15px; font-size: 0.8rem; color: var(--text-muted); opacity: 0.5; transition: opacity 0.3s; }
+        .kpi-card:hover .info-badge { opacity: 1; }
+        
         .charts-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
@@ -89,21 +116,25 @@
     
         <div class="kpi-container">
             <div class="kpi-card">
+                <i class="fas fa-info-circle info-badge tooltip"><span class="tooltiptext">Porcentaje de conversaciones totales que han sido marcadas como "Lead" en el CRM.</span></i>
                 <div class="kpi-icon"><i class="fas fa-percentage"></i></div>
                 <div class="kpi-label">Conversión Leads</div>
                 <div class="kpi-value" id="kpi-conversion">--%</div>
             </div>
             <div class="kpi-card">
+                <i class="fas fa-info-circle info-badge tooltip"><span class="tooltiptext">Cantidad total de mensajes (Entrantes y Salientes) procesados en las últimas 24 horas.</span></i>
                 <div class="kpi-icon"><i class="fas fa-paper-plane"></i></div>
                 <div class="kpi-label">Msjs (24h)</div>
                 <div class="kpi-value" id="kpi-msgs">--</div>
             </div>
             <div class="kpi-card">
+                <i class="fas fa-info-circle info-badge tooltip"><span class="tooltiptext">Relación de mensajes enviados por el Bot frente a la participación humana total.</span></i>
                 <div class="kpi-icon"><i class="fas fa-robot"></i></div>
                 <div class="kpi-label">Proactividad Bot</div>
                 <div class="kpi-value" id="kpi-bot">--%</div>
             </div>
             <div class="kpi-card">
+                <i class="fas fa-info-circle info-badge tooltip"><span class="tooltiptext">Tiempo promedio que tarda el sistema/operador en responder a un mensaje del usuario.</span></i>
                 <div class="kpi-icon"><i class="fas fa-bolt"></i></div>
                 <div class="kpi-label">T. Respuesta</div>
                 <div class="kpi-value" id="kpi-resp">--m</div>

@@ -4,6 +4,13 @@ const activeToken = backofficeToken;
 
 if (!activeToken) window.location.href = '/login';
 
+const userRole = localStorage.getItem('user_role') || 'subuser';
+const userId = localStorage.getItem('user_id');
+const isAdmin = (userRole === 'admin' || activeToken === 'neuroadmin25');
+const userName = localStorage.getItem('user_name') || 'Usuario';
+
+let teamUsers = [];
+
 let kanbanBoard = null;
 let columns = [
     { id: 'UNASSIGNED', title: 'Tickets Nuevos', fixed: true },
@@ -19,9 +26,20 @@ let crmData = {}; // Para guardar metadatos (alertas, notas adicionales) de cada
 
 // --- Inicialización ---
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('🚀 Iniciando CRM...');
-    showToast('🚀 Iniciando CRM...');
+    console.log('🚀 Iniciando CRM como:', userName, `(${userRole})`);
+    showToast(`Bienvenido ${userName}`, 'success');
     
+    // Mostrar botones de admin si corresponde
+    if (isAdmin) {
+        const btnNewUser = document.getElementById('btn-new-user');
+        const assigneeSection = document.getElementById('assignee-section');
+        if (btnNewUser) btnNewUser.style.display = 'block';
+        if (assigneeSection) assigneeSection.style.display = 'block';
+        
+        // Cargar equipo para los selects
+        await loadTeam();
+    }
+
     // Cargamos primero el estado (columnas)
     await loadCRMState();
     // Luego sincronizamos los datos (tickets, leads y metadatos de posicionamiento)
@@ -298,6 +316,12 @@ function openCardModal(ticketId) {
     document.getElementById('edit-lead-tax-status').value = lead?.tax_status || 'Cons. Final';
     document.getElementById('edit-lead-offered-product').value = lead?.offered_product || ticket.tipo || '';
 
+    // Carga de asignación
+    if (isAdmin) {
+        const selectAssign = document.getElementById('edit-lead-assignee');
+        if (selectAssign) selectAssign.value = lead?.assigned_to || '';
+    }
+
     document.getElementById('additional-notes-list').innerHTML = '';
     document.getElementById('card-modal').classList.add('active');
 }
@@ -380,6 +404,16 @@ document.getElementById('card-edit-form').onsubmit = async (e) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(leadData)
             });
+
+            // Guardar asignación si es admin
+            if (isAdmin) {
+                const assignee = document.getElementById('edit-lead-assignee').value;
+                await fetch(`/api/backoffice/chat/assign?token=${activeToken}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chatId, userId: assignee || null })
+                });
+            }
         }
         
         closeCardModal();

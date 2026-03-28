@@ -17,7 +17,11 @@ async function login() {
 
         const result = await response.json();
         if (result.success) {
-            const token = pass; // Usamos pass como token para middleware
+            const token = result.token; // Usamos el token devuelto por el servidor
+            localStorage.setItem('user_role', result.role || 'subuser');
+            localStorage.setItem('user_id', result.userId || '');
+            localStorage.setItem('user_name', result.user || user);
+
             if (target === 'system-config') {
                 localStorage.setItem('system_config_token', token);
                 window.location.href = '/system-config';

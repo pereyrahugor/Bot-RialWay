@@ -5,15 +5,20 @@ Este repositorio implementa un bot de WhatsApp con integración de IA (OpenAI As
 ---
 
 ## Funcionalidad principal
-- Automatización de respuestas en WhatsApp
-- Integración con OpenAI Assistant (texto, imágenes)
-- Flujos personalizables por evento (texto, voz, imagen, documento)
-- Sincronización y consulta de datos desde Google Sheets
-- Gestión de eventos en Google Calendar (alta, modificación, baja, consulta de disponibilidad)
-- Reporte de mensajes ignorados (ej: contactos @lid) al administrador
-- Despliegue sencillo vía Docker y Railway
+- **Conector WhatsApp**: Vinculación QR y gestión de sesión persistente.
+- **Backoffice Avanzado**: Filtros, historial completo, etiquetas y coexistencia Bot/Humano.
+- **CRM Kanban**: Tablero visual de oportunidades con estados personailzables.
+- **Gestión Multi-agente**: Creación de usuarios con acceso restringido y asignación de Leads.
+- **IA Generativa**: Integración con OpenAI Assistant (texto, imágenes y voz).
+- **Dashboard de KPIs**: Métricas en tiempo real sobre conversión y productividad.
+- **Sincronización Hot-Update**: Cambio de credenciales y ajustes sin reiniciar el servidor.
 
 ---
+
+## 📖 Documentación y Uso
+Para obtener instrucciones detalladas sobre el manejo del sistema, consulta:
+- [📘 Guía de Instrucciones de Uso (Backoffice, CRM, Tickets)](./docs/INSTRUCCIONES_USO.md)
+- [⚙️ Configuración de Variables y Alertas](./docs/configuracion/)
 
 ## Variables de entorno usadas
 

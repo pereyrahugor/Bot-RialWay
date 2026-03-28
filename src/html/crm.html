@@ -51,14 +51,16 @@
                 <button class="btn btn-secondary" onclick="openClosedLeadsModal()">
                     <i class="fas fa-archive"></i> Leads Cerrados
                 </button>
-                <div style="display: flex; gap: 15px; align-items: center;">
-            <button class="btn-primary" onclick="window.syncCRM()" title="Sincronizar">
-                <i class="fas fa-sync-alt"></i> Sincronizar
-            </button>
-            <button class="btn-primary" style="background:#059669;" onclick="openNewLeadModal()" title="Crear Lead">
-                <i class="fas fa-plus-circle"></i> Crear Lead Card
-            </button>
-        </div>
+                    <button id="btn-new-user" class="btn btn-secondary" style="display:none; background:#6366f1;" onclick="window.openNewUserModal()" title="Gestionar Equipo">
+                        <i class="fas fa-users"></i> Nuevo Usuario
+                    </button>
+                    <button class="btn btn-secondary" onclick="window.syncCRM()" title="Sincronizar">
+                        <i class="fas fa-sync-alt"></i> Sincronizar
+                    </button>
+                    <button class="btn btn-primary" style="background:#059669;" onclick="window.openNewLeadModal()" title="Crear Lead">
+                        <i class="fas fa-plus-circle"></i> Crear Lead Card
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -157,10 +159,6 @@
                         </select>
                     </div>
 
-                        <label><i class="fas fa-sticky-note"></i> Notas Principales</label>
-                        <textarea id="edit-custom-notes" class="crm-input" rows="2" placeholder="Notas base del lead..."></textarea>
-                    </div>
-
                     <div id="additional-notes-list" style="margin-top: 10px; display: flex; flex-direction: column; gap: 10px;">
                         <!-- Aquí se inyectarán las notas dinámicas -->
                     </div>
@@ -170,6 +168,14 @@
                     </button>
 
                     <div id="alert-status-info" style="margin-top:10px;"></div>
+
+                    <div id="assignee-section" class="modal-section" style="display:none; margin-top: 15px; padding-top: 15px; border-top: 1px dashed var(--border);">
+                        <label><i class="fas fa-user-tag" style="color:var(--accent);"></i> Asignar Lead a:</label>
+                        <select id="edit-lead-assignee" class="crm-input">
+                            <option value="">Sin asignar (Libre)</option>
+                            <!-- Se llena dinámicamente -->
+                        </select>
+                    </div>
 
                     <button type="submit" class="btn btn-primary" style="width:100%; margin-top:20px;">
                         <i class="fas fa-save" style="margin-right:8px;"></i> Guardar y Sincronizar
@@ -217,32 +223,35 @@
 
     <script src="/js/crm-common.js"></script>
     <script src="/js/crm.js"></script>
-<div id="new-lead-modal" class="modal">
-    <div class="modal-content animate-pop">
-        <div class="modal-header">
-            <h3><i class="fas fa-user-plus"></i> Crear Nuevo Lead</h3>
-            <button class="btn-close" onclick="closeNewLeadModal()">&times;</button>
+    <!-- Modal Crear Nuevo Lead -->
+    <div id="new-lead-modal" class="modal-overlay">
+        <div class="modal-content animate-pop" style="max-width: 450px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-user-plus" style="color:var(--accent); margin-right:10px;"></i> Crear Nuevo Lead</h3>
+                <button class="btn-close-modal" onclick="closeNewLeadModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <form id="new-lead-form">
+                <div class="modal-body">
+                    <div class="modal-section">
+                        <label><i class="fas fa-phone"></i> Teléfono / ID (WhatsApp)</label>
+                        <input type="text" id="new-lead-id" class="crm-input" placeholder="Ej: 54911..." required>
+                    </div>
+                    <div class="modal-section">
+                        <label><i class="fas fa-user"></i> Nombre Completo / Razón Social</label>
+                        <input type="text" id="new-lead-name" class="crm-input" placeholder="Ej: Juan Perez" required>
+                    </div>
+                    <div class="modal-section">
+                        <label><i class="fas fa-shopping-bag"></i> Producto Ofrecido</label>
+                        <input type="text" id="new-lead-product" class="crm-input" placeholder="Seguro, Plan, etc...">
+                    </div>
+                </div>
+                <div style="display:flex; gap:12px; margin-top:20px;">
+                    <button type="button" class="btn btn-secondary" style="flex:1" onclick="closeNewLeadModal()">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" style="flex:2">
+                        <i class="fas fa-plus"></i> Crear Card
+                    </button>
+                </div>
+            </form>
         </div>
-        <form id="new-lead-form">
-            <div class="modal-body">
-                <div class="modal-section">
-                    <label>Teléfono / ID (WhatsApp)</label>
-                    <input type="text" id="new-lead-id" class="crm-input" placeholder="54911..." required>
-                </div>
-                <div class="modal-section">
-                    <label>Nombre Completo / Razón Social</label>
-                    <input type="text" id="new-lead-name" class="crm-input" placeholder="Juan Perez" required>
-                </div>
-                <div class="modal-section">
-                    <label>Producto Ofrecido</label>
-                    <input type="text" id="new-lead-product" class="crm-input" placeholder="Seguro de vida...">
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn-primary" style="background:#64748b" onclick="closeNewLeadModal()">Cancelar</button>
-                <button type="submit" class="btn-primary">Crear Card</button>
-            </div>
-        </form>
     </div>
-</div>
 </html>
