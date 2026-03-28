@@ -9,8 +9,9 @@ import { backofficeAuth } from '../middleware/auth';
 export const registerStaticRoutes = (app: any, { __dirname }: { __dirname: string }) => {
 
     const serveHtmlPage = (route: string, filename: string, middlewares: any[] = []) => {
-        const handler = (req: any, res: any) => {
+        const handler = async (req: any, res: any) => {
             try {
+                const { HistoryHandler } = await import('../utils/historyHandler');
                 const possiblePaths = [
                     path.join(process.cwd(), 'src', 'html', filename),
                     path.join(process.cwd(), filename),
@@ -34,9 +35,18 @@ export const registerStaticRoutes = (app: any, { __dirname }: { __dirname: strin
                     
                     console.log(`[Static] Sirviendo ${filename} para ${route}. botName=${botName}`);
 
+                    // Obtener configuración de visibilidad desde DB (con fallback a env)
+                    const dbBackoffice = await HistoryHandler.getSetting('BACKOFFICE_VISIBLE');
+                    const dbCRM = await HistoryHandler.getSetting('CRM_VISIBLE');
+                    
+                    const showBackoffice = (dbBackoffice === 'false' || (!dbBackoffice && process.env.BACKOFFICE_VISIBLE === 'false')) ? 'none' : 'flex';
+                    const showCRM = (dbCRM === 'false' || (!dbCRM && process.env.CRM_VISIBLE === 'false')) ? 'none' : 'flex';
+
                     // Reemplazo universal de placeholders
                     htmlContent = htmlContent.replace(/{{BOT_NAME}}/g, botName);
                     htmlContent = htmlContent.replace(/{{ASSISTANT_NAME}}/g, botName);
+                    htmlContent = htmlContent.replace(/{{SHOW_BACKOFFICE_STYLE}}/g, showBackoffice);
+                    htmlContent = htmlContent.replace(/{{SHOW_CRM_STYLE}}/g, showCRM);
                     
                     res.setHeader('Content-Type', 'text/html');
                     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -45,6 +55,7 @@ export const registerStaticRoutes = (app: any, { __dirname }: { __dirname: strin
                     res.status(404).send('HTML no encontrado en el servidor');
                 }
             } catch (err) {
+                console.error(`Error sirviendo ${filename}:`, err);
                 res.status(500).send('Error interno al servir HTML');
             }
         };

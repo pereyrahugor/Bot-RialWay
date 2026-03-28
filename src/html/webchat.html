@@ -12,10 +12,10 @@
 <body data-theme="light">
     <!-- Navbar -->
     <div id="navbar">
-        <div class="nav-item" title="Conversaciones" onclick="window.location.href='/backoffice'"><i class="fas fa-comment-dots"></i></div>
+        <div class="nav-item" style="display: {{SHOW_BACKOFFICE_STYLE}};" title="Conversaciones" onclick="window.location.href='/backoffice'"><i class="fas fa-comment-dots"></i></div>
         <div class="nav-item" title="Dashboard" onclick="window.location.href='/dashboard'"><i class="fas fa-th-large"></i></div>
         <div class="nav-item" title="Webchat" onclick="window.location.href='/webchat'"><i class="fas fa-desktop"></i></div>
-        <div class="nav-item" title="CRM" onclick="window.location.href='/crm'"><i class="fas fa-user-friends"></i></div>
+        <div class="nav-item" style="display: {{SHOW_CRM_STYLE}};" title="CRM" onclick="window.location.href='/crm'"><i class="fas fa-user-friends"></i></div>
         <div class="nav-item badge-container" title="Contactos" onclick="toggleLeadsPanel(event)">
             <i class="fas fa-address-book"></i>
         </div>

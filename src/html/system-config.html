@@ -182,10 +182,10 @@
     <div id="main-config-content" style="display: none; width: 100%; height: 100vh; flex-direction: row; opacity: 0; transition: opacity 0.5s ease;">
         <!-- Navbar -->
         <div id="navbar">
-            <div class="nav-item" title="Conversaciones" onclick="window.location.href='/backoffice'"><i class="fas fa-comment-dots"></i></div>
+            <div class="nav-item" style="display: {{SHOW_BACKOFFICE_STYLE}};" title="Conversaciones" onclick="window.location.href='/backoffice'"><i class="fas fa-comment-dots"></i></div>
             <div class="nav-item" title="Dashboard" onclick="window.location.href='/dashboard'"><i class="fas fa-th-large"></i></div>
             <div class="nav-item" title="Webchat" onclick="window.location.href='/webchat'"><i class="fas fa-desktop"></i></div>
-            <div class="nav-item" title="CRM" onclick="window.location.href='/crm'"><i class="fas fa-user-friends"></i></div>
+            <div class="nav-item" style="display: {{SHOW_CRM_STYLE}};" title="CRM" onclick="window.location.href='/crm'"><i class="fas fa-user-friends"></i></div>
             <div class="nav-item badge-container" title="Contactos" onclick="toggleLeadsPanel(event)">
                 <i class="fas fa-address-book"></i>
             </div>
@@ -380,6 +380,8 @@
                     </div>
                 </div>
             </div>
+            
+            <!-- Grupo 5: Navegación (Removido del form principal) -->
 
             <!-- Railway Config (Ocultas) -->
             <div class="variable-group" hidden>
@@ -389,6 +391,36 @@
                 <input type="text" name="RAILWAY_PROJECT_ID" id="RAILWAY_PROJECT_ID">
                 <input type="text" name="RAILWAY_ENVIRONMENT_ID" id="RAILWAY_ENVIRONMENT_ID">
                 <input type="text" name="RAILWAY_SERVICE_ID" id="RAILWAY_SERVICE_ID">
+            </div>
+
+
+            <!-- Grupo 5: Navegación (Hot-update - Sin atributo 'name' para evitar reinicio) -->
+            <div class="section-header">
+                <h2>🧭 Visibilidad de Navegación <span style="font-size: 0.7rem; background: #6366f1; color: white; padding: 2px 8px; border-radius: 10px; margin-left:10px; vertical-align: middle;">Hot-update</span></h2>
+            </div>
+            <div class="variables-grid" style="margin-bottom: 30px;">
+                <div class="variable-group">
+                    <h3>BACKOFFICE_VISIBLE</h3>
+                    <p class="description">Mostrar o ocultar el acceso a Conversaciones en el Nav.</p>
+                    <select id="BACKOFFICE_VISIBLE_HOT">
+                        <option value="true">ON - Visible</option>
+                        <option value="false">OFF - Oculto</option>
+                    </select>
+                </div>
+                <div class="variable-group">
+                    <h3>CRM_VISIBLE</h3>
+                    <p class="description">Mostrar o ocultar el acceso al CRM en el Nav.</p>
+                    <select id="CRM_VISIBLE_HOT">
+                        <option value="true">ON - Visible</option>
+                        <option value="false">OFF - Oculto</option>
+                    </select>
+                </div>
+                <div style="grid-column: 1 / -1; display: flex; justify-content: flex-end; align-items: center; gap: 15px; margin-top: 10px;">
+                    <div id="nav-sync-status" style="font-weight: 600; font-size: 14px;"></div>
+                    <button type="button" id="save-nav-hot-btn" class="btn" style="width: auto; background: #10b981; border:none; padding: 10px 30px;">
+                        <i class="fas fa-save"></i> Guardar Visibilidad (Sin reiniciar)
+                    </button>
+                </div>
             </div>
 
             <div class="actions">

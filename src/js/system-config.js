@@ -304,4 +304,76 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Llamar a la carga del prompt
     await loadAssistantPrompt();
+
+    // --- Gestión de Visibilidad de Navegación (Hot-update) ---
+    const navSyncStatus = document.getElementById('nav-sync-status');
+    const backofficeSelect = document.getElementById('BACKOFFICE_VISIBLE_HOT');
+    const crmSelect = document.getElementById('CRM_VISIBLE_HOT');
+    const saveNavBtn = document.getElementById('save-nav-hot-btn');
+
+    async function loadNavVisibility() {
+        try {
+            const token = localStorage.getItem('system_config_token');
+            const [resBack, resCrm] = await Promise.all([
+                fetch(`/api/backoffice/get-setting?key=BACKOFFICE_VISIBLE&token=${token}`),
+                fetch(`/api/backoffice/get-setting?key=CRM_VISIBLE&token=${token}`)
+            ]);
+            
+            const dataBack = await resBack.json();
+            const dataCrm = await resCrm.json();
+
+            if (dataBack.success && dataBack.value !== null) {
+                backofficeSelect.value = dataBack.value;
+            }
+            if (dataCrm.success && dataCrm.value !== null) {
+                crmSelect.value = dataCrm.value;
+            }
+        } catch (err) {
+            console.error('Error loading nav visibility:', err);
+        }
+    }
+
+    saveNavBtn.addEventListener('click', async () => {
+        saveNavBtn.disabled = true;
+        navSyncStatus.textContent = '⏳ Guardando...';
+        navSyncStatus.style.color = 'inherit';
+
+        try {
+            const token = localStorage.getItem('system_config_token');
+            const backofficeValue = backofficeSelect.value;
+            const crmValue = crmSelect.value;
+
+            const [resBack, resCrm] = await Promise.all([
+                fetch(`/api/backoffice/save-setting?token=${token}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key: 'BACKOFFICE_VISIBLE', value: backofficeValue })
+                }),
+                fetch(`/api/backoffice/save-setting?token=${token}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key: 'CRM_VISIBLE', value: crmValue })
+                })
+            ]);
+
+            const dataBack = await resBack.json();
+            const dataCrm = await resCrm.json();
+
+            if (dataBack.success && dataCrm.success) {
+                navSyncStatus.textContent = '✅ Visibilidad actualizada correctamente.';
+                navSyncStatus.style.color = '#10b981';
+            } else {
+                navSyncStatus.textContent = '❌ Error al guardar.';
+                navSyncStatus.style.color = '#ef4444';
+            }
+        } catch (err) {
+            console.error('Error saving nav visibility:', err);
+            navSyncStatus.textContent = '❌ Error de conexión.';
+            navSyncStatus.style.color = '#ef4444';
+        } finally {
+            saveNavBtn.disabled = false;
+        }
+    });
+
+    await loadNavVisibility();
 });
