@@ -37,27 +37,27 @@
         .tooltip .tooltiptext {
             visibility: hidden;
             width: 200px;
-            background-color: var(--bg-header);
+            background-color: var(--bg-main);
             color: var(--text-main);
             text-align: center;
             border-radius: 12px;
             padding: 12px;
             position: absolute;
-            z-index: 100;
+            z-index: 999;
             bottom: 125%;
             left: 50%;
             margin-left: -100px;
             opacity: 0;
             transition: opacity 0.3s;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
             font-size: 0.75rem;
             line-height: 1.4;
             border: 1px solid var(--border);
             pointer-events: none;
         }
         .tooltip:hover .tooltiptext { visibility: visible; opacity: 1; }
-        .kpi-card .info-badge { position: absolute; top: 15px; right: 15px; font-size: 0.8rem; color: var(--text-muted); opacity: 0.5; transition: opacity 0.3s; }
-        .kpi-card:hover .info-badge { opacity: 1; }
+        .info-badge { position: absolute; top: 15px; right: 15px; font-size: 0.8rem; color: var(--text-muted); opacity: 0.3; transition: opacity 0.3s; cursor: help; }
+        .kpi-card:hover .info-badge, .chart-card:hover .info-badge { opacity: 1; }
         
         .charts-grid {
             display: grid;
@@ -71,6 +71,7 @@
             border-radius: 24px;
             box-shadow: 0 10px 25px rgba(0,0,0,0.05);
             border: 1px solid var(--border);
+            position: relative; /* Para la badge de info */
         }
         .chart-header { margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 15px; display: flex; align-items: center; gap: 10px; }
         .chart-header i { color: var(--accent); }
@@ -145,21 +146,25 @@
         <div class="charts-grid">
             <!-- Gráfico Funnel -->
             <div class="chart-card">
+                <i class="fas fa-info-circle info-badge tooltip"><span class="tooltiptext">Distribución actual de tickets abiertos según su etapa en el funnel de ventas.</span></i>
                 <div class="chart-header"><i class="fas fa-filter"></i> <h3>Estado del Funnel (Tickets)</h3></div>
                 <div style="height: 300px;"><canvas id="chart-funnel"></canvas></div>
             </div>
             <!-- Gráfico Categorías -->
             <div class="chart-card">
+                <i class="fas fa-info-circle info-badge tooltip"><span class="tooltiptext">Temáticas más consultadas detectadas por la IA en las interacciones de los clientes.</span></i>
                 <div class="chart-header"><i class="fas fa-shapes"></i> <h3>Categorización de Consultas</h3></div>
                 <div style="height: 300px;"><canvas id="chart-categories"></canvas></div>
             </div>
             <!-- Productividad Operadores -->
             <div class="chart-card">
+                <i class="fas fa-info-circle info-badge tooltip"><span class="tooltiptext">Volumen de acciones realizadas por cada operador humano en los últimos 7 días.</span></i>
                 <div class="chart-header"><i class="fas fa-user-edit"></i> <h3>Acciones por Operador (7d)</h3></div>
                 <div style="height: 300px;"><canvas id="chart-productivity"></canvas></div>
             </div>
             <!-- Origen de Leads -->
             <div class="chart-card">
+                <i class="fas fa-info-circle info-badge tooltip"><span class="tooltiptext">Atribución de origen de los leads autodetectados o informados por el sistema.</span></i>
                 <div class="chart-header"><i class="fas fa-share-nodes"></i> <h3>Origen de Contactos</h3></div>
                 <div style="height: 300px;"><canvas id="chart-sources"></canvas></div>
             </div>

@@ -79,7 +79,7 @@ export const registerStaticRoutes = (app: any, { __dirname }: { __dirname: strin
     serveHtmlPage("/login", "login.html");
     serveHtmlPage("/backoffice", "backoffice.html");
     serveHtmlPage("/crm", "crm.html");
-    serveHtmlPage("/documentacion", "docs.html", [backofficeAuth]);
+    serveHtmlPage("/documentacion", "docs.html");
 
     // Servir archivos estáticos
     app.use("/js", serve(path.join(process.cwd(), "src", "js")));
