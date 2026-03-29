@@ -405,6 +405,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             appId: process.env.META_APP_ID,
             // Proporcionar el secreto para el flujo de onboarding
             appSecret: process.env.META_APP_SECRET,
+            configId: process.env.META_CONFIG_ID, // Nuevo campo para el flujo v22.0+
             railwayProjectId: projectId,
             config: config
         });

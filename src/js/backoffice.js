@@ -980,6 +980,7 @@ function launchMetaOnboarding() {
           url.searchParams.append('projectId', data.railwayProjectId);
           url.searchParams.append('metaAppId', data.appId);
           url.searchParams.append('metaAppSecret', data.appSecret);
+          if (data.configId) url.searchParams.append('configId', data.configId);
           url.searchParams.append('projectUrl', currentOrigin);
           url.searchParams.append('redirectUri', `${currentOrigin}/api/backoffice/whatsapp/onboard-callback`);
           
