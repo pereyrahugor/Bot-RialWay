@@ -10,13 +10,31 @@ import { updateMain } from "../addModule/updateMain";
 export class AiManager {
     private userTimeouts = new Map<string, NodeJS.Timeout>();
     private readonly TIMEOUT_MS = 60000;
+    private userAssignedAssistant = new Map<string, string>(); // userId -> 'asistente1', 'asistente2', etc.
+
+    // IDs genéricos de asistentes desde variables de entorno
+    public readonly ASSISTANT_MAP: Record<string, string | undefined> = {
+        asistente1: process.env.ASSISTANT_1 || process.env.ASSISTANT_ID, 
+        asistente2: process.env.ASSISTANT_2,
+        asistente3: process.env.ASSISTANT_3,
+        asistente4: process.env.ASSISTANT_4,
+        asistente5: process.env.ASSISTANT_5,
+    };
 
     constructor(
         private openaiMain: any,
-        private assistantId: string,
+        private assistantId: string, // Mantenemos por compatibilidad, pero usaremos ASSISTANT_MAP
         private errorReporter: any,
         private flows: any // Objeto con welcomeFlowTxt, welcomeFlowVoice, etc.
     ) {}
+
+    /**
+     * Retorna el Assistant ID asignado al usuario
+     */
+    public getAssignedAssistantId(userId: string): string {
+        const assigned = this.userAssignedAssistant.get(userId) || 'asistente1';
+        return this.ASSISTANT_MAP[assigned] || this.assistantId;
+    }
 
     public getAssistantResponse = async (assistantId: string, message: string, state: any, fallbackMessage: string | undefined, userId: string, thread_id: string | null = null) => {
         const currentDatetimeArg = getArgentinaDatetimeString();
@@ -64,6 +82,28 @@ export class AiManager {
                 });
         });
     };
+
+    /**
+     * Analiza la respuesta para determinar si hay una derivación a otro asistente.
+     */
+    public analizarDestinoRecepcionista(respuesta: string): string | null {
+        if (!respuesta || typeof respuesta !== 'string') return null;
+        const lower = respuesta.toLowerCase();
+        if (/derivar(?:ndo)?\s+a\s+asistente\s*1\b/.test(lower)) return 'asistente1';
+        if (/derivar(?:ndo)?\s+a\s+asistente\s*2\b/.test(lower)) return 'asistente2';
+        if (/derivar(?:ndo)?\s+a\s+asistente\s*3\b/.test(lower)) return 'asistente3';
+        if (/derivar(?:ndo)?\s+a\s+asistente\s*4\b/.test(lower)) return 'asistente4';
+        if (/derivar(?:ndo)?\s+a\s+asistente\s*5\b/.test(lower)) return 'asistente5';
+        return null;
+    }
+
+    /**
+     * Extrae el bloque de resumen para el siguiente asistente.
+     */
+    private extraerResumenRecepcionista(respuesta: string): string {
+        const match = respuesta.match(/GET_RESUMEN[\s\S]+/i);
+        return match ? match[0].trim() : "Continúa con la atención del cliente.";
+    }
 
     public processUserMessage = async (ctx: any, { flowDynamic, state, provider, gotoFlow }: any) => {
         await typing(ctx, provider);
@@ -157,7 +197,13 @@ export class AiManager {
                 }
             }
 
-            const response = (await this.getAssistantResponse(this.assistantId, ctx.body, state, undefined, ctx.from, ctx.thread_id)) as string;
+            // --- LÓGICA MULTI-AGENTE ---
+            let assigned = this.userAssignedAssistant.get(ctx.from) || 'asistente1';
+            let currentAssistantId = this.ASSISTANT_MAP[assigned] || this.assistantId;
+
+            const response = (await this.getAssistantResponse(currentAssistantId, ctx.body, state, undefined, ctx.from, ctx.thread_id)) as string;
+
+            if (!response) return state;
 
             try {
                 const currentThreadId = state && typeof state.get === 'function' ? state.get('thread_id') : null;
@@ -168,16 +214,60 @@ export class AiManager {
                 console.error("[AiManager] Error guardando threadId:", e.message);
             }
 
-            await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
-                response,
-                ctx,
-                flowDynamic,
-                state,
-                provider,
-                gotoFlow,
-                this.getAssistantResponse,
-                this.assistantId
-            );
+            const destino = this.analizarDestinoRecepcionista(response);
+            const resumen = this.extraerResumenRecepcionista(response);
+            
+            // Limpiar la respuesta para el usuario (remover bloques técnicos)
+            let cleanResponse = String(response)
+                .replace(/GET_RESUMEN[\s\S]+/i, '')
+                .replace(/^[ \t]*derivar(?:ndo)? a (asistente\s*[1-5]|asesor humano)\.?\s*$/gim, '')
+                .replace(/\[Enviando.*$/gim, '')
+                .replace(/^[ \t]*\n/gm, '')
+                .trim();
+
+            if (destino && this.ASSISTANT_MAP[destino] && destino !== assigned) {
+                console.log(`🚀 [MultiAgent] Derivando de ${assigned} a ${destino} para ${ctx.from}`);
+                this.userAssignedAssistant.set(ctx.from, destino);
+
+                // Enviar respuesta parcial si existe (sin bloques técnicos)
+                if (cleanResponse && cleanResponse.length > 0) {
+                    await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
+                        cleanResponse, ctx, flowDynamic, state, provider, gotoFlow,
+                        this.getAssistantResponse, currentAssistantId
+                    );
+                    await HistoryHandler.saveMessage(ctx.from, 'assistant', cleanResponse, 'text', null, ctx.userId);
+                }
+
+                // Consultar inmediatamente al siguiente asistente
+                const nextAssistantId = this.ASSISTANT_MAP[destino]!;
+                const nextResponseRaw = (await this.getAssistantResponse(nextAssistantId, resumen, state, undefined, ctx.from, ctx.thread_id)) as string;
+                
+                if (nextResponseRaw) {
+                    const nextClean = String(nextResponseRaw)
+                        .replace(/GET_RESUMEN[\s\S]+/i, '')
+                        .replace(/^[ \t]*derivar(?:ndo)? a (asistente\s*[1-5]|asesor humano)\.?\s*$/gim, '')
+                        .replace(/\[Enviando.*$/gim, '')
+                        .replace(/^[ \t]*\n/gm, '')
+                        .trim();
+
+                    if (nextClean) {
+                        await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
+                           nextClean, ctx, flowDynamic, state, provider, gotoFlow,
+                           this.getAssistantResponse, nextAssistantId
+                        );
+                        await HistoryHandler.saveMessage(ctx.from, 'assistant', nextClean, 'text', null, ctx.userId);
+                    }
+                }
+            } else {
+                // Sin derivación o derivación redundante
+                if (cleanResponse) {
+                    await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
+                        cleanResponse, ctx, flowDynamic, state, provider, gotoFlow,
+                        this.getAssistantResponse, currentAssistantId
+                    );
+                    await HistoryHandler.saveMessage(ctx.from, 'assistant', cleanResponse, 'text', null, ctx.userId);
+                }
+            }
 
             const setTime = Number(process.env.timeOutCierre || 5) * 60 * 1000;
             reset(ctx, gotoFlow, setTime);

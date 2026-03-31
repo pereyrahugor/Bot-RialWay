@@ -234,7 +234,7 @@ const main = async () => {
 
         // 9. Register Other Routes
         registerRailwayRoutes(app, { RailwayApi: (await import("./Api-RailWay/Railway")).RailwayApi });
-        registerWebchatRoutes(app, { webChatManager, openaiVision, ASSISTANT_ID, processUserMessage: aiManager.processUserMessage });
+        registerWebchatRoutes(app, { webChatManager, openaiVision, aiManager });
         registerStaticRoutes(app, { __dirname });
 
         // API Health & Info

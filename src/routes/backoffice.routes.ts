@@ -504,15 +504,15 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             console.log(`📡 [SYNC] Obteniendo instrucciones para el asistente: ${assistantId}`);
             const assistant = await openaiMain.beta.assistants.retrieve(assistantId);
             
-            if (assistant && assistant.instructions) {
+            if (assistant) {
                 res.json({ 
                     success: true, 
-                    instructions: assistant.instructions,
+                    instructions: assistant.instructions || '',
                     name: assistant.name,
                     model: assistant.model
                 });
             } else {
-                res.status(404).json({ success: false, error: 'Assistant not found or has no instructions' });
+                res.status(404).json({ success: false, error: 'Assistant not found' });
             }
         } catch (error: any) {
             console.error('Error syncing assistant prompt:', error.message);
@@ -546,8 +546,16 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     // --- GET STORED PROMPT ---
     app.get('/api/backoffice/get-prompt', systemConfigAuth, async (req, res) => {
         try {
-            const prompt = await HistoryHandler.getSetting('ASSISTANT_PROMPT');
-            res.json({ success: true, prompt: prompt || process.env.ASSISTANT_PROMPT || '' });
+            const index = req.query.index || '1';
+            const settingKey = index === '1' ? 'ASSISTANT_PROMPT' : `ASSISTANT_PROMPT_${index}`;
+            const envKey = index === '1' ? 'ASSISTANT_ID' : `ASSISTANT_${index}`;
+            
+            const prompt = await HistoryHandler.getSetting(settingKey);
+            res.json({ 
+                success: true, 
+                prompt: prompt || '',
+                assistantId: process.env[envKey] || ''
+            });
         } catch (error: any) {
             res.status(500).json({ success: false, error: error.message });
         }
@@ -555,26 +563,30 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     // --- UPDATE PROMPT WITHOUT RESTART ---
     app.post('/api/backoffice/update-prompt', systemConfigAuth, bodyParser.json(), async (req, res) => {
-        const { prompt } = req.body;
+        const { prompt, index } = req.body;
+        const idx = index || '1';
         if (prompt === undefined) return res.status(400).json({ success: false, error: 'prompt is required' });
 
         try {
-            console.log(`📡 [HOT-UPDATE] Actualizando prompt en base de datos...`);
-            await HistoryHandler.saveSetting('ASSISTANT_PROMPT', prompt);
+            const settingKey = idx === '1' ? 'ASSISTANT_PROMPT' : `ASSISTANT_PROMPT_${idx}`;
+            const envKey = idx === '1' ? 'ASSISTANT_ID' : `ASSISTANT_${idx}`;
+            const assistantId = process.env[envKey];
+
+            console.log(`📡 [HOT-UPDATE] Actualizando prompt para Asistente ${idx} en base de datos...`);
+            await HistoryHandler.saveSetting(settingKey, prompt);
 
             // Sincronizar hacia OpenAI (Empujar cambio al dashboard de OpenAI)
-            const assistantId = process.env.ASSISTANT_ID;
             if (assistantId && openaiMain) {
                 console.log(`📡 [SYNC] Empujando nuevo prompt hacia OpenAI Assistant: ${assistantId}`);
                 await openaiMain.beta.assistants.update(assistantId, {
                     instructions: prompt
                 });
-                console.log('✅ [SYNC] Prompt actualizado en OpenAI exitosamente.');
+                console.log(`✅ [SYNC] Prompt de Asistente ${idx} actualizado en OpenAI exitosamente.`);
             }
 
             res.json({ 
                 success: true, 
-                message: 'Prompt actualizado correctamente en local y en OpenAI (Hot-update)' 
+                message: `Prompt de Asistente ${idx} actualizado correctamente en local y en OpenAI (Hot-update)` 
             });
         } catch (error: any) {
             console.error('Error updating prompt and syncing to OpenAI:', error.message);

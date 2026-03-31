@@ -222,8 +222,28 @@
                 </div>
                 <div class="variable-group">
                     <h3>ASSISTANT_ID</h3>
-                    <p class="description">ID del asistente principal en OpenAI.</p>
+                    <p class="description">ID del asistente 1 (Principal).</p>
                     <input type="text" name="ASSISTANT_ID" id="ASSISTANT_ID">
+                </div>
+                <div class="variable-group">
+                    <h3>ASSISTANT_2</h3>
+                    <p class="description">ID del asistente 2.</p>
+                    <input type="text" name="ASSISTANT_2" id="ASSISTANT_2">
+                </div>
+                <div class="variable-group">
+                    <h3>ASSISTANT_3</h3>
+                    <p class="description">ID del asistente 3.</p>
+                    <input type="text" name="ASSISTANT_3" id="ASSISTANT_3">
+                </div>
+                <div class="variable-group">
+                    <h3>ASSISTANT_4</h3>
+                    <p class="description">ID del asistente 4.</p>
+                    <input type="text" name="ASSISTANT_4" id="ASSISTANT_4">
+                </div>
+                <div class="variable-group">
+                    <h3>ASSISTANT_5</h3>
+                    <p class="description">ID del asistente 5.</p>
+                    <input type="text" name="ASSISTANT_5" id="ASSISTANT_5">
                 </div>
                 <div class="variable-group">
                     <h3>ASSISTANT_ID_IMG</h3>
@@ -460,9 +480,18 @@
     <div id="panel-overlay" class="panel-overlay" onclick="togglePromptPanel()"></div>
     <div id="prompt-panel" class="prompt-panel">
         <div class="prompt-panel-header">
-            <div>
+            <div style="flex: 1;">
                 <h3 style="margin:0; font-size: 1.4rem;"><i class="fas fa-magic" style="color: #6366f1; margin-right:12px;"></i> Editor de Lógica Maestra</h3>
-                <p style="margin:5px 0 0 0; font-size: 0.85rem; opacity: 0.7;">Define el comportamiento, personalidad y reglas del bot con precisión quirúrgica.</p>
+                <p style="margin:5px 0 0 0; font-size: 0.85rem; opacity: 0.7;">Define el comportamiento y reglas del bot con precisión quirúrgica.</p>
+            </div>
+            <div style="margin-right: 20px;">
+                <select id="assistant-select" class="auth-input" style="margin:0; padding: 10px; width: 200px; font-size: 0.9rem;">
+                    <option value="1">Asistente 1 (Principal)</option>
+                    <option value="2">Asistente 2</option>
+                    <option value="3">Asistente 3</option>
+                    <option value="4">Asistente 4</option>
+                    <option value="5">Asistente 5</option>
+                </select>
             </div>
             <button class="btn-icon" onclick="togglePromptPanel()" style="font-size: 1.5rem;"><i class="fas fa-times"></i></button>
         </div>

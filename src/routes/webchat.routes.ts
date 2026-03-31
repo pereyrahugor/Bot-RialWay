@@ -13,8 +13,7 @@ import { backofficeAuth } from "../middleware/auth";
 export const registerWebchatRoutes = (app: any, { 
     webChatManager, 
     openaiVision, 
-    ASSISTANT_ID, 
-    processUserMessage 
+    aiManager 
 }: any) => {
 
     app.post('/webchat-api', async (req: any, res: any) => {
@@ -100,7 +99,8 @@ export const registerWebchatRoutes = (app: any, {
                     return await sendMessageToThread(tid, msg, assistantId);
                 };
 
-                const reply = await webChatAdapterFn(ASSISTANT_ID, message, state, "", ip, threadId);
+                const currentAssistantId = aiManager.getAssignedAssistantId(ip);
+                const reply = await webChatAdapterFn(currentAssistantId, message, state, "", ip, threadId);
 
                 const flowDynamic = async (arr: any) => {
                     const text = Array.isArray(arr) ? arr.map(a => a.body).join('\n') : arr;
@@ -115,7 +115,7 @@ export const registerWebchatRoutes = (app: any, {
                     undefined,
                     () => {},
                     webChatAdapterFn,
-                    ASSISTANT_ID
+                    currentAssistantId
                 );
                 session.addAssistantMessage(replyText);
             }

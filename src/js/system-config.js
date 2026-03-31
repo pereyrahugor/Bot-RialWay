@@ -209,12 +209,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- Sincronizar Prompt ---
     const syncBtn = document.getElementById('sync-prompt-btn');
     const syncStatus = document.getElementById('sync-status');
-    const assistantIdInput = document.getElementById('ASSISTANT_ID');
+    const assistantSelect = document.getElementById('assistant-select');
 
     syncBtn.addEventListener('click', async () => {
-        const assistantId = assistantIdInput.value;
+        const index = assistantSelect.value;
+        const envKey = index === '1' ? 'ASSISTANT_ID' : `ASSISTANT_${index}`;
+        const assistantIdInput = document.getElementById(envKey);
+        const assistantId = assistantIdInput ? assistantIdInput.value : '';
+
         if (!assistantId) {
-            alert('Debes ingresar un ASSISTANT_ID para sincronizar.');
+            alert(`Debes ingresar un ID para el Asistente ${index} en la configuración principal para sincronizar.`);
             return;
         }
 
@@ -255,8 +259,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const hotSaveBtn = document.getElementById('save-prompt-hot-btn');
     hotSaveBtn.addEventListener('click', async () => {
         const prompt = editor ? editor.getValue() : promptTextarea.value;
+        const index = assistantSelect.value;
         hotSaveBtn.disabled = true;
-        syncStatus.textContent = '⏳ Guardando en base de datos...';
+        syncStatus.textContent = `⏳ Guardando Asistente ${index}...`;
         syncStatus.style.color = 'inherit';
 
         try {
@@ -266,15 +271,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ prompt })
+                body: JSON.stringify({ prompt, index })
             });
 
             const data = await response.json();
             if (data.success) {
-                syncStatus.textContent = '✅ Guardado correctamente (Hot-update).';
+                syncStatus.textContent = `✅ Asistente ${index} guardado correctamente (Hot-update).`;
                 syncStatus.style.color = '#10b981';
                 // Actualizar initialVariables para evitar que el form principal crea que hay cambios
-                initialVariables['ASSISTANT_PROMPT'] = prompt;
+                const settingKey = index === '1' ? 'ASSISTANT_PROMPT' : `ASSISTANT_PROMPT_${index}`;
+                initialVariables[settingKey] = prompt;
             } else {
                 syncStatus.textContent = '❌ Error al guardar.';
                 syncStatus.style.color = '#ef4444';
@@ -291,17 +297,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- Cargar Prompt actual desde DB ---
     async function loadAssistantPrompt() {
         try {
+            const index = assistantSelect.value || '1';
             const token = localStorage.getItem('system_config_token');
-            const response = await fetch(`/api/backoffice/get-prompt?token=${token}`);
+            const response = await fetch(`/api/backoffice/get-prompt?index=${index}&token=${token}`);
             const data = await response.json();
             if (data.success && data.prompt) {
                 if (editor) editor.setValue(data.prompt);
-                initialVariables['ASSISTANT_PROMPT'] = data.prompt;
+                const settingKey = index === '1' ? 'ASSISTANT_PROMPT' : `ASSISTANT_PROMPT_${index}`;
+                initialVariables[settingKey] = data.prompt;
+            } else {
+                if (editor) editor.setValue('');
             }
         } catch (err) {
             console.error('Error loading stored prompt:', err);
         }
     }
+    
+    // Cambiar de asistente en el editor
+    assistantSelect.addEventListener('change', async () => {
+        syncStatus.textContent = '⏳ Cargando...';
+        await loadAssistantPrompt();
+        syncStatus.textContent = '';
+    });
     
     // Llamar a la carga del prompt
     await loadAssistantPrompt();

@@ -27,7 +27,13 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
         if (run.status === 'completed') {
             const messages = await openai.beta.threads.messages.list(run.thread_id);
             const latestMessage = messages.data.filter(m => m.role === 'assistant')[0];
-            return latestMessage && latestMessage.content[0].type === 'text' ? latestMessage.content[0].text.value : '';
+            if (!latestMessage) return '';
+            
+            // Concatenate all text parts (new API v2 can have multiple content parts)
+            return latestMessage.content
+                .filter(c => c.type === 'text')
+                .map((c: any) => c.text.value)
+                .join('\n\n');
         } 
         
         // B) OpenAI entró en modo Tool Call (Function Calling) y necesita que procesemos la lógica localmente
