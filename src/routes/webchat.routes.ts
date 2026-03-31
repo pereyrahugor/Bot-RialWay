@@ -78,6 +78,7 @@ export const registerWebchatRoutes = (app: any, {
                 }
             }
 
+            const { HistoryHandler } = await import("../utils/historyHandler");
             const session = webChatManager.getSession(ip);
             let replyText = '';
 
@@ -88,6 +89,16 @@ export const registerWebchatRoutes = (app: any, {
             } else {
                 const threadId = await getOrCreateThreadId(session);
                 session.addUserMessage(message);
+
+                // Guardar mensaje del usuario en el historial persistente (Backoffice)
+                await HistoryHandler.saveMessage(
+                    ip, 
+                    'user', 
+                    message, 
+                    'text', 
+                    'Webchat User', 
+                    ip
+                );
 
                 const state = {
                     get: (key: string) => key === 'thread_id' ? session.thread_id : undefined,

@@ -144,8 +144,8 @@ export class AiManager {
                 ctx.from, 
                 'user', 
                 body || (ctx.type === EVENTS.VOICE_NOTE ? "[Audio]" : "[Media]"), 
-                ctx.type,
-                ctx.pushName || null,
+                ctx.type === 'webchat' ? 'text' : ctx.type,
+                ctx.pushName || (ctx.type === 'webchat' ? 'Webchat User' : null),
                 ctx.userId
             );
 
