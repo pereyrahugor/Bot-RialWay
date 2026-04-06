@@ -21,18 +21,19 @@ const supabase = createClient(supabaseUrl, supabaseKey);
  * Soporta formato antiguo (archivos individuales) y nuevo (full_backup).
  */
 export async function restoreSessionFromDb(sessionId: string = 'default') {
+    const sessionPath = path.join(SESSION_DIR, sessionId);
     console.log(`[SessionSync] 📥 Restaurando sesión '${sessionId}' para proyecto '${projectId}'...`);
 
     try {
-        // Limpiar carpeta local antes de restaurar para evitar archivos huérfanos o corruptos
-        if (fs.existsSync(SESSION_DIR)) {
-            console.log(`[SessionSync] 🧹 Limpiando carpeta local '${SESSION_DIR}' antes de restaurar...`);
-            const files = fs.readdirSync(SESSION_DIR);
+        // Limpiar carpeta local antes de restaurar
+        if (fs.existsSync(sessionPath)) {
+            console.log(`[SessionSync] 🧹 Limpiando carpeta local '${sessionPath}'...`);
+            const files = fs.readdirSync(sessionPath);
             for (const file of files) {
-                fs.unlinkSync(path.join(SESSION_DIR, file));
+                fs.unlinkSync(path.join(sessionPath, file));
             }
         } else {
-            fs.mkdirSync(SESSION_DIR, { recursive: true });
+            fs.mkdirSync(sessionPath, { recursive: true });
         }
 
         // const { data, error } = await supabase.rpc('get_whatsapp_session', {
@@ -65,7 +66,7 @@ export async function restoreSessionFromDb(sessionId: string = 'default') {
             const filesMap = backupRow.data; // { "file.json": content, ... }
 
             for (const [fileName, fileContent] of Object.entries(filesMap)) {
-                const filePath = path.join(SESSION_DIR, fileName);
+                const filePath = path.join(sessionPath, fileName);
                 // Escribir contenido (stringify porque es objeto en memoria)
                 fs.writeFileSync(filePath, JSON.stringify(fileContent, null, 2));
                 count++;
@@ -81,7 +82,7 @@ export async function restoreSessionFromDb(sessionId: string = 'default') {
                 if (row.key_id === 'full_backup') continue;
 
                 const fileName = `${row.key_id}.json`;
-                const filePath = path.join(SESSION_DIR, fileName);
+                const filePath = path.join(sessionPath, fileName);
                 const fileContent = JSON.stringify(row.data, null, 2);
                 fs.writeFileSync(filePath, fileContent);
                 count++;
@@ -176,9 +177,10 @@ export function startSessionSync(sessionId: string = 'default') {
 
 async function syncToDb(sessionId: string) {
     try {
-        if (!fs.existsSync(SESSION_DIR)) return;
+        const sessionPath = path.join(SESSION_DIR, sessionId);
+        if (!fs.existsSync(sessionPath)) return;
 
-        const files = fs.readdirSync(SESSION_DIR);
+        const files = fs.readdirSync(sessionPath);
         const sessionFiles = files.filter(f => f.endsWith('.json'));
 
         if (sessionFiles.length === 0) return;
@@ -187,7 +189,7 @@ async function syncToDb(sessionId: string) {
         let corruptCount = 0;
 
         for (const file of sessionFiles) {
-            const filePath = path.join(SESSION_DIR, file);
+            const filePath = path.join(sessionPath, file);
             const content = fs.readFileSync(filePath, 'utf-8');
             let jsonContent;
 

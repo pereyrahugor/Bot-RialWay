@@ -95,9 +95,14 @@ export const hasActiveSession = async (adapterProvider: any, groupProvider: any 
         const adapterStatus = await getStatus(adapterProvider, false);
         const groupStatus = await getStatus(groupProvider, true);
 
+        // Fetch meta configuration for additional info if not active
+        const { HistoryHandler } = await import('../utils/historyHandler');
+        const metaOnboarding = await HistoryHandler.getMetaOnboardingData();
+
         return {
             adapter: adapterStatus,
-            group: groupStatus
+            group: groupStatus,
+            metaOnboarding: metaOnboarding || null
         };
     } catch (error: any) {
         return { active: false, error: error.message };

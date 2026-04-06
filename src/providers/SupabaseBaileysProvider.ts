@@ -3,17 +3,20 @@ import { BaileysProvider } from 'builderbot-provider-sherpa';
 import makeWASocket, { 
     DisconnectReason, 
     makeCacheableSignalKeyStore,
+    useMultiFileAuthState,
     isJidUser 
 } from '@whiskeysockets/baileys';
-import { useSupabaseAuthState } from '../utils/supabaseAdapter';
 import { EventEmitter } from 'events';
 import pino from 'pino';
+import path from 'path';
+import fs from 'fs';
 
 // Logger compatible con Baileys
 const logger = pino({ level: 'error' });
 
 /**
- * Provider personalizado extendiendo de Sherpa/Baileys para inyectar Supabase Auth.
+ * Provider personalizado extendiendo de Sherpa/Baileys para inyectar persistencia local.
+ * La sincronización con la nube la maneja externamente sessionSync.ts
  */
 export class SupabaseBaileysProvider extends BaileysProvider {
     saveCreds: any = null;
@@ -27,34 +30,27 @@ export class SupabaseBaileysProvider extends BaileysProvider {
     }
 
     protected async initProvider() {
-        if (this.initialized) {
-             console.log('[SupabaseBaileysProvider] ⚠️ initProvider ya fue iniciado. Omitiendo duplicado.');
+        // Si ya está inicializado, evitamos duplicar threads, pero permitimos reconexión si el socket está muerto
+        if (this.initialized && this.vendor?.ws?.isOpen) {
+             console.log('[SupabaseBaileysProvider] ⚠️ initProvider ya activo y conectado. Omitiendo.');
              return;
         }
         this.initialized = true;
 
-        console.log('[SupabaseBaileysProvider] 🚀 Iniciando Provider Personalizado...');
+        console.log('[SupabaseBaileysProvider] 🚀 Iniciando Provider (Uso de archivos locales)...');
         
-        // 1. Cargar Auth State desde Supabase
-        const projectId = process.env.RAILWAY_PROJECT_ID || 'local-dev';
-        const botName = process.env.BOT_NAME || 'Unknown Bot';
-        console.log(`[SupabaseBaileysProvider] Project ID: ${projectId} - Cargando sesión de Supabase...`);
-
-        const { state, saveCreds, clearSession } = await useSupabaseAuthState(
-            process.env.SUPABASE_URL!,
-            process.env.SUPABASE_KEY!,
-            projectId,
-            'default', // session ID
-            botName    // bot Name
-        );
+        // 1. Cargar Auth State desde archivos locales (restaurados por SessionSync)
+        const authPath = path.join(process.cwd(), `bot_sessions/${this.globalVendorArgs.name || 'default'}`);
+        const credsExist = fs.existsSync(path.join(authPath, 'creds.json'));
+        console.log(`[SupabaseBaileysProvider] ¿Existe creds.json en ${authPath}?: ${credsExist}`);
         
-        console.log('[SupabaseBaileysProvider] ✅ Sesión cargada (o inicializada vacía). Creando Socket...');
+        const { state, saveCreds } = await useMultiFileAuthState(authPath);
+        
+        console.log('[SupabaseBaileysProvider] ✅ Sistema de archivos cargado. Creando Socket...');
         
         this.saveCreds = saveCreds;
-        this.clearSession = clearSession;
 
         // 2. Crear Socket usando la configuración base más nuestro auth
-        // OJO: Al sobreescribir initProvider, somos responsables de crear this.vendor
         this.vendor = makeWASocket({
             auth: {
                 creds: state.creds,
@@ -96,13 +92,10 @@ export class SupabaseBaileysProvider extends BaileysProvider {
                 
                 if (shouldReconnect) {
                     console.log('[SupabaseBaileysProvider] 🔄 Reconectando...');
-                    // Llamar recursivamente a este initProvider para reconectar
                     this.initProvider();
                 } else {
-                    console.log('[SupabaseBaileysProvider] ❌ Desconectado (Logout). Limpiando sesión en DB...');
-                    if (this.clearSession) await this.clearSession();
+                    console.log('[SupabaseBaileysProvider] ❌ Desconectado (Logout).');
                     this.emit('auth_failure', { instructions: ['Sesión cerrada. Escanea de nuevo.'] });
-                    this.initProvider(); 
                 }
             }
         });

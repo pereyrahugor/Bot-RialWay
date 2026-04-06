@@ -29,9 +29,22 @@ async function fetchStatus() {
 
         // --- MANEJO DEL ADAPTER PRINCIPAL ---
         const isMeta = data.adapter.type === 'meta';
+        const hasMetaConfig = data.metaOnboarding && data.metaOnboarding.status === 'active';
+
         if (isMeta) {
             statusEl.textContent = '✅ Principal: META';
             statusEl.style.color = '#0668E1'; // Azul Meta
+            sessionInfo.style.display = 'block';
+            sessionInfo.innerHTML = `<div><strong>Configuración:</strong> Meta Cloud API Activa</div>`;
+        } else if (hasMetaConfig) {
+            statusEl.textContent = '⏳ Principal: META (En curso)';
+            statusEl.style.color = '#f59e0b';
+            
+            // Mostrar info de por qué no está activo
+            const missing = !data.metaOnboarding.access_token ? 'Token' : (!data.metaOnboarding.phone_number_id || data.metaOnboarding.phone_number_id === 'PENDING' ? 'Phone ID' : 'Desconocido');
+            sessionInfo.style.display = 'block';
+            sessionInfo.innerHTML = `<div class="warning-box">Vinculación de Meta detectada pero incompleta (Falta: ${missing}). Usando Baileys como respaldo.</div>`;
+            renderProviderStatus(data.adapter, 'Baileys (Respaldo)');
         } else {
             renderProviderStatus(data.adapter, 'Principal');
         }
