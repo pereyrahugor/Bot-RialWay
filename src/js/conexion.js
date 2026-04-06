@@ -11,39 +11,63 @@ async function fetchStatus() {
         const sessionInfo = document.getElementById('session-info');
         const sessionError = document.getElementById('session-error');
         const wsLinkContainer = document.getElementById('whatsapp-link-container');
+        const groupContainer = document.getElementById('group-connection-container');
+        const groupStatusEl = document.getElementById('group-session-status');
 
         // Limpiar
         qrSection.style.display = 'none';
         sessionInfo.style.display = 'none';
         wsLinkContainer.style.display = 'none';
+        groupContainer.style.display = 'none';
         sessionError.innerHTML = '';
         sessionInfo.innerHTML = '';
 
-        if (!data.adapter) {
+        if (!data || !data.adapter) {
             statusEl.textContent = '❌ Error de sistema';
             return;
         }
 
-        // Caso 1: Solo Adapter (Modo Estándar Baileys o Meta sin Grupos)
-        if (!data.group) {
+        // --- MANEJO DEL ADAPTER PRINCIPAL ---
+        const isMeta = data.adapter.type === 'meta';
+        if (isMeta) {
+            statusEl.textContent = '✅ Principal: META';
+            statusEl.style.color = '#0668E1'; // Azul Meta
+        } else {
             renderProviderStatus(data.adapter, 'Principal');
-        } 
-        // Caso 2: Modo Dual
-        else {
-            renderProviderStatus(data.adapter, 'Mensajes Privados (Meta)');
-            renderProviderStatus(data.group, 'Mensajes de Grupo (Baileys)', true);
+        }
+
+        // --- MANEJO DE GRUPOS (SI EXISTE) ---
+        if (data.group) {
+            groupContainer.style.display = 'block';
+            if (data.group.active) {
+                groupStatusEl.textContent = '✅ Grupos: Baileys';
+                groupStatusEl.style.color = '#10b981';
+            } else if (data.group.qr) {
+                groupStatusEl.textContent = '⏳ Grupos: Esperando vinculación';
+                groupStatusEl.style.color = '#f59e0b';
+                
+                // Mostrar el QR para los grupos
+                qrSection.style.display = 'block';
+                const qrImg = document.querySelector('.qr');
+                qrImg.src = data.group.qrImage || '/bot.groups.qr.png';
+                qrImg.style.display = 'inline-block';
+                if (qrImg.nextElementSibling) qrImg.nextElementSibling.style.display = 'none';
+            } else {
+                groupStatusEl.textContent = '⏳ Grupos: ' + (data.group.message || 'Cargando...');
+                groupStatusEl.style.color = '#94a3b8';
+            }
         }
     } catch (e) {
+        console.error(e);
         document.getElementById('session-status').textContent = 'Error';
         document.getElementById('session-error').innerHTML = `<div class='error-box'>No se pudo obtener el estado del bot.</div>`;
     }
 }
 
-function renderProviderStatus(status, label, isGroup = false) {
+function renderProviderStatus(status, label) {
     const statusEl = document.getElementById('session-status');
     const qrSection = document.getElementById('qr-section');
     const sessionInfo = document.getElementById('session-info');
-    const sessionError = document.getElementById('session-error');
 
     if (status.active) {
         statusEl.textContent = `✅ ${label}: ${status.message || 'Conectado'}`;
@@ -56,13 +80,9 @@ function renderProviderStatus(status, label, isGroup = false) {
         qrSection.style.display = 'block';
         
         const qrImg = document.querySelector('.qr');
-        if (status.qrImage) {
-            qrImg.src = status.qrImage;
-        } else {
-            qrImg.src = isGroup ? '/bot.groups.qr.png' : '/qr.png';
-        }
+        qrImg.src = status.qrImage || '/qr.png';
         qrImg.style.display = 'inline-block';
-        qrImg.nextElementSibling.style.display = 'none';
+        if (qrImg.nextElementSibling) qrImg.nextElementSibling.style.display = 'none';
     } else {
         statusEl.textContent = `⏳ ${label}: ${status.message || 'Cargando...'}`;
     }

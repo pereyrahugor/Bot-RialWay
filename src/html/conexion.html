@@ -47,6 +47,12 @@
                 <div style="font-size: 1.2rem; margin-bottom: 25px;">
                     Estado de Sesión: <span class="status" id="session-status" style="font-weight: 700; color: var(--accent);">Cargando...</span>
                 </div>
+
+                <!-- Estado de Grupos (Solo visible en modo Meta) -->
+                <div id="group-connection-container" style="display:none; font-size: 1.1rem; margin-bottom: 25px; padding: 15px; background: rgba(0,0,0,0.03); border-radius: 12px;">
+                    <div style="margin-bottom: 10px; opacity: 0.8; font-weight: 600;">Estado de conexión grupos:</div>
+                    <span id="group-session-status" class="status" style="font-weight: 700;">No configurado</span>
+                </div>
                 
                 <div id="session-error"></div>
 
