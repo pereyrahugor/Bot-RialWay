@@ -498,18 +498,16 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                 throw new Error("Faltan META_APP_ID o META_APP_SECRET en el servidor.");
             }
 
-            // 1. Intercambio Servidor a Servidor (Lo que solicitó el usuario)
-            const protocol = req.headers['x-forwarded-proto'] || 'https';
-            const host = req.headers.host;
-            const absoluteUrl = `${protocol}://${host}/api/backoffice/whatsapp/onboard-callback`;
-            const projectUrl = process.env.PROJECT_URL ? (process.env.PROJECT_URL.startsWith('http') ? process.env.PROJECT_URL : `https://${process.env.PROJECT_URL}`) : absoluteUrl;
+            // 1. Intercambio Servidor a Servidor (Usando la Pasarela Oficial Estática)
+            // Esto permite que el bot de Railway no necesite estar registrado en Meta.
+            const staticGatewayUrl = "https://duskcodes.com.ar/meta-callback.html";
 
             const tokenResponse = await axios.post(`https://graph.facebook.com/v22.0/oauth/access_token`, {
                 client_id: appId,
                 client_secret: appSecret,
                 grant_type: 'authorization_code',
                 code: code,
-                redirect_uri: projectUrl
+                redirect_uri: staticGatewayUrl
             });
 
             const accessToken = tokenResponse.data.access_token;
