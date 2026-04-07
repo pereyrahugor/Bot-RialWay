@@ -26,6 +26,38 @@ export class SupabaseBaileysProvider extends BaileysProvider {
     constructor(args: any = {}) {
         super(args);
         console.log('[SupabaseBaileysProvider] 🏗️ Constructor instanciado. Forzando initProvider...');
+        
+        // --- Overrides de seguridad para propiedades del padre ---
+        const originalSendMessage = this.sendMessage.bind(this);
+        this.sendMessage = async (number: string, message: string, options: any = {}) => {
+            try {
+                const isReady = !!(this.vendor?.authState?.creds?.me?.id || this.vendor?.user?.id);
+                if (!isReady) {
+                    console.warn(`[SupabaseBaileysProvider] 🚫 Envío bloqueado a ${number}: Sin sesión.`);
+                    return null;
+                }
+                return await originalSendMessage(number, message, options);
+            } catch (err: any) {
+                console.error(`[SupabaseBaileysProvider] ❌ Error en sendMessage:`, err.message);
+                return null;
+            }
+        };
+
+        const originalSendMedia = this.sendMedia.bind(this);
+        this.sendMedia = async (number: string, media: string, caption: string) => {
+            try {
+                const isReady = !!(this.vendor?.authState?.creds?.me?.id || this.vendor?.user?.id);
+                if (!isReady) {
+                    console.warn(`[SupabaseBaileysProvider] 🚫 Envío media bloqueado a ${number}: Sin sesión.`);
+                    return null;
+                }
+                return await originalSendMedia(number, media, caption);
+            } catch (err: any) {
+                console.error(`[SupabaseBaileysProvider] ❌ Error en sendMedia:`, err.message);
+                return null;
+            }
+        };
+
         this.initProvider();
     }
 
