@@ -96,11 +96,30 @@ const main = async () => {
     const metaConfig = await HistoryHandler.getMetaOnboardingData();
     
     // Fallback: Si no hay config en DB o falta el token, intentamos usar variables de entorno
-    const metaToken = (metaConfig?.access_token && metaConfig.access_token !== "PENDING") ? metaConfig.access_token : process.env.META_ACCESS_TOKEN;
-    const metaPhoneId = (metaConfig?.phone_number_id && metaConfig.phone_number_id !== "PENDING") ? metaConfig.phone_number_id : process.env.META_PHONE_ID;
-    const metaWabaId = (metaConfig?.waba_id && metaConfig.waba_id !== "PENDING") ? metaConfig.waba_id : process.env.META_WABA_ID;
+    let metaToken = (metaConfig?.access_token && metaConfig.access_token !== "PENDING") ? metaConfig.access_token : process.env.META_ACCESS_TOKEN;
+    let metaPhoneId = (metaConfig?.phone_number_id && metaConfig.phone_number_id !== "PENDING") ? metaConfig.phone_number_id : process.env.META_PHONE_ID;
+    let metaWabaId = (metaConfig?.waba_id && metaConfig.waba_id !== "PENDING") ? metaConfig.waba_id : process.env.META_WABA_ID;
 
-    const useMeta = (metaConfig?.status === 'active' || !!process.env.META_ACCESS_TOKEN) && !!metaToken && !!metaPhoneId;
+    // --- AUTO-DESCUBRIMIENTO DE META (Solicitado por el usuario) ---
+    // Si tenemos Token pero faltan los IDs, intentamos recuperarlos automáticamente desde Meta
+    if (metaToken && (!metaPhoneId || metaPhoneId === 'PENDING' || !metaWabaId || metaWabaId === 'PENDING')) {
+        console.log('📡 [App] Detectada configuración de Meta parcial. Iniciando recuperación automática de IDs...');
+        try {
+            const { discoverMetaIds } = await import("./utils/metaDiscovery");
+            const discovery = await discoverMetaIds(metaToken);
+            if (discovery && discovery.phoneNumberId && discovery.wabaId) {
+                console.log(`✅ [App] Recuperación exitosa: PhoneID=${discovery.phoneNumberId}, WABAID=${discovery.wabaId}`);
+                metaPhoneId = discovery.phoneNumberId;
+                metaWabaId = discovery.wabaId;
+                // Guardamos en DB para persistencia permanente
+                await HistoryHandler.saveMetaOnboardingData(metaWabaId, metaPhoneId, metaToken, { ...discovery, syncedAt: new Date().toISOString() });
+            }
+        } catch (e: any) {
+            console.error('⚠️ [App] Error en auto-descubrimiento de Meta:', e.message);
+        }
+    }
+
+    const useMeta = !!metaToken && !!metaPhoneId && metaPhoneId !== 'PENDING';
 
     if (useMeta) {
         console.log('🚀 [App] Modo Dual detectado (Meta API + Baileys Grupos)');

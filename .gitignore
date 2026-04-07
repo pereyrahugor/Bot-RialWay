@@ -1,5 +1,5 @@
 # Ignorar archivo de variables de entorno
-.env
+.env*
 dist/*
 temp/voiceNote
 !tmp/.gitkeep

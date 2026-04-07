@@ -302,12 +302,19 @@
                 </ul>
             </div>
 
-            <p style="font-size: 0.8rem; color: var(--text-muted); opacity: 0.8; margin-top: 20px;">
-                Escala tu negocio con el respaldo oficial de Meta y las nuevas capacidades de coexistencia.
-            </p>
+            <div style="width:100%; margin-top:10px; border-top: 1px solid var(--border); padding-top: 20px;">
+                <h4 style="margin: 0 0 10px 0; font-size: 0.8rem; color: var(--text-muted); text-align: left;">Configuración Manual</h4>
+                <div style="display:flex; gap:10px;">
+                    <input type="password" id="manual-meta-token" class="crm-input" style="flex:1; margin:0;" placeholder="Pegar Access Token...">
+                    <button class="btn-primary" onclick="syncMetaManual()" style="background:#4ade80; border:none; width:auto; padding:0 15px; border-radius:8px;">
+                        <i class="fas fa-sync"></i>
+                    </button>
+                </div>
+                <p style="font-size: 0.7rem; color: var(--text-muted); margin-top: 5px; text-align: left;">Si tienes un Token Permanente, pégalo aquí para configurar automáticamente los IDs.</p>
+            </div>
 
             <button class="btn-primary" onclick="launchMetaOnboarding()" style="width:100%; height:45px; display:flex; align-items:center; justify-content:center; gap:10px; background:#0668E1; border:none; border-radius:12px; font-weight:600; cursor:pointer; color:white;">
-                <i class="fab fa-meta"></i> Conectar con Meta
+                <i class="fab fa-meta"></i> Vincular con Meta (Nuevo)
             </button>
         </div>
     </div>

@@ -411,6 +411,33 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         });
     });
 
+    app.post('/api/backoffice/whatsapp/sync-manual', systemConfigAuth, bodyParser.json(), async (req, res) => {
+        const { token: manualToken } = req.body;
+        if (!manualToken) return res.status(400).json({ success: false, error: 'Token is required' });
+
+        try {
+            const { discoverMetaIds } = await import("../utils/metaDiscovery");
+            console.log(`📡 [META-SYNC-MANUAL] Iniciando descubrimiento manual...`);
+            
+            const discovery = await discoverMetaIds(manualToken);
+            if (!discovery || !discovery.phoneNumberId) {
+                return res.status(404).json({ success: false, error: 'No se encontraron datos de WhatsApp asociados a este token.' });
+            }
+
+            const result = await HistoryHandler.saveMetaOnboardingData(
+                discovery.wabaId, 
+                discovery.phoneNumberId, 
+                manualToken,
+                { ...discovery, syncedBy: 'manual-sync-tool' }
+            );
+
+            res.json(result);
+        } catch (error: any) {
+            console.error('Error in Meta Manual Sync:', error.message);
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
     app.post('/api/backoffice/whatsapp/onboard', systemConfigAuth, bodyParser.json(), async (req, res) => {
         const { code } = req.body;
         if (!code) return res.status(400).json({ success: false, error: 'Code is required' });
@@ -458,91 +485,75 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     // --- ONBOARDING CALLBACK (Recibe los datos de la subventana de Meta) ---
     app.get('/api/backoffice/whatsapp/onboard-callback', async (req, res) => {
-        const { code, projectId } = req.query;
+        const { code } = req.query;
         if (!code) return res.send('<h2>❌ Error: No se recibió el código de Meta</h2>');
 
         try {
-            console.log(`📡 [CALLBACK] Iniciando recuperación automática de datos de Meta para código: ${code}`);
+            console.log(`📡 [CALLBACK] Intercambiando código Meta por token (v22.0)...`);
             
-            // 1. Intercambiar el CODE por un ACCESS_TOKEN
-            // Necesitamos el AppID y Secret del .env
             const appId = process.env.META_APP_ID;
             const appSecret = process.env.META_APP_SECRET;
 
             if (!appId || !appSecret) {
-                throw new Error("Faltan META_APP_ID o META_APP_SECRET en el servidor para completar la vinculación automática.");
+                throw new Error("Faltan META_APP_ID o META_APP_SECRET en el servidor.");
             }
 
-            const tokenResponse = await axios.get(`https://graph.facebook.com/v22.0/oauth/access_token`, {
-                params: {
-                    client_id: appId,
-                    client_secret: appSecret,
-                    code: code
-                }
+            // 1. Intercambio Servidor a Servidor (Lo que solicitó el usuario)
+            const tokenResponse = await axios.post(`https://graph.facebook.com/v22.0/oauth/access_token`, {
+                client_id: appId,
+                client_secret: appSecret,
+                grant_type: 'authorization_code',
+                code: code,
+                redirect_uri: `${process.env.PROJECT_URL || req.headers.host}/api/backoffice/whatsapp/onboard-callback`
             });
 
             const accessToken = tokenResponse.data.access_token;
             console.log("✅ [CALLBACK] Token de acceso obtenido exitosamente.");
 
-            // 2. Intentar descubrir el WABA ID y el Phone ID automáticamente
-            // Consultamos las cuentas de Whatsapp Business asociadas al token
-            const wabaResponse = await axios.get(`https://graph.facebook.com/v22.0/me/client_whatsapp_business_accounts`, {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
-            });
+            // 2. Auto-descubrimiento de IDs (WABA y Phone)
+            const { discoverMetaIds } = await import("../utils/metaDiscovery");
+            const discovery = await discoverMetaIds(accessToken);
 
-            const wabaData = wabaResponse.data.data?.[0]; // Tomamos la primera cuenta disponible
-            const wabaId = wabaData?.id || "PENDING";
-
-            let phoneNumberId = "PENDING";
-            if (wabaId !== "PENDING") {
-                // Consultamos los números de teléfono de esa WABA
-                const phoneResponse = await axios.get(`https://graph.facebook.com/v22.0/${wabaId}/phone_numbers`, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
-                });
-                phoneNumberId = phoneResponse.data.data?.[0]?.id || "PENDING";
+            if (!discovery || !discovery.phoneNumberId) {
+                throw new Error("Token obtenido pero no se encontraron cuentas de WhatsApp asociadas.");
             }
-
-            console.log(`📡 [CALLBACK] Datos detectados: WABA=${wabaId}, PhoneID=${phoneNumberId}`);
 
             // 3. Guardar todo en la base de datos local
             await HistoryHandler.saveMetaOnboardingData(
-                wabaId, 
-                phoneNumberId, 
+                discovery.wabaId, 
+                discovery.phoneNumberId, 
                 accessToken,
-                { ...wabaData, syncedBy: 'auto-callback-v2' }
+                { ...discovery, syncedBy: 'auto-callback-v22' }
             );
 
-            // 4. Intentar notificar al Router Maestro (Opcional)
-            try {
-                await axios.post('https://ygyicozjewxbyixtpjlo.supabase.co/functions/v1/whatsapp-router/register', {
-                    phone_number_id: phoneNumberId,
-                    waba_id: wabaId,
-                    access_token: accessToken,
-                    project_url: process.env.PROJECT_URL || req.headers.host,
-                    project_id: process.env.RAILWAY_PROJECT_ID
-                });
-            } catch (e) { console.warn("⚠️ Router Maestro no notificado:", (e as Error).message); }
-
-            res.send('<html><body style="font-family: Arial; text-align:center; padding-top:50px; background:#f0f2f5;">' +
-                     '<div style="max-width:500px; margin:auto; background:white; padding:30px; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.1);">' +
-                     '<h2 style="color:#25D366;">✅ ¡Vinculación Exitosa!</h2>' +
-                     '<p style="color:#555;">Hemos detectado y configurado automáticamente:</p>' +
-                     '<ul style="text-align:left; color:#666;">' +
-                        `<li><b>WABA ID:</b> ${wabaId}</li>` +
-                        `<li><b>Phone ID:</b> ${phoneNumberId}</li>` +
-                        `<li><b>Token:</b> ********** (Guardado)</li>` +
-                     '</ul>' +
-                     '<p style="margin-top:20px;">Ya puedes cerrar esta ventana. El bot se activará en modo Meta en el próximo reinicio.</p>' +
-                     '<button onclick="window.close()" style="padding:12px 25px; cursor:pointer; background:#25D366; color:white; border:none; border-radius:5px; font-weight:bold;">Listo, cerrar</button>' +
-                     '</div></body></html>');
+            res.send(`
+                <html><body style="font-family: Arial; text-align:center; padding-top:50px; background:#f0f2f5;">
+                    <div style="max-width:500px; margin:auto; background:white; padding:30px; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.1);">
+                        <h2 style="color:#0668E1;">✅ ¡Vinculación Exitosa!</h2>
+                        <p style="color:#555;">La conexión con Meta se ha configurado automáticamente.</p>
+                        <ul style="text-align:left; color:#666; background: #f9f9f9; padding: 15px; border-radius: 8px; list-style: none;">
+                            <li><b>📡 Phone ID:</b> ${discovery.phoneNumberId}</li>
+                            <li><b>🆔 WABA ID:</b> ${discovery.wabaId}</li>
+                            <li><b>🎫 Token:</b> Guardado exitosamente</li>
+                        </ul>
+                        <p style="margin-top:20px;">El bot está listo. Ya puedes cerrar esta ventana.</p>
+                        <button onclick="window.close()" style="padding:12px 25px; cursor:pointer; background:#0668E1; color:white; border:none; border-radius:5px; font-weight:bold;">Cerrar Ventana</button>
+                    </div>
+                </body></html>
+            `);
 
         } catch (error: any) {
             console.error('❌ Error en vinculación automática:', error.response?.data || error.message);
-            res.send(`<div style="font-family:Arial; text-align:center; padding:50px;">` +
-                     `<h2 style="color:#dc3545;">❌ Error en la vinculación automática</h2>` +
-                     `<p>${error.response?.data?.error?.message || error.message}</p>` +
-                     `<p>Asegúrate de que el META_APP_SECRET y META_APP_ID en tu .env sean correctos.</p>` +
-                     `<button onclick="window.close()" style="padding:10px 20px;">Cerrar</button></div>`);
+            res.send(`
+                <div style="font-family:Arial; text-align:center; padding:50px;">
+                    <h2 style="color:#dc3545;">❌ Error en la vinculación automática</h2>
+                    <p style="background:#fff5f5; padding:15px; border-radius:8px; border: 1px solid #ffc1c1;">
+                        ${error.response?.data?.error?.message || error.message}
+                    </p>
+                    <p>Revisa que el App Secret y el App ID sean los correctos y que la URL de redirección esté permitida en Meta.</p>
+                    <button onclick="window.close()" style="padding:10px 20px; cursor:pointer;">Cerrar</button>
+                </div>
+            `);
         }
     });
 
