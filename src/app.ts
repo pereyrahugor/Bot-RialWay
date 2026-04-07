@@ -94,14 +94,20 @@ const main = async () => {
 
     // 2. Initialize Providers
     const metaConfig = await HistoryHandler.getMetaOnboardingData();
-    const useMeta = metaConfig && metaConfig.status === 'active' && metaConfig.access_token && metaConfig.phone_number_id;
+    
+    // Fallback: Si no hay config en DB o falta el token, intentamos usar variables de entorno
+    const metaToken = (metaConfig?.access_token && metaConfig.access_token !== "PENDING") ? metaConfig.access_token : process.env.META_ACCESS_TOKEN;
+    const metaPhoneId = (metaConfig?.phone_number_id && metaConfig.phone_number_id !== "PENDING") ? metaConfig.phone_number_id : process.env.META_PHONE_ID;
+    const metaWabaId = (metaConfig?.waba_id && metaConfig.waba_id !== "PENDING") ? metaConfig.waba_id : process.env.META_WABA_ID;
+
+    const useMeta = (metaConfig?.status === 'active' || !!process.env.META_ACCESS_TOKEN) && !!metaToken && !!metaPhoneId;
 
     if (useMeta) {
         console.log('🚀 [App] Modo Dual detectado (Meta API + Baileys Grupos)');
         adapterProvider = createProvider(MetaCloudProvider, {
-            waba_id: metaConfig.waba_id,
-            phone_number_id: metaConfig.phone_number_id,
-            access_token: metaConfig.access_token
+            waba_id: metaWabaId || "PENDING",
+            phone_number_id: metaPhoneId,
+            access_token: metaToken
         });
         
         groupProvider = createProvider(SupabaseBaileysProvider, {

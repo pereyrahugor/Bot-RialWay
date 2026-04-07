@@ -456,41 +456,93 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
-    // --- ONBOARDING CALLBACK (Recibe los datos de la subventana) ---
+    // --- ONBOARDING CALLBACK (Recibe los datos de la subventana de Meta) ---
     app.get('/api/backoffice/whatsapp/onboard-callback', async (req, res) => {
-        const { code, accessToken, projectId } = req.query;
-        if (!code) return res.send('<h2>Error: No se recibió el código de Meta</h2>');
+        const { code, projectId } = req.query;
+        if (!code) return res.send('<h2>❌ Error: No se recibió el código de Meta</h2>');
 
         try {
-            console.log(`📡 [CALLBACK] Recibido código de Meta para proyecto: ${projectId}`);
+            console.log(`📡 [CALLBACK] Iniciando recuperación automática de datos de Meta para código: ${code}`);
             
-            // 2. Guardar los datos (Usando HistoryHandler que ya apunta al nuevo Supabase)
-            // Nota: Aquí el HistoryHandler ya tiene el Supabase unificado configurado vía .env
+            // 1. Intercambiar el CODE por un ACCESS_TOKEN
+            // Necesitamos el AppID y Secret del .env
+            const appId = process.env.META_APP_ID;
+            const appSecret = process.env.META_APP_SECRET;
+
+            if (!appId || !appSecret) {
+                throw new Error("Faltan META_APP_ID o META_APP_SECRET en el servidor para completar la vinculación automática.");
+            }
+
+            const tokenResponse = await axios.get(`https://graph.facebook.com/v22.0/oauth/access_token`, {
+                params: {
+                    client_id: appId,
+                    client_secret: appSecret,
+                    code: code
+                }
+            });
+
+            const accessToken = tokenResponse.data.access_token;
+            console.log("✅ [CALLBACK] Token de acceso obtenido exitosamente.");
+
+            // 2. Intentar descubrir el WABA ID y el Phone ID automáticamente
+            // Consultamos las cuentas de Whatsapp Business asociadas al token
+            const wabaResponse = await axios.get(`https://graph.facebook.com/v22.0/me/client_whatsapp_business_accounts`, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+
+            const wabaData = wabaResponse.data.data?.[0]; // Tomamos la primera cuenta disponible
+            const wabaId = wabaData?.id || "PENDING";
+
+            let phoneNumberId = "PENDING";
+            if (wabaId !== "PENDING") {
+                // Consultamos los números de teléfono de esa WABA
+                const phoneResponse = await axios.get(`https://graph.facebook.com/v22.0/${wabaId}/phone_numbers`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                phoneNumberId = phoneResponse.data.data?.[0]?.id || "PENDING";
+            }
+
+            console.log(`📡 [CALLBACK] Datos detectados: WABA=${wabaId}, PhoneID=${phoneNumberId}`);
+
+            // 3. Guardar todo en la base de datos local
             await HistoryHandler.saveMetaOnboardingData(
-                "PENDING", // Se actualizará al recibir el primer mensaje o vía API
-                "PENDING", 
-                accessToken as string || "",
-                { syncedBy: 'duskcodes-popup' }
+                wabaId, 
+                phoneNumberId, 
+                accessToken,
+                { ...wabaData, syncedBy: 'auto-callback-v2' }
             );
 
-            // Intentar registro en Router Maestro
+            // 4. Intentar notificar al Router Maestro (Opcional)
             try {
-                const masterRouter = 'https://ygyicozjewxbyixtpjlo.supabase.co/functions/v1/whatsapp-router/register';
-                await axios.post(masterRouter, {
-                    project_url: process.env.PROJECT_URL || req.headers.host,
+                await axios.post('https://ygyicozjewxbyixtpjlo.supabase.co/functions/v1/whatsapp-router/register', {
+                    phone_number_id: phoneNumberId,
+                    waba_id: wabaId,
                     access_token: accessToken,
-                    // Si tenemos el code, la función de Supabase podría intercambiarlo
-                    meta_code: code 
+                    project_url: process.env.PROJECT_URL || req.headers.host,
+                    project_id: process.env.RAILWAY_PROJECT_ID
                 });
-            } catch (e) { /* silent fail on master router sync */ }
+            } catch (e) { console.warn("⚠️ Router Maestro no notificado:", (e as Error).message); }
 
-            res.send('<html><body style="font-family: Arial; text-align:center; padding-top:50px;">' +
-                     '<h2>✅ ¡Conexión con Meta Exitosa!</h2>' +
-                     '<p>Ya puedes cerrar esta ventana y empezar a usar la API de la nube.</p>' +
-                     '<button onclick="window.close()" style="padding:10px 20px; cursor:pointer; background:#25D366; color:white; border:none; border-radius:5px;">Cerrar Ventana</button>' +
-                     '</body></html>');
+            res.send('<html><body style="font-family: Arial; text-align:center; padding-top:50px; background:#f0f2f5;">' +
+                     '<div style="max-width:500px; margin:auto; background:white; padding:30px; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.1);">' +
+                     '<h2 style="color:#25D366;">✅ ¡Vinculación Exitosa!</h2>' +
+                     '<p style="color:#555;">Hemos detectado y configurado automáticamente:</p>' +
+                     '<ul style="text-align:left; color:#666;">' +
+                        `<li><b>WABA ID:</b> ${wabaId}</li>` +
+                        `<li><b>Phone ID:</b> ${phoneNumberId}</li>` +
+                        `<li><b>Token:</b> ********** (Guardado)</li>` +
+                     '</ul>' +
+                     '<p style="margin-top:20px;">Ya puedes cerrar esta ventana. El bot se activará en modo Meta en el próximo reinicio.</p>' +
+                     '<button onclick="window.close()" style="padding:12px 25px; cursor:pointer; background:#25D366; color:white; border:none; border-radius:5px; font-weight:bold;">Listo, cerrar</button>' +
+                     '</div></body></html>');
+
         } catch (error: any) {
-            res.send(`<h2>❌ Error en la vinculación: ${error.message}</h2>`);
+            console.error('❌ Error en vinculación automática:', error.response?.data || error.message);
+            res.send(`<div style="font-family:Arial; text-align:center; padding:50px;">` +
+                     `<h2 style="color:#dc3545;">❌ Error en la vinculación automática</h2>` +
+                     `<p>${error.response?.data?.error?.message || error.message}</p>` +
+                     `<p>Asegúrate de que el META_APP_SECRET y META_APP_ID en tu .env sean correctos.</p>` +
+                     `<button onclick="window.close()" style="padding:10px 20px;">Cerrar</button></div>`);
         }
     });
 
