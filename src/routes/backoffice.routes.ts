@@ -529,32 +529,24 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                 { ...discovery, syncedBy: 'auto-callback-v22' }
             );
 
-            res.send(`
-                <html><body style="font-family: Arial; text-align:center; padding-top:50px; background:#f0f2f5;">
-                    <div style="max-width:500px; margin:auto; background:white; padding:30px; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.1);">
-                        <h2 style="color:#0668E1;">✅ ¡Vinculación Exitosa!</h2>
-                        <p style="color:#555;">La conexión con Meta se ha configurado automáticamente.</p>
-                        <ul style="text-align:left; color:#666; background: #f9f9f9; padding: 15px; border-radius: 8px; list-style: none;">
-                            <li><b>📡 Phone ID:</b> ${discovery.phoneNumberId}</li>
-                            <li><b>🆔 WABA ID:</b> ${discovery.wabaId}</li>
-                            <li><b>🎫 Token:</b> Guardado exitosamente</li>
-                        </ul>
-                        <p style="margin-top:20px;">El bot está listo. Ya puedes cerrar esta ventana.</p>
-                        <button onclick="window.close()" style="padding:12px 25px; cursor:pointer; background:#0668E1; color:white; border:none; border-radius:5px; font-weight:bold;">Cerrar Ventana</button>
-                    </div>
-                </body></html>
-            `);
+            // 4. Redirigir al usuario de vuelta a la web oficial (Experiencia Premium)
+            // Ya no nos quedamos en la URL de Railway
+            return res.redirect("https://duskcodes.com.ar/dashboard.html?metaStatus=success");
 
         } catch (error: any) {
             console.error('❌ Error en vinculación automática:', error.response?.data || error.message);
-            res.send(`
-                <div style="font-family:Arial; text-align:center; padding:50px;">
-                    <h2 style="color:#dc3545;">❌ Error en la vinculación automática</h2>
-                    <p style="background:#fff5f5; padding:15px; border-radius:8px; border: 1px solid #ffc1c1;">
-                        ${error.response?.data?.error?.message || error.message}
-                    </p>
-                    <p>Revisa que el App Secret y el App ID sean los correctos y que la URL de redirección esté permitida en Meta.</p>
-                    <button onclick="window.close()" style="padding:10px 20px; cursor:pointer;">Cerrar</button>
+            
+            const metaError = error.response?.data?.error;
+            const errorMsg = metaError ? `${metaError.message} (Code: ${metaError.code})` : error.message;
+
+            return res.status(500).send(`
+                <div style="font-family: Arial; text-align: center; padding: 50px;">
+                    <h2 style="color: #e11d48;">❌ Error en la vinculación automática</h2>
+                    <div style="background: #fff1f2; border: 1px solid #fda4af; padding: 20px; border-radius: 8px; display: inline-block; margin: 20px 0;">
+                        <p style="color: #9f1239;">${errorMsg}</p>
+                    </div>
+                    <p>Revisa que el App Secret, el App ID y los <b>Dominios de la App</b> en Meta sean los correctos.</p>
+                    <button onclick="window.close()" style="padding: 10px 20px; cursor: pointer;">Cerrar</button>
                 </div>
             `);
         }
