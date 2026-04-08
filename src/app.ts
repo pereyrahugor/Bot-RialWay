@@ -126,7 +126,8 @@ const main = async () => {
         adapterProvider = createProvider(MetaCloudProvider, {
             waba_id: metaWabaId || "PENDING",
             phone_number_id: metaPhoneId,
-            access_token: metaToken
+            access_token: metaToken,
+            verify_token: process.env.META_VERIFY_TOKEN || "BotRialWayVerifyToken2026"
         });
         
         groupProvider = createProvider(SupabaseBaileysProvider, {

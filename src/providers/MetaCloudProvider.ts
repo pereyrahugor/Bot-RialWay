@@ -125,9 +125,15 @@ class MetaCloudProvider extends ProviderClass {
                 const mode = req.query['hub.mode'];
                 const token = req.query['hub.verify_token'];
                 const challenge = req.query['hub.challenge'];
-                if (mode && token) {
-                    // Aquí deberíamos validar el token con el de nuestro .env
+                const { verify_token } = this.config;
+
+                if (mode === 'subscribe' && token === verify_token) {
+                    console.log('✅ [MetaCloudProvider] Webhook Verificado Correctamente.');
                     return res.end(challenge);
+                } else {
+                    console.error('❌ [MetaCloudProvider] Error de Verificación: Token incorrecto');
+                    res.statusCode = 403;
+                    return res.end('Forbidden');
                 }
             }
 

@@ -68,14 +68,12 @@ export async function executeDbQuery(sqlQuery: string): Promise<string> {
                 return "No se encontraron resultados.";
             }
 
-            // Ordenar por created_at descendente (más reciente primero) y limitar a 10
-            const sortedData = data.sort((a: any, b: any) => {
-                const dateA = new Date(a.created_at || 0).getTime();
-                const dateB = new Date(b.created_at || 0).getTime();
-                return dateB - dateA;
-            }).slice(0, 10);
+            // Ya no ordenamos en JS para evitar picos de memoria/IO.
+            // Confiamos en que la Query SQL ya venga con el LIMIT y ORDER BY deseado.
+            // Si el resultado es muy grande, mostramos solo los primeros 10 por seguridad de respuesta.
+            const resultData = data.slice(0, 10);
 
-            return JSON.stringify(sortedData, null, 2);
+            return JSON.stringify(resultData, null, 2);
 
         } catch (err: any) {
             console.error("❌ Excepción en executeDbQuery:", err);

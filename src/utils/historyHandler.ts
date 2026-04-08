@@ -233,6 +233,27 @@ export class HistoryHandler {
                 console.error(`❌ Error fatal inicializando tabla '${table.name}':`, fatalErr);
             }
         }
+
+        // Crear índices críticos para optimizar I/O (Lectura rápida)
+        console.log('🔍 [HistoryHandler] Verificando índices críticos...');
+        try {
+            const indexingSql = `
+                CREATE INDEX IF NOT EXISTS idx_messages_chat_project_created ON messages (chat_id, project_id, created_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_chats_project_last_msg ON chats (project_id, last_message_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_whatsapp_sessions_lookup ON whatsapp_sessions (project_id, session_id, key_id);
+                CREATE INDEX IF NOT EXISTS idx_tickets_project_status_chat ON tickets (project_id, estado, chat_id);
+            `;
+            const { error: indexError } = await supabase.rpc('exec_sql', { query: indexingSql });
+            if (indexError) {
+                console.warn('⚠️ No se pudieron crear los índices automáticamente:', indexError.message);
+                console.warn('💡 Tip: Intenta ejecutarlos manualmente en el SQL Editor de Supabase si el problema persiste.');
+            } else {
+                console.log('✅ Índices de rendimiento verificados.');
+            }
+        } catch (err) {
+            console.error('❌ Error fatal creando índices:', err);
+        }
+
         console.log('✅ [HistoryHandler] Inicialización completa.');
     }
     

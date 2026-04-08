@@ -131,15 +131,31 @@ export const useSupabaseAuthState = async (
                     return data;
                 },
                 set: async (data) => {
-                    const tasks: Promise<void>[] = [];
+                    const upsertBuffer: any[] = [];
                     for (const category in data) {
                         for (const id in data[category]) {
                             const value = data[category][id];
                             const key = `${category}-${id}`;
-                            tasks.push(writeData(value, key));
+                            upsertBuffer.push({
+                                project_id: projectId,
+                                session_id: sessionId,
+                                key_id: key,
+                                data: JSON.parse(JSON.stringify(value, BufferJSON.replacer)),
+                                updated_at: new Date().toISOString()
+                            });
                         }
                     }
-                    await Promise.all(tasks);
+
+                    if (upsertBuffer.length > 0) {
+                        try {
+                            const { error } = await supabase
+                                .from('whatsapp_sessions')
+                                .upsert(upsertBuffer, { onConflict: 'project_id,session_id,key_id' });
+                            if (error) throw error;
+                        } catch (error) {
+                            console.error('[SupabaseAdapter] ❌ Bulk Upsert Error:', error);
+                        }
+                    }
                 }
             }
         },

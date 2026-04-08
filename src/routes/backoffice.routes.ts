@@ -485,7 +485,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     // --- ONBOARDING CALLBACK (Recibe los datos de la subventana de Meta) ---
     app.get('/api/backoffice/whatsapp/onboard-callback', async (req, res) => {
-        const { code } = req.query;
+        const { code, wabaId: queryWabaId, phoneId: queryPhoneId } = req.query;
         if (!code) return res.send('<h2>❌ Error: No se recibió el código de Meta</h2>');
 
         try {
@@ -498,39 +498,57 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                 throw new Error("Faltan META_APP_ID o META_APP_SECRET en el servidor.");
             }
 
-            // 1. Intercambio Servidor a Servidor (Usando la Pasarela Oficial Estática)
-            // Esto permite que el bot de Railway no necesite estar registrado en Meta.
-            const staticGatewayUrl = "https://duskcodes.com.ar/meta-callback.html";
-
-            const tokenResponse = await axios.post(`https://graph.facebook.com/v22.0/oauth/access_token`, {
-                client_id: appId,
-                client_secret: appSecret,
-                grant_type: 'authorization_code',
-                code: code,
-                redirect_uri: staticGatewayUrl
+            // 1. Intercambio Servidor a Servidor (Generar Token de Usuario del Sistema)
+            const tokenResponse = await axios.get(`https://graph.facebook.com/v22.0/oauth/access_token`, {
+                params: {
+                    client_id: appId,
+                    client_secret: appSecret,
+                    code: code
+                }
             });
 
             const accessToken = tokenResponse.data.access_token;
             console.log("✅ [CALLBACK] Token de acceso obtenido exitosamente.");
 
-            // 2. Auto-descubrimiento de IDs (WABA y Phone)
-            const { discoverMetaIds } = await import("../utils/metaDiscovery");
-            const discovery = await discoverMetaIds(accessToken);
+            // 2. Determinar WABA ID y Phone ID
+            let finalWabaId = queryWabaId as string;
+            let finalPhoneId = queryPhoneId as string;
+            let finalVerifiedName = "";
 
-            if (!discovery || !discovery.phoneNumberId) {
-                throw new Error("Token obtenido pero no se encontraron cuentas de WhatsApp asociadas.");
+            if (!finalWabaId || !finalPhoneId) {
+                console.log("⚠️ No se recibieron WABA ID / Phone ID del frontend. Intentando descubrimiento API Graph...");
+                const { discoverMetaIds } = await import("../utils/metaDiscovery");
+                const discovery = await discoverMetaIds(accessToken);
+
+                if (!discovery || !discovery.phoneNumberId) {
+                    throw new Error("Token obtenido pero no se encontraron cuentas de WhatsApp asociadas.");
+                }
+                finalWabaId = discovery.wabaId;
+                finalPhoneId = discovery.phoneNumberId;
+                finalVerifiedName = discovery.verifiedName || "";
             }
 
-            // 3. Guardar todo en la base de datos local
+            // 3. Registrar el número de teléfono con la API (Paso 3 de integración comercial)
+            console.log(`📡 [CALLBACK] Registrando número de teléfono: ${finalPhoneId}...`);
+            try {
+                await axios.post(`https://graph.facebook.com/v22.0/${finalPhoneId}/register`, 
+                    { messaging_product: 'whatsapp', pin: '' }, // PIN vacío a menos que el cliente use 2FA
+                    { headers: { 'Authorization': `Bearer ${accessToken}` } }
+                );
+                console.log("✅ [CALLBACK] Número de teléfono registrado con éxito en WhatsApp API.");
+            } catch (regError: any) {
+                console.warn("⚠️ [CALLBACK] Fallo al registrar número (podría estar ya registrado o requerir PIN real):", regError.response?.data || regError.message);
+            }
+
+            // 4. Guardar todo en la base de datos local
             await HistoryHandler.saveMetaOnboardingData(
-                discovery.wabaId, 
-                discovery.phoneNumberId, 
+                finalWabaId, 
+                finalPhoneId, 
                 accessToken,
-                { ...discovery, syncedBy: 'auto-callback-v22' }
+                { verified_name: finalVerifiedName, syncedBy: 'auto-callback-v22' }
             );
 
-            // 4. Redirigir al usuario de vuelta a la web oficial (Experiencia Premium)
-            // Ya no nos quedamos en la URL de Railway
+            // 5. Redirigir al usuario de vuelta a la web oficial (Experiencia Premium)
             return res.redirect("https://duskcodes.com.ar/dashboard.html?metaStatus=success");
 
         } catch (error: any) {
