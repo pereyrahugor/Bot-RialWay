@@ -271,11 +271,9 @@ export class AiManager {
             return state;
 
         } catch (error: any) {
-            await this.errorReporter.reportError(error, ctx.from, `https://wa.me/${ctx.from}`);
-
-            if (ctx.type === EVENTS.VOICE_NOTE) return gotoFlow(this.flows.welcomeFlowVoice);
-            if (ctx.type === EVENTS.ACTION) return gotoFlow(this.flows.welcomeFlowButton);
-            return gotoFlow(this.flows.welcomeFlowTxt);
+            console.warn("⚠️ [AiManager] Comunicación con OpenAI fallida o no configurada. (Ignorando para permitir uso solo como CRM/Pasarela). Detalle:", error.message);
+            // No reportamos al ErrorReporter interno ni enviamos flowDynamic para evitar spam en bots que son solo "pasarela".
+            return state;
         }
     };
 }
