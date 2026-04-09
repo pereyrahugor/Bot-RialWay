@@ -21,12 +21,6 @@ class MetaCloudProvider extends ProviderClass {
 
     protected initProvider() {
         console.log('🌐 [MetaCloudProvider] Inicializado con Cloud API. Esperando Webhooks...');
-        if (this.server) {
-            this.server.post('/webhook/meta', this.handleWebhook);
-            this.server.get('/webhook/meta', this.handleWebhook);
-            this.server.post('/webhook', this.handleWebhook);
-            this.server.get('/webhook', this.handleWebhook);
-        }
     }
 
     public async initVendor() {
@@ -38,7 +32,16 @@ class MetaCloudProvider extends ProviderClass {
     }
 
     public beforeHttpServerInit() {}
-    public afterHttpServerInit() {}
+
+    public afterHttpServerInit() {
+        if (this.server) {
+            console.log('📡 [MetaCloudProvider] Montando endpoints de Webhook HTTP en Polka...');
+            this.server.post('/webhook/meta', this.handleWebhook);
+            this.server.get('/webhook/meta', this.handleWebhook);
+            this.server.post('/webhook', this.handleWebhook);
+            this.server.get('/webhook', this.handleWebhook);
+        }
+    }
 
     public busEvents = () => {
         return [];
