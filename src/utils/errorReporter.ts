@@ -11,10 +11,15 @@ class ErrorReporter {
     }
 
     async reportError(error: Error, userId: string, userLink: string) {
+        console.error("🔴 [ErrorReporter] Error original dentro de AiManager:", error);
         const errorMessage = `Error externo, se interrumpio la conexion con OpenAI. Verificar el chat manualmente\n${userLink}`;
 
         try {
-            await this.provider.sendMessage(this.groupId, errorMessage, {});
+            if (this.groupId.includes('@g.us') && this.provider.constructor.name === 'MetaCloudProvider') {
+                console.warn("⚠️ [ErrorReporter] Omitiendo notificación de grupo en WhatsApp porque MetaCloud no soporta @g.us directamente.");
+            } else {
+                await this.provider.sendMessage(this.groupId, errorMessage, {});
+            }
         } catch (sendError) {
             console.error("Error al enviar el mensaje de error al grupo:", sendError);
         }
