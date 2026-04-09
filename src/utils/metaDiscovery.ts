@@ -8,28 +8,26 @@ export async function discoverMetaIds(accessToken: string) {
     try {
         console.log('📡 [MetaDiscovery] Iniciando descubrimiento con token...');
 
-        // 1. Obtener los Negocios (Business Managers) del usuario
-        // Un usuario no tiene "Cuentas de WhatsApp" directamente, las tienen sus negocios.
-        const businessesResponse = await axios.get(`https://graph.facebook.com/v22.0/me/businesses`, {
-            headers: { 'Authorization': `Bearer ${accessToken}` }
-        });
+        let wabaId = null;
+        let businesses: any[] = [];
 
-        const businesses = businessesResponse.data.data;
-        if (!businesses || businesses.length === 0) {
-            console.warn('⚠️ [MetaDiscovery] El usuario no pertenece a ningún Business Manager.');
-            return null;
+        // 1. Intentar obtener los Negocios (Business Managers)
+        try {
+            const businessesResponse = await axios.get(`https://graph.facebook.com/v22.0/me/businesses`, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+            businesses = businessesResponse.data?.data || [];
+        } catch (e: any) {
+            console.warn(`⚠️ [MetaDiscovery] No se pudo acceder a me/businesses (${e.response?.data?.error?.message || e.message}). Intentando rutas secundarias...`);
         }
 
-        let wabaId = null;
-
-        // Buscar en todos los negocios alguna WABA (ya sea propia o compartida)
+        // Buscar en los negocios si los obtuvimos
         for (const business of businesses) {
             try {
-                // Buscamos WABAs compartidas/propias
                 const accountsResponse = await axios.get(`https://graph.facebook.com/v22.0/${business.id}/owned_whatsapp_business_accounts`, {
                     headers: { 'Authorization': `Bearer ${accessToken}` }
                 });
-                if (accountsResponse.data.data && accountsResponse.data.data.length > 0) {
+                if (accountsResponse.data?.data && accountsResponse.data.data.length > 0) {
                     wabaId = accountsResponse.data.data[0].id;
                     break;
                 }
@@ -37,17 +35,39 @@ export async function discoverMetaIds(accessToken: string) {
                 const clientResponse = await axios.get(`https://graph.facebook.com/v22.0/${business.id}/client_whatsapp_business_accounts`, {
                     headers: { 'Authorization': `Bearer ${accessToken}` }
                 });
-                if (clientResponse.data.data && clientResponse.data.data.length > 0) {
+                if (clientResponse.data?.data && clientResponse.data.data.length > 0) {
                     wabaId = clientResponse.data.data[0].id;
                     break;
                 }
             } catch (e) {
-                // Ignorar si un negocio da error de permisos
+                // Ignorar
+            }
+        }
+
+        // 2. Fallback: Intentar directamente en el usuario/sistema si no se obtuvo WABA
+        if (!wabaId) {
+            console.log('📡 [MetaDiscovery] Intentando buscar WABAs directamente asociadas al usuario...');
+            try {
+                const directOwned = await axios.get(`https://graph.facebook.com/v22.0/me/owned_whatsapp_business_accounts`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                if (directOwned.data?.data && directOwned.data.data.length > 0) {
+                    wabaId = directOwned.data.data[0].id;
+                } else {
+                    const directClient = await axios.get(`https://graph.facebook.com/v22.0/me/client_whatsapp_business_accounts`, {
+                        headers: { 'Authorization': `Bearer ${accessToken}` }
+                    });
+                    if (directClient.data?.data && directClient.data.data.length > 0) {
+                        wabaId = directClient.data.data[0].id;
+                    }
+                }
+            } catch (e: any) {
+                console.warn(`⚠️ [MetaDiscovery] Error en búsqueda directa: ${e.response?.data?.error?.message || e.message}`);
             }
         }
 
         if (!wabaId) {
-            console.warn('⚠️ [MetaDiscovery] No se encontraron cuentas de WhatsApp Business asociadas a los negocios de este usuario.');
+            console.warn('⚠️ [MetaDiscovery] No se encontraron cuentas asociadas en absoluto.');
             return null;
         }
 
