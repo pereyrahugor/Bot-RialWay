@@ -540,6 +540,18 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                 console.warn("⚠️ [CALLBACK] Fallo al registrar número (podría estar ya registrado o requerir PIN real):", regError.response?.data || regError.message);
             }
 
+            // 3.5. Suscribir la App a la WABA (Obligatorio para que Meta envíe los webhooks)
+            console.log(`📡 [CALLBACK] Suscribiendo Webhooks para la WABA: ${finalWabaId}...`);
+            try {
+                await axios.post(`https://graph.facebook.com/v22.0/${finalWabaId}/subscribed_apps`, 
+                    {}, 
+                    { headers: { 'Authorization': `Bearer ${accessToken}` } }
+                );
+                console.log("✅ [CALLBACK] WABA suscrita correctamente a la App para recibir Webhooks.");
+            } catch (subError: any) {
+                console.warn("⚠️ [CALLBACK] Fallo al suscribir la WABA (los mensajes no llegarán al bot):", subError.response?.data || subError.message);
+            }
+
             // 4. Guardar todo en la base de datos local
             await HistoryHandler.saveMetaOnboardingData(
                 finalWabaId, 
