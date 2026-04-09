@@ -8,19 +8,49 @@ export async function discoverMetaIds(accessToken: string) {
     try {
         console.log('📡 [MetaDiscovery] Iniciando descubrimiento con token...');
 
-        // 1. Obtener el WABA ID (WhatsApp Business Account)
-        // Consultamos las cuentas de Whatsapp Business asociadas al token
-        const wabaResponse = await axios.get(`https://graph.facebook.com/v22.0/me/client_whatsapp_business_accounts`, {
+        // 1. Obtener los Negocios (Business Managers) del usuario
+        // Un usuario no tiene "Cuentas de WhatsApp" directamente, las tienen sus negocios.
+        const businessesResponse = await axios.get(`https://graph.facebook.com/v22.0/me/businesses`, {
             headers: { 'Authorization': `Bearer ${accessToken}` }
         });
 
-        const wabaData = wabaResponse.data.data?.[0]; // Tomamos la primera cuenta disponible
-        if (!wabaData) {
-            console.warn('⚠️ [MetaDiscovery] No se encontraron cuentas de WhatsApp Business asociadas a este token.');
+        const businesses = businessesResponse.data.data;
+        if (!businesses || businesses.length === 0) {
+            console.warn('⚠️ [MetaDiscovery] El usuario no pertenece a ningún Business Manager.');
             return null;
         }
 
-        const wabaId = wabaData.id;
+        let wabaId = null;
+
+        // Buscar en todos los negocios alguna WABA (ya sea propia o compartida)
+        for (const business of businesses) {
+            try {
+                // Buscamos WABAs compartidas/propias
+                const accountsResponse = await axios.get(`https://graph.facebook.com/v22.0/${business.id}/owned_whatsapp_business_accounts`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                if (accountsResponse.data.data && accountsResponse.data.data.length > 0) {
+                    wabaId = accountsResponse.data.data[0].id;
+                    break;
+                }
+                
+                const clientResponse = await axios.get(`https://graph.facebook.com/v22.0/${business.id}/client_whatsapp_business_accounts`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                if (clientResponse.data.data && clientResponse.data.data.length > 0) {
+                    wabaId = clientResponse.data.data[0].id;
+                    break;
+                }
+            } catch (e) {
+                // Ignorar si un negocio da error de permisos
+            }
+        }
+
+        if (!wabaId) {
+            console.warn('⚠️ [MetaDiscovery] No se encontraron cuentas de WhatsApp Business asociadas a los negocios de este usuario.');
+            return null;
+        }
+
         console.log(`✅ [MetaDiscovery] WABA ID detectado: ${wabaId}`);
 
         // 2. Obtener el Phone Number ID
@@ -30,6 +60,7 @@ export async function discoverMetaIds(accessToken: string) {
         });
 
         const phoneData = phoneResponse.data.data?.[0]; // Tomamos el primer número
+
         if (!phoneData) {
             console.warn(`⚠️ [MetaDiscovery] No se encontraron números de teléfono en la WABA ${wabaId}.`);
             return { wabaId, phoneNumberId: null };
