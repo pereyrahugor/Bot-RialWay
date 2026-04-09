@@ -60,6 +60,7 @@ class MetaCloudProvider extends ProviderClass {
 
         const url = `https://graph.facebook.com/v20.0/${phone_number_id}/messages`;
         const cleanNumber = number.replace(/\D/g, '');
+        console.log(`[MetaCloudProvider] Intentando enviar a: raw=${number}, clean=${cleanNumber}`);
 
         const body: any = {
             messaging_product: "whatsapp",
