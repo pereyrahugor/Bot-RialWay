@@ -235,7 +235,6 @@ export class AiManager {
                         cleanResponse, ctx, flowDynamic, state, provider, gotoFlow,
                         this.getAssistantResponse, currentAssistantId
                     );
-                    await HistoryHandler.saveMessage(ctx.from, 'assistant', cleanResponse, 'text', null, ctx.userId);
                 }
 
                 // Consultar inmediatamente al siguiente asistente
@@ -255,7 +254,6 @@ export class AiManager {
                            nextClean, ctx, flowDynamic, state, provider, gotoFlow,
                            this.getAssistantResponse, nextAssistantId
                         );
-                        await HistoryHandler.saveMessage(ctx.from, 'assistant', nextClean, 'text', null, ctx.userId);
                     }
                 }
             } else {
@@ -265,7 +263,6 @@ export class AiManager {
                         cleanResponse, ctx, flowDynamic, state, provider, gotoFlow,
                         this.getAssistantResponse, currentAssistantId
                     );
-                    await HistoryHandler.saveMessage(ctx.from, 'assistant', cleanResponse, 'text', null, ctx.userId);
                 }
             }
 
