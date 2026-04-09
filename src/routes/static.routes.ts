@@ -87,7 +87,7 @@ export const registerStaticRoutes = (app: any, { __dirname }: { __dirname: strin
     app.use("/assets", serve(path.join(process.cwd(), "src", "assets")));
     app.use("/uploads", serve(path.join(process.cwd(), "uploads")));
 
-    // QR específico
+    // QR genérico / Principal
     app.get("/qr.png", (req: any, res: any) => {
         const qrPath = path.join(process.cwd(), 'bot.qr.png');
         if (fs.existsSync(qrPath)) {
@@ -95,6 +95,17 @@ export const registerStaticRoutes = (app: any, { __dirname }: { __dirname: strin
             fs.createReadStream(qrPath).pipe(res);
         } else {
             res.status(404).send('QR not found');
+        }
+    });
+
+    // QR específico para grupos / motor secundario
+    app.get("/bot.groups.qr.png", (req: any, res: any) => {
+        const qrPath = path.join(process.cwd(), 'bot.groups.qr.png');
+        if (fs.existsSync(qrPath)) {
+            res.setHeader('Content-Type', 'image/png');
+            fs.createReadStream(qrPath).pipe(res);
+        } else {
+            res.status(404).send('QR Groups not found');
         }
     });
 
