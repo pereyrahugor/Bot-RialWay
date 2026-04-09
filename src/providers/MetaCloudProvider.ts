@@ -21,6 +21,12 @@ class MetaCloudProvider extends ProviderClass {
 
     protected initProvider() {
         console.log('🌐 [MetaCloudProvider] Inicializado con Cloud API. Esperando Webhooks...');
+        if (this.server) {
+            this.server.post('/webhook/meta', this.handleWebhook);
+            this.server.get('/webhook/meta', this.handleWebhook);
+            this.server.post('/webhook', this.handleWebhook);
+            this.server.get('/webhook', this.handleWebhook);
+        }
     }
 
     public async initVendor() {
