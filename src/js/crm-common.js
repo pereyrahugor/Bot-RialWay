@@ -63,10 +63,37 @@ window.toggleMetaPanel = (e) => {
     if (typeof window.realToggleMeta === 'function') window.realToggleMeta(e);
 };
 
+async function updateMetaNavButton() {
+    const navBtn = document.getElementById('nav-meta-btn');
+    if (!navBtn) return;
+
+    try {
+        const activeToken = localStorage.getItem('system_config_token') || localStorage.getItem('backoffice_token');
+        if (!activeToken) return;
+
+        const res = await fetch(`/api/backoffice/whatsapp/config?token=${activeToken}`);
+        const data = await res.json();
+
+        // Si hay una configuración activa de Meta (WABA / Token)
+        if (data && data.config && data.config.access_token) {
+            navBtn.title = "Envio Masivo";
+            const icon = navBtn.querySelector('i');
+            if (icon) {
+                icon.className = 'fas fa-layer-group'; // Nuevo icono para envío masivo
+            }
+            // Opcional: Cambiar color o añadir un indicador si lo deseas
+            navBtn.style.color = '#10b981'; // Un verde esmeralda para indicar "activo/masivo"
+        }
+    } catch (e) {
+        console.error('[CRM-Common] Error al verificar estado de Meta:', e);
+    }
+}
+
 // Inicialización
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
     highlightActiveNav();
+    updateMetaNavButton(); // Verificar estado de Meta
     
     const themeBtn = document.getElementById('theme-toggle');
     if (themeBtn) themeBtn.addEventListener('click', toggleTheme);

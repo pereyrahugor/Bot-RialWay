@@ -1,5 +1,7 @@
 import { ProviderClass } from '@builderbot/bot';
 import axios from 'axios';
+import * as fs from 'fs';
+import * as path from 'path';
 
 /**
  * Proveedor para Meta Cloud API (WhatsApp Business API)
@@ -15,8 +17,100 @@ class MetaCloudProvider extends ProviderClass {
         this.globalVendorArgs = args;
     }
 
-    public async saveFile(): Promise<string> {
-        return "no-file";
+    /**
+     * Descarga y guarda archivos multimedia recibidos por webhook
+     */
+    public async saveFile(ctx: any, options: { path?: string } = {}): Promise<string> {
+        const { access_token } = this.config;
+        // El payload puede estar en ctx.payload o en ctx directamente dependiendo de quién llame
+        const msg = ctx.payload || ctx;
+        const mediaType = msg.type || ctx.type;
+        
+        // Intentar obtener el objeto de media (image, audio, voice, video, document)
+        const mediaObj = msg[mediaType] || ctx.media || (msg.type ? msg[msg.type] : null);
+
+        if (!mediaObj) {
+            console.error('❌ [MetaCloudProvider] No se encontró objeto de media para descargar.');
+            return "no-file";
+        }
+
+        let mediaUrl = mediaObj.link || mediaObj.url || (ctx.media ? ctx.media.url : null);
+        const mediaId = mediaObj.id || (ctx.media ? ctx.media.id : null);
+
+        // Si no hay URL pero hay ID (estándar de Meta), obtenemos la URL temporal de la API
+        if (!mediaUrl && mediaId && access_token) {
+            try {
+                console.log(`📡 [MetaCloudProvider] Obteniendo URL de descarga para media ID: ${mediaId}`);
+                const res = await axios.get(`https://graph.facebook.com/v20.0/${mediaId}`, {
+                    headers: { 'Authorization': `Bearer ${access_token}` }
+                });
+                mediaUrl = res.data.url;
+            } catch (e: any) {
+                console.error(`❌ [MetaCloudProvider] Error obteniendo URL de media Meta:`, e.response?.data || e.message);
+            }
+        }
+
+        if (!mediaUrl) {
+            console.error('❌ [MetaCloudProvider] No se pudo obtener una URL válida para la descarga.');
+            return "no-file";
+        }
+
+        // Preparar destino
+        const outPath = options.path || './temp/';
+        if (!fs.existsSync(outPath)) {
+            fs.mkdirSync(outPath, { recursive: true });
+        }
+
+        const mimeType = mediaObj.mime_type || mediaObj.mimetype || '';
+        const ext = this.getExtByMimeOrType(mediaType, mimeType);
+        const filename = `${Date.now()}-${mediaId || 'media'}.${ext}`;
+        const dest = path.join(process.cwd(), outPath, filename);
+
+        try {
+            console.log(`📥 [MetaCloudProvider] Descargando desde: ${mediaUrl.split('?')[0]}...`);
+            
+            // Si la URL es de Meta (fbcdn.net), adjuntamos el token
+            const headers: any = {};
+            if (mediaUrl.includes('fbcdn.net') && access_token) {
+                headers['Authorization'] = `Bearer ${access_token}`;
+            }
+
+            const response = await axios.get(mediaUrl, {
+                headers,
+                responseType: 'stream'
+            });
+
+            const writer = fs.createWriteStream(dest);
+            response.data.pipe(writer);
+
+            return new Promise((resolve, reject) => {
+                writer.on('finish', () => {
+                    console.log(`✅ [MetaCloudProvider] Archivo guardado en: ${dest}`);
+                    resolve(dest);
+                });
+                writer.on('error', (err) => {
+                    console.error('❌ [MetaCloudProvider] Error escribiendo archivo:', err);
+                    reject(err);
+                });
+            });
+        } catch (error: any) {
+            console.error('❌ [MetaCloudProvider] Error en la descarga:', error.message);
+            return "no-file";
+        }
+    }
+
+    private getExtByMimeOrType(type: string, mime: string): string {
+        if (mime) {
+            if (mime.includes('image')) return 'jpg';
+            if (mime.includes('audio')) return 'ogg';
+            if (mime.includes('video')) return 'mp4';
+            if (mime.includes('pdf')) return 'pdf';
+        }
+        if (type === 'image') return 'jpg';
+        if (type === 'audio' || type === 'voice') return 'ogg';
+        if (type === 'video') return 'mp4';
+        if (type === 'document') return 'pdf';
+        return 'bin';
     }
 
     protected initProvider() {
@@ -178,18 +272,41 @@ class MetaCloudProvider extends ProviderClass {
                         const bsuid = contact?.user_id || value.messages?.[0]?.from_user_id;
 
                         value.messages.forEach((msg: any) => {
-                            const formatedMessage = {
-                                body: msg.text?.body || 
-                                      msg.interactive?.button_reply?.title || 
-                                      msg.interactive?.list_reply?.title || 
-                                      msg.button?.text || '',
+                            const mediaObj = msg.image || msg.video || msg.audio || msg.document || msg.voice || msg[msg.type];
+                            let type = msg.type;
+
+                            // Mapeo de tipos para eventos de Builderbot
+                            if (type === 'audio') type = 'voice';
+
+                            let messageBody = msg.text?.body || 
+                                              msg.interactive?.button_reply?.title || 
+                                              msg.interactive?.list_reply?.title || 
+                                              msg.button?.text || '';
+                            
+                            // Si es media y no tiene texto (body), intentamos usar el caption o enviamos el evento
+                            if (!messageBody && mediaObj) {
+                                messageBody = mediaObj.caption || `_event_${type}_`;
+                            }
+
+                            const formatedMessage: any = {
+                                body: messageBody,
                                 from: wa_id || msg.from,
                                 phoneNumber: msg.from,
                                 userId: bsuid, // Añadimos el BSUID al contexto
                                 name: contact?.profile?.name || 'User',
-                                type: msg.type,
+                                type: type,
                                 payload: msg
                             };
+
+                            // Enriquecer con objeto media para que los flujos (saveFile) tengan lo necesario
+                            if (mediaObj) {
+                                formatedMessage.media = {
+                                    url: mediaObj.link || mediaObj.url || null,
+                                    mimetype: mediaObj.mime_type || mediaObj.mimetype || null,
+                                    id: mediaObj.id || null
+                                };
+                            }
+
                             this.emit('message', formatedMessage);
                         });
                     }
@@ -202,3 +319,4 @@ class MetaCloudProvider extends ProviderClass {
 }
 
 export { MetaCloudProvider };
+
