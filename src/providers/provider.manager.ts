@@ -43,9 +43,41 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
     provider.on('require_action', handleQR);
     provider.on('auth_require', handleQR);
 
-    provider.on('message', (ctx: any) => {
-        // Aquí podríamos normalizar mensajes si fuera necesario (como en Bot-ApiSWS)
-        // Por ahora mantenemos la lógica estándar de Builderbot
+    provider.on('message', async (ctx: any) => {
+        try {
+            console.log(`${prefix} 📩 Mensaje entrante - Tipo: ${ctx.type}, De: ${ctx.from}`);
+            
+            // Si el mensaje es una nota de voz, forzamos el log específico para confirmar detección
+            if (ctx.type === 'voice') {
+                console.log(`${prefix} 🎙️ NOTA DE VOZ DETECTADA. Enviando a los flujos...`);
+            }
+
+            // Opcional: Guardar en el historial de Supabase si no es un comando de sistema
+            if (ctx.body && !ctx.body.startsWith('_event_')) {
+                const { HistoryHandler } = await import('../utils/historyHandler');
+                const chatId = ctx.from?.includes('@') ? ctx.from.split('@')[0] : ctx.from;
+                await HistoryHandler.saveMessage(chatId, 'user', ctx.body, ctx.type || 'text');
+            }
+        } catch (err) {
+            console.error(`❌ ${prefix} Error en el logger de mensajes entrantes:`, err);
+        }
+    });
+
+    // --- CAPTURA DE MENSAJES SALIENTES MANUALES ---
+    // Escuchamos el evento especial para guardar lo que el usuario envía desde el celular
+    provider.on('message_from_me', async (ctx: any) => {
+        try {
+            console.log(`${prefix} 📤 Mensaje saliente manual detectado. ID: ${ctx.from}. Body: ${ctx.body}`);
+            const { HistoryHandler } = await import('../utils/historyHandler');
+            
+            // Limpiamos el ID si viene con sufijo de Baileys
+            const chatId = ctx.from?.includes('@') ? ctx.from.split('@')[0] : ctx.from;
+            
+            // Guardamos como 'assistant' para que aparezca en el lado derecho del chat en el backoffice
+            await HistoryHandler.saveMessage(chatId, 'assistant', ctx.body, ctx.type || 'text');
+        } catch (err) {
+            console.error(`❌ ${prefix} Error guardando mensaje saliente manual:`, err);
+        }
     });
 
     provider.on('ready', () => {

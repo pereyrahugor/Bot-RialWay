@@ -136,26 +136,54 @@ export class SupabaseBaileysProvider extends BaileysProvider {
             if (type !== 'notify') return;
 
             for (const msg of messages) {
-                if (msg.key.fromMe) continue;
-                if (!msg.message) continue;
-
-                // Extraer body con lógica estándar
+                // Capturamos el contenido pase lo que pase
                 const body = 
                     msg.message?.conversation || 
                     msg.message?.extendedTextMessage?.text || 
                     msg.message?.imageMessage?.caption || 
+                    msg.message?.videoMessage?.caption ||
                     '';
                 
                 const from = msg.key.remoteJid;
                 
+                // Extraer el tipo real
+                const messageType = Object.keys(msg.message || {})[0] || 'text';
+                
+                // Mapear tipos nativos a tipos estándar de BuilderBot
+                const typeMapping: any = {
+                    audioMessage: 'voice',
+                    imageMessage: 'image',
+                    videoMessage: 'video',
+                    documentMessage: 'document',
+                    locationMessage: 'location',
+                    buttonsResponseMessage: 'buttons',
+                    templateButtonReplyMessage: 'buttons',
+                    contactMessage: 'contact'
+                };
+
+                const type = typeMapping[messageType] || 'text';
+
+                // Si el body está vacío (común en audios/imágenes sin caption), ponemos un placeholder
+                const finalBody = body || (type !== 'text' ? `_event_${type}_` : '');
+
                 // Mapear eventos nativos de Baileys al formato de BuilderBot
                 const payload = {
-                    body,
+                    body: finalBody,
                     from,
+                    phoneNumber: from?.split('@')[0],
                     name: msg.pushName || 'User',
-                    type: Object.keys(msg.message)[0],
+                    type,
                     payload: msg 
                 };
+
+                // Si el mensaje es mío (enviado desde la App móvil), lo emitimos con un evento especial
+                // para que el sistema de historial lo guarde, pero el bot no intente responderse a sí mismo.
+                if (msg.key.fromMe) {
+                    this.emit('message_from_me', payload);
+                    continue;
+                }
+
+                if (!msg.message) continue;
 
                 this.emit('message', payload);
             }

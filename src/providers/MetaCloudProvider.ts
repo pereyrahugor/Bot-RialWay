@@ -288,12 +288,16 @@ class MetaCloudProvider extends ProviderClass {
                                 messageBody = mediaObj.caption || `_event_${type}_`;
                             }
 
+                            // --- DETECCIÓN DE ECHO (Mensaje enviado desde otro cliente / manual) ---
+                            // Si el mensaje tiene recipient_id, significa que es un echo de algo que enviamos
+                            const isEcho = !!msg.recipient_id;
+
                             const formatedMessage: any = {
                                 body: messageBody,
-                                from: wa_id || msg.from,
-                                phoneNumber: msg.from,
+                                from: isEcho ? msg.recipient_id : (wa_id || msg.from),
+                                phoneNumber: isEcho ? msg.recipient_id : msg.from,
                                 userId: bsuid, // Añadimos el BSUID al contexto
-                                name: contact?.profile?.name || 'User',
+                                name: isEcho ? 'Me' : (contact?.profile?.name || 'User'),
                                 type: type,
                                 payload: msg
                             };
@@ -307,7 +311,11 @@ class MetaCloudProvider extends ProviderClass {
                                 };
                             }
 
-                            this.emit('message', formatedMessage);
+                            if (isEcho) {
+                                this.emit('message_from_me', formatedMessage);
+                            } else {
+                                this.emit('message', formatedMessage);
+                            }
                         });
                     }
                 });
