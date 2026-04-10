@@ -899,6 +899,40 @@ export class HistoryHandler {
                 .single();
 
             if (error) throw error;
+
+            // --- PASO ADICIONAL: Sincronizar con la routing_table para habilitar webhooks globales ---
+            // Solo si tenemos un dominio público configurado
+            const publicDomain = process.env.RAILWAY_PUBLIC_DOMAIN;
+            if (publicDomain && phoneId) {
+                const projectUrl = publicDomain.startsWith('http') ? publicDomain : `https://${publicDomain}`;
+                console.log(`📡 [HistoryHandler] Sincronizando routing_table para ${phoneId} -> ${projectUrl}`);
+                
+                await supabase
+                    .from('routing_table')
+                    .upsert({
+                        phone_number_id: phoneId,
+                        waba_id: wabaId,
+                        project_id: PROJECT_ID,
+                        project_url: projectUrl,
+                        updated_at: new Date().toISOString()
+                    }, { onConflict: 'phone_number_id' });
+            }
+
+            // --- PASO ADICIONAL 2: Asegurar suscripción a la WABA vía API de Meta ---
+            // Esto garantiza que Meta envíe los webhooks al enrutador
+            if (wabaId && token) {
+                try {
+                    const axios = (await import('axios')).default;
+                    await axios.post(`https://graph.facebook.com/v22.0/${wabaId}/subscribed_apps`, 
+                        {}, 
+                        { headers: { 'Authorization': `Bearer ${token}` } }
+                    );
+                    console.log(`✅ [HistoryHandler] Suscripción de webhooks confirmada para WABA ${wabaId}`);
+                } catch (apiErr: any) {
+                    console.warn(`⚠️ [HistoryHandler] No se pudo confirmar la suscripción de webhooks:`, apiErr.response?.data || apiErr.message);
+                }
+            }
+
             return { success: true, data };
         } catch (err: any) {
             console.error('[HistoryHandler] Error en saveMetaOnboardingData:', err);

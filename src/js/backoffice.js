@@ -998,45 +998,7 @@ function launchMetaOnboarding() {
       });
 }
 
-async function syncMetaManual() {
-    const input = document.getElementById('manual-meta-token');
-    const tokenToSync = input.value.trim();
-    if (!tokenToSync) {
-        showToast('⚠️ Por favor ingrese un token', 'error');
-        return;
-    }
 
-    const btn = event.currentTarget;
-    const originalContent = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-
-    try {
-        const activeToken = localStorage.getItem('system_config_token') || localStorage.getItem('backoffice_token');
-        const res = await fetch('/api/backoffice/whatsapp/sync-manual', {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': 'token=' + activeToken
-            },
-            body: JSON.stringify({ token: tokenToSync })
-        });
-
-        if (res.ok) {
-            showToast('✅ ¡Meta sincronizado y activado!', 'success');
-            setTimeout(() => window.location.reload(), 1500);
-        } else {
-            const err = await res.json();
-            showToast('❌ Error: ' + (err.error || 'No se pudo sincronizar'), 'error');
-        }
-    } catch (e) {
-        console.error(e);
-        showToast('❌ Error de red al sincronizar', 'error');
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = originalContent;
-    }
-}
 
 // Inicialización
 fetchPendingTicketsCount();
