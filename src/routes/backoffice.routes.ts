@@ -44,9 +44,7 @@ export const processSendMessage = async (
 
         console.log(`[BACKOFFICE] Procesando envío para ${chatId}...`);
         
-        // 2. GUARDAR PRIMERO (Feedback instantáneo)
-        await HistoryHandler.saveMessage(chatId, 'assistant', finalContent, finalType);
-        await HistoryHandler.updateLastHumanMessage(chatId);
+        // El guardado se movió después del envío para capturar el ID real y evitar duplicados
 
         // 3. Inyectar en thread OpenAI (silencioso)
         HistoryHandler.getThreadId(chatId).then((threadId: string) => {
@@ -66,37 +64,51 @@ export const processSendMessage = async (
             console.log(`[BACKOFFICE] Enviando via ${providerToSend.constructor.name} a ${chatId}`);
 
             const jid = chatId.includes('@') ? chatId : `${chatId}@s.whatsapp.net`;
+            let providerResponse: any = null;
+
             if (file) {
                 const absolutePath = path.resolve(file.path);
                 if (finalType === 'image') {
                     if (typeof providerToSend.sendImage === 'function') {
-                        await providerToSend.sendImage(jid, absolutePath, message || '');
+                        providerResponse = await providerToSend.sendImage(jid, absolutePath, message || '');
                     } else {
-                        await providerToSend.sendMessage(jid, message || '', { media: absolutePath });
+                        providerResponse = await providerToSend.sendMessage(jid, message || '', { media: absolutePath });
                     }
                 } else if (finalType === 'video') {
                     if (typeof (providerToSend as any).sendVideo === 'function') {
-                        await (providerToSend as any).sendVideo(jid, absolutePath, message || '');
+                        providerResponse = await (providerToSend as any).sendVideo(jid, absolutePath, message || '');
                     } else {
-                        await providerToSend.sendMessage(jid, message || '', { media: absolutePath });
+                        providerResponse = await providerToSend.sendMessage(jid, message || '', { media: absolutePath });
                     }
                 } else {
                     if (typeof (providerToSend as any).sendFile === 'function') {
-                        await (providerToSend as any).sendFile(jid, absolutePath, message || file.originalname);
+                        providerResponse = await (providerToSend as any).sendFile(jid, absolutePath, message || file.originalname);
                     } else {
-                        await providerToSend.sendMessage(jid, message || '', { media: absolutePath, fileName: file.originalname });
+                        providerResponse = await providerToSend.sendMessage(jid, message || '', { media: absolutePath, fileName: file.originalname });
                     }
                 }
             } else {
-                await providerToSend.sendMessage(jid, message, {});
+                providerResponse = await providerToSend.sendMessage(jid, message, {});
             }
+
+            // 5. GUARDAR EN HISTORIAL (Ahora con ID para evitar duplicados con el ECHO)
+            // Builderbot/Baileys retorna el objeto mensaje, Meta retorna un objeto con { messages: [ { id: ... } ] }
+            const externalId = providerResponse?.key?.id || providerResponse?.messages?.[0]?.id || providerResponse?.id;
+            
+            await HistoryHandler.saveMessage(chatId, 'assistant', finalContent, finalType, null, null, externalId);
+            await HistoryHandler.updateLastHumanMessage(chatId);
+
             res.json({ success: true, fileUrl: file ? fileUrl : undefined });
         } catch (waError) {
             console.error('[BACKOFFICE] Error enviando a Whatsapp:', waError);
+            
+            // Si falló el envío, igual guardamos pero sin ID externo para que al menos quede el log local
+            await HistoryHandler.saveMessage(chatId, 'assistant', finalContent, finalType);
+
             res.json({ 
                 success: true, 
                 fileUrl: file ? fileUrl : undefined,
-                warning: 'El mensaje se guardó en el historial pero falló el envío a WhatsApp (¿Bot conectado?)' 
+                warning: 'El envío a WhatsApp falló (¿Bot conectado?), el mensaje solo se guardó localmente.' 
             });
         }
 

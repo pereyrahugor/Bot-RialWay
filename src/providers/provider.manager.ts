@@ -56,7 +56,19 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
             if (ctx.body && !ctx.body.startsWith('_event_')) {
                 const { HistoryHandler } = await import('../utils/historyHandler');
                 const chatId = ctx.from?.includes('@') ? ctx.from.split('@')[0] : ctx.from;
-                await HistoryHandler.saveMessage(chatId, 'user', ctx.body, ctx.type || 'text');
+                
+                // Extraer un ID único del mensaje para evital duplicados (external_id)
+                const externalId = ctx.key?.id || ctx.payload?.id || ctx.id;
+                
+                await HistoryHandler.saveMessage(
+                    chatId, 
+                    'user', 
+                    ctx.body, 
+                    ctx.type || 'text', 
+                    null, 
+                    ctx.userId,
+                    externalId
+                );
             }
         } catch (err) {
             console.error(`❌ ${prefix} Error en el logger de mensajes entrantes:`, err);
@@ -73,8 +85,19 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
             // Limpiamos el ID si viene con sufijo de Baileys
             const chatId = ctx.from?.includes('@') ? ctx.from.split('@')[0] : ctx.from;
             
+            // Extraer un ID único del mensaje para evital duplicados (external_id)
+            const externalId = ctx.key?.id || ctx.payload?.id || ctx.id;
+
             // Guardamos como 'assistant' para que aparezca en el lado derecho del chat en el backoffice
-            await HistoryHandler.saveMessage(chatId, 'assistant', ctx.body, ctx.type || 'text');
+            await HistoryHandler.saveMessage(
+                chatId, 
+                'assistant', 
+                ctx.body, 
+                ctx.type || 'text', 
+                null, 
+                null,
+                externalId
+            );
         } catch (err) {
             console.error(`❌ ${prefix} Error guardando mensaje saliente manual:`, err);
         }

@@ -212,14 +212,22 @@ export class HistoryHandler {
                             await supabase.rpc('exec_sql', { query: `ALTER TABLE chats ADD COLUMN IF NOT EXISTS notes TEXT, ADD COLUMN IF NOT EXISTS email TEXT, ADD COLUMN IF NOT EXISTS source TEXT;` });
                         }
 
-                        // Migración para user_id (Meta BSUID)
-                        const { error: bsuidErr } = await supabase.from('chats').select('user_id').limit(1);
-                        if (bsuidErr && bsuidErr.code === '42703') {
-                            console.log(`🔧 Agregando columna user_id (BSUID) a chats...`);
-                            await supabase.rpc('exec_sql', { query: `ALTER TABLE chats ADD COLUMN IF NOT EXISTS user_id TEXT;` });
-                        }
+                    // Migración para user_id (Meta BSUID)
+                    const { error: bsuidErr } = await supabase.from('chats').select('user_id').limit(1);
+                    if (bsuidErr && bsuidErr.code === '42703') {
+                        console.log(`🔧 Agregando columna user_id (BSUID) a chats...`);
+                        await supabase.rpc('exec_sql', { query: `ALTER TABLE chats ADD COLUMN IF NOT EXISTS user_id TEXT;` });
+                    }
 
-                        // Migración para assigned_to
+                    // Migración para external_id en mensajes (Deduplicación)
+                    const { error: extIdErr } = await supabase.from('messages').select('external_id').limit(1);
+                    if (extIdErr && extIdErr.code === '42703') {
+                        console.log(`🔧 Agregando columna external_id a messages...`);
+                        await supabase.rpc('exec_sql', { query: `ALTER TABLE messages ADD COLUMN IF NOT EXISTS external_id TEXT;` });
+                        await supabase.rpc('exec_sql', { query: `CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_external_id ON messages (external_id);` });
+                    }
+
+                    // Migración para assigned_to
                         const { error: assignedErr } = await supabase.from('chats').select('assigned_to').limit(1);
                         if (assignedErr && assignedErr.code === '42703') {
                             console.log(`🔧 Agregando columna assigned_to a chats...`);
@@ -343,23 +351,43 @@ export class HistoryHandler {
     /**
      * Guarda un mensaje en la base de datos
      */
-    static async saveMessage(chatId: string, role: 'user' | 'assistant' | 'system', content: string, type: string = 'text', contactName: string | null = null, userId: string | null = null) {
+    static async saveMessage(chatId: string, role: 'user' | 'assistant' | 'system', content: string, type: string = 'text', contactName: string | null = null, userId: string | null = null, external_id: string | null = null) {
         try {
             // Asegurar que el chat existe (pasamos el userId para el mapeo o creación)
             await this.getOrCreateChat(chatId, chatId.includes('@') ? 'whatsapp' : 'webchat', contactName, userId);
 
+            const msgData: any = {
+                chat_id: chatId,
+                project_id: PROJECT_ID,
+                role,
+                content,
+                type,
+                created_at: new Date().toISOString()
+            };
+
+            if (external_id) {
+                msgData.external_id = external_id;
+            }
+
             const { error } = await supabase
                 .from('messages')
-                .insert({
-                    chat_id: chatId,
-                    project_id: PROJECT_ID,
-                    role,
-                    content,
-                    type,
-                    created_at: new Date().toISOString()
-                });
+                .upsert(msgData, { onConflict: 'external_id' });
 
-            if (error) throw error;
+            if (error) {
+                // Si el error es por falta de columna external_id, intentamos insert normal
+                if (error.code === '42703') {
+                   await supabase.from('messages').insert({
+                        chat_id: chatId,
+                        project_id: PROJECT_ID,
+                        role,
+                        content,
+                        type,
+                        created_at: new Date().toISOString()
+                   });
+                } else {
+                    throw error;
+                }
+            }
 
             // Actualizar timestamp del último mensaje en el chat
             await supabase

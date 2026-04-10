@@ -140,13 +140,16 @@ export class AiManager {
 
             stop(ctx);
 
+            const externalId = ctx.key?.id || ctx.payload?.id || ctx.id;
+
             await HistoryHandler.saveMessage(
                 ctx.from, 
                 'user', 
                 body || (ctx.type === EVENTS.VOICE_NOTE ? "[Audio]" : "[Media]"), 
                 ctx.type === 'webchat' ? 'text' : ctx.type,
                 ctx.pushName || (ctx.type === 'webchat' ? 'Webchat User' : null),
-                ctx.userId
+                ctx.userId,
+                externalId
             );
 
             const isBotActiveForUser = await HistoryHandler.isBotEnabled(ctx.from);
