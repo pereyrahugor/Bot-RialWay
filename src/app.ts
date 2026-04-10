@@ -89,7 +89,10 @@ function registerSafeErrorHandlers() {
 const main = async () => {
     // 1. Storage cleanup and session restoration
     await HistoryHandler.initDatabase();
-    await restoreSessionFromDb();
+    
+    // Usar un nombre de sesión consistente para evitar desajustes entre SessionSync y el Provider
+    const SESSION_NAME = process.env.BOT_NAME || process.env.ASSISTANT_NAME || 'bot';
+    await restoreSessionFromDb(SESSION_NAME);
     const qrPath = path.join(process.cwd(), "bot.qr.png");
 
     // 2. Initialize Providers
@@ -100,8 +103,7 @@ const main = async () => {
     let metaPhoneId = (metaConfig?.phone_number_id && metaConfig.phone_number_id !== "PENDING") ? metaConfig.phone_number_id : process.env.META_PHONE_ID;
     let metaWabaId = (metaConfig?.waba_id && metaConfig.waba_id !== "PENDING") ? metaConfig.waba_id : process.env.META_WABA_ID;
 
-    // --- AUTO-DESCUBRIMIENTO DE META (Solicitado por el usuario) ---
-    // Si tenemos Token pero faltan los IDs, intentamos recuperarlos automáticamente desde Meta
+    // --- AUTO-DESCUBRIMIENTO DE META ---
     if (metaToken && (!metaPhoneId || metaPhoneId === 'PENDING' || !metaWabaId || metaWabaId === 'PENDING')) {
         console.log('📡 [App] Detectada configuración de Meta parcial. Iniciando recuperación automática de IDs...');
         try {
@@ -111,7 +113,6 @@ const main = async () => {
                 console.log(`✅ [App] Recuperación exitosa: PhoneID=${discovery.phoneNumberId}, WABAID=${discovery.wabaId}`);
                 metaPhoneId = discovery.phoneNumberId;
                 metaWabaId = discovery.wabaId;
-                // Guardamos en DB para persistencia permanente
                 await HistoryHandler.saveMetaOnboardingData(metaWabaId, metaPhoneId, metaToken, { ...discovery, syncedAt: new Date().toISOString() });
             }
         } catch (e: any) {
@@ -131,6 +132,7 @@ const main = async () => {
         });
         
         groupProvider = createProvider(SupabaseBaileysProvider, {
+            name: SESSION_NAME, // <--- Mantener sincronizado
             version: [2, 3000, 1030817285],
             groupsIgnore: false,
             readStatus: false,
@@ -140,6 +142,7 @@ const main = async () => {
     } else {
         console.log('🚀 [App] Modo Estándar detectado (Baileys para todo)');
         adapterProvider = createProvider(SupabaseBaileysProvider, {
+            name: SESSION_NAME, // <--- Mantener sincronizado
             version: [2, 3000, 1030817285],
             groupsIgnore: false,
             readStatus: false,
@@ -250,7 +253,7 @@ const main = async () => {
     });
 
     registerSafeErrorHandlers();
-    startSessionSync();
+    startSessionSync(SESSION_NAME);
 
     // 8. Middlewares y Plugins post-Bot
     if (app) {
