@@ -453,9 +453,25 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     });
 
     // --- TEMPLATES & BULK MESSAGING ---
+    
+    /** Asegura que el proveedor tenga la config más reciente de la DB */
+    const syncMetaProvider = async () => {
+        const config = await HistoryHandler.getMetaOnboardingData();
+        if (config && config.access_token && config.access_token !== 'PENDING') {
+            const provider = (adapterProvider.constructor.name === 'MetaCloudProvider') ? adapterProvider : deps.groupProvider;
+            if (provider && typeof provider.updateConfig === 'function') {
+                provider.updateConfig({
+                    waba_id: config.waba_id,
+                    phone_number_id: config.phone_number_id,
+                    access_token: config.access_token
+                });
+            }
+        }
+    };
 
     app.get('/api/backoffice/whatsapp/templates', backofficeAuth, async (req: any, res: any) => {
         try {
+            await syncMetaProvider();
             if (!adapterProvider) return res.status(503).json({ success: false, error: 'Provider not ready' });
             // Detectar si el provider soporta getTemplates
             const provider = (adapterProvider.constructor.name === 'MetaCloudProvider') ? adapterProvider : deps.groupProvider;
@@ -472,6 +488,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     app.post('/api/backoffice/whatsapp/templates', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         try {
+            await syncMetaProvider();
             const { name, category, language, text } = req.body;
             if (!name || !category || !language || !text) {
                 return res.status(400).json({ success: false, error: 'Faltan campos obligatorios para crear la plantilla.' });
@@ -495,6 +512,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     app.get('/api/backoffice/whatsapp/template-excel/:templateName', backofficeAuth, async (req: any, res: any) => {
         try {
+            await syncMetaProvider();
             const { templateName } = req.params;
             const provider = (adapterProvider.constructor.name === 'MetaCloudProvider') ? adapterProvider : deps.groupProvider;
             if (!provider || typeof provider.getTemplates !== 'function') {
@@ -560,6 +578,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     app.post('/api/backoffice/whatsapp/send-bulk-template', backofficeAuth, (req: any, res: any) => {
         upload.single('file')(req, res, async (err: any) => {
             if (err) return res.status(400).json({ success: false, error: err.message });
+            
+            await syncMetaProvider();
             
             const { templateName, languageCode } = req.body;
             const file = (req as any).file;

@@ -18,6 +18,15 @@ class MetaCloudProvider extends ProviderClass {
     }
 
     /**
+     * Actualiza la configuración del proveedor en caliente (útil tras onboarding)
+     */
+    public updateConfig(newConfig: any) {
+        this.config = { ...this.config, ...newConfig };
+        this.globalVendorArgs = this.config;
+        console.log(`📡 [MetaCloudProvider] Configuración actualizada dinámicamente.`);
+    }
+
+    /**
      * Descarga y guarda archivos multimedia recibidos por webhook
      */
     public async saveFile(ctx: any, options: { path?: string } = {}): Promise<string> {
