@@ -173,7 +173,7 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
             const parameters: any[] = [];
             for (const key of paramKeys) {
                 const val = String(row[key] ?? '');
-                parameters.push({ type: 'text', text: val || '-' });
+                parameters.push({ type: 'text', parameter_name: key, text: val || '-' });
             }
 
             const components = parameters.length > 0 ? [{ type: 'body', parameters }] : [];
