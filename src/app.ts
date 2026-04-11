@@ -184,11 +184,13 @@ const main = async () => {
         app.use(compatibilityLayer);
         // MASTER-INTERCEPTOR DE STREAMS (CRÍTICO)
         // Usamos middleware global (sin prefijo en app.use) para tener el req.url ORIGINAL completo.
-        app.use(async (req: any, res: any, next: any) => {
+        app.use((req: any, res: any, next: any) => {
             const fullUrl = req.url.split('?')[0];
-            
-            if (fullUrl === '/api/backoffice/send-message' && req.method === 'POST') {
-                console.log("🛡️ [MASTER-INTERCEPTOR] Captura detectada de envío. Procesando bypass total...");
+            const isBulk = fullUrl === '/api/backoffice/whatsapp/send-bulk-template';
+            const isSend = fullUrl === '/api/backoffice/send-message';
+
+            if ((isSend || isBulk) && req.method === 'POST') {
+                console.log(`🛡️ [MASTER-INTERCEPTOR] Bypass detectado para ${fullUrl}.`);
                 
                 return backofficeAuth(req, res, () => {
                     const deps: BackofficeDependencies = { adapterProvider, groupProvider, HistoryHandler, openaiMain, upload };
@@ -200,14 +202,24 @@ const main = async () => {
                                 console.error("❌ [MASTER-INTERCEPTOR] Multer Error:", err.message);
                                 return res.status(400).end(JSON.stringify({ success: false, error: `Error de archivo: ${err.message}` }));
                             }
-                            const { chatId, message } = req.body;
-                            console.log(`📡 [MASTER-INTERCEPTOR] Datos recibidos: chatId=${chatId}, messageLen=${message?.length || 0}, hasFile=${!!(req as any).file}`);
-                            return processSendMessage(req, res, chatId, message, (req as any).file, deps);
+
+                            if (isSend) {
+                                const { chatId, message } = req.body;
+                                return processSendMessage(req, res, chatId, message, (req as any).file, deps);
+                            } else {
+                                // Para masivos, dejamos que siga a la ruta normal ya con req.file poblado
+                                return next();
+                            }
                         });
                     } else {
+                        // Caso JSON (solo para send-message)
                         return bodyParser.json()(req, res, () => {
-                            const { chatId, message } = req.body;
-                            return processSendMessage(req, res, chatId || '', message || '', null, deps);
+                            if (isSend) {
+                                const { chatId, message } = req.body;
+                                return processSendMessage(req, res, chatId || '', message || '', null, deps);
+                            } else {
+                                return next();
+                            }
                         });
                     }
                 });

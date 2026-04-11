@@ -575,7 +575,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
-    app.post('/api/backoffice/whatsapp/send-bulk-template', backofficeAuth, upload.single('file'), async (req: any, res: any) => {
+    app.post('/api/backoffice/whatsapp/send-bulk-template', async (req: any, res: any) => {
         try {
             await syncMetaProvider();
             
