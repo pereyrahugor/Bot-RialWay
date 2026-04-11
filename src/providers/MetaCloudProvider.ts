@@ -164,6 +164,44 @@ class MetaCloudProvider extends ProviderClass {
     }
 
     /**
+     * Crea una nueva plantilla de mensaje en la WABA
+     */
+    public async createTemplate(name: string, category: string, language: string, text: string): Promise<any> {
+        const { waba_id, access_token } = this.config;
+        if (!waba_id || !access_token) {
+            console.error('❌ [MetaCloudProvider] createTemplate: Faltan IDs o token');
+            return null;
+        }
+
+        const url = `https://graph.facebook.com/v22.0/${waba_id}/message_templates`;
+        const body = {
+            name,
+            category, // MARKETING, UTILITY, AUTHENTICATION
+            allow_category_change: true,
+            language,
+            components: [
+                {
+                    type: "BODY",
+                    text: text
+                }
+            ]
+        };
+
+        try {
+            const response = await axios.post(url, body, {
+                headers: {
+                    'Authorization': `Bearer ${access_token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            return response.data;
+        } catch (error: any) {
+            console.error('❌ [MetaCloudProvider] Error creando plantilla:', error?.response?.data || error.message);
+            throw error;
+        }
+    }
+
+    /**
      * Envía un mensaje basado en una plantilla oficial
      */
     public async sendTemplate(number: string, templateName: string, languageCode: string = 'es', components: any[] = []): Promise<any> {

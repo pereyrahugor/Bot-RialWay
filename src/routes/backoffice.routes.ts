@@ -470,6 +470,29 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
+    app.post('/api/backoffice/whatsapp/templates', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
+        try {
+            const { name, category, language, text } = req.body;
+            if (!name || !category || !language || !text) {
+                return res.status(400).json({ success: false, error: 'Faltan campos obligatorios para crear la plantilla.' });
+            }
+
+            const provider = (adapterProvider.constructor.name === 'MetaCloudProvider') ? adapterProvider : deps.groupProvider;
+            if (!provider || typeof provider.createTemplate !== 'function') {
+                return res.status(400).json({ success: false, error: 'Proveedor Meta no configurado o no soporta creación.' });
+            }
+
+            const result = await provider.createTemplate(name, category, language, text);
+            res.json({ success: true, result });
+        } catch (error: any) {
+            console.error('Error creando plantilla Meta:', error.response?.data || error.message);
+            res.status(error.response?.status || 500).json({ 
+                success: false, 
+                error: error.response?.data?.error?.message || error.message 
+            });
+        }
+    });
+
     app.get('/api/backoffice/whatsapp/template-excel/:templateName', backofficeAuth, async (req: any, res: any) => {
         try {
             const { templateName } = req.params;

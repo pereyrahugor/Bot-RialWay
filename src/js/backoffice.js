@@ -1099,8 +1099,7 @@ async function checkMetaStatus() {
         
         // Mostrar botón de masivos y actualizar panel solo si Meta está vinculado
         if (config.waba_id && config.waba_id !== 'PENDING') {
-            const bulkBtn = document.getElementById('nav-bulk-btn');
-            if (bulkBtn) bulkBtn.style.display = 'flex';
+            // nav-bulk-btn removido del sidebar por redundancia
 
             // Updating Meta Panel UI for Connected State
             const metaPanel = document.getElementById('meta-panel');
@@ -1167,7 +1166,8 @@ async function loadTemplates() {
         }
         
         select.innerHTML = '<option value="">-- Seleccione Plantilla --</option>' + 
-            availableTemplates.map(t => `<option value="${t.name}">${t.name} (${t.language})</option>`).join('');
+            availableTemplates.map(t => `<option value="${t.name}">${t.name} (${t.language})</option>`).join('') +
+            '<option value="NEW" style="color:#10b981; font-weight:700;">➕ Crear nueva plantilla...</option>';
             
     } catch (e) {
         console.error('[Bulk] Error loading templates:', e);
@@ -1182,13 +1182,17 @@ function onTemplateChange(templateName) {
     const step2 = document.getElementById('bulk-step-2');
     const step3 = document.getElementById('bulk-step-3');
     
-    if (!templateName) {
+    const newForm = document.getElementById('new-template-form');
+    
+    if (templateName === 'NEW') {
         previewBox.style.display = 'none';
         step2.style.display = 'none';
         step3.style.display = 'none';
+        newForm.style.display = 'block';
         return;
     }
-    
+
+    newForm.style.display = 'none';
     const template = availableTemplates.find(t => t.name === templateName);
     if (template) {
         // Extract body text for preview
@@ -1198,6 +1202,58 @@ function onTemplateChange(templateName) {
         step2.style.display = 'block';
         step3.style.display = 'block';
     }
+}
+
+async function submitTemplateForReview() {
+    const name = document.getElementById('tpl-name').value.trim();
+    const category = document.getElementById('tpl-category').value;
+    const language = document.getElementById('tpl-lang').value;
+    const text = document.getElementById('tpl-body').value.trim();
+    const btn = document.getElementById('btn-submit-tpl');
+
+    if (!name || !text) {
+        showToast('⚠️ Nombre y cuerpo son obligatorios', 'error');
+        return;
+    }
+
+    // Validar nombre (minúsculas y guiones bajos)
+    if (!/^[a-z0-9_]+$/.test(name)) {
+        showToast('⚠️ El nombre solo permite minúsculas y guiones bajos', 'error');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+
+    try {
+        const res = await fetch(`/api/backoffice/whatsapp/templates?token=${token}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, category, language, text })
+        });
+
+        const data = await res.json();
+        if (data.success) {
+            showToast('✅ Plantilla enviada correctamente. Meta la revisará pronto.');
+            cancelTemplateCreation();
+            loadTemplates();
+        } else {
+            showToast('❌ Error: ' + (data.error || 'No se pudo crear'), 'error');
+        }
+    } catch (e) {
+        console.error(e);
+        showToast('❌ Error de conexión al crear plantilla', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Enviar a Revisión';
+    }
+}
+
+function cancelTemplateCreation() {
+    document.getElementById('new-template-form').style.display = 'none';
+    document.getElementById('bulk-template-select').value = '';
+    document.getElementById('tpl-name').value = '';
+    document.getElementById('tpl-body').value = '';
 }
 
 function downloadBulkExcel() {
@@ -1271,3 +1327,12 @@ checkPlatformVisibility();
 fetchChats();
 fetchBotTags();
 checkMetaStatus();
+
+// Exportaciones globales para HTML
+window.toggleBulkModal = toggleBulkModal;
+window.onTemplateChange = onTemplateChange;
+window.submitTemplateForReview = submitTemplateForReview;
+window.cancelTemplateCreation = cancelTemplateCreation;
+window.downloadBulkExcel = downloadBulkExcel;
+window.startBulkSend = startBulkSend;
+window.loadTemplates = loadTemplates;

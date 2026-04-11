@@ -100,9 +100,7 @@
             <i class="fas fa-ticket-alt"></i>
             <span class="badge" id="tickets-badge" style="display:none;">0</span>
         </div>
-        <div class="nav-item" title="Envío Masivo (Meta Templates)" onclick="toggleBulkModal()" id="nav-bulk-btn" style="color: #10b981; display: none;">
-            <i class="fas fa-mail-bulk"></i>
-        </div>
+
         <div class="nav-item" title="Configuración" onclick="window.location.href='/system-config'"><i class="fas fa-cog"></i></div>
         <div class="nav-item" title="Manual" onclick="window.location.href='/documentacion'"><i class="fas fa-book"></i></div>
         
@@ -338,9 +336,48 @@
                 </p>
 
                 <label>Paso 1: Seleccione Plantilla</label>
-                <select id="bulk-template-select" class="crm-input" onchange="onTemplateChange(this.value)">
-                    <option value="">Cargando plantillas...</option>
-                </select>
+                <div style="display:flex; gap:10px; align-items:flex-start;">
+                    <select id="bulk-template-select" class="crm-input" style="flex:1" onchange="onTemplateChange(this.value)">
+                        <option value="">Cargando plantillas...</option>
+                    </select>
+                    <button class="btn-icon" title="Refrescar plantillas" onclick="loadTemplates()"><i class="fas fa-sync-alt"></i></button>
+                </div>
+
+                <!-- Formulario Nueva Plantilla (Oculto por defecto) -->
+                <div id="new-template-form" style="display:none; margin-top:20px; padding:20px; border:1px solid var(--border); border-radius:15px; background:rgba(16, 185, 129, 0.05);">
+                    <h4 style="margin:0 0 15px 0; font-size:0.9rem; color:#10b981;"><i class="fas fa-plus-circle"></i> Crear Nueva Plantilla</h4>
+                    
+                    <label style="font-size:0.8rem;">Nombre (solo minúsculas y guiones bajos)</label>
+                    <input type="text" id="tpl-name" class="crm-input" placeholder="ej: promocion_verano_01">
+                    
+                    <div style="display:flex; gap:10px; margin-top:10px;">
+                        <div style="flex:1">
+                            <label style="font-size:0.8rem;">Categoría</label>
+                            <select id="tpl-category" class="crm-input">
+                                <option value="MARKETING">Marketing</option>
+                                <option value="UTILITY">Utilidad</option>
+                            </select>
+                        </div>
+                        <div style="flex:1">
+                            <label style="font-size:0.8rem;">Idioma</label>
+                            <select id="tpl-lang" class="crm-input">
+                                <option value="es">Español</option>
+                                <option value="en">Inglés</option>
+                                <option value="pt_BR">Portugués</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <label style="font-size:0.8rem; margin-top:10px; display:block;">Cuerpo del Mensaje</label>
+                    <textarea id="tpl-body" class="crm-input" rows="4" placeholder="Hola {{1}}, gracias por contactar a RialWay..."></textarea>
+                    
+                    <div style="display:flex; gap:10px; margin-top:15px;">
+                        <button class="btn-primary" onclick="submitTemplateForReview()" id="btn-submit-tpl" style="flex:1; background:#10b981; border:none;">
+                            Enviar a Revisión
+                        </button>
+                        <button class="btn-secondary" onclick="cancelTemplateCreation()" style="flex:0.5;">Cancelar</button>
+                    </div>
+                </div>
 
                 <div id="template-preview-box" style="display:none; margin-top:15px; padding:15px; background:var(--bg-header); border-radius:10px; border:1px solid var(--border);">
                     <div style="font-size:0.75rem; color:var(--accent); font-weight:700; text-transform:uppercase; margin-bottom:8px;">Vista Previa</div>
