@@ -1160,14 +1160,18 @@ async function loadTemplates() {
         const data = await res.json();
         availableTemplates = data.templates || [];
         
-        if (availableTemplates.length === 0) {
-            select.innerHTML = '<option value="">Sin plantillas aprobadas</option>';
-            return;
+        let options = '<option value="">-- Seleccione Plantilla --</option>';
+        
+        if (availableTemplates.length > 0) {
+            options += availableTemplates.map(t => `<option value="${t.name}">${t.name} (${t.language})</option>`).join('');
+        } else {
+            options += '<option value="" disabled>Sin plantillas aprobadas</option>';
         }
         
-        select.innerHTML = '<option value="">-- Seleccione Plantilla --</option>' + 
-            availableTemplates.map(t => `<option value="${t.name}">${t.name} (${t.language})</option>`).join('') +
-            '<option value="NEW" style="color:#10b981; font-weight:700;">➕ Crear nueva plantilla...</option>';
+        // La opción de crear nueva debe estar siempre disponible
+        options += '<option value="NEW" style="color:#10b981; font-weight:700;">➕ Crear nueva plantilla...</option>';
+        
+        select.innerHTML = options;
             
     } catch (e) {
         console.error('[Bulk] Error loading templates:', e);
@@ -1184,6 +1188,14 @@ function onTemplateChange(templateName) {
     
     const newForm = document.getElementById('new-template-form');
     
+    if (!templateName) {
+        previewBox.style.display = 'none';
+        step2.style.display = 'none';
+        step3.style.display = 'none';
+        newForm.style.display = 'none';
+        return;
+    }
+
     if (templateName === 'NEW') {
         previewBox.style.display = 'none';
         step2.style.display = 'none';
