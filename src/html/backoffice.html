@@ -356,20 +356,31 @@
                             <select id="tpl-category" class="crm-input">
                                 <option value="MARKETING">Marketing</option>
                                 <option value="UTILITY">Utilidad</option>
+                                <option value="AUTHENTICATION">Autenticación</option>
                             </select>
                         </div>
                         <div style="flex:1">
                             <label style="font-size:0.8rem;">Idioma</label>
                             <select id="tpl-lang" class="crm-input">
-                                <option value="es">Español</option>
-                                <option value="en">Inglés</option>
-                                <option value="pt_BR">Portugués</option>
+                                <option value="es_AR">Español (Argentina)</option>
+                                <option value="es_ES">Español (España)</option>
+                                <option value="es_MX">Español (México)</option>
+                                <option value="es">Español (Genérico)</option>
+                                <option value="en_US">Inglés (EE.UU.)</option>
+                                <option value="en">Inglés (Genérico)</option>
+                                <option value="pt_BR">Portugués (Brasil)</option>
                             </select>
                         </div>
                     </div>
 
                     <label style="font-size:0.8rem; margin-top:10px; display:block;">Cuerpo del Mensaje</label>
                     <textarea id="tpl-body" class="crm-input" rows="4" placeholder="Hola {{1}}, gracias por contactar a RialWay..."></textarea>
+                    <p style="font-size:0.7rem; margin-top:4px; opacity:0.6;">Usa {{1}}, {{2}}, etc. para variables dinámicas.</p>
+                    
+                    <div id="tpl-examples-container" style="display:none; margin-top:10px;">
+                        <label style="font-size:0.8rem; color:#f59e0b;">⚠️ Valores de ejemplo para las variables (requerido por Meta)</label>
+                        <div id="tpl-examples-fields"></div>
+                    </div>
                     
                     <div style="display:flex; gap:10px; margin-top:15px;">
                         <button class="btn-primary" onclick="submitTemplateForReview()" id="btn-submit-tpl" style="flex:1; background:#10b981; border:none;">

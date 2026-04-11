@@ -566,7 +566,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     app.post('/api/backoffice/whatsapp/templates', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         try {
             await syncMetaProvider();
-            const { name, category, language, text } = req.body;
+            const { name, category, language, text, examples } = req.body;
             if (!name || !category || !language || !text) {
                 return res.status(400).json({ success: false, error: 'Faltan campos obligatorios para crear la plantilla.' });
             }
@@ -576,7 +576,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                 return res.status(400).json({ success: false, error: 'Proveedor Meta no configurado o no soporta creación.' });
             }
 
-            const result = await provider.createTemplate(name, category, language, text);
+            const result = await provider.createTemplate(name, category, language, text, examples || []);
             res.json({ success: true, result });
         } catch (error: any) {
             console.error('Error creando plantilla Meta:', error.response?.data || error.message);

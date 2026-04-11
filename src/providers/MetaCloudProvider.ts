@@ -174,8 +174,9 @@ class MetaCloudProvider extends ProviderClass {
 
     /**
      * Crea una nueva plantilla de mensaje en la WABA
+     * @param examples - Valores de ejemplo para variables {{1}}, {{2}}, etc. (requerido por Meta)
      */
-    public async createTemplate(name: string, category: string, language: string, text: string): Promise<any> {
+    public async createTemplate(name: string, category: string, language: string, text: string, examples: string[] = []): Promise<any> {
         const { waba_id, access_token } = this.config;
         if (!waba_id || !access_token) {
             console.error('❌ [MetaCloudProvider] createTemplate: Faltan IDs o token');
@@ -183,18 +184,29 @@ class MetaCloudProvider extends ProviderClass {
         }
 
         const url = `https://graph.facebook.com/v22.0/${waba_id}/message_templates`;
+        
+        // Construir componente BODY con ejemplos si hay variables
+        const bodyComponent: any = {
+            type: "BODY",
+            text: text
+        };
+
+        // Si hay variables {{1}}, {{2}}, etc. Meta requiere valores de ejemplo
+        if (examples.length > 0) {
+            bodyComponent.example = {
+                body_text: [examples]  // Meta espera un array de arrays
+            };
+        }
+
         const body = {
             name,
             category, // MARKETING, UTILITY, AUTHENTICATION
             allow_category_change: true,
             language,
-            components: [
-                {
-                    type: "BODY",
-                    text: text
-                }
-            ]
+            components: [bodyComponent]
         };
+
+        console.log(`📡 [MetaCloudProvider] Creando plantilla: ${name} | Categoría: ${category} | Idioma: ${language} | Variables: ${examples.length}`);
 
         try {
             const response = await axios.post(url, body, {
@@ -203,6 +215,7 @@ class MetaCloudProvider extends ProviderClass {
                     'Content-Type': 'application/json'
                 }
             });
+            console.log(`✅ [MetaCloudProvider] Plantilla '${name}' creada. ID: ${response.data?.id} | Estado: ${response.data?.status}`);
             return response.data;
         } catch (error: any) {
             console.error('❌ [MetaCloudProvider] Error creando plantilla:', error?.response?.data || error.message);

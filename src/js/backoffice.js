@@ -1163,9 +1163,31 @@ async function loadTemplates() {
         let options = '<option value="">-- Seleccione Plantilla --</option>';
         
         if (availableTemplates.length > 0) {
-            options += availableTemplates.map(t => `<option value="${t.name}">${t.name} (${t.language})</option>`).join('');
+            // Separar por estado
+            const approved = availableTemplates.filter(t => t.status === 'APPROVED');
+            const pending = availableTemplates.filter(t => t.status === 'PENDING');
+            const rejected = availableTemplates.filter(t => t.status === 'REJECTED');
+            
+            if (approved.length > 0) {
+                options += '<optgroup label="✅ Aprobadas (listas para enviar)">';
+                options += approved.map(t => `<option value="${t.name}">✅ ${t.name} (${t.language})</option>`).join('');
+                options += '</optgroup>';
+            }
+            if (pending.length > 0) {
+                options += '<optgroup label="⏳ Pendientes de revisión">';
+                options += pending.map(t => `<option value="${t.name}" disabled>⏳ ${t.name} (${t.language}) - En revisión</option>`).join('');
+                options += '</optgroup>';
+            }
+            if (rejected.length > 0) {
+                options += '<optgroup label="❌ Rechazadas">';
+                options += rejected.map(t => `<option value="${t.name}" disabled>❌ ${t.name} (${t.language}) - Rechazada</option>`).join('');
+                options += '</optgroup>';
+            }
+            if (approved.length === 0) {
+                options += '<option value="" disabled>⚠️ No hay plantillas aprobadas para enviar</option>';
+            }
         } else {
-            options += '<option value="" disabled>Sin plantillas aprobadas</option>';
+            options += '<option value="" disabled>Sin plantillas</option>';
         }
         
         // La opción de crear nueva debe estar siempre disponible
@@ -1234,6 +1256,19 @@ async function submitTemplateForReview() {
         return;
     }
 
+    // Recolectar valores de ejemplo para las variables
+    const varMatches = text.match(/\{\{\d+\}\}/g) || [];
+    const examples = [];
+    for (let i = 0; i < varMatches.length; i++) {
+        const input = document.getElementById(`tpl-example-${i+1}`);
+        const value = input ? input.value.trim() : '';
+        if (!value) {
+            showToast(`⚠️ Completá el ejemplo para la variable {{${i+1}}}`, 'error');
+            return;
+        }
+        examples.push(value);
+    }
+
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
 
@@ -1241,12 +1276,12 @@ async function submitTemplateForReview() {
         const res = await fetch(`/api/backoffice/whatsapp/templates?token=${token}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, category, language, text })
+            body: JSON.stringify({ name, category, language, text, examples })
         });
 
         const data = await res.json();
         if (data.success) {
-            showToast('✅ Plantilla enviada correctamente. Meta la revisará pronto.');
+            showToast('✅ Plantilla enviada a Meta para revisión. Aparecerá como ⏳ PENDIENTE hasta que la aprueben.');
             cancelTemplateCreation();
             loadTemplates();
         } else {
@@ -1266,7 +1301,41 @@ function cancelTemplateCreation() {
     document.getElementById('bulk-template-select').value = '';
     document.getElementById('tpl-name').value = '';
     document.getElementById('tpl-body').value = '';
+    document.getElementById('tpl-examples-container').style.display = 'none';
+    document.getElementById('tpl-examples-fields').innerHTML = '';
 }
+
+/** Auto-detecta variables {{N}} en el textarea y genera campos de ejemplo */
+function detectTemplateVariables() {
+    const text = document.getElementById('tpl-body').value;
+    const container = document.getElementById('tpl-examples-container');
+    const fieldsDiv = document.getElementById('tpl-examples-fields');
+    const matches = text.match(/\{\{\d+\}\}/g) || [];
+    const uniqueVars = [...new Set(matches)].sort();
+
+    if (uniqueVars.length === 0) {
+        container.style.display = 'none';
+        fieldsDiv.innerHTML = '';
+        return;
+    }
+
+    container.style.display = 'block';
+    fieldsDiv.innerHTML = uniqueVars.map((v, i) => {
+        const num = v.replace(/[{}]/g, '');
+        return `<div style="display:flex; align-items:center; gap:8px; margin-top:6px;">
+            <span style="font-size:0.8rem; min-width:40px; font-weight:700;">${v}</span>
+            <input type="text" id="tpl-example-${num}" class="crm-input" placeholder="ej: Juan" style="flex:1;">
+        </div>`;
+    }).join('');
+}
+
+// Vincular detección de variables al textarea
+document.addEventListener('DOMContentLoaded', () => {
+    const tplBody = document.getElementById('tpl-body');
+    if (tplBody) {
+        tplBody.addEventListener('input', detectTemplateVariables);
+    }
+});
 
 function downloadBulkExcel() {
     const templateName = document.getElementById('bulk-template-select').value;
@@ -1354,3 +1423,4 @@ window.cancelTemplateCreation = cancelTemplateCreation;
 window.downloadBulkExcel = downloadBulkExcel;
 window.startBulkSend = startBulkSend;
 window.loadTemplates = loadTemplates;
+window.detectTemplateVariables = detectTemplateVariables;
