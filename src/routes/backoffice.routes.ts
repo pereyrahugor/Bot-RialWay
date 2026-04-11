@@ -512,13 +512,23 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     /** Asegura que el proveedor tenga la config más reciente de la DB */
     const syncMetaProvider = async () => {
         const config = await HistoryHandler.getMetaOnboardingData();
-        if (config && config.access_token && config.access_token !== 'PENDING') {
-            const provider = (adapterProvider.constructor.name === 'MetaCloudProvider') ? adapterProvider : deps.groupProvider;
-            if (provider && typeof provider.updateConfig === 'function') {
-                provider.updateConfig({
-                    waba_id: config.waba_id,
-                    phone_number_id: config.phone_number_id,
-                    access_token: config.access_token
+        if (config && adapterProvider && adapterProvider.updateConfig) {
+            // El objeto config puede venir de la DB (whatsappToken) o de una sincronización previa (access_token)
+            const token = config.whatsappToken || config.access_token;
+            const phoneId = config.whatsappNumberId || config.phone_number_id;
+            const wabaId = config.whatsappBusinessId || config.waba_id;
+
+            if (token && token !== 'PENDING') {
+                console.log("🔄 [MetaSync] Sincronizando credenciales de Meta...");
+                adapterProvider.updateConfig({
+                    jwtToken: token,
+                    numberId: phoneId,
+                    verifyToken: process.env.META_VERIFY_TOKEN,
+                    businessId: wabaId,
+                    // Compatibilidad con versiones antiguas del provider:
+                    access_token: token,
+                    phone_number_id: phoneId,
+                    waba_id: wabaId
                 });
             }
         }
@@ -629,19 +639,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             res.status(500).json({ success: false, error: error.message });
         }
     });
-    // --- RELOAD META CONFIG HELPER ---
-    const syncMetaProvider = async () => {
-        const metaOnboarding = await HistoryHandler.getMetaOnboardingData();
-        if (metaOnboarding && adapterProvider && adapterProvider.updateConfig) {
-            console.log("🔄 [MetaSync] Sincronizando credenciales antes de la operación...");
-            adapterProvider.updateConfig({
-                jwtToken: metaOnboarding.whatsappToken,
-                numberId: metaOnboarding.whatsappNumberId,
-                verifyToken: process.env.META_VERIFY_TOKEN,
-                businessId: metaOnboarding.whatsappBusinessId
-            });
-        }
-    };
+
 
     app.post('/api/backoffice/whatsapp/send-bulk-template', async (req: any, res: any) => {
         await syncMetaProvider();
