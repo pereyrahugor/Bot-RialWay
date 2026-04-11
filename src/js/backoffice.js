@@ -26,6 +26,10 @@ const MSG_LIMIT = 50;
 let loadingMessages = false;
 let allMessagesLoaded = false;
 
+// Paginación de chats
+const CHAT_LIMIT = 50;
+let loadingChats = false;
+
 // Inicializar Socket.IO para tiempo real
 const socket = io();
 
