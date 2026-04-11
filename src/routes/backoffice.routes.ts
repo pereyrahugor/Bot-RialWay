@@ -119,6 +119,14 @@ export const processSendMessage = async (
     }
 };
 
+/** Helper: responder JSON compatible con Polka crudo (sin compatibilityLayer) */
+const sendJson = (res: any, statusCode: number, data: any) => {
+    if (res.headersSent) return;
+    res.statusCode = statusCode;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify(data));
+};
+
 /** Función para procesar el envío masivo de plantillas */
 export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDependencies) => {
     const file = (req as any).file;
@@ -127,22 +135,26 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
 
     try {
         if (!file || !templateName) {
-            return res.status(400).json({ success: false, error: 'Falta el archivo o el nombre de la plantilla.' });
+            return sendJson(res, 400, { success: false, error: 'Falta el archivo o el nombre de la plantilla.' });
         }
 
-        const workbook = XLSX.readFile(file.path);
+        // Import dinámico para evitar problemas ESM/CJS con esbuild
+        const xlsxModule = await import('xlsx');
+        const xlsxLib = xlsxModule.default || xlsxModule;
+
+        const workbook = xlsxLib.readFile(file.path);
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        const data: any[] = XLSX.utils.sheet_to_json(worksheet);
+        const data: any[] = xlsxLib.utils.sheet_to_json(worksheet);
 
         if (data.length === 0) {
-            return res.status(400).json({ success: false, error: 'El Excel está vacío.' });
+            return sendJson(res, 400, { success: false, error: 'El Excel está vacío.' });
         }
 
         // Determinar proveedor (Meta es requerido para plantillas)
         const provider = (adapterProvider.constructor.name === 'MetaCloudProvider') ? adapterProvider : (deps as any).groupProvider;
 
-        res.status(202).json({ success: true, message: 'Proceso masivo iniciado.', total: data.length });
+        sendJson(res, 202, { success: true, message: 'Proceso masivo iniciado.', total: data.length });
 
         for (const row of data) {
             const phone = String(row.phone || row.PHONE || '').replace(/\D/g, '');
@@ -168,7 +180,7 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
         }
     } catch (e: any) {
         console.error('Error en processBulkTemplate:', e);
-        if (!res.headersSent) res.status(500).json({ success: false, error: e.message });
+        sendJson(res, 500, { success: false, error: e.message });
     } finally {
         if (file && fs.existsSync(file.path)) fs.unlinkSync(file.path);
     }

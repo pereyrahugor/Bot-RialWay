@@ -204,7 +204,9 @@ const main = async () => {
                         return upload.single('file')(req, res, (err: any) => {
                             if (err) {
                                 console.error("❌ [MASTER-INTERCEPTOR] Multer Error:", err);
-                                return res.status(500).json({ success: false, error: `Error de stream: ${err.message}` });
+                                res.statusCode = 500;
+                                res.setHeader('Content-Type', 'application/json');
+                                return res.end(JSON.stringify({ success: false, error: `Error de stream: ${err.message}` }));
                             }
                             if (isSend) {
                                 const { chatId, message } = req.body;
