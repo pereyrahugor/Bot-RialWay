@@ -575,63 +575,83 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
-    app.post('/api/backoffice/whatsapp/send-bulk-template', async (req: any, res: any) => {
-        try {
-            await syncMetaProvider();
-            
-            const { templateName, languageCode } = req.body;
-            const file = (req as any).file;
+/** Función para procesar el envío masivo de plantillas */
+export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDependencies) => {
+    const file = (req as any).file;
+    const { templateName, languageCode } = req.body;
+    const { adapterProvider, HistoryHandler } = deps;
 
-            if (!file || !templateName) {
-                return res.status(400).json({ success: false, error: 'Falta el archivo o el nombre de la plantilla.' });
-            }
+    try {
+        if (!file || !templateName) {
+            return res.status(400).json({ success: false, error: 'Falta el archivo o el nombre de la plantilla.' });
+        }
+
+        const workbook = XLSX.readFile(file.path);
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const data: any[] = XLSX.utils.sheet_to_json(worksheet);
+
+        if (data.length === 0) {
+            return res.status(400).json({ success: false, error: 'El Excel está vacío.' });
+        }
+
+        // Determinar proveedor (Meta es requerido para plantillas)
+        const provider = (adapterProvider.constructor.name === 'MetaCloudProvider') ? adapterProvider : (deps as any).groupProvider;
+
+        res.status(202).json({ success: true, message: 'Proceso masivo iniciado.', total: data.length });
+
+        for (const row of data) {
+            const phone = String(row.phone || row.PHONE || '').replace(/\D/g, '');
+            if (!phone) continue;
+
+            const parameters: any[] = [];
+            Object.keys(row).forEach(key => {
+                if (key.toLowerCase().startsWith('var')) {
+                    parameters.push({ type: 'text', text: String(row[key]) });
+                }
+            });
+
+            const components = parameters.length > 0 ? [{ type: 'body', parameters }] : [];
 
             try {
-                const XLSX = await import('xlsx');
-                const workbook = XLSX.readFile(file.path);
-                const sheetName = workbook.SheetNames[0];
-                const worksheet = workbook.Sheets[sheetName];
-                const data: any[] = XLSX.utils.sheet_to_json(worksheet);
-
-                if (data.length === 0) {
-                    return res.status(400).json({ success: false, error: 'El Excel está vacío.' });
+                const resApi = await provider.sendTemplate(phone, templateName, languageCode || 'es', components);
+                if (resApi?.messages) {
+                    const msgId = resApi.messages[0].id;
+                    await HistoryHandler.saveMessage(phone, 'assistant', `[Plantilla Masiva: ${templateName}]`, 'text', null, null, msgId);
                 }
-
-                const provider = (adapterProvider.constructor.name === 'MetaCloudProvider') ? adapterProvider : deps.groupProvider;
-
-                res.status(202).json({ success: true, message: 'Proceso masivo iniciado.', total: data.length });
-
-                for (const row of data) {
-                    const phone = String(row.phone || row.PHONE || '').replace(/\D/g, '');
-                    if (!phone) continue;
-
-                    const parameters: any[] = [];
-                    Object.keys(row).forEach(key => {
-                        if (key.toLowerCase().startsWith('var')) {
-                            parameters.push({ type: 'text', text: String(row[key]) });
-                        }
-                    });
-
-                    const components = parameters.length > 0 ? [{ type: 'body', parameters }] : [];
-
-                    try {
-                        const resApi = await provider.sendTemplate(phone, templateName, languageCode || 'es', components);
-                        if (resApi?.messages) {
-                            const msgId = resApi.messages[0].id;
-                            await deps.HistoryHandler.saveMessage(phone, 'assistant', `[Plantilla Masiva: ${templateName}]`, 'text', null, null, msgId);
-                        }
-                    } catch (e) {}
-                    await new Promise(r => setTimeout(r, 250));
-                }
-            } catch (e: any) {
-                console.error('Error en bulk:', e);
-            } finally {
-                if (file && fs.existsSync(file.path)) fs.unlinkSync(file.path);
-            }
-        } catch (error: any) {
-            console.error('Error en bulk:', error);
-            res.status(500).json({ success: false, error: error.message });
+            } catch (e) {}
+            await new Promise(r => setTimeout(r, 250));
         }
+    } catch (e: any) {
+        console.error('Error en processBulkTemplate:', e);
+        if (!res.headersSent) res.status(500).json({ success: false, error: e.message });
+    } finally {
+        if (file && fs.existsSync(file.path)) fs.unlinkSync(file.path);
+    }
+};
+
+export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies) => {
+    const { adapterProvider, HistoryHandler, openaiMain, upload } = deps;
+
+    // --- HELPER PARA SYNC ---
+    const syncMetaProvider = async () => {
+        const metaOnboarding = await HistoryHandler.getMetaOnboardingData();
+        if (metaOnboarding && adapterProvider && adapterProvider.updateConfig) {
+            console.log("🔄 [MetaSync] Sincronizando credenciales antes de la operación...");
+            adapterProvider.updateConfig({
+                jwtToken: metaOnboarding.whatsappToken,
+                numberId: metaOnboarding.whatsappNumberId,
+                verifyToken: process.env.META_VERIFY_TOKEN,
+                businessId: metaOnboarding.whatsappBusinessId
+            });
+        }
+    };
+
+    // Rutas existentes...
+    // ... (rest of the code will stay, but the bulk route will call the helper)
+    app.post('/api/backoffice/whatsapp/send-bulk-template', async (req: any, res: any) => {
+        await syncMetaProvider();
+        return processBulkTemplate(req, res, deps);
     });
 
     // --- ONBOARDING META ---

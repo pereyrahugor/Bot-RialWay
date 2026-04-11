@@ -20,7 +20,7 @@ import { HistoryHandler } from "./utils/historyHandler";
 import { registerProcessCallback, handleQueue, userQueues, userLocks } from "./utils/queueManager";
 
 // --- Managers & Routes ---
-import { registerBackofficeRoutes, processSendMessage, BackofficeDependencies } from "./routes/backoffice.routes";
+import { registerBackofficeRoutes, processSendMessage, processBulkTemplate, BackofficeDependencies } from "./routes/backoffice.routes";
 import { registerRailwayRoutes } from "./routes/railway.routes";
 import { registerWebchatRoutes } from "./routes/webchat.routes";
 import { registerStaticRoutes } from "./routes/static.routes";
@@ -174,51 +174,55 @@ const main = async () => {
     if (app) {
         // 5. Polka/Express Server setup & Early Middlewares
         console.log("🛠️ [POLKA MIDDLEWARES - INITIAL]:", app.middlewares?.length || 0);
-        app.onError = (err: any, _req: any, res: any) => {
-            console.error("🔥 [POLKA ERROR]:", err);
-            res.statusCode = 500;
-            res.end(JSON.stringify({ success: false, error: err.message || "Internal Server Error" }));
-        };
 
-        // APLICAR COMPATIBILIDAD AL INICIO
-        app.use(compatibilityLayer);
-        // MASTER-INTERCEPTOR DE STREAMS (CRÍTICO)
-        // Usamos middleware global (sin prefijo en app.use) para tener el req.url ORIGINAL completo.
+        // --- MASTER-INTERCEPTOR DE STREAMS (EL PRIMERO SIEMPRE) ---
         app.use((req: any, res: any, next: any) => {
-            const fullUrl = req.url.split('?')[0];
-            const isBulk = fullUrl === '/api/backoffice/whatsapp/send-bulk-template';
-            const isSend = fullUrl === '/api/backoffice/send-message';
+            const normalizedPath = (req.url || '').split('?')[0].replace(/\/+/g, '/');
+            const isBulk = normalizedPath.includes('/api/backoffice/whatsapp/send-bulk-template');
+            const isSend = normalizedPath.includes('/api/backoffice/send-message');
 
             if ((isSend || isBulk) && req.method === 'POST') {
-                console.log(`🛡️ [MASTER-INTERCEPTOR] Bypass detectado para ${fullUrl}.`);
+                req.setTimeout(0);
+                console.log(`🛡️ [MASTER-INTERCEPTOR-PRIORITY] Bypass activo para: ${normalizedPath}`);
                 
-                return backofficeAuth(req, res, () => {
-                    const deps: BackofficeDependencies = { adapterProvider, groupProvider, HistoryHandler, openaiMain, upload };
+                return backofficeAuth(req, res, async () => {
                     const contentType = req.headers['content-type'] || '';
+                    const deps: BackofficeDependencies = { adapterProvider, groupProvider, HistoryHandler, openaiMain, upload };
+
+                    // Sincronizar Meta Provider antes de procesar si es necesario
+                    const metaOnboarding = await HistoryHandler.getMetaOnboardingData();
+                    if (metaOnboarding && adapterProvider && adapterProvider.updateConfig) {
+                        adapterProvider.updateConfig({
+                            jwtToken: metaOnboarding.whatsappToken,
+                            numberId: metaOnboarding.whatsappNumberId,
+                            verifyToken: process.env.META_VERIFY_TOKEN,
+                            businessId: metaOnboarding.whatsappBusinessId
+                        });
+                    }
 
                     if (contentType.includes('multipart/form-data')) {
                         return upload.single('file')(req, res, (err: any) => {
                             if (err) {
-                                console.error("❌ [MASTER-INTERCEPTOR] Multer Error:", err.message);
-                                return res.status(400).end(JSON.stringify({ success: false, error: `Error de archivo: ${err.message}` }));
+                                console.error("❌ [MASTER-INTERCEPTOR] Multer Error:", err);
+                                return res.status(500).json({ success: false, error: `Error de stream: ${err.message}` });
                             }
-
                             if (isSend) {
                                 const { chatId, message } = req.body;
                                 return processSendMessage(req, res, chatId, message, (req as any).file, deps);
                             } else {
-                                // Para masivos, dejamos que siga a la ruta normal ya con req.file poblado
-                                return next();
+                                // CAPTURA TOTAL: Procesamos el masivo aquí mismo y NO llamamos a next()
+                                // Esto evita que otros middlewares (como el plugin de openai) intenten re-parsear el stream
+                                console.log("🚀 [MASTER-INTERCEPTOR] Ejecutando lógica de envío masivo (bypass total)...");
+                                return processBulkTemplate(req, res, deps);
                             }
                         });
                     } else {
-                        // Caso JSON (solo para send-message)
                         return bodyParser.json()(req, res, () => {
                             if (isSend) {
                                 const { chatId, message } = req.body;
                                 return processSendMessage(req, res, chatId || '', message || '', null, deps);
                             } else {
-                                return next();
+                                return processBulkTemplate(req, res, deps);
                             }
                         });
                     }
@@ -227,6 +231,14 @@ const main = async () => {
             next();
         });
 
+        app.onError = (err: any, _req: any, res: any) => {
+            console.error("🔥 [POLKA ERROR]:", err);
+            res.statusCode = 500;
+            res.end(JSON.stringify({ success: false, error: err.message || "Internal Server Error" }));
+        };
+
+        // APLICAR COMPATIBILIDAD DESPUÉS DEL INTERCEPTOR
+        app.use(compatibilityLayer);
         app.use(rootRedirect);
         
         registerBackofficeRoutes(app, {
