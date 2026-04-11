@@ -1289,9 +1289,15 @@ async function startBulkSend() {
     }
     
     const file = fileInput.files[0];
+    
+    // Buscar el idioma de la plantilla seleccionada
+    const selectedTemplate = availableTemplates.find(t => t.name === templateName);
+    const languageCode = selectedTemplate ? selectedTemplate.language : 'es';
+
     const formData = new FormData();
     formData.append('file', file);
     formData.append('templateName', templateName);
+    formData.append('languageCode', languageCode);
     
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Iniciando...';
