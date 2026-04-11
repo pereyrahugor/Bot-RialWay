@@ -1256,14 +1256,19 @@ async function submitTemplateForReview() {
         return;
     }
 
-    // Recolectar valores de ejemplo para las variables
-    const varMatches = text.match(/\{\{\d+\}\}/g) || [];
+    // Recolectar valores de ejemplo para las variables (soporta {{1}} y {{nombre}})
+    const varRegex = /\{\{(\w+)\}\}/g;
+    const varNames = [];
+    let m;
+    while ((m = varRegex.exec(text)) !== null) {
+        if (!varNames.includes(m[1])) varNames.push(m[1]);
+    }
     const examples = [];
-    for (let i = 0; i < varMatches.length; i++) {
-        const input = document.getElementById(`tpl-example-${i+1}`);
+    for (const varName of varNames) {
+        const input = document.getElementById(`tpl-example-${varName}`);
         const value = input ? input.value.trim() : '';
         if (!value) {
-            showToast(`⚠️ Completá el ejemplo para la variable {{${i+1}}}`, 'error');
+            showToast(`⚠️ Completá el ejemplo para la variable {{${varName}}}`, 'error');
             return;
         }
         examples.push(value);
@@ -1305,26 +1310,29 @@ function cancelTemplateCreation() {
     document.getElementById('tpl-examples-fields').innerHTML = '';
 }
 
-/** Auto-detecta variables {{N}} en el textarea y genera campos de ejemplo */
+/** Auto-detecta variables {{nombre}} o {{1}} en el textarea y genera campos de ejemplo */
 function detectTemplateVariables() {
     const text = document.getElementById('tpl-body').value;
     const container = document.getElementById('tpl-examples-container');
     const fieldsDiv = document.getElementById('tpl-examples-fields');
-    const matches = text.match(/\{\{\d+\}\}/g) || [];
-    const uniqueVars = [...new Set(matches)].sort();
+    const varRegex = /\{\{(\w+)\}\}/g;
+    const varNames = [];
+    let m;
+    while ((m = varRegex.exec(text)) !== null) {
+        if (!varNames.includes(m[1])) varNames.push(m[1]);
+    }
 
-    if (uniqueVars.length === 0) {
+    if (varNames.length === 0) {
         container.style.display = 'none';
         fieldsDiv.innerHTML = '';
         return;
     }
 
     container.style.display = 'block';
-    fieldsDiv.innerHTML = uniqueVars.map((v, i) => {
-        const num = v.replace(/[{}]/g, '');
+    fieldsDiv.innerHTML = varNames.map(varName => {
         return `<div style="display:flex; align-items:center; gap:8px; margin-top:6px;">
-            <span style="font-size:0.8rem; min-width:40px; font-weight:700;">${v}</span>
-            <input type="text" id="tpl-example-${num}" class="crm-input" placeholder="ej: Juan" style="flex:1;">
+            <span style="font-size:0.8rem; min-width:80px; font-weight:700;">{{${varName}}}</span>
+            <input type="text" id="tpl-example-${varName}" class="crm-input" placeholder="ej: Juan" style="flex:1;">
         </div>`;
     }).join('');
 }

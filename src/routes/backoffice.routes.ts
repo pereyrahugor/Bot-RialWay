@@ -145,39 +145,54 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
         const workbook = xlsxLib.readFile(file.path);
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        const data: any[] = xlsxLib.utils.sheet_to_json(worksheet);
+        // defval: '' asegura que celdas vacías aparezcan como '' en vez de ser omitidas
+        const data: any[] = xlsxLib.utils.sheet_to_json(worksheet, { defval: '' });
 
         if (data.length === 0) {
             return sendJson(res, 400, { success: false, error: 'El Excel está vacío.' });
         }
 
-        // Determinar proveedor (Meta es requerido para plantillas)
+        // Detectar columnas de parámetros: todas las que NO sean 'phone'
+        const allKeys = Object.keys(data[0]);
+        const paramKeys = allKeys.filter(k => k.toLowerCase() !== 'phone');
+
+        console.log(`📊 [BULK] Excel cargado: ${data.length} filas | Columnas: [${allKeys.join(', ')}] | Parámetros de plantilla: [${paramKeys.join(', ')}]`);
+
+        // Determinar proveedor
         const provider = (adapterProvider.constructor.name === 'MetaCloudProvider') ? adapterProvider : (deps as any).groupProvider;
 
         sendJson(res, 202, { success: true, message: 'Proceso masivo iniciado.', total: data.length });
 
+        let sent = 0, errors = 0;
+
         for (const row of data) {
-            const phone = String(row.phone || row.PHONE || '').replace(/\D/g, '');
+            const phone = String(row.phone || row.PHONE || row.Phone || '').replace(/\D/g, '');
             if (!phone) continue;
 
+            // Construir parámetros en el orden de las columnas del Excel (excluyendo phone)
             const parameters: any[] = [];
-            Object.keys(row).forEach(key => {
-                if (key.toLowerCase().startsWith('var')) {
-                    parameters.push({ type: 'text', text: String(row[key]) });
-                }
-            });
+            for (const key of paramKeys) {
+                const val = String(row[key] ?? '');
+                parameters.push({ type: 'text', text: val || '-' });
+            }
 
             const components = parameters.length > 0 ? [{ type: 'body', parameters }] : [];
 
             try {
-                const resApi = await provider.sendTemplate(phone, templateName, languageCode || 'es', components);
+                const resApi = await provider.sendTemplate(phone, templateName, languageCode || 'es_AR', components);
                 if (resApi?.messages) {
                     const msgId = resApi.messages[0].id;
                     await HistoryHandler.saveMessage(phone, 'assistant', `[Plantilla Masiva: ${templateName}]`, 'text', null, null, msgId);
+                    sent++;
                 }
-            } catch (e) {}
+            } catch (e: any) {
+                errors++;
+                console.error(`❌ [BULK] Error enviando a ${phone}:`, e?.response?.data?.error?.message || e.message || e);
+            }
             await new Promise(r => setTimeout(r, 250));
         }
+
+        console.log(`✅ [BULK] Proceso finalizado: ${sent} enviados, ${errors} errores de ${data.length} filas.`);
     } catch (e: any) {
         console.error('Error en processBulkTemplate:', e);
         sendJson(res, 500, { success: false, error: e.message });
@@ -603,11 +618,18 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                 return res.status(404).json({ success: false, error: 'Plantilla no encontrada.' });
             }
 
-            // Detectar variables en BODY
+            // Detectar variables en BODY — soporta {{1}} y {{nombre}}
             const bodyComponent = template.components.find((c: any) => c.type === 'BODY');
             const text = bodyComponent?.text || '';
-            const matches = text.match(/\{\{\d+\}\}/g) || [];
-            const varCount = matches.length;
+            // Extrae los nombres de las variables en orden de aparición
+            const varNames: string[] = [];
+            const varRegex = /\{\{(\w+)\}\}/g;
+            let match;
+            while ((match = varRegex.exec(text)) !== null) {
+                if (!varNames.includes(match[1])) {
+                    varNames.push(match[1]); // ej: ['nombre'] o ['1', '2']
+                }
+            }
 
             // Obtener contactos existentes del proyecto
             const chats = await HistoryHandler.listChats(2000, 0); // Hasta 2000 contactos recientes
@@ -615,11 +637,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             const XLSX = await import('xlsx');
             const wb = XLSX.utils.book_new();
             
-            // Definir cabeceras
-            const headers = ['phone', 'name'];
-            for (let i = 1; i <= varCount; i++) {
-                headers.push(`var${i}`);
-            }
+            // Cabeceras: phone + los nombres reales de cada variable
+            const headers = ['phone', ...varNames];
 
             // Preparar filas de datos
             const rows = [headers];
@@ -627,15 +646,18 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             if (chats && chats.length > 0) {
                 chats.forEach((chat: any) => {
                     const cleanPhone = chat.id.split('@')[0];
-                    const row = [cleanPhone, chat.name || ''];
-                    for (let i = 1; i <= varCount; i++) {
-                        row.push('valor'); // Relleno por defecto para variables
+                    const row = [cleanPhone];
+                    // Dejar las columnas de variables vacías para que el usuario complete
+                    for (let i = 0; i < varNames.length; i++) {
+                        row.push('');
                     }
                     rows.push(row);
                 });
             } else {
                 // Fila de ejemplo si no hay contactos
-                rows.push(['54911... (sin el +)', 'Nombre Ejemplo', ...Array(varCount).fill('valor')]);
+                const exampleRow = ['54911... (sin el +)'];
+                varNames.forEach(v => exampleRow.push(`ejemplo_${v}`));
+                rows.push(exampleRow);
             }
 
             const ws = XLSX.utils.aoa_to_sheet(rows);
