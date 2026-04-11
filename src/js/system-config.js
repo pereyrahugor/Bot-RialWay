@@ -325,27 +325,31 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- Gestión de Visibilidad de Navegación (Hot-update) ---
     const navSyncStatus = document.getElementById('nav-sync-status');
-    const backofficeSelect = document.getElementById('BACKOFFICE_VISIBLE_HOT');
+    const whatsappSelect = document.getElementById('WHATSAPP_VISIBLE_HOT');
+    const instagramSelect = document.getElementById('INSTAGRAM_VISIBLE_HOT');
+    const messengerSelect = document.getElementById('MESSENGER_VISIBLE_HOT');
     const crmSelect = document.getElementById('CRM_VISIBLE_HOT');
     const saveNavBtn = document.getElementById('save-nav-hot-btn');
 
     async function loadNavVisibility() {
         try {
             const token = localStorage.getItem('system_config_token') || 'neuroadmin25';
-            const [resBack, resCrm] = await Promise.all([
-                fetch(`/api/backoffice/get-setting?key=BACKOFFICE_VISIBLE&token=${token}`),
+            const [resWa, resIg, resMs, resCrm] = await Promise.all([
+                fetch(`/api/backoffice/get-setting?key=WHATSAPP_VISIBLE&token=${token}`),
+                fetch(`/api/backoffice/get-setting?key=INSTAGRAM_VISIBLE&token=${token}`),
+                fetch(`/api/backoffice/get-setting?key=MESSENGER_VISIBLE&token=${token}`),
                 fetch(`/api/backoffice/get-setting?key=CRM_VISIBLE&token=${token}`)
             ]);
             
-            const dataBack = await resBack.json();
+            const dataWa = await resWa.json();
+            const dataIg = await resIg.json();
+            const dataMs = await resMs.json();
             const dataCrm = await resCrm.json();
 
-            if (dataBack.success && dataBack.value !== null) {
-                backofficeSelect.value = dataBack.value;
-            }
-            if (dataCrm.success && dataCrm.value !== null) {
-                crmSelect.value = dataCrm.value;
-            }
+            if (dataWa.success && dataWa.value !== null) whatsappSelect.value = dataWa.value;
+            if (dataIg.success && dataIg.value !== null) instagramSelect.value = dataIg.value;
+            if (dataMs.success && dataMs.value !== null) messengerSelect.value = dataMs.value;
+            if (dataCrm.success && dataCrm.value !== null) crmSelect.value = dataCrm.value;
         } catch (err) {
             console.error('Error loading nav visibility:', err);
         }
@@ -354,36 +358,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     saveNavBtn.addEventListener('click', async () => {
         saveNavBtn.disabled = true;
         navSyncStatus.textContent = '⏳ Guardando...';
-        navSyncStatus.style.color = 'inherit';
-
         try {
             const token = localStorage.getItem('system_config_token') || 'neuroadmin25';
-            const backofficeValue = backofficeSelect.value;
-            const crmValue = crmSelect.value;
+            
+            const settingsToSave = [
+                { key: 'WHATSAPP_VISIBLE', value: whatsappSelect.value },
+                { key: 'INSTAGRAM_VISIBLE', value: instagramSelect.value },
+                { key: 'MESSENGER_VISIBLE', value: messengerSelect.value },
+                { key: 'CRM_VISIBLE', value: crmSelect.value }
+            ];
 
-            const [resBack, resCrm] = await Promise.all([
+            const results = await Promise.all(settingsToSave.map(s => 
                 fetch(`/api/backoffice/save-setting?token=${token}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ key: 'BACKOFFICE_VISIBLE', value: backofficeValue })
-                }),
-                fetch(`/api/backoffice/save-setting?token=${token}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ key: 'CRM_VISIBLE', value: crmValue })
-                })
-            ]);
+                    body: JSON.stringify(s)
+                }).then(r => r.json())
+            ));
 
-            const dataBack = await resBack.json();
-            const dataCrm = await resCrm.json();
+            const allSuccess = results.every(r => r.success);
 
-            if (dataBack.success && dataCrm.success) {
+            if (allSuccess) {
                 navSyncStatus.textContent = '✅ Visibilidad actualizada correctamente. Recargando...';
                 navSyncStatus.style.color = '#10b981';
-                // Recargar página después de un momento para ver cambios en el nav actual
                 setTimeout(() => window.location.reload(), 1500);
             } else {
-                navSyncStatus.textContent = '❌ Error al guardar.';
+                navSyncStatus.textContent = '❌ Error al guardar algunos cambios.';
                 navSyncStatus.style.color = '#ef4444';
             }
         } catch (err) {

@@ -23,13 +23,14 @@ export interface Chat {
     id: string; // WAID (Teléfono) o identificador de Webchat
     user_id?: string | null; // BSUID (Meta Business-Scoped User ID)
     project_id: string;
-    type: 'whatsapp' | 'webchat';
+    type: 'whatsapp' | 'webchat' | 'instagram' | 'messenger';
     name: string | null;
     email: string | null;
     notes: string | null;
     source: string | null;
     bot_enabled: boolean;
     last_message_at: string;
+    assigned_to?: string | null;
     last_human_message_at: string | null;
     metadata: any;
 }
@@ -273,7 +274,7 @@ export class HistoryHandler {
      * @param name - Nombre del contacto
      * @param userId - El nuevo BSUID (Business-Scoped User ID) de Meta
      */
-    static async getOrCreateChat(chatId: string, type: 'whatsapp' | 'webchat', name: string | null = null, userId: string | null = null): Promise<Chat | null> {
+    static async getOrCreateChat(chatId: string, type: 'whatsapp' | 'webchat' | 'instagram' | 'messenger', name: string | null = null, userId: string | null = null): Promise<Chat | null> {
         try {
             let data: Chat | null = null;
             let error: any = null;
@@ -351,10 +352,24 @@ export class HistoryHandler {
     /**
      * Guarda un mensaje en la base de datos
      */
-    static async saveMessage(chatId: string, role: 'user' | 'assistant' | 'system', content: string, type: string = 'text', contactName: string | null = null, userId: string | null = null, external_id: string | null = null) {
+    static async saveMessage(chatId: string, role: 'user' | 'assistant' | 'system', content: string, type: string = 'text', contactName: string | null = null, userId: string | null = null, external_id: string | null = null, platformType?: 'whatsapp' | 'webchat' | 'instagram' | 'messenger') {
         try {
-            // Asegurar que el chat existe (pasamos el userId para el mapeo o creación)
-            await this.getOrCreateChat(chatId, chatId.includes('@') ? 'whatsapp' : 'webchat', contactName, userId);
+            // Lógica de resolución de plataforma mejorada
+            let resolvedPlatform: 'whatsapp' | 'webchat' | 'instagram' | 'messenger' = platformType || 'whatsapp';
+
+            if (!platformType) {
+                if (chatId.includes('@')) {
+                    resolvedPlatform = 'whatsapp';
+                } else if (chatId.length > 15) { 
+                    // IDs de Instagram/Messenger suelen ser más largos que números de teléfono
+                    resolvedPlatform = 'messenger'; 
+                } else {
+                    resolvedPlatform = 'whatsapp';
+                }
+            }
+
+            // Asegurar que el chat existe
+            await this.getOrCreateChat(chatId, resolvedPlatform, contactName, userId);
 
             const msgData: any = {
                 chat_id: chatId,
@@ -526,12 +541,16 @@ export class HistoryHandler {
     /**
      * Lista todos los chats activos (con tags incluidos)
      */
-    static async listChats(limit: number = 20, offset: number = 0, search?: string, tagId?: string, assignedTo?: string | null) {
+    static async listChats(limit: number = 20, offset: number = 0, search?: string, tagId?: string, assignedTo?: string | null, platform?: string) {
         try {
             let query = supabase
                 .from('chats')
                 .select('*, chat_tags(tag_id, tags(*))')
                 .eq('project_id', PROJECT_ID);
+
+            if (platform && platform !== 'all') {
+                query = query.eq('type', platform);
+            }
 
             // Filtro por asignación (si se solicita)
             if (assignedTo) {
@@ -998,7 +1017,28 @@ export class HistoryHandler {
                 updated_at: new Date().toISOString() 
             }, { onConflict: 'project_id,key' });
 
-        if (error) console.error(`❌ [HistoryHandler] Error guardando setting ${key}:`, error);
+        if (error) {
+            console.error(`❌ [HistoryHandler] Error guardando setting ${key}:`, error);
+        } else {
+            // --- PASO ADICIONAL: Si configuramos IDs de Meta, registrar en la routing_table para triangulación ---
+            if ((key === 'FACEBOOK_PAGE_ID' || key === 'INSTAGRAM_BUSINESS_ID') && value) {
+                const publicDomain = process.env.RAILWAY_PUBLIC_DOMAIN;
+                if (publicDomain && value) {
+                    const projectUrl = publicDomain.startsWith('http') ? publicDomain : `https://${publicDomain}`;
+                    console.log(`📡 [HistoryHandler] Sincronizando routing_table para ${key}: ${value} -> ${projectUrl}`);
+                    
+                    await supabase
+                        .from('routing_table')
+                        .upsert({
+                            phone_number_id: value, // Reutilizamos esta columna como identificador remoto universal (PhoneID o PageID)
+                            waba_id: null,
+                            project_id: PROJECT_ID,
+                            project_url: projectUrl,
+                            updated_at: new Date().toISOString()
+                        }, { onConflict: 'phone_number_id' });
+                }
+            }
+        }
     }
 
     static async getSetting(key: string): Promise<string | null> {

@@ -67,7 +67,8 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
                     ctx.type || 'text', 
                     null, 
                     ctx.userId,
-                    externalId
+                    externalId,
+                    ctx.platform // 'whatsapp', 'instagram' or 'messenger'
                 );
             }
         } catch (err) {
@@ -96,7 +97,8 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
                 ctx.type || 'text', 
                 null, 
                 null,
-                externalId
+                externalId,
+                ctx.platform || 'whatsapp'
             );
         } catch (err) {
             console.error(`❌ ${prefix} Error guardando mensaje saliente manual:`, err);

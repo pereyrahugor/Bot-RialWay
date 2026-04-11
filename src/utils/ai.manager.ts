@@ -116,7 +116,7 @@ export class AiManager {
                 if (ctx.pushName) await HistoryHandler.getOrCreateChat(ctx.from, 'whatsapp', ctx.pushName, ctx.userId);
                 const msg = "🤖 Bot activado para este chat.";
                 await flowDynamic([{ body: msg }]);
-                await HistoryHandler.saveMessage(ctx.from, 'assistant', msg, 'text', null, ctx.userId);
+                await HistoryHandler.saveMessage(ctx.from, 'assistant', msg, 'text', null, ctx.userId, null, ctx.platform);
                 return state;
             }
 
@@ -125,7 +125,7 @@ export class AiManager {
                 if (ctx.pushName) await HistoryHandler.getOrCreateChat(ctx.from, 'whatsapp', ctx.pushName, ctx.userId);
                 const msg = "🛑 Bot desactivado. (Intervención humana activa)";
                 await flowDynamic([{ body: msg }]);
-                await HistoryHandler.saveMessage(ctx.from, 'assistant', msg, 'text', null, ctx.userId);
+                await HistoryHandler.saveMessage(ctx.from, 'assistant', msg, 'text', null, ctx.userId, null, ctx.platform);
                 return state;
             }
 
@@ -149,7 +149,8 @@ export class AiManager {
                 ctx.type === 'webchat' ? 'text' : ctx.type,
                 ctx.pushName || (ctx.type === 'webchat' ? 'Webchat User' : null),
                 ctx.userId,
-                externalId
+                externalId,
+                ctx.platform
             );
 
             const isBotActiveForUser = await HistoryHandler.isBotEnabled(ctx.from);

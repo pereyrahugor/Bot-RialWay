@@ -36,10 +36,14 @@ export const registerStaticRoutes = (app: any, { __dirname }: { __dirname: strin
                     console.log(`[Static] Sirviendo ${filename} para ${route}. botName=${botName}`);
 
                     // Obtener configuración de visibilidad desde DB (con fallback a env)
-                    const dbBackoffice = await HistoryHandler.getSetting('BACKOFFICE_VISIBLE');
+                    const dbWa = await HistoryHandler.getSetting('WHATSAPP_VISIBLE');
+                    const dbIg = await HistoryHandler.getSetting('INSTAGRAM_VISIBLE');
+                    const dbMs = await HistoryHandler.getSetting('MESSENGER_VISIBLE');
                     const dbCRM = await HistoryHandler.getSetting('CRM_VISIBLE');
                     
-                    const showBackoffice = (dbBackoffice === 'false' || (!dbBackoffice && process.env.BACKOFFICE_VISIBLE === 'false')) ? 'hidden-item' : '';
+                    // Si cualquiera de las plataformas está activa, mostrar backoffice
+                    const isAnyPlatformActive = (dbWa !== 'false') || (dbIg === 'true') || (dbMs === 'true');
+                    const showBackoffice = isAnyPlatformActive ? '' : 'hidden-item';
                     const showCRM = (dbCRM === 'false' || (!dbCRM && process.env.CRM_VISIBLE === 'false')) ? 'hidden-item' : '';
 
                     // Reemplazo universal de placeholders

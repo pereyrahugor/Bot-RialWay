@@ -3,6 +3,7 @@ import fs from 'fs';
 import url from 'url';
 import bodyParser from 'body-parser';
 import axios from 'axios';
+import * as XLSX from 'xlsx';
 import { backofficeAuth, systemConfigAuth } from "../middleware/auth";
 
 /**
@@ -198,11 +199,12 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         const offset = parseInt(req.query.offset as string) || 0;
         const search = req.query.search as string;
         const tag = req.query.tag as string;
+        const platform = req.query.platform as string;
         
         // Si es subusuario, aplicamos filtro de asignación (ve lo suyo + lo libre)
         const assignedTo = req.auth.isSubUser ? req.auth.userId : null;
         
-        const chats = await HistoryHandler.listChats(limit, offset, search, tag, assignedTo);
+        const chats = await HistoryHandler.listChats(limit, offset, search, tag, assignedTo, platform);
         res.json(chats);
     });
 
@@ -450,52 +452,146 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
-    app.post('/api/backoffice/whatsapp/onboard', systemConfigAuth, bodyParser.json(), async (req, res) => {
-        const { code } = req.body;
-        if (!code) return res.status(400).json({ success: false, error: 'Code is required' });
+    // --- TEMPLATES & BULK MESSAGING ---
 
+    app.get('/api/backoffice/whatsapp/templates', backofficeAuth, async (req: any, res: any) => {
         try {
-            console.log(`📡 [META-ONBOARD] Llamando a DuskCodes central para intercambio de tokens...`);
-            
-            // 1. Usar el Master Router para el intercambio (DuskCodes central)
-            // Nota: En un entorno real, DuskCodes tendría un backend en duscodes.com.ar que gestiona esto.
-            // Para esta implementación unificada, usamos el proxy de Supabase.
-            const response = await axios.post('https://ygyicozjewxbyixtpjlo.supabase.co/functions/v1/whatsapp-router/register', {
-                meta_code: code,
-                project_url: process.env.PROJECT_URL,
-                project_id: process.env.RAILWAY_PROJECT_ID,
-                app_id: process.env.META_APP_ID,
-                app_secret: process.env.META_APP_SECRET
-            });
+            if (!adapterProvider) return res.status(503).json({ success: false, error: 'Provider not ready' });
+            // Detectar si el provider soporta getTemplates
+            const provider = (adapterProvider.constructor.name === 'MetaCloudProvider') ? adapterProvider : deps.groupProvider;
+            if (!provider || typeof provider.getTemplates !== 'function') {
+                return res.status(400).json({ success: false, error: 'El proveedor actual no soporta plantillas oficiales (Meta).' });
+            }
 
-            const data = response.data;
-
-            // 2. Guardar los datos recibidos (WABA, Phone ID, Token) en la base de datos del cliente
-            // (que ahora también es ygyicozjewxbyixtpjlo)
-            const result = await HistoryHandler.saveMetaOnboardingData(
-                data.phoneNumberId || data.phone_number_id || "PENDING", 
-                data.wabaId || data.waba_id || "PENDING",
-                data.accessToken || data.access_token,
-                { ...data, syncedBy: 'duskcodes-master-router' }
-            );
-
-            // 3. Registrar en la tabla de ruteo global (Master Router)
-            const masterRouterRegister = 'https://ygyicozjewxbyixtpjlo.supabase.co/functions/v1/whatsapp-router/register';
-            await axios.post(masterRouterRegister, {
-                phone_number_id: data.phoneNumberId || data.phone_number_id,
-                project_url: process.env.PROJECT_URL,
-                waba_id: data.wabaId || data.waba_id,
-                project_id: process.env.RAILWAY_PROJECT_ID
-            }).catch(e => console.error('⚠️ [META-ONBOARD] Error registrando en Router Maestro:', e.message));
-
-            res.json(result);
+            const templates = await provider.getTemplates();
+            res.json({ success: true, templates });
         } catch (error: any) {
-            console.error('Error in Meta Onboarding (Unified):', error.response?.data || error.message);
-            res.status(500).json({ success: false, error: error.response?.data?.error?.message || error.message });
+            res.status(500).json({ success: false, error: error.message });
         }
     });
 
-    // --- ONBOARDING CALLBACK (Recibe los datos de la subventana de Meta) ---
+    app.get('/api/backoffice/whatsapp/template-excel/:templateName', backofficeAuth, async (req: any, res: any) => {
+        try {
+            const { templateName } = req.params;
+            const provider = (adapterProvider.constructor.name === 'MetaCloudProvider') ? adapterProvider : deps.groupProvider;
+            if (!provider || typeof provider.getTemplates !== 'function') {
+                return res.status(400).json({ success: false, error: 'Proveedor Meta no disponible' });
+            }
+
+            const templates = await provider.getTemplates();
+            const template = templates.find((t: any) => t.name === templateName);
+
+            if (!template) {
+                return res.status(404).json({ success: false, error: 'Plantilla no encontrada.' });
+            }
+
+            // Detectar variables en BODY
+            const bodyComponent = template.components.find((c: any) => c.type === 'BODY');
+            const text = bodyComponent?.text || '';
+            const matches = text.match(/\{\{\d+\}\}/g) || [];
+            const varCount = matches.length;
+
+            // Obtener contactos existentes del proyecto
+            const chats = await HistoryHandler.listChats(2000, 0); // Hasta 2000 contactos recientes
+
+            const XLSX = await import('xlsx');
+            const wb = XLSX.utils.book_new();
+            
+            // Definir cabeceras
+            const headers = ['phone', 'name'];
+            for (let i = 1; i <= varCount; i++) {
+                headers.push(`var${i}`);
+            }
+
+            // Preparar filas de datos
+            const rows = [headers];
+            
+            if (chats && chats.length > 0) {
+                chats.forEach((chat: any) => {
+                    const cleanPhone = chat.id.split('@')[0];
+                    const row = [cleanPhone, chat.name || ''];
+                    for (let i = 1; i <= varCount; i++) {
+                        row.push('valor'); // Relleno por defecto para variables
+                    }
+                    rows.push(row);
+                });
+            } else {
+                // Fila de ejemplo si no hay contactos
+                rows.push(['54911... (sin el +)', 'Nombre Ejemplo', ...Array(varCount).fill('valor')]);
+            }
+
+            const ws = XLSX.utils.aoa_to_sheet(rows);
+            XLSX.utils.book_append_sheet(wb, ws, 'EnvioMasivo');
+
+            const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+            res.setHeader('Content-Disposition', `attachment; filename="plantilla_${templateName}.xlsx"`);
+            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            res.end(buf);
+        } catch (error: any) {
+            console.error('Error generando Excel:', error);
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
+    app.post('/api/backoffice/whatsapp/send-bulk-template', backofficeAuth, (req: any, res: any) => {
+        upload.single('file')(req, res, async (err: any) => {
+            if (err) return res.status(400).json({ success: false, error: err.message });
+            
+            const { templateName, languageCode } = req.body;
+            const file = (req as any).file;
+
+            if (!file || !templateName) {
+                return res.status(400).json({ success: false, error: 'Falta el archivo o el nombre de la plantilla.' });
+            }
+
+            try {
+                const XLSX = await import('xlsx');
+                const workbook = XLSX.readFile(file.path);
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                const data: any[] = XLSX.utils.sheet_to_json(worksheet);
+
+                if (data.length === 0) {
+                    return res.status(400).json({ success: false, error: 'El Excel está vacío.' });
+                }
+
+                const provider = (adapterProvider.constructor.name === 'MetaCloudProvider') ? adapterProvider : deps.groupProvider;
+
+                res.status(202).json({ success: true, message: 'Proceso masivo iniciado.', total: data.length });
+
+                for (const row of data) {
+                    const phone = String(row.phone || row.PHONE || '').replace(/\D/g, '');
+                    if (!phone) continue;
+
+                    const parameters: any[] = [];
+                    Object.keys(row).forEach(key => {
+                        if (key.toLowerCase().startsWith('var')) {
+                            parameters.push({ type: 'text', text: String(row[key]) });
+                        }
+                    });
+
+                    const components = parameters.length > 0 ? [{ type: 'body', parameters }] : [];
+
+                    try {
+                        const resApi = await provider.sendTemplate(phone, templateName, languageCode || 'es', components);
+                        if (resApi?.messages) {
+                            const msgId = resApi.messages[0].id;
+                            await deps.HistoryHandler.saveMessage(phone, 'assistant', `[Plantilla Masiva: ${templateName}]`, 'text', null, null, msgId);
+                        }
+                    } catch (e) {}
+                    await new Promise(r => setTimeout(r, 250));
+                }
+            } catch (e: any) {
+                console.error('Error en bulk:', e);
+            } finally {
+                if (file && fs.existsSync(file.path)) fs.unlinkSync(file.path);
+            }
+        });
+    });
+
+    // --- ONBOARDING META ---
+
     app.get('/api/backoffice/whatsapp/onboard-callback', async (req, res) => {
         const { code, wabaId: queryWabaId, phoneId: queryPhoneId } = req.query;
         if (!code) return res.send('<h2>❌ Error: No se recibió el código de Meta</h2>');
@@ -510,87 +606,92 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                 throw new Error("Faltan META_APP_ID o META_APP_SECRET en el servidor.");
             }
 
-            // 1. Intercambio Servidor a Servidor (Generar Token de Usuario del Sistema)
             const tokenResponse = await axios.get(`https://graph.facebook.com/v22.0/oauth/access_token`, {
-                params: {
-                    client_id: appId,
-                    client_secret: appSecret,
-                    code: code
-                }
+                params: { client_id: appId, client_secret: appSecret, code: code }
             });
 
             const accessToken = tokenResponse.data.access_token;
-            console.log("✅ [CALLBACK] Token de acceso obtenido exitosamente.");
-
-            // 2. Determinar WABA ID y Phone ID
             let finalWabaId = queryWabaId as string;
             let finalPhoneId = queryPhoneId as string;
             let finalVerifiedName = "";
 
-            if (!finalWabaId || !finalPhoneId) {
-                console.log("⚠️ No se recibieron WABA ID / Phone ID del frontend. Intentando descubrimiento API Graph...");
-                const { discoverMetaIds } = await import("../utils/metaDiscovery");
-                const discovery = await discoverMetaIds(accessToken);
-
-                if (!discovery || !discovery.phoneNumberId) {
-                    throw new Error("Token obtenido pero no se encontraron cuentas de WhatsApp asociadas.");
-                }
-                finalWabaId = discovery.wabaId;
-                finalPhoneId = discovery.phoneNumberId;
+            // 1. Descubrimiento de WhatsApp (WABA)
+            const { discoverMetaIds } = await import("../utils/metaDiscovery");
+            const discovery = await discoverMetaIds(accessToken);
+            if (discovery) {
+                finalWabaId = discovery.wabaId || finalWabaId;
+                finalPhoneId = discovery.phoneNumberId || finalPhoneId;
                 finalVerifiedName = discovery.verifiedName || "";
             }
 
-            // 3. Registrar el número de teléfono con la API (Paso 3 de integración comercial)
-            console.log(`📡 [CALLBACK] Registrando número de teléfono: ${finalPhoneId}...`);
-            try {
-                await axios.post(`https://graph.facebook.com/v22.0/${finalPhoneId}/register`, 
-                    { messaging_product: 'whatsapp', pin: '' }, // PIN vacío a menos que el cliente use 2FA
-                    { headers: { 'Authorization': `Bearer ${accessToken}` } }
-                );
-                console.log("✅ [CALLBACK] Número de teléfono registrado con éxito en WhatsApp API.");
-            } catch (regError: any) {
-                console.warn("⚠️ [CALLBACK] Fallo al registrar número (podría estar ya registrado o requerir PIN real):", regError.response?.data || regError.message);
+            // 2. Descubrimiento de Páginas (Messenger / Instagram)
+            const { discoverAndLinkMetaPages } = await import("../utils/metaPageDiscovery");
+            const pageDiscovery = await discoverAndLinkMetaPages(accessToken);
+            if (pageDiscovery) {
+                console.log(`✅ [CALLBACK] Guardando configuración de Página: ${pageDiscovery.pageName}`);
+                await HistoryHandler.saveSetting('FACEBOOK_PAGE_ID', pageDiscovery.pageId);
+                await HistoryHandler.saveSetting('FACEBOOK_PAGE_TOKEN', pageDiscovery.pageAccessToken);
+                
+                // Si encontramos Instagram vinculado, guardarlo también
+                if (pageDiscovery.instagramId) {
+                    await HistoryHandler.saveSetting('INSTAGRAM_BUSINESS_ID', pageDiscovery.instagramId);
+                }
+
+                // Activar visibilidad por defecto si encontramos una página
+                await HistoryHandler.saveSetting('INSTAGRAM_VISIBLE', 'on');
+                await HistoryHandler.saveSetting('MESSENGER_VISIBLE', 'on');
             }
 
-            // 3.5. Suscribir la App a la WABA (Obligatorio para que Meta envíe los webhooks)
-            console.log(`📡 [CALLBACK] Suscribiendo Webhooks para la WABA: ${finalWabaId}...`);
-            try {
+            if (!finalWabaId && !pageDiscovery) {
+                throw new Error("No se pudo descubrir ninguna cuenta de WhatsApp ni Página de Facebook.");
+            }
+
+            // Registrar y suscribir WhatsApp si se encontró
+            if (finalPhoneId) {
+                await axios.post(`https://graph.facebook.com/v22.0/${finalPhoneId}/register`, 
+                    { messaging_product: 'whatsapp', pin: '' }, 
+                    { headers: { 'Authorization': `Bearer ${accessToken}` } }
+                ).catch(() => {});
+            }
+
+            if (finalWabaId) {
                 await axios.post(`https://graph.facebook.com/v22.0/${finalWabaId}/subscribed_apps`, 
                     {}, 
                     { headers: { 'Authorization': `Bearer ${accessToken}` } }
-                );
-                console.log("✅ [CALLBACK] WABA suscrita correctamente a la App para recibir Webhooks.");
-            } catch (subError: any) {
-                console.warn("⚠️ [CALLBACK] Fallo al suscribir la WABA (los mensajes no llegarán al bot):", subError.response?.data || subError.message);
+                ).catch(() => {});
+
+                await HistoryHandler.saveMetaOnboardingData(finalWabaId, finalPhoneId, accessToken, { verified_name: finalVerifiedName });
             }
 
-            // 4. Guardar todo en la base de datos local
-            await HistoryHandler.saveMetaOnboardingData(
-                finalWabaId, 
-                finalPhoneId, 
-                accessToken,
-                { verified_name: finalVerifiedName, syncedBy: 'auto-callback-v22' }
-            );
-
-            // 5. Redirigir al usuario de vuelta a la web oficial (Experiencia Premium)
             return res.redirect("https://duskcodes.com.ar/dashboard.html?metaStatus=success");
 
         } catch (error: any) {
-            console.error('❌ Error en vinculación automática:', error.response?.data || error.message);
-            
-            const metaError = error.response?.data?.error;
-            const errorMsg = metaError ? `${metaError.message} (Code: ${metaError.code})` : error.message;
+            console.error('❌ Error en vinculación:', error.message);
+            return res.status(500).send(`<h2>❌ Error en la vinculación: ${error.message}</h2>`);
+        }
+    });
 
-            return res.status(500).send(`
-                <div style="font-family: Arial; text-align: center; padding: 50px;">
-                    <h2 style="color: #e11d48;">❌ Error en la vinculación automática</h2>
-                    <div style="background: #fff1f2; border: 1px solid #fda4af; padding: 20px; border-radius: 8px; display: inline-block; margin: 20px 0;">
-                        <p style="color: #9f1239;">${errorMsg}</p>
-                    </div>
-                    <p>Revisa que el App Secret, el App ID y los <b>Dominios de la App</b> en Meta sean los correctos.</p>
-                    <button onclick="window.close()" style="padding: 10px 20px; cursor: pointer;">Cerrar</button>
-                </div>
-            `);
+    app.post('/api/backoffice/whatsapp/onboard', systemConfigAuth, bodyParser.json(), async (req, res) => {
+        const { code } = req.body;
+        if (!code) return res.status(400).json({ success: false, error: 'Code is required' });
+        try {
+            const response = await axios.post('https://ygyicozjewxbyixtpjlo.supabase.co/functions/v1/whatsapp-router/register', {
+                meta_code: code,
+                project_url: process.env.PROJECT_URL,
+                project_id: process.env.RAILWAY_PROJECT_ID,
+                app_id: process.env.META_APP_ID,
+                app_secret: process.env.META_APP_SECRET
+            });
+            const data = response.data;
+            const result = await HistoryHandler.saveMetaOnboardingData(
+                data.phoneNumberId || data.phone_number_id || "PENDING", 
+                data.wabaId || data.waba_id || "PENDING",
+                data.accessToken || data.access_token,
+                { ...data, syncedBy: 'duskcodes-master-router' }
+            );
+            res.json(result);
+        } catch (error: any) {
+            res.status(500).json({ success: false, error: error.message });
         }
     });
 
@@ -638,6 +739,19 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         try {
             await HistoryHandler.saveSetting(key, value);
             res.json({ success: true });
+        } catch (error: any) {
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
+    app.get('/api/backoffice/settings', backofficeAuth, async (req, res) => {
+        try {
+            const keys = ['WHATSAPP_VISIBLE', 'INSTAGRAM_VISIBLE', 'MESSENGER_VISIBLE', 'CRM_VISIBLE'];
+            const results: any = {};
+            for (const key of keys) {
+                results[key] = await HistoryHandler.getSetting(key);
+            }
+            res.json(results);
         } catch (error: any) {
             res.status(500).json({ success: false, error: error.message });
         }

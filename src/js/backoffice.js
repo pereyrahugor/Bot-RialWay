@@ -12,9 +12,13 @@ let isSending = false;
 
 // Paginación de chats
 let chatOffset = 0;
-const CHAT_LIMIT = 20;
-let loadingChats = false;
 let allChatsLoaded = false;
+let currentPlatform = 'whatsapp';
+let platformSettings = {
+    whatsapp: true,
+    instagram: false,
+    messenger: false
+};
 
 // Paginación de mensajes
 let messageOffset = 0;
@@ -61,7 +65,8 @@ async function fetchChats(refresh = false) {
 
     loadingChats = true;
     try {
-        const url = `/api/backoffice/chats?token=${token}&limit=${CHAT_LIMIT}&offset=${chatOffset}&search=${encodeURIComponent(query)}&tag=${tagFilter}`;
+        const platformParam = currentPlatform === 'all' ? '' : `&platform=${currentPlatform}`;
+        const url = `/api/backoffice/chats?token=${token}&limit=${CHAT_LIMIT}&offset=${chatOffset}&search=${encodeURIComponent(query)}&tag=${tagFilter}${platformParam}`;
         const res = await fetch(url);
         if (res.status === 401) {
             logout();
@@ -156,6 +161,16 @@ function renderChatList(listToRender = chats) {
         const initial = (chat.name || chat.id).charAt(0).toUpperCase();
         const avatarUrl = `/api/backoffice/profile-pic/${chat.id}?token=${token}`;
         
+        // Icono de plataforma
+        let platformIcon = '';
+        if (chat.type === 'instagram') platformIcon = '<i class="fab fa-instagram platform-instagram"></i>';
+        else if (chat.type === 'messenger') platformIcon = '<i class="fab fa-facebook-messenger platform-messenger"></i>';
+        else platformIcon = '<i class="fab fa-whatsapp platform-whatsapp"></i>';
+
+        // Si estamos en "Todos", mostramos el icono como overlay o principal
+        const showIconOverlay = currentPlatform === 'all';
+        const iconOverlayHtml = showIconOverlay ? `<div class="platform-icon-overlay">${platformIcon}</div>` : '';
+
         const tagsHtml = (chat.tags || []).map(t => 
             `<span class="tag-pill" style="background:${t.color || '#6366f1'}">${t.name}</span>`
         ).join('');
@@ -167,9 +182,10 @@ function renderChatList(listToRender = chats) {
 
         return `
             <div class="chat-item ${activeChatId === chat.id ? 'active' : ''}" onclick="selectChat('${chat.id}')">
-                <div class="chat-avatar">
+                <div class="chat-avatar" style="position:relative;">
                     <span style="position:relative; z-index:1;">${initial}</span>
                     <img src="${avatarUrl}" onerror="this.style.display='none'">
+                    ${iconOverlayHtml}
                 </div>
                 <div class="chat-info">
                     <div style="display:flex; justify-content:space-between; align-items: baseline;">
@@ -182,6 +198,51 @@ function renderChatList(listToRender = chats) {
             </div>
         `;
     }).join('');
+}
+
+async function switchPlatform(platform) {
+    if (loadingChats) return;
+    currentPlatform = platform;
+    
+    // Actualizar UI de tabs
+    document.querySelectorAll('.platform-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById(`tab-${platform}`).classList.add('active');
+    
+    console.log(`[Platform] Cambiando a ${platform}`);
+    fetchChats(true);
+}
+
+async function checkPlatformVisibility() {
+    try {
+        const res = await fetch(`/api/backoffice/settings?token=${token}`);
+        const settings = await res.json();
+        
+        platformSettings.whatsapp = settings.WHATSAPP_VISIBLE !== 'false';
+        platformSettings.instagram = settings.INSTAGRAM_VISIBLE === 'true';
+        platformSettings.messenger = settings.MESSENGER_VISIBLE === 'true';
+
+        // Mostrar/ocultar los tabs según configuración
+        document.getElementById('tab-whatsapp').style.display = platformSettings.whatsapp ? 'flex' : 'none';
+        document.getElementById('tab-instagram').style.display = platformSettings.instagram ? 'flex' : 'none';
+        document.getElementById('tab-messenger').style.display = platformSettings.messenger ? 'flex' : 'none';
+
+        // Si hay más de una plataforma activa, mostrar el tab "Todos"
+        const activeCount = [platformSettings.whatsapp, platformSettings.instagram, platformSettings.messenger].filter(v => v === true).length;
+        if (activeCount > 1) {
+            document.getElementById('tab-all').style.display = 'flex';
+        } else {
+            document.getElementById('tab-all').style.display = 'none';
+        }
+
+        // Si la plataforma actual no está habilitada, cambiar a la primera disponible o 'all' si corresponde
+        if (!platformSettings[currentPlatform] && currentPlatform !== 'all') {
+            if (platformSettings.whatsapp) switchPlatform('whatsapp');
+            else if (platformSettings.instagram) switchPlatform('instagram');
+            else if (platformSettings.messenger) switchPlatform('messenger');
+        }
+    } catch (e) {
+        console.error('Error verificando visibilidad de plataformas:', e);
+    }
 }
 
 async function selectChat(id) {
@@ -1006,6 +1067,7 @@ setInterval(fetchPendingTicketsCount, 30000);
 
 fetchChats(true);
 fetchBotTags();
+checkMetaStatus(); // Check if bulk messaging should be enabled
 
 // Listeners para Infinite Scroll
 document.getElementById('chat-list').addEventListener('scroll', function() {
@@ -1020,3 +1082,153 @@ document.getElementById('messages').addEventListener('scroll', function() {
         fetchMessages(activeChatId);
     }
 });
+
+// --- BULK MESSAGING LOGIC ---
+
+let availableTemplates = [];
+
+async function checkMetaStatus() {
+    try {
+        const res = await fetch(`/api/backoffice/whatsapp/config?token=${token}`);
+        const data = await res.json();
+        
+        // Show bulk button only if Meta is configured (has WABA ID)
+        if (data.wabaId) {
+            const bulkBtn = document.getElementById('nav-bulk-btn');
+            if (bulkBtn) bulkBtn.style.display = 'flex';
+        }
+    } catch (e) {
+        console.error('[Bulk] Error checking Meta status:', e);
+    }
+}
+
+async function toggleBulkModal() {
+    const modal = document.getElementById('bulk-modal');
+    modal.classList.toggle('active');
+    
+    if (modal.classList.contains('active')) {
+        loadTemplates();
+    }
+}
+
+async function loadTemplates() {
+    const select = document.getElementById('bulk-template-select');
+    select.innerHTML = '<option value="">Cargando plantillas...</option>';
+    
+    try {
+        const res = await fetch(`/api/backoffice/whatsapp/templates?token=${token}`);
+        if (!res.ok) throw new Error('Error al obtener plantillas');
+        
+        const data = await res.json();
+        availableTemplates = data.templates || [];
+        
+        if (availableTemplates.length === 0) {
+            select.innerHTML = '<option value="">Sin plantillas aprobadas</option>';
+            return;
+        }
+        
+        select.innerHTML = '<option value="">-- Seleccione Plantilla --</option>' + 
+            availableTemplates.map(t => `<option value="${t.name}">${t.name} (${t.language})</option>`).join('');
+            
+    } catch (e) {
+        console.error('[Bulk] Error loading templates:', e);
+        select.innerHTML = '<option value="">Error al cargar</option>';
+        showToast('❌ No se pudieron cargar las plantillas de Meta', 'error');
+    }
+}
+
+function onTemplateChange(templateName) {
+    const previewBox = document.getElementById('template-preview-box');
+    const previewText = document.getElementById('template-preview-text');
+    const step2 = document.getElementById('bulk-step-2');
+    const step3 = document.getElementById('bulk-step-3');
+    
+    if (!templateName) {
+        previewBox.style.display = 'none';
+        step2.style.display = 'none';
+        step3.style.display = 'none';
+        return;
+    }
+    
+    const template = availableTemplates.find(t => t.name === templateName);
+    if (template) {
+        // Extract body text for preview
+        const bodyComp = template.components.find(c => c.type === 'BODY');
+        previewText.innerText = bodyComp ? bodyComp.text : 'Sin texto de cuerpo';
+        previewBox.style.display = 'block';
+        step2.style.display = 'block';
+        step3.style.display = 'block';
+    }
+}
+
+function downloadBulkExcel() {
+    const templateName = document.getElementById('bulk-template-select').value;
+    if (!templateName) return;
+    
+    window.open(`/api/backoffice/whatsapp/template-excel/${templateName}?token=${token}`, '_blank');
+}
+
+async function startBulkSend() {
+    const templateName = document.getElementById('bulk-template-select').value;
+    const fileInput = document.getElementById('bulk-file-input');
+    const btn = document.getElementById('send-bulk-btn');
+    const progressDiv = document.getElementById('bulk-progress');
+    const progressBar = document.getElementById('bulk-progress-bar');
+    const statusText = document.getElementById('bulk-status-text');
+    
+    if (!templateName || fileInput.files.length === 0) {
+        showToast('⚠️ Seleccione una plantilla y suba un archivo Excel', 'error');
+        return;
+    }
+    
+    const file = fileInput.files[0];
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('templateName', templateName);
+    
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Iniciando...';
+    progressDiv.style.display = 'block';
+    progressBar.style.width = '0%';
+    statusText.innerText = 'Subiendo y procesando...';
+    
+    try {
+        const res = await fetch(`/api/backoffice/whatsapp/send-bulk-template?token=${token}`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (res.status === 202) {
+            // El proceso inició en segundo plano
+            statusText.innerText = '✅ Proceso iniciado en segundo plano. Los mensajes se enviarán gradualmente.';
+            progressBar.style.width = '100%';
+            progressBar.style.background = '#10b981';
+            showToast('🚀 Envío masivo iniciado correctamente');
+            
+            setTimeout(() => {
+                toggleBulkModal();
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-paper-plane" style="margin-right:8px;"></i> Iniciar Envío';
+                progressDiv.style.display = 'none';
+                fileInput.value = '';
+            }, 3000);
+            
+        } else {
+            const data = await res.json();
+            throw new Error(data.error || 'Error al iniciar envío');
+        }
+    } catch (e) {
+        console.error('[Bulk] Error:', e);
+        statusText.innerText = '❌ Error: ' + e.message;
+        progressBar.style.background = '#ef4444';
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-paper-plane" style="margin-right:8px;"></i> Reintentar';
+        showToast('❌ Error al iniciar envío masivo', 'error');
+    }
+}
+
+// Inicialización
+checkPlatformVisibility();
+fetchChats();
+fetchBotTags();
+checkMetaStatus();

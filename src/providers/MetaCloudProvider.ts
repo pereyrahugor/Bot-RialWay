@@ -142,6 +142,72 @@ class MetaCloudProvider extends ProviderClass {
     };
 
     /**
+     * Obtiene la lista de plantillas disponibles en la WABA
+     */
+    public async getTemplates(): Promise<any[]> {
+        const { waba_id, access_token } = this.config;
+        if (!waba_id || !access_token) {
+            console.error('❌ [MetaCloudProvider] getTemplates: Faltan IDs o token');
+            return [];
+        }
+
+        try {
+            const url = `https://graph.facebook.com/v22.0/${waba_id}/message_templates`;
+            const response = await axios.get(url, {
+                headers: { 'Authorization': `Bearer ${access_token}` }
+            });
+            return response.data?.data || [];
+        } catch (error: any) {
+            console.error('❌ [MetaCloudProvider] Error obteniendo plantillas:', error?.response?.data || error.message);
+            return [];
+        }
+    }
+
+    /**
+     * Envía un mensaje basado en una plantilla oficial
+     */
+    public async sendTemplate(number: string, templateName: string, languageCode: string = 'es', components: any[] = []): Promise<any> {
+        const { phone_number_id, access_token } = this.config;
+        if (!phone_number_id || !access_token) {
+            console.error('❌ [MetaCloudProvider] sendTemplate: Faltan IDs o token');
+            return null;
+        }
+
+        const url = `https://graph.facebook.com/v22.0/${phone_number_id}/messages`;
+        
+        // Limpiar número: solo dígitos
+        const cleanNumber = number.replace(/\D/g, '');
+        // El formato debe ser internacional sin el + o con él, dependiendo de la configuración. 
+        // Usualmente Meta acepta el número internacional directo.
+        
+        const body = {
+            messaging_product: "whatsapp",
+            to: cleanNumber,
+            type: "template",
+            template: {
+                name: templateName,
+                language: {
+                    code: languageCode
+                },
+                components: components
+            }
+        };
+
+        try {
+            const response = await axios.post(url, body, {
+                headers: {
+                    'Authorization': `Bearer ${access_token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            return response.data;
+        } catch (error: any) {
+            console.error('❌ [MetaCloudProvider] Error enviando plantilla:', error?.response?.data || error.message);
+            return null;
+        }
+    }
+
+    /**
      * Envía mensajes a través de la API oficial de Meta
      */
     public async sendMessage(number: string, message: string, options: any = {}): Promise<any> {
@@ -242,15 +308,73 @@ class MetaCloudProvider extends ProviderClass {
                 }
             }
 
-            if (!body || body.object !== 'whatsapp_business_account') return;
+            if (!body || (body.object !== 'whatsapp_business_account' && body.object !== 'page')) return;
 
             setImmediate(() => {
-                this.processIncomingMessage(body);
+                if (body.object === 'page') {
+                    this.processMessengerMessage(body);
+                } else {
+                    this.processIncomingMessage(body);
+                }
             });
         } catch (e) {
             console.error('❌ [MetaCloudProvider] Error en handleWebhook:', e);
         }
     }
+
+    /**
+     * Obtiene la lista de plantillas disponibles en la WABA
+     */
+    // public async getTemplates(): Promise<any[]> {
+    //     const { waba_id, access_token } = this.config;
+    //     if (!waba_id || !access_token) return [];
+
+    //     try {
+    //         const url = `https://graph.facebook.com/v20.0/${waba_id}/message_templates`;
+    //         const response = await axios.get(url, {
+    //             headers: { 'Authorization': `Bearer ${access_token}` }
+    //         });
+    //         return response.data?.data || [];
+    //     } catch (error: any) {
+    //         console.error('❌ [MetaCloudProvider] Error obteniendo plantillas:', error?.response?.data || error.message);
+    //         return [];
+    //     }
+    // }
+
+    // /**
+    //  * Envía un mensaje basado en una plantilla
+    //  */
+    // public async sendTemplate(number: string, templateName: string, languageCode: string = 'es', components: any[] = []): Promise<any> {
+    //     const { phone_number_id, access_token } = this.config;
+    //     if (!phone_number_id || !access_token) return null;
+
+    //     const url = `https://graph.facebook.com/v20.0/${phone_number_id}/messages`;
+    //     const cleanNumber = number.replace(/\D/g, '');
+        
+    //     const body = {
+    //         messaging_product: "whatsapp",
+    //         to: cleanNumber,
+    //         type: "template",
+    //         template: {
+    //             name: templateName,
+    //             language: { code: languageCode },
+    //             components: components
+    //         }
+    //     };
+
+    //     try {
+    //         const response = await axios.post(url, body, {
+    //             headers: {
+    //                 'Authorization': `Bearer ${access_token}`,
+    //                 'Content-Type': 'application/json'
+    //             }
+    //         });
+    //         return response.data;
+    //     } catch (error: any) {
+    //         console.error('❌ [MetaCloudProvider] Error enviando plantilla:', error?.response?.data || error.message);
+    //         return null;
+    //     }
+    // }
 
     private processIncomingMessage = (body: any) => {
         try {
@@ -299,7 +423,8 @@ class MetaCloudProvider extends ProviderClass {
                                 userId: bsuid, // Añadimos el BSUID al contexto
                                 name: isEcho ? 'Me' : (contact?.profile?.name || 'User'),
                                 type: type,
-                                payload: msg
+                                payload: msg,
+                                platform: 'whatsapp'
                             };
 
                             // Enriquecer con objeto media para que los flujos (saveFile) tengan lo necesario
@@ -322,6 +447,77 @@ class MetaCloudProvider extends ProviderClass {
             });
         } catch (e) {
             console.error('❌ [MetaCloudProvider] Error procesando mensaje entrante:', e);
+        }
+    }
+
+    /**
+     * Procesa el Webhook entrante de Messenger / Instagram (objeto 'page')
+     */
+    private processMessengerMessage = (body: any) => {
+        try {
+            body.entry?.forEach((entry: any) => {
+                entry.messaging?.forEach((msgEntry: any) => {
+                    if (msgEntry.message) {
+                        const senderId = msgEntry.sender.id;
+                        const msg = msgEntry.message;
+                        
+                        // Determinar si es Instagram o Messenger basado en el formato del ID o metadata
+                        // Usualmente Meta envía info del receptor
+                        const isInstagram = !!msgEntry.recipient?.id && entry.id !== msgEntry.recipient.id; 
+                        // Nota: Una forma más fiable es ver si el senderId tiene formato numérico largo
+                        const platform: 'instagram' | 'messenger' = (senderId.length > 15) ? 'instagram' : 'messenger';
+
+                        const type = msg.attachments ? msg.attachments[0].type : 'text';
+                        const messageBody = msg.text || (msg.attachments ? `_event_${type}_` : '');
+
+                        const formatedMessage: any = {
+                            body: messageBody,
+                            from: senderId,
+                            phoneNumber: senderId,
+                            userId: senderId,
+                            name: 'Meta User',
+                            type: type === 'image' || type === 'video' ? type : 'text',
+                            payload: msgEntry,
+                            platform: platform // Custom field for easier identification
+                        };
+
+                        if (msg.attachments) {
+                            const att = msg.attachments[0].payload;
+                            formatedMessage.media = {
+                                url: att.url,
+                                mimetype: type === 'image' ? 'image/jpeg' : (type === 'video' ? 'video/mp4' : 'application/octet-stream'),
+                                id: null
+                            };
+                        }
+
+                        this.emit('message', formatedMessage);
+                    }
+                });
+            });
+        } catch (e) {
+            console.error('❌ [MetaCloudProvider] Error procesando mensaje de Messenger:', e);
+        }
+    }
+
+    /**
+     * Alternativa de envio para Messenger/Instagram
+     */
+    public async sendMessenger(recipientId: string, message: string, platform: 'instagram' | 'messenger' = 'messenger'): Promise<any> {
+        const { access_token } = this.config;
+        if (!access_token) return null;
+
+        const url = `https://graph.facebook.com/v20.0/me/messages?access_token=${access_token}`;
+        const body = {
+            recipient: { id: recipientId },
+            message: { text: message }
+        };
+
+        try {
+            const response = await axios.post(url, body);
+            return response.data;
+        } catch (error: any) {
+            console.error(`❌ [MetaCloudProvider] Error enviando a ${platform}:`, error?.response?.data || error.message);
+            return null;
         }
     }
 }
