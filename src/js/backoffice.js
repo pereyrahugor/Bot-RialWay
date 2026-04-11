@@ -1095,11 +1095,46 @@ async function checkMetaStatus() {
     try {
         const res = await fetch(`/api/backoffice/whatsapp/config?token=${token}`);
         const data = await res.json();
+        const config = data.config || {};
         
-        // Show bulk button only if Meta is configured (has WABA ID)
-        if (data.wabaId) {
+        // Mostrar botón de masivos y actualizar panel solo si Meta está vinculado
+        if (config.waba_id && config.waba_id !== 'PENDING') {
             const bulkBtn = document.getElementById('nav-bulk-btn');
             if (bulkBtn) bulkBtn.style.display = 'flex';
+
+            // Updating Meta Panel UI for Connected State
+            const metaPanel = document.getElementById('meta-panel');
+            if (metaPanel) {
+                const content = metaPanel.querySelector('.tickets-list');
+                if (content) {
+                    content.innerHTML = `
+                        <div style="background: linear-gradient(135deg, #10b981, #059669); width: 100px; height: 100px; border-radius: 24px; display: flex; align-items: center; justify-content: center; font-size: 3rem; color: white; box-shadow: 0 15px 30px rgba(16, 185, 129, 0.4); margin-top: 40px;">
+                            <i class="fas fa-check-double"></i>
+                        </div>
+                        <div>
+                            <h2 style="margin: 0; color: var(--text-main); font-size: 1.6rem; font-weight: 700;">Meta Conectado</h2>
+                            <div style="height: 3px; width: 50px; background: #10b981; margin: 10px auto; border-radius: 10px;"></div>
+                            <p style="color: var(--text-muted); font-size: 1rem; margin-top: 15px; line-height: 1.6;">
+                                Tu cuenta de <strong>WhatsApp Business</strong> está vinculada correctamente.
+                            </p>
+                        </div>
+                        <div style="background: var(--bg-header); padding: 24px; border-radius: 20px; border: 1px solid var(--border); width: 100%; text-align: left;">
+                            <h4 style="margin: 0 0 15px 0; color: #10b981; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700;">Detalles de la conexión:</h4>
+                            <div style="font-size: 0.9rem; color: var(--text-main); line-height: 1.8;">
+                                <div><strong>WABA ID:</strong> ${config.waba_id}</div>
+                                <div><strong>ID de Teléfono:</strong> ${config.phone_number_id}</div>
+                                ${config.verified_name ? `<div><strong>Nombre:</strong> ${config.verified_name}</div>` : ''}
+                            </div>
+                        </div>
+                        <button class="btn-primary" onclick="toggleBulkModal(); toggleMetaPanel();" style="width:100%; height:45px; display:flex; align-items:center; justify-content:center; gap:10px; background:#10b981; border:none; border-radius:12px; font-weight:600; cursor:pointer; color:white; margin-top: 20px;">
+                            <i class="fas fa-layer-group"></i> Abrir Envío Masivo
+                        </button>
+                        <button class="btn-secondary" onclick="launchMetaOnboarding()" style="width:100%; margin-top:10px; opacity:0.7; font-size:0.8rem;">
+                            Actualizar Configuración
+                        </button>
+                    `;
+                }
+            }
         }
     } catch (e) {
         console.error('[Bulk] Error checking Meta status:', e);
