@@ -575,10 +575,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
-    app.post('/api/backoffice/whatsapp/send-bulk-template', backofficeAuth, (req: any, res: any) => {
-        upload.single('file')(req, res, async (err: any) => {
-            if (err) return res.status(400).json({ success: false, error: err.message });
-            
+    app.post('/api/backoffice/whatsapp/send-bulk-template', backofficeAuth, upload.single('file'), async (req: any, res: any) => {
+        try {
             await syncMetaProvider();
             
             const { templateName, languageCode } = req.body;
@@ -630,7 +628,10 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             } finally {
                 if (file && fs.existsSync(file.path)) fs.unlinkSync(file.path);
             }
-        });
+        } catch (error: any) {
+            console.error('Error en bulk:', error);
+            res.status(500).json({ success: false, error: error.message });
+        }
     });
 
     // --- ONBOARDING META ---
