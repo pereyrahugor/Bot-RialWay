@@ -133,7 +133,7 @@ const main = async () => {
         
         groupProvider = createProvider(SupabaseBaileysProvider, {
             name: `${SESSION_NAME}_groups`, // <--- Diferente del principal para evitar bloqueo
-            version: [2, 3000, 1015901307],
+            version: [2, 3000, 1030817285],
             groupsIgnore: false,
             readStatus: false,
             disableHttpServer: true,
