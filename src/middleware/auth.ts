@@ -35,8 +35,11 @@ export const backofficeAuth = async (req: any, res: any, next: () => void) => {
     
     // Log de diagnóstico persistente para depurar fallos en producción
     const projectId = (HistoryHandler as any).PROJECT_ID || process.env.RAILWAY_PROJECT_ID || 'unknown';
+    
     if (!adminPass) {
-        console.error(`⚡⚡ [AUTH-CRITICAL] No se detectó ADMIN_PASS ni BACKOFFICE_TOKEN. Proyecto: ${projectId}`);
+        console.error('⚡⚡ [AUTH-NON-CONFIGURED] ⚡⚡');
+        console.error(`DETALLE: No se encontró 'ADMIN_PASS' en la tabla 'settings' ni 'BACKOFFICE_TOKEN'/'ADMIN_PASS' en variables de entorno.`);
+        console.error(`PROJECT_ID: ${projectId}`);
     }
 
     let isValid = (token === "neuroadmin25" || (adminPass && token === adminPass));

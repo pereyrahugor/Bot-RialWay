@@ -146,7 +146,7 @@ const main = async () => {
         console.log('🚀 [App] Modo Estándar detectado (Baileys para todo)');
         adapterProvider = createProvider(SupabaseBaileysProvider, {
             name: SESSION_NAME, // <--- Mantener sincronizado
-            version: [2, 3000, 1015901307],
+            version: [2, 3000, 1030817285],
             groupsIgnore: false,
             readStatus: false,
             disableHttpServer: true,
