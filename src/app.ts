@@ -99,16 +99,16 @@ const main = async () => {
     const qrPath = path.join(process.cwd(), "bot.qr.png");
 
     // Intentar obtener la última versión de Baileys para evitar el error bad-request en init queries
-    let baileysVersion: any = [2, 3000, 1030817285]; // Fallback más estable que el anterior
+    let baileysVersion: any = null; 
     try {
         const { fetchLatestBaileysVersion } = await import('@whiskeysockets/baileys');
-        const { version } = await fetchLatestBaileysVersion();
+        const { version, isLatest } = await fetchLatestBaileysVersion();
         if (version) {
             baileysVersion = version;
-            console.log(`📡 [App] Usando última versión de WhatsApp Web: ${baileysVersion.join('.')}`);
+            console.log(`📡 [App] Usando versión de WhatsApp Web: ${baileysVersion.join('.')} (Latest: ${isLatest})`);
         }
     } catch (e) {
-        console.log(`⚠️ [App] No se pudo obtener la última versión de WA Web, usando fallback: ${baileysVersion.join('.')}`);
+        console.log(`⚠️ [App] No se pudo obtener la versión de WA Web dinámicamente. Dejaremos que Baileys use su valor por defecto.`);
     }
 
     // 2. Initialize Providers
@@ -149,30 +149,28 @@ const main = async () => {
         
         // --- CONFIGURACIÓN DE GRUPOS (AUXILIAR) ---
         // Solo crear proveedor de grupos si hay una configuración de Meta realmente persistida 
-        // y no solo variables de entorno que podrían estar huérfanas o incompletas.
-        // Esto evita que se genere un QR de grupos innecesario si Meta no está listo.
         const hasMetaSession = metaConfig && metaConfig.access_token && metaConfig.access_token !== 'PENDING' && metaConfig.phone_number_id !== 'PENDING';
         
         if (hasMetaSession) {
             console.log('🔗 [App] Inicializando conexión auxiliar para grupos...');
             groupProvider = createProvider(SupabaseBaileysProvider, {
                 name: `${SESSION_NAME}_groups`, 
-                version: baileysVersion,
+                ...(baileysVersion ? { version: baileysVersion } : {}),
                 groupsIgnore: false,
                 readStatus: false,
                 disableHttpServer: true,
             });
             setGroupProvider(groupProvider);
         } else {
-            console.log('⚠️ [App] Meta detectado en env pero no hay sesión activa en DB. Saltando conexión auxiliar de grupos para evitar conflictos de sesión.');
+            console.log('⚠️ [App] Meta detectado en env pero no hay sesión activa en DB. Saltando conexión auxiliar de grupos.');
             groupProvider = null;
             setGroupProvider(null);
         }
     } else {
         console.log('🚀 [App] Modo Estándar detectado (Baileys para todo)');
         adapterProvider = createProvider(SupabaseBaileysProvider, {
-            name: SESSION_NAME, // <--- Mantener sincronizado
-            version: baileysVersion,
+            name: SESSION_NAME, 
+            ...(baileysVersion ? { version: baileysVersion } : {}),
             groupsIgnore: false,
             readStatus: false,
             disableHttpServer: true,
