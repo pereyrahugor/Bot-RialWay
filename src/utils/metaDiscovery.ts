@@ -44,9 +44,27 @@ export async function discoverMetaIds(accessToken: string) {
             }
         }
 
-        // 2. Fallback: Intentar directamente en el usuario/sistema si no se obtuvo WABA
+        // 2. Fallback: Intentar obtener WABAs directamente asociadas al usuario vía 'me/whatsapp_business_accounts'
         if (!wabaId) {
-            console.log('📡 [MetaDiscovery] Intentando buscar WABAs directamente asociadas al usuario...');
+            console.log('📡 [MetaDiscovery] Intentando buscar WABAs directamente asociadas al usuario vía endpoint específico...');
+            try {
+                const directResponse = await axios.get(`https://graph.facebook.com/v22.0/me/whatsapp_business_accounts`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                
+                const accounts = directResponse.data?.data || [];
+                if (accounts.length > 0) {
+                    wabaId = accounts[0].id;
+                    console.log(`✅ [MetaDiscovery] WABA encontrado vía 'me/whatsapp_business_accounts': ${wabaId}`);
+                }
+            } catch (e: any) {
+                console.warn(`⚠️ [MetaDiscovery] Error en me/whatsapp_business_accounts: ${e.response?.data?.error?.message || e.message}`);
+            }
+        }
+
+        // 3. Fallback: Intentar directamente en el usuario/sistema si no se obtuvo WABA (campos genéricos)
+        if (!wabaId) {
+            console.log('📡 [MetaDiscovery] Intentando buscar WABAs directamente asociadas al usuario vía campos...');
             try {
                 // Probamos campos directos que a veces funcionan dependiendo del tipo de token
                 const directResponse = await axios.get(`https://graph.facebook.com/v22.0/me?fields=id,name,whatsapp_business_accounts,owned_whatsapp_business_accounts,client_whatsapp_business_accounts`, {

@@ -737,8 +737,52 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                 await HistoryHandler.saveSetting('MESSENGER_VISIBLE', 'on', projectId);
             }
 
+            // 3. Verificación de resultados y depuración de scopes si falló todo
             if (!finalWabaId && !pageDiscovery) {
-                throw new Error("No se pudo descubrir ninguna cuenta de WhatsApp ni Página de Facebook.");
+                console.warn('⚠️ [CALLBACK] No se pudo descubrir ningún recurso automáticamente.');
+                
+                // Obtener scopes para ayudar al diagnóstico
+                let debugInfo = "";
+                try {
+                    const appToken = `${process.env.META_APP_ID}|${process.env.META_APP_SECRET}`;
+                    const debugResponse = await axios.get(`https://graph.facebook.com/v22.0/debug_token`, {
+                        params: { input_token: accessToken, access_token: appToken }
+                    });
+                    const scopes = debugResponse.data.data.scopes || [];
+                    debugInfo = `Permisos detectados: ${scopes.join(', ')}`;
+                    console.log(`ℹ️ [CALLBACK] Scopes del token: ${debugInfo}`);
+                } catch (e) {
+                    debugInfo = "No se pudo obtener el detalle de permisos del token.";
+                }
+
+                // En lugar de lanzar un error que bloquea todo, podemos permitir que continúe
+                // pero marcando que la configuración está incompleta.
+                // Sin embargo, para evitar que el usuario se confunda, le mostraremos el aviso
+                // pero guardaremos el token para que no tenga que repetir el login.
+                
+                const htmlError = `
+                    <div style="font-family: sans-serif; padding: 40px; text-align: center; color: #333;">
+                        <h1 style="color: #e53e3e;">Configuración Incompleta</h1>
+                        <p>Hemos vinculado tu cuenta de Meta, pero no pudimos encontrar automáticamente tu cuenta de WhatsApp ni Página de Facebook.</p>
+                        <div style="background: #f7fafc; padding: 15px; border-radius: 8px; margin: 20px auto; max-width: 500px; text-align: left; font-size: 14px; border: 1px solid #e2e8f0;">
+                            <strong>Posibles causas:</strong>
+                            <ul style="margin-top: 10px;">
+                                <li>No seleccionaste ningún activo (Página o WABA) en el diálogo de Meta.</li>
+                                <li>Tu cuenta de Meta no tiene activos de tipo Business configurados.</li>
+                                <li>Faltan permisos necesarios (scopes).</li>
+                            </ul>
+                            <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 10px 0;">
+                            <strong>Detalle técnico:</strong><br>
+                            ${debugInfo}
+                        </div>
+                        <p>Puedes ingresar los IDs manualmente en el Dashboard.</p>
+                        <a href="/backoffice/whatsapp/config" style="display: inline-block; background: #3182ce; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: bold; margin-top: 20px;">Ir a Configuración Manual</a>
+                    </div>
+                `;
+
+                // Guardar solo el token antes de salir
+                await HistoryHandler.saveMetaOnboardingData({ accessToken }, projectId);
+                return res.send(htmlError);
             }
 
             // Registrar y suscribir WhatsApp si se encontró
