@@ -58,7 +58,12 @@ export class SupabaseBaileysProvider extends BaileysProvider {
             }
         };
 
-        this.initProvider();
+        // Retardar un poco el inicio para asegurar que los listeners externos se adjunten primero
+        setTimeout(() => {
+            this.initProvider().catch(err => {
+                console.error('[SupabaseBaileysProvider] ❌ Error en initProvider diferido:', err.message);
+            });
+        }, 100);
     }
 
     protected async initProvider() {

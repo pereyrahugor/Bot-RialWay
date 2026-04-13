@@ -22,7 +22,8 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
             else if (payload?.code) qrString = payload.code;
 
             if (qrString && typeof qrString === 'string') {
-                provider.qrCodeString = qrString;
+                provider.qrCodeString = qrString; // <--- Sincronizar con la instancia para el dashboard
+                console.log(`${prefix} 🆕 Nuevo QR recibido. Guardando...`);
                 const qrFilename = isGroupProvider ? 'bot.groups.qr.png' : 'bot.qr.png';
                 const qrPath = path.join(process.cwd(), qrFilename);
                 await QRCode.toFile(qrPath, qrString, {
