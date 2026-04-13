@@ -99,7 +99,7 @@ const main = async () => {
     const metaConfig = await HistoryHandler.getMetaOnboardingData();
     
     // Fallback: Si no hay config en DB o falta el token, intentamos usar variables de entorno
-    let metaToken = (metaConfig?.access_token && metaConfig.access_token !== "PENDING") ? metaConfig.access_token : process.env.META_ACCESS_TOKEN;
+    const metaToken = (metaConfig?.access_token && metaConfig.access_token !== "PENDING") ? metaConfig.access_token : process.env.META_ACCESS_TOKEN;
     let metaPhoneId = (metaConfig?.phone_number_id && metaConfig.phone_number_id !== "PENDING") ? metaConfig.phone_number_id : process.env.META_PHONE_ID;
     let metaWabaId = (metaConfig?.waba_id && metaConfig.waba_id !== "PENDING") ? metaConfig.waba_id : process.env.META_WABA_ID;
 
@@ -133,7 +133,7 @@ const main = async () => {
         
         groupProvider = createProvider(SupabaseBaileysProvider, {
             name: SESSION_NAME, // <--- Mantener sincronizado
-            version: [2, 3000, 1030817285],
+            version: [2, 3000, 1037191587],
             groupsIgnore: false,
             readStatus: false,
             disableHttpServer: true,

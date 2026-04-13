@@ -202,8 +202,8 @@ export class AiManager {
             }
 
             // --- LÓGICA MULTI-AGENTE ---
-            let assigned = this.userAssignedAssistant.get(ctx.from) || 'asistente1';
-            let currentAssistantId = this.ASSISTANT_MAP[assigned] || this.assistantId;
+            const assigned = this.userAssignedAssistant.get(ctx.from) || 'asistente1';
+            const currentAssistantId = this.ASSISTANT_MAP[assigned] || this.assistantId;
 
             const response = (await this.getAssistantResponse(currentAssistantId, ctx.body, state, undefined, ctx.from, ctx.thread_id)) as string;
 
@@ -222,7 +222,7 @@ export class AiManager {
             const resumen = this.extraerResumenRecepcionista(response);
             
             // Limpiar la respuesta para el usuario (remover bloques técnicos)
-            let cleanResponse = String(response)
+            const cleanResponse = String(response)
                 .replace(/GET_RESUMEN[\s\S]+/i, '')
                 .replace(/^[ \t]*derivar(?:ndo)? a (asistente\s*[1-5]|asesor humano)\.?\s*$/gim, '')
                 .replace(/\[Enviando.*$/gim, '')

@@ -442,8 +442,10 @@ document.getElementById('card-edit-form').onsubmit = async (e) => {
 };
 
 // --- Creación Manual de Leads ---
-window.openNewLeadModal = () => document.getElementById('new-lead-modal').classList.add('active');
-window.closeNewLeadModal = () => document.getElementById('new-lead-modal').classList.remove('active');
+function openNewLeadModal() { document.getElementById('new-lead-modal').classList.add('active'); }
+function closeNewLeadModal() { document.getElementById('new-lead-modal').classList.remove('active'); }
+window.openNewLeadModal = openNewLeadModal;
+window.closeNewLeadModal = closeNewLeadModal;
 
 document.getElementById('new-lead-form').onsubmit = async (e) => {
     e.preventDefault();
