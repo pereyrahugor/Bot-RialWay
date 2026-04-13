@@ -195,6 +195,24 @@ class MetaCloudProvider extends ProviderClass {
             }
         }
 
+        // --- CONVERSIÓN: Variables con nombre → Variables posicionales ---
+        // Meta Cloud API SOLO acepta formato posicional {{1}}, {{2}}, {{3}} via API.
+        // Las variables con nombre ({{nombre}}) solo funcionan desde el Manager UI.
+        let apiText = text;
+        const varNameToPosition: Record<string, number> = {};
+        const hasNamedVars = detectedVars.some(v => isNaN(Number(v)));
+        
+        if (hasNamedVars) {
+            console.log(`🔄 [MetaCloudProvider] Convirtiendo variables con nombre a posicionales: [${detectedVars.join(', ')}]`);
+            detectedVars.forEach((varName, index) => {
+                const position = index + 1;
+                varNameToPosition[varName] = position;
+                // Reemplazar {{nombre}} por {{1}}, soportando espacios opcionales
+                apiText = apiText.replace(new RegExp(`\\{\\{\\s*${varName}\\s*\\}\\}`, 'g'), `{{${position}}}`);
+            });
+            console.log(`📝 [MetaCloudProvider] Mapeo: ${JSON.stringify(varNameToPosition)}`);
+        }
+
         // Auto-generar ejemplos si el texto tiene variables pero no se proporcionaron
         let finalExamples = examples;
         if (detectedVars.length > 0 && (!examples || examples.length === 0)) {
@@ -205,7 +223,7 @@ class MetaCloudProvider extends ProviderClass {
         // Construir componente BODY con ejemplos si hay variables
         const bodyComponent: any = {
             type: "BODY",
-            text: text
+            text: apiText  // Usar texto con variables posicionales
         };
 
         // Meta REQUIERE valores de ejemplo para plantillas con variables
@@ -234,6 +252,11 @@ class MetaCloudProvider extends ProviderClass {
                 }
             });
             console.log(`✅ [MetaCloudProvider] Plantilla '${name}' creada. ID: ${response.data?.id} | Estado: ${response.data?.status}`);
+            
+            // Incluir el mapeo de variables en la respuesta para uso posterior (Excel headers)
+            if (hasNamedVars) {
+                response.data._varMapping = varNameToPosition;
+            }
             return response.data;
         } catch (error: any) {
             console.error('❌ [MetaCloudProvider] Error creando plantilla:', error?.response?.data || error.message);
