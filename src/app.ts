@@ -99,7 +99,7 @@ const main = async () => {
     const qrPath = path.join(process.cwd(), "bot.qr.png");
 
     // Intentar obtener la última versión de Baileys para evitar el error bad-request en init queries
-    let baileysVersion: any = [2, 3000, 1015901307]; // Fallback más estable que el anterior
+    let baileysVersion: any = [2, 3000, 1030817285]; // Fallback más estable que el anterior
     try {
         const { fetchLatestBaileysVersion } = await import('@whiskeysockets/baileys');
         const { version } = await fetchLatestBaileysVersion();
