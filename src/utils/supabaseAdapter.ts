@@ -132,20 +132,28 @@ export const useSupabaseAuthState = async (
                 },
                 set: async (data) => {
                     const upsertBuffer: any[] = [];
+                    const deleteIds: string[] = [];
+
                     for (const category in data) {
                         for (const id in data[category]) {
                             const value = data[category][id];
                             const key = `${category}-${id}`;
-                            upsertBuffer.push({
-                                project_id: projectId,
-                                session_id: sessionId,
-                                key_id: key,
-                                data: JSON.parse(JSON.stringify(value, BufferJSON.replacer)),
-                                updated_at: new Date().toISOString()
-                            });
+                            
+                            if (value === null || value === undefined) {
+                                deleteIds.push(key);
+                            } else {
+                                upsertBuffer.push({
+                                    project_id: projectId,
+                                    session_id: sessionId,
+                                    key_id: key,
+                                    data: JSON.parse(JSON.stringify(value, BufferJSON.replacer)),
+                                    updated_at: new Date().toISOString()
+                                });
+                            }
                         }
                     }
 
+                    // Ejecutar upserts
                     if (upsertBuffer.length > 0) {
                         try {
                             const { error } = await supabase
@@ -154,6 +162,21 @@ export const useSupabaseAuthState = async (
                             if (error) throw error;
                         } catch (error) {
                             console.error('[SupabaseAdapter] ❌ Bulk Upsert Error:', error);
+                        }
+                    }
+
+                    // Ejecutar deletes si hay claves nulas
+                    if (deleteIds.length > 0) {
+                        try {
+                            const { error } = await supabase
+                                .from('whatsapp_sessions')
+                                .delete()
+                                .eq('project_id', projectId)
+                                .eq('session_id', sessionId)
+                                .in('key_id', deleteIds);
+                            if (error) throw error;
+                        } catch (error) {
+                            console.error('[SupabaseAdapter] ❌ Bulk Delete Error:', error);
                         }
                     }
                 }
