@@ -604,6 +604,51 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
+    /** Paso 1: Añadir número a Meta y solicitar OTP */
+    app.post('/api/backoffice/whatsapp/register-step-1', bodyParser.json(), async (req, res) => {
+        const { phoneNumber, verifiedName, projectId } = req.body;
+        try {
+            const config = await HistoryHandler.getMetaOnboardingData(projectId);
+            if (!config || !config.waba_id) throw new Error('No se encontró WABA vinculado. Repite el login de Meta.');
+
+            const { addPhoneNumberToWaba, requestPhoneNumberOtp } = await import("../utils/metaDiscovery");
+            
+            // 1. Añadir el número (esto nos da el Phone ID)
+            const result = await addPhoneNumberToWaba(config.access_token, config.waba_id, phoneNumber, verifiedName);
+            const phoneId = result.id;
+
+            // 2. Solicitar OTP
+            await requestPhoneNumberOtp(config.access_token, phoneId, 'SMS');
+
+            res.json({ success: true, phoneId });
+        } catch (error: any) {
+            console.error('❌ [Register-Step-1] Error:', error.response?.data || error.message);
+            res.status(400).json({ success: false, error: error.response?.data?.error?.message || error.message });
+        }
+    });
+
+    /** Paso 2: Verificar OTP y activar el bot */
+    app.post('/api/backoffice/whatsapp/register-step-2', bodyParser.json(), async (req, res) => {
+        const { phoneId, code, projectId } = req.body;
+        try {
+            const config = await HistoryHandler.getMetaOnboardingData(projectId);
+            const token = config.access_token;
+
+            const { verifyPhoneNumberOtp } = await import("../utils/metaDiscovery");
+            
+            // 1. Verificar y Registrar en Meta
+            await verifyPhoneNumberOtp(token, phoneId, code);
+
+            // 2. Guardar definitivamente en nuestra DB
+            await HistoryHandler.saveMetaOnboardingData(config.waba_id, phoneId, token, { activatedVia: 'auto-registration' }, projectId);
+
+            res.json({ success: true });
+        } catch (error: any) {
+            console.error('❌ [Register-Step-2] Error:', error.response?.data || error.message);
+            res.status(400).json({ success: false, error: error.response?.data?.error?.message || error.message });
+        }
+    });
+
     app.get('/api/backoffice/whatsapp/template-excel/:templateName', backofficeAuth, async (req: any, res: any) => {
         try {
             await syncMetaProvider();
@@ -761,22 +806,96 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                 // pero guardaremos el token para que no tenga que repetir el login.
                 
                 const htmlError = `
-                    <div style="font-family: sans-serif; padding: 40px; text-align: center; color: #333;">
-                        <h1 style="color: #e53e3e;">Configuración Incompleta</h1>
-                        <p>Hemos vinculado tu cuenta de Meta, pero no pudimos encontrar automáticamente tu cuenta de WhatsApp ni Página de Facebook.</p>
-                        <div style="background: #f7fafc; padding: 15px; border-radius: 8px; margin: 20px auto; max-width: 500px; text-align: left; font-size: 14px; border: 1px solid #e2e8f0;">
-                            <strong>Posibles causas:</strong>
-                            <ul style="margin-top: 10px;">
-                                <li>No seleccionaste ningún activo (Página o WABA) en el diálogo de Meta.</li>
-                                <li>Tu cuenta de Meta no tiene activos de tipo Business configurados.</li>
-                                <li>Faltan permisos necesarios (scopes).</li>
-                            </ul>
-                            <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 10px 0;">
-                            <strong>Detalle técnico:</strong><br>
-                            ${debugInfo}
+                    <div style="font-family: sans-serif; padding: 40px; text-align: center; color: #333; max-width: 700px; margin: 0 auto; line-height: 1.6;">
+                        <h1 style="color: #e53e3e; margin-bottom: 20px;">⚠️ Configuración Incompleta</h1>
+                        <p>Hemos vinculado tu cuenta de Meta, pero no pudimos encontrar automáticamente una cuenta de WhatsApp Cloud API.</p>
+                        
+                        <div id="step-1" style="background: #fffaf0; padding: 25px; border-radius: 12px; border: 1px solid #feebc8; margin-top: 25px; text-align: left; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+                            <h3 style="margin-top: 0; color: #9c4221;">Paso 1: Vincular tu Número</h3>
+                            <p style="font-size: 14px;">Introduce el número que deseas usar (con código de país, ej: 54911...). Enviaremos un SMS de verificación desde Meta.</p>
+                            
+                            <div style="margin-top: 15px;">
+                                <label style="display: block; font-size: 13px; font-weight: bold; margin-bottom: 5px;">Número de Teléfono:</label>
+                                <input type="text" id="phoneInput" placeholder="5491122334455" style="width: 100%; padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; box-sizing: border-box;">
+                            </div>
+                            
+                            <div style="margin-top: 15px;">
+                                <label style="display: block; font-size: 13px; font-weight: bold; margin-bottom: 5px;">Nombre para mostrar (Verified Name):</label>
+                                <input type="text" id="nameInput" placeholder="Nombre de tu Negocio" style="width: 100%; padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; box-sizing: border-box;">
+                            </div>
+
+                            <button onclick="submitNumber()" id="btnSubmit" style="background: #38a169; color: white; padding: 12px 20px; border-radius: 6px; border: none; font-weight: bold; width: 100%; margin-top: 20px; cursor: pointer;">
+                                Solicitar Código SMS
+                            </button>
                         </div>
-                        <p>Puedes ingresar los IDs manualmente en el Dashboard.</p>
-                        <a href="/backoffice/whatsapp/config" style="display: inline-block; background: #3182ce; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: bold; margin-top: 20px;">Ir a Configuración Manual</a>
+
+                        <div id="step-2" style="display: none; background: #ebf8ff; padding: 25px; border-radius: 12px; border: 1px solid #bee3f8; margin-top: 25px; text-align: left;">
+                            <h3 style="margin-top: 0; color: #2b6cb0;">Paso 2: Confirmar Código</h3>
+                            <p style="font-size: 14px;">Introduce el código de 6 dígitos que recibiste en tu celular.</p>
+                            <input type="text" id="codeInput" placeholder="000000" maxlength="6" style="width: 100%; padding: 15px; border: 1px solid #63b3ed; border-radius: 6px; font-size: 24px; text-align: center; letter-spacing: 10px;">
+                            <button onclick="verifyCode()" id="btnVerify" style="background: #3182ce; color: white; padding: 12px 20px; border-radius: 6px; border: none; font-weight: bold; width: 100%; margin-top: 20px; cursor: pointer;">
+                                Activar WhatsApp
+                            </button>
+                        </div>
+
+                        <script>
+                            const projectId = "${projectId}";
+                            let tempPhoneId = "";
+
+                            async function submitNumber() {
+                                const phone = document.getElementById('phoneInput').value;
+                                const name = document.getElementById('nameInput').value;
+                                if (!phone || !name) return alert('Por favor completa ambos campos');
+                                
+                                document.getElementById('btnSubmit').innerText = 'Procesando...';
+                                document.getElementById('btnSubmit').disabled = true;
+
+                                try {
+                                    const res = await fetch('/api/backoffice/whatsapp/register-step-1', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ phoneNumber: phone, verifiedName: name, projectId: projectId })
+                                    });
+                                    const data = await res.json();
+                                    if (data.success) {
+                                        tempPhoneId = data.phoneId;
+                                        document.getElementById('step-1').style.display = 'none';
+                                        document.getElementById('step-2').style.display = 'block';
+                                    } else {
+                                        alert('Error: ' + data.error);
+                                        document.getElementById('btnSubmit').innerText = 'Solicitar Código SMS';
+                                        document.getElementById('btnSubmit').disabled = false;
+                                    }
+                                } catch (e) {
+                                    alert('Error de conexión: ' + e.message);
+                                }
+                            }
+
+                            async function verifyCode() {
+                                const code = document.getElementById('codeInput').value;
+                                if (!code) return alert('Introduce el código');
+
+                                try {
+                                    const res = await fetch('/api/backoffice/whatsapp/register-step-2', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ phoneId: tempPhoneId, code: code, projectId: projectId })
+                                    });
+                                    const data = await res.json();
+                                    if (data.success) {
+                                        window.location.href = "https://duskcodes.com.ar/dashboard.html?metaStatus=success";
+                                    } else {
+                                        alert('Error: ' + data.error);
+                                    }
+                                } catch (e) {
+                                    alert('Error: ' + e.message);
+                                }
+                            }
+                        </script>
+
+                        <div style="margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 20px;">
+                            <a href="/backoffice/whatsapp/config" style="color: #718096; text-decoration: none; font-size: 14px;">Omitir y configurar manualmente luego</a>
+                        </div>
                     </div>
                 `;
 

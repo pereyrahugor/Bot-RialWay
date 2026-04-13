@@ -154,3 +154,82 @@ export async function discoverMetaIds(accessToken: string) {
         return null;
     }
 }
+
+/**
+ * Paso 1: Añadir un número de teléfono a la WABA.
+ * Esto genera un Phone ID en Meta.
+ */
+export async function addPhoneNumberToWaba(accessToken: string, wabaId: string, phoneNumber: string, verifiedName: string) {
+    try {
+        // Limpiar número: debe ser solo dígitos (ej: 549116244...)
+        const cleanNumber = phoneNumber.replace(/[^0-9]/g, '');
+        
+        // Meta requiere CC (country code) y el número por separado.
+        // Intentamos inferir (este es un macheo básico, en producción el front debería enviarlos separados)
+        // Ejemplo simple: Argentina 54, España 34, etc.
+        let cc = "54"; // Default simple
+        let number = cleanNumber;
+        if (cleanNumber.startsWith("54")) { cc = "54"; number = cleanNumber.substring(2); }
+        else if (cleanNumber.startsWith("34")) { cc = "34"; number = cleanNumber.substring(2); }
+        else if (cleanNumber.length > 10) { 
+            cc = cleanNumber.substring(0, 2); 
+            number = cleanNumber.substring(2); 
+        }
+
+        console.log(`📡 [MetaDiscovery] Añadiendo número ${cc}${number} a WABA ${wabaId}...`);
+        
+        const response = await axios.post(`https://graph.facebook.com/v22.0/${wabaId}/phone_numbers`, {
+            cc,
+            phone_number: number,
+            verified_name: verifiedName
+        }, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+
+        return response.data; // { id: "PHONE_ID" }
+    } catch (error: any) {
+        console.error('❌ [MetaDiscovery] Error añadiendo número:', error.response?.data || error.message);
+        throw error;
+    }
+}
+
+/**
+ * Paso 2: Solicitar código de verificación (OTP) vía SMS o VOZ
+ */
+export async function requestPhoneNumberOtp(accessToken: string, phoneId: string, method: 'SMS' | 'VOICE' = 'SMS') {
+    try {
+        console.log(`📡 [MetaDiscovery] Solicitando OTP (${method}) para Phone ID ${phoneId}...`);
+        const response = await axios.post(`https://graph.facebook.com/v22.0/${phoneId}/request_code`, {
+            code_method: method,
+            language: 'es_ES'
+        }, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+
+        return response.data;
+    } catch (error: any) {
+        console.error('❌ [MetaDiscovery] Error solicitando OTP:', error.response?.data || error.message);
+        throw error;
+    }
+}
+
+/**
+ * Paso 3: Verificar el código y activar el número
+ */
+export async function verifyPhoneNumberOtp(accessToken: string, phoneId: string, code: string) {
+    try {
+        console.log(`📡 [MetaDiscovery] Verificando OTP para Phone ID ${phoneId}...`);
+        const response = await axios.post(`https://graph.facebook.com/v22.0/${phoneId}/verify_code`, {
+            code: code
+        }, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+
+        // Si la verificación es exitosa, registramos el número en la plataforma de WhatsApp
+        if (response.data.success) {
+            await axios.post(`https://graph.facebook.com/v22.0/${phoneId}/register`, {
+                messaging_product: 'whatsapp',
+                pin: '123456' // PIN de seguridad por defecto
+            }, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+        }
+
+        return response.data;
+    } catch (error: any) {
+        console.error('❌ [MetaDiscovery] Error verificando OTP:', error.response?.data || error.message);
+        throw error;
+    }
+}
