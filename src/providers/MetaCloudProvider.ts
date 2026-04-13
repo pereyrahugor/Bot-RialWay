@@ -374,7 +374,12 @@ class MetaCloudProvider extends ProviderClass {
                 if (body.object === 'page') {
                     this.processMessengerMessage(body);
                 } else {
-                    this.processIncomingMessage(body);
+                    // Detectar si algún change viene del campo 'smb_message_echoes'
+                    // Esto indica mensajes enviados manualmente desde la app de WhatsApp Business
+                    const hasSmbEcho = body.entry?.some((entry: any) =>
+                        entry.changes?.some((change: any) => change.field === 'smb_message_echoes')
+                    );
+                    this.processIncomingMessage(body, hasSmbEcho);
                 }
             });
         } catch (e) {
@@ -436,13 +441,20 @@ class MetaCloudProvider extends ProviderClass {
     //     }
     // }
 
-    private processIncomingMessage = (body: any) => {
+    private processIncomingMessage = (body: any, isEchoWebhook: boolean = false) => {
         try {
             const { phone_number_id } = this.config;
+
+            if (isEchoWebhook) {
+                console.log('📡 [MetaCloudProvider] 🔄 Procesando smb_message_echoes (mensaje manual desde app WhatsApp)');
+            }
 
             body.entry?.forEach((entry: any) => {
                 entry.changes?.forEach((change: any) => {
                     const value = change.value;
+                    const fieldName = change.field || 'messages';
+                    const isThisChangeEcho = fieldName === 'smb_message_echoes' || isEchoWebhook;
+
                     if (value?.messages) {
                         
                         // Filtro de número destino para asegurar que es para nosotros
@@ -472,19 +484,25 @@ class MetaCloudProvider extends ProviderClass {
                                 messageBody = mediaObj.caption || `_event_${type}_`;
                             }
 
-                            // --- DETECCIÓN DE ECHO (Mensaje enviado desde otro cliente / manual) ---
-                            // Si el mensaje tiene recipient_id, significa que es un echo de algo que enviamos
-                            const isEcho = !!msg.recipient_id;
+                            // --- DETECCIÓN DE ECHO ---
+                            // Caso 1: smb_message_echoes → Mensaje enviado desde la app de WhatsApp (Atención Humana)
+                            // Caso 2: recipient_id presente → Echo estándar de la API
+                            const isEcho = isThisChangeEcho || !!msg.recipient_id;
+
+                            // Para echos de smb_message_echoes, el "from" contiene el número del destinatario
+                            // (la persona a la que el operador le escribió desde la app)
+                            const recipientId = msg.recipient_id || wa_id || msg.from;
 
                             const formatedMessage: any = {
                                 body: messageBody,
-                                from: isEcho ? msg.recipient_id : (wa_id || msg.from),
-                                phoneNumber: isEcho ? msg.recipient_id : msg.from,
+                                from: isEcho ? recipientId : (wa_id || msg.from),
+                                phoneNumber: isEcho ? recipientId : msg.from,
                                 userId: bsuid, // Añadimos el BSUID al contexto
-                                name: isEcho ? 'Me' : (contact?.profile?.name || 'User'),
+                                name: isEcho ? 'Operador (App WhatsApp)' : (contact?.profile?.name || 'User'),
                                 type: type,
                                 payload: msg,
-                                platform: 'whatsapp'
+                                platform: 'whatsapp',
+                                isManualIntervention: isThisChangeEcho // Flag para que el provider.manager active modo humano
                             };
 
                             // Enriquecer con objeto media para que los flujos (saveFile) tengan lo necesario

@@ -750,6 +750,22 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                     { headers: { 'Authorization': `Bearer ${accessToken}` } }
                 ).catch(() => {});
 
+                // Suscribir también a smb_message_echoes para capturar mensajes
+                // enviados manualmente desde la app de WhatsApp (Atención Humana)
+                try {
+                    console.log('📡 [CALLBACK] Suscribiendo a smb_message_echoes para sincronización de mensajes manuales...');
+                    await axios.post(`https://graph.facebook.com/v22.0/${finalWabaId}/subscribed_apps`, 
+                        { override_callback_uri: undefined }, 
+                        { 
+                            headers: { 'Authorization': `Bearer ${accessToken}` },
+                            params: { subscribed_fields: 'messages,smb_message_echoes' }
+                        }
+                    );
+                    console.log('✅ [CALLBACK] Suscripción a smb_message_echoes exitosa.');
+                } catch (smbErr: any) {
+                    console.warn('⚠️ [CALLBACK] No se pudo suscribir a smb_message_echoes:', smbErr?.response?.data || smbErr.message);
+                }
+
                 await HistoryHandler.saveMetaOnboardingData(finalWabaId, finalPhoneId, accessToken, { verified_name: finalVerifiedName });
             }
 

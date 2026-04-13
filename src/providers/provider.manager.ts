@@ -78,9 +78,11 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
 
     // --- CAPTURA DE MENSAJES SALIENTES MANUALES ---
     // Escuchamos el evento especial para guardar lo que el usuario envía desde el celular
+    // Incluye: echos de Baileys (message_from_me) y smb_message_echoes de Meta Cloud API
     provider.on('message_from_me', async (ctx: any) => {
         try {
-            console.log(`${prefix} 📤 Mensaje saliente manual detectado. ID: ${ctx.from}. Body: ${ctx.body}`);
+            const isManual = ctx.isManualIntervention;
+            console.log(`${prefix} 📤 Mensaje saliente manual detectado. ID: ${ctx.from}. Body: ${ctx.body}${isManual ? ' [INTERVENCIÓN DESDE APP WHATSAPP]' : ''}`);
             const { HistoryHandler } = await import('../utils/historyHandler');
             
             // Limpiamos el ID si viene con sufijo de Baileys
@@ -100,6 +102,14 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
                 externalId,
                 ctx.platform || 'whatsapp'
             );
+
+            // Si fue una intervención manual desde la app de WhatsApp (smb_message_echoes),
+            // activar automáticamente el modo "Atención Humana" para este chat
+            if (isManual) {
+                console.log(`${prefix} 🛑 Activando modo Atención Humana para ${chatId} (operador escribió desde la app)`);
+                await HistoryHandler.toggleBot(chatId, false);
+                await HistoryHandler.updateLastHumanMessage(chatId);
+            }
         } catch (err) {
             console.error(`❌ ${prefix} Error guardando mensaje saliente manual:`, err);
         }
