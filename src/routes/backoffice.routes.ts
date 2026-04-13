@@ -492,16 +492,16 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             return res.status(401).json({ success: false, error: "Unauthorized" });
         }
 
-        const config = await HistoryHandler.getMetaOnboardingData();
-        const projectId = process.env.RAILWAY_PROJECT_ID || process.env.PROJECT_ID || process.env.projectId || "";
+        const projectId = req.query.projectId as string || process.env.RAILWAY_PROJECT_ID || process.env.PROJECT_ID || "";
+        const config = await HistoryHandler.getMetaOnboardingData(projectId);
         
         console.log(`📡 [META-CONFIG] Enviando AppID: ${process.env.META_APP_ID}, ProjectID detectado: ${projectId}`);
         
         res.json({
-            appId: process.env.META_APP_ID,
+            appId: process.env.META_APP_ID || 'MISSING',
             // Proporcionar el secreto para el flujo de onboarding
-            appSecret: process.env.META_APP_SECRET,
-            configId: process.env.META_CONFIG_ID, // Nuevo campo para el flujo v22.0+
+            appSecret: process.env.META_APP_SECRET || 'MISSING',
+            configId: process.env.META_CONFIG_ID || '', // Nuevo campo para el flujo v22.0+
             railwayProjectId: projectId,
             config: config
         });
@@ -520,11 +520,13 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                 return res.status(404).json({ success: false, error: 'No se encontraron datos de WhatsApp asociados a este token.' });
             }
 
+            const projectId = req.body.projectId || req.query.projectId || process.env.RAILWAY_PROJECT_ID;
             const result = await HistoryHandler.saveMetaOnboardingData(
                 discovery.wabaId, 
                 discovery.phoneNumberId, 
                 manualToken,
-                { ...discovery, syncedBy: 'manual-sync-tool' }
+                { ...discovery, syncedBy: 'manual-sync-tool' },
+                projectId
             );
 
             res.json(result);
@@ -537,8 +539,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     // --- TEMPLATES & BULK MESSAGING ---
     
     /** Asegura que el proveedor tenga la config más reciente de la DB */
-    const syncMetaProvider = async () => {
-        const config = await HistoryHandler.getMetaOnboardingData();
+    const syncMetaProvider = async (projectId: string | null = null) => {
+        const config = await HistoryHandler.getMetaOnboardingData(projectId || process.env.RAILWAY_PROJECT_ID);
         if (config && adapterProvider && adapterProvider.updateConfig) {
             // El objeto config puede venir de la DB (whatsappToken) o de una sincronización previa (access_token)
             const token = config.whatsappToken || config.access_token;
@@ -683,7 +685,10 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     // --- ONBOARDING META ---
 
     app.get('/api/backoffice/whatsapp/onboard-callback', async (req, res) => {
-        const { code, wabaId: queryWabaId, phoneId: queryPhoneId } = req.query;
+        const { code, wabaId: queryWabaId, phoneId: queryPhoneId, projectId: queryProjectId } = req.query;
+        const projectId = (queryProjectId as string) || process.env.RAILWAY_PROJECT_ID || 'default_project';
+        
+        console.log(`📡 [CALLBACK] Iniciando onboard-callback para Proyecto: ${projectId}`);
         if (!code) return res.send('<h2>❌ Error: No se recibió el código de Meta</h2>');
 
         try {
@@ -718,18 +723,18 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             const { discoverAndLinkMetaPages } = await import("../utils/metaPageDiscovery");
             const pageDiscovery = await discoverAndLinkMetaPages(accessToken);
             if (pageDiscovery) {
-                console.log(`✅ [CALLBACK] Guardando configuración de Página: ${pageDiscovery.pageName}`);
-                await HistoryHandler.saveSetting('FACEBOOK_PAGE_ID', pageDiscovery.pageId);
-                await HistoryHandler.saveSetting('FACEBOOK_PAGE_TOKEN', pageDiscovery.pageAccessToken);
+                console.log(`✅ [CALLBACK] Guardando configuración de Página: ${pageDiscovery.pageName} para Proyecto: ${projectId}`);
+                await HistoryHandler.saveSetting('FACEBOOK_PAGE_ID', pageDiscovery.pageId, projectId);
+                await HistoryHandler.saveSetting('FACEBOOK_PAGE_TOKEN', pageDiscovery.pageAccessToken, projectId);
                 
                 // Si encontramos Instagram vinculado, guardarlo también
                 if (pageDiscovery.instagramId) {
-                    await HistoryHandler.saveSetting('INSTAGRAM_BUSINESS_ID', pageDiscovery.instagramId);
+                    await HistoryHandler.saveSetting('INSTAGRAM_BUSINESS_ID', pageDiscovery.instagramId, projectId);
                 }
 
                 // Activar visibilidad por defecto si encontramos una página
-                await HistoryHandler.saveSetting('INSTAGRAM_VISIBLE', 'on');
-                await HistoryHandler.saveSetting('MESSENGER_VISIBLE', 'on');
+                await HistoryHandler.saveSetting('INSTAGRAM_VISIBLE', 'on', projectId);
+                await HistoryHandler.saveSetting('MESSENGER_VISIBLE', 'on', projectId);
             }
 
             if (!finalWabaId && !pageDiscovery) {
@@ -766,14 +771,28 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                     console.warn('⚠️ [CALLBACK] No se pudo suscribir a smb_message_echoes:', smbErr?.response?.data || smbErr.message);
                 }
 
-                await HistoryHandler.saveMetaOnboardingData(finalWabaId, finalPhoneId, accessToken, { verified_name: finalVerifiedName });
+                await HistoryHandler.saveMetaOnboardingData(finalWabaId, finalPhoneId, accessToken, { verified_name: finalVerifiedName }, projectId);
             }
 
+            console.log(`✅ [CALLBACK] Onboarding finalizado con éxito para Proyecto: ${projectId}`);
             return res.redirect("https://duskcodes.com.ar/dashboard.html?metaStatus=success");
 
         } catch (error: any) {
-            console.error('❌ Error en vinculación:', error.message);
-            return res.status(500).send(`<h2>❌ Error en la vinculación: ${error.message}</h2>`);
+            console.error('❌ [CALLBACK] Error en vinculación Meta:', error.response?.data || error.message);
+            const errorDetails = error.response?.data ? JSON.stringify(error.response.data, null, 2) : error.message;
+            
+            return res.status(500).send(`
+                <div style="font-family: sans-serif; padding: 40px; text-align: center; background: #fff5f5; border: 1px solid #feb2b2; border-radius: 8px; max-width: 600px; margin: 40px auto;">
+                    <h2 style="color: #c53030; margin-bottom: 20px;">❌ Error en la vinculación con Meta</h2>
+                    <p style="color: #4a5568; margin-bottom: 20px;">No se pudieron guardar las credenciales del proyecto <b>${projectId || 'No Detectado'}</b>.</p>
+                    <div style="text-align: left; background: #fff; padding: 15px; border-radius: 4px; border: 1px solid #edf2f7; overflow: auto; max-height: 200px;">
+                        <pre style="font-size: 12px; color: #718096; margin: 0;">${errorDetails}</pre>
+                    </div>
+                    <div style="margin-top: 30px;">
+                        <a href="https://duskcodes.com.ar/dashboard.html" style="background: #3182ce; color: white; padding: 10px 20px; border-radius: 5px; text-decoration: none;">Volver al Dashboard</a>
+                    </div>
+                </div>
+            `);
         }
     });
 

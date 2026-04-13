@@ -58,7 +58,10 @@ export class SupabaseBaileysProvider extends BaileysProvider {
             logger: logger as any,
             printQRInTerminal: false,
             generateHighQualityLinkPreview: true,
-            browser: ["Bot-RialWay", "Chrome", "110.0.0"],
+            browser: ["Ubuntu", "Chrome", "20.0.04"],
+            syncFullHistory: false,
+            markOnlineOnConnect: false,
+            linkPreviewImageThumbnailWidth: 192,
             ...this.globalVendorArgs
         }) as any;
 

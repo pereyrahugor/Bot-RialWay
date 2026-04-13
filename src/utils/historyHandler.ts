@@ -944,12 +944,13 @@ export class HistoryHandler {
     /**
      * Guarda o actualiza los datos de onboarding de Meta
      */
-    static async saveMetaOnboardingData(wabaId: string, phoneId: string, token: string, extra: any = {}) {
+    static async saveMetaOnboardingData(wabaId: string, phoneId: string, token: string, extra: any = {}, projectId: string | null = null) {
         try {
+            const targetProjectId = projectId || PROJECT_ID;
             const { data, error } = await supabase
                 .from('meta_onboarding')
                 .upsert({
-                    project_id: PROJECT_ID,
+                    project_id: targetProjectId,
                     waba_id: wabaId,
                     phone_number_id: phoneId,
                     access_token: token,
@@ -974,7 +975,7 @@ export class HistoryHandler {
                     .upsert({
                         phone_number_id: phoneId,
                         waba_id: wabaId,
-                        project_id: PROJECT_ID,
+                        project_id: targetProjectId,
                         project_url: projectUrl,
                         updated_at: new Date().toISOString()
                     }, { onConflict: 'phone_number_id' });
@@ -1010,12 +1011,13 @@ export class HistoryHandler {
     /**
      * Obtiene los datos de onboarding configurados
      */
-    static async getMetaOnboardingData() {
+    static async getMetaOnboardingData(projectId: string | null = null) {
         try {
+            const targetProjectId = projectId || PROJECT_ID;
             const { data, error } = await supabase
                 .from('meta_onboarding')
                 .select('*')
-                .eq('project_id', PROJECT_ID)
+                .eq('project_id', targetProjectId)
                 .maybeSingle();
 
             if (error) throw error;
@@ -1026,12 +1028,13 @@ export class HistoryHandler {
         }
     }
 
-    static async saveSetting(key: string, value: string) {
+    static async saveSetting(key: string, value: string, projectId: string | null = null) {
         if (!supabase) return;
+        const targetProjectId = projectId || PROJECT_IDENTIFIER;
         const { error } = await supabase
             .from('settings')
             .upsert({ 
-                project_id: PROJECT_IDENTIFIER, 
+                project_id: targetProjectId, 
                 key, 
                 value, 
                 updated_at: new Date().toISOString() 
@@ -1052,7 +1055,7 @@ export class HistoryHandler {
                         .upsert({
                             phone_number_id: value, // Reutilizamos esta columna como identificador remoto universal (PhoneID o PageID)
                             waba_id: null,
-                            project_id: PROJECT_ID,
+                            project_id: targetProjectId,
                             project_url: projectUrl,
                             updated_at: new Date().toISOString()
                         }, { onConflict: 'phone_number_id' });
@@ -1061,12 +1064,13 @@ export class HistoryHandler {
         }
     }
 
-    static async getSetting(key: string): Promise<string | null> {
+    static async getSetting(key: string, projectId: string | null = null): Promise<string | null> {
         if (!supabase) return null;
+        const targetProjectId = projectId || PROJECT_IDENTIFIER;
         const { data, error } = await supabase
             .from('settings')
             .select('value')
-            .eq('project_id', PROJECT_IDENTIFIER)
+            .eq('project_id', targetProjectId)
             .eq('key', key)
             .single();
 

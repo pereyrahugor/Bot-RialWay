@@ -98,6 +98,19 @@ const main = async () => {
     await restoreSessionFromDb(SESSION_NAME);
     const qrPath = path.join(process.cwd(), "bot.qr.png");
 
+    // Intentar obtener la última versión de Baileys para evitar el error bad-request en init queries
+    let baileysVersion: any = [2, 3000, 1015901307]; // Fallback más estable que el anterior
+    try {
+        const { fetchLatestBaileysVersion } = await import('@whiskeysockets/baileys');
+        const { version } = await fetchLatestBaileysVersion();
+        if (version) {
+            baileysVersion = version;
+            console.log(`📡 [App] Usando última versión de WhatsApp Web: ${baileysVersion.join('.')}`);
+        }
+    } catch (e) {
+        console.log(`⚠️ [App] No se pudo obtener la última versión de WA Web, usando fallback: ${baileysVersion.join('.')}`);
+    }
+
     // 2. Initialize Providers
     const metaConfig = await HistoryHandler.getMetaOnboardingData();
     
@@ -136,7 +149,7 @@ const main = async () => {
         
         groupProvider = createProvider(SupabaseBaileysProvider, {
             name: `${SESSION_NAME}_groups`, // <--- Diferente del principal para evitar bloqueo
-            version: [2, 3000, 1030817285],
+            version: baileysVersion,
             groupsIgnore: false,
             readStatus: false,
             disableHttpServer: true,
@@ -146,7 +159,7 @@ const main = async () => {
         console.log('🚀 [App] Modo Estándar detectado (Baileys para todo)');
         adapterProvider = createProvider(SupabaseBaileysProvider, {
             name: SESSION_NAME, // <--- Mantener sincronizado
-            version: [2, 3000, 1030817285],
+            version: baileysVersion,
             groupsIgnore: false,
             readStatus: false,
             disableHttpServer: true,
