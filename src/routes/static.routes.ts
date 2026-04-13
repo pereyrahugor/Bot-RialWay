@@ -91,26 +91,54 @@ export const registerStaticRoutes = (app: any, { __dirname }: { __dirname: strin
     app.use("/assets", serve(path.join(process.cwd(), "src", "assets")));
     app.use("/uploads", serve(path.join(process.cwd(), "uploads")));
 
-    // QR genérico / Principal
-    app.get("/qr.png", (req: any, res: any) => {
-        const qrPath = path.join(process.cwd(), 'bot.qr.png');
-        if (fs.existsSync(qrPath)) {
-            res.setHeader('Content-Type', 'image/png');
-            fs.createReadStream(qrPath).pipe(res);
-        } else {
-            res.status(404).send('QR not found');
+    // QR genérico / Principal (Con fallback a memoria para evitar 404)
+    app.get("/qr.png", async (req: any, res: any) => {
+        try {
+            const qrPath = path.join(process.cwd(), 'bot.qr.png');
+            if (fs.existsSync(qrPath)) {
+                res.setHeader('Content-Type', 'image/png');
+                return fs.createReadStream(qrPath).pipe(res);
+            }
+
+            // Fallback: Si no hay archivo, buscar en la instancia del proveedor
+            const { getAdapterProvider } = await import('../providers/instances');
+            const provider = getAdapterProvider();
+            
+            if (provider && provider.qrCodeString) {
+                console.log("[Static] QR physical file missing, generating from memory...");
+                const QRCode = await import('qrcode');
+                const imgBuffer = await QRCode.toBuffer(provider.qrCodeString);
+                res.setHeader('Content-Type', 'image/png');
+                return res.end(imgBuffer);
+            }
+            
+            res.status(404).send('QR not found (no file, no memory)');
+        } catch (e) {
+            console.error("[Static] Error serving QR:", e);
+            res.status(500).send('Error serving QR');
         }
     });
 
     // QR específico para grupos / motor secundario
-    app.get("/bot.groups.qr.png", (req: any, res: any) => {
+    app.get("/bot.groups.qr.png", async (req: any, res: any) => {
         const qrPath = path.join(process.cwd(), 'bot.groups.qr.png');
         if (fs.existsSync(qrPath)) {
             res.setHeader('Content-Type', 'image/png');
-            fs.createReadStream(qrPath).pipe(res);
-        } else {
-            res.status(404).send('QR Groups not found');
+            return fs.createReadStream(qrPath).pipe(res);
         }
+        
+        // Fallback para grupos
+        const { getGroupProvider } = await import('../providers/instances');
+        const provider = getGroupProvider();
+        if (provider && provider.qrCodeString) {
+             console.log("[Static] Group QR physical file missing, generating from memory...");
+             const QRCode = await import('qrcode');
+             const imgBuffer = await QRCode.toBuffer(provider.qrCodeString);
+             res.setHeader('Content-Type', 'image/png');
+             return res.end(imgBuffer);
+        }
+
+        res.status(404).send('QR Groups not found');
     });
 
 };

@@ -132,7 +132,7 @@ const main = async () => {
         });
         
         groupProvider = createProvider(SupabaseBaileysProvider, {
-            name: SESSION_NAME, // <--- Mantener sincronizado
+            name: `${SESSION_NAME}_groups`, // <--- Diferente del principal para evitar bloqueo
             version: [2, 3000, 1015901307],
             groupsIgnore: false,
             readStatus: false,
@@ -158,12 +158,11 @@ const main = async () => {
     registerProviderEvents(adapterProvider);
     if (groupProvider) {
         registerProviderEvents(groupProvider, true);
-        
-        // Iniciar motor de grupos asíncronamente
-        setTimeout(async () => {
-            console.log('📡 [GroupSync] Iniciando motor secundario de grupos...');
-            if (groupProvider.initVendor) await groupProvider.initVendor();
-        }, 5000);
+        // Inicialización manual si es Baileys
+        if (groupProvider.initVendor) {
+            console.log('🚀 [App] Inicializando Motor de Grupos...');
+            await groupProvider.initVendor();
+        }
     }
 
     // 4. Initialize Data and Error Reporter
