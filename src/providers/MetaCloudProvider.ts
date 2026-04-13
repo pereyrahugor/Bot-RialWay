@@ -213,23 +213,11 @@ class MetaCloudProvider extends ProviderClass {
 
         // Meta REQUIERE valores de ejemplo para plantillas con variables
         if (detectedVars.length > 0 && finalExamples.length > 0) {
-            if (hasNamedVars) {
-                // Formato para variables CON NOMBRE: array de objetos {param_name, example}
-                // Ref: https://developers.facebook.com/docs/whatsapp/business-management-api/message-templates/
-                bodyComponent.example = {
-                    body_text: [
-                        detectedVars.map((varName, i) => ({
-                            param_name: varName,
-                            example: finalExamples[i] || `ejemplo_${varName}`
-                        }))
-                    ]
-                };
-            } else {
-                // Formato para variables POSICIONALES: array de arrays de strings
-                bodyComponent.example = {
-                    body_text: [finalExamples]
-                };
-            }
+            // body_text SIEMPRE es array de arrays de strings, tanto para named como positional
+            // parameter_format: "named" solo afecta el texto, no el formato de examples
+            bodyComponent.example = {
+                body_text: [finalExamples]
+            };
         }
 
         const body: any = {
