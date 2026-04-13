@@ -60,7 +60,7 @@ export class SupabaseBaileysProvider extends BaileysProvider {
             supabaseUrl,
             supabaseKey,
             projectId,
-            'baileys_session',
+            botName, // Usar el nombre del bot como session_id para evitar conflictos
             botName
         );
         

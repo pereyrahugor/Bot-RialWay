@@ -11,83 +11,73 @@ export const useSupabaseAuthState = async (
 ): Promise<{ state: AuthenticationState, saveCreds: () => Promise<void>, clearSession: () => Promise<void> }> => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
+    let sessionData: Record<string, any> = {};
 
-    // Helpers para interactuar con la DB
-    const writeData = async (data: any, key: string) => {
+    // Cargar toda la sesión al inicio
+    const init = async () => {
         try {
-            // Si data es null, lo guardamos como null (si la DB lo permite) o como objeto vacío marcado
-            // Nuestra tabla tiene NOT NULL en data, así que evitamos guardar nulls si no son creds.
-            if (data === null || data === undefined) return;
-
-            // const { error } = await supabase.rpc('save_whatsapp_session', {
-            //     p_project_id: projectId,
-            //     p_session_id: sessionId,
-            //     p_key_id: key,
-            //     p_data: JSON.parse(JSON.stringify(data, BufferJSON.replacer)),
-            //     p_bot_name: botName
-            // });
-            const { error } = await supabase
-                .from('whatsapp_sessions')
-                .upsert({
-                    project_id: projectId,
-                    session_id: sessionId,
-                    key_id: key,
-                    data: JSON.parse(JSON.stringify(data, BufferJSON.replacer)),
-                    updated_at: new Date().toISOString()
-                }, { onConflict: 'project_id,session_id,key_id' });
-            if (error) throw error;
-            // console.log(`[SupabaseAdapter] ✅ Data saved for key: ${key}`);
-        } catch (error) {
-            // console.error('[SupabaseAdapter] ❌ Error saving data:', key, error);
-            // No lanzar throw para no romper el flujo del bot, pero loguear
-        }
-    };
-
-    const readData = async (key: string) => {
-        try {
-            // Leemos TODA la sesión y filtramos en memoria (dado que la RPC actual trae todo)
-            // Esto no es óptimo para escalado masivo pero funcional para sesiones de WhatsApp estándar
-            // const { data, error } = await supabase.rpc('get_whatsapp_session', {
-            //     p_project_id: projectId,
-            //     p_session_id: sessionId
-            // });
-            const { data, error } = await supabase
+            const { data: rows, error } = await supabase
                 .from('whatsapp_sessions')
                 .select('key_id, data')
                 .eq('project_id', projectId)
                 .eq('session_id', sessionId);
 
             if (error) throw error;
-            if (!data || !Array.isArray(data)) return null;
 
-            const row = data.find((r: any) => r.key_id === key);
-            return row ? JSON.parse(JSON.stringify(row.data), BufferJSON.reviver) : null;
+            if (rows && rows.length > 0) {
+                const backupRow = rows.find(r => r.key_id === 'full_backup');
+                if (backupRow) {
+                    // Formato unificado (nuevo/estable)
+                    sessionData = JSON.parse(JSON.stringify(backupRow.data), BufferJSON.reviver);
+                } else {
+                    // Migración: cargar formato legacy (múltiples filas)
+                    rows.forEach(r => {
+                        const key = r.key_id.endsWith('.json') ? r.key_id : `${r.key_id}.json`;
+                        sessionData[key] = JSON.parse(JSON.stringify(r.data), BufferJSON.reviver);
+                    });
+                }
+            }
         } catch (error) {
-            // console.error('[SupabaseAdapter] Error reading data:', key, error);
-            return null;
+            console.error('[SupabaseAdapter] ❌ Error inicializando sesión:', error);
+        }
+    };
+
+    await init();
+
+    const saveToDb = async () => {
+        try {
+            const { error } = await supabase
+                .from('whatsapp_sessions')
+                .upsert({
+                    project_id: projectId,
+                    session_id: sessionId,
+                    key_id: 'full_backup',
+                    data: JSON.parse(JSON.stringify(sessionData, BufferJSON.replacer)),
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'project_id,session_id,key_id' });
+
+            if (error) throw error;
+        } catch (error) {
+            console.error('[SupabaseAdapter] ❌ Error al persistir full_backup:', error);
         }
     };
 
     const clearSession = async () => {
         try {
-            // const { error } = await supabase.rpc('delete_whatsapp_session', {
-            //     p_project_id: projectId,
-            //     p_session_id: sessionId
-            // });
             const { error } = await supabase
                 .from('whatsapp_sessions')
                 .delete()
                 .eq('project_id', projectId)
                 .eq('session_id', sessionId);
             if (error) throw error;
-            // console.log(`[SupabaseAdapter] Session ${sessionId} cleared for project ${projectId}`);
+            sessionData = {};
         } catch (error) {
-            // console.error('[SupabaseAdapter] Error clearing session:', error);
+            console.error('[SupabaseAdapter] ❌ Error eliminando sesión:', error);
         }
     };
 
-    // Cargar credenciales iniciales
-    const creds: AuthenticationCreds = await readData('creds') || initAuthCreds();
+    // Baileys espera que 'creds' esté disponible directamente (initAuthCreds lo inicializa si no existe)
+    const creds: AuthenticationCreds = sessionData['creds.json'] || initAuthCreds();
 
     return {
         state: {
@@ -95,95 +85,33 @@ export const useSupabaseAuthState = async (
             keys: {
                 get: async (type, ids) => {
                     const data: { [key: string]: SignalDataTypeMap[typeof type] } = {};
-
-                    try {
-                        // const { data: allRows, error } = await supabase.rpc('get_whatsapp_session', {
-                        //     p_project_id: projectId,
-                        //     p_session_id: sessionId
-                        // });
-                        const { data: allRows, error } = await supabase
-                            .from('whatsapp_sessions')
-                            .select('key_id, data')
-                            .eq('project_id', projectId)
-                            .eq('session_id', sessionId);
-
-                        if (error) throw error;
-
-                        // Mapear filas a objeto en memoria eficiente
-                        const memoryMap = new Map();
-                        if (allRows && Array.isArray(allRows)) {
-                            allRows.forEach((r: any) => {
-                                memoryMap.set(r.key_id, JSON.parse(JSON.stringify(r.data), BufferJSON.reviver));
-                            });
+                    ids.forEach(id => {
+                        const key = `${type}-${id}.json`;
+                        if (sessionData[key]) {
+                            data[id] = sessionData[key];
                         }
-
-                        ids.forEach((id) => {
-                            const key = `${type}-${id}`;
-                            const val = memoryMap.get(key);
-                            if (val) {
-                                data[id] = val;
-                            }
-                        });
-                    } catch (e) {
-                        // console.error('[SupabaseAdapter] Error in keys.get:', e);
-                    }
-
+                    });
                     return data;
                 },
                 set: async (data) => {
-                    const upsertBuffer: any[] = [];
-                    const deleteIds: string[] = [];
-
                     for (const category in data) {
                         for (const id in data[category]) {
                             const value = data[category][id];
-                            const key = `${category}-${id}`;
-                            
-                            if (value === null || value === undefined) {
-                                deleteIds.push(key);
+                            const key = `${category}-${id}.json`;
+                            if (value) {
+                                sessionData[key] = value;
                             } else {
-                                upsertBuffer.push({
-                                    project_id: projectId,
-                                    session_id: sessionId,
-                                    key_id: key,
-                                    data: JSON.parse(JSON.stringify(value, BufferJSON.replacer)),
-                                    updated_at: new Date().toISOString()
-                                });
+                                delete sessionData[key];
                             }
                         }
                     }
-
-                    // Ejecutar upserts
-                    if (upsertBuffer.length > 0) {
-                        try {
-                            const { error } = await supabase
-                                .from('whatsapp_sessions')
-                                .upsert(upsertBuffer, { onConflict: 'project_id,session_id,key_id' });
-                            if (error) throw error;
-                        } catch (error) {
-                            console.error('[SupabaseAdapter] ❌ Bulk Upsert Error:', error);
-                        }
-                    }
-
-                    // Ejecutar deletes si hay claves nulas
-                    if (deleteIds.length > 0) {
-                        try {
-                            const { error } = await supabase
-                                .from('whatsapp_sessions')
-                                .delete()
-                                .eq('project_id', projectId)
-                                .eq('session_id', sessionId)
-                                .in('key_id', deleteIds);
-                            if (error) throw error;
-                        } catch (error) {
-                            console.error('[SupabaseAdapter] ❌ Bulk Delete Error:', error);
-                        }
-                    }
+                    await saveToDb();
                 }
             }
         },
-        saveCreds: () => {
-            return writeData(creds, 'creds');
+        saveCreds: async () => {
+            sessionData['creds.json'] = creds;
+            await saveToDb();
         },
         clearSession
     };

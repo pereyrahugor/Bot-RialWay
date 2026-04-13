@@ -95,7 +95,7 @@ const main = async () => {
     const rawSessionName = process.env.BOT_NAME || process.env.ASSISTANT_NAME || 'bot';
     const SESSION_NAME = rawSessionName.replace(/[^a-zA-Z0-9_-]/g, '_');
     
-    await restoreSessionFromDb(SESSION_NAME);
+    // await restoreSessionFromDb(SESSION_NAME);
     const qrPath = path.join(process.cwd(), "bot.qr.png");
 
     // Intentar obtener la última versión de Baileys para evitar el error bad-request en init queries
@@ -294,7 +294,7 @@ const main = async () => {
     });
 
     registerSafeErrorHandlers();
-    startSessionSync(SESSION_NAME);
+    // startSessionSync(SESSION_NAME);
 
     // 8. Middlewares y Plugins post-Bot
     if (app) {
