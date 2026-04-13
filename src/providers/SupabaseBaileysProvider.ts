@@ -13,6 +13,7 @@ const logger = pino({ level: 'error' });
 
 export class SupabaseBaileysProvider extends BaileysProvider {
     saveCreds: any = null;
+    qrCodeString: string | null = null;
     private initialized = false;
 
     constructor(args: any = {}) {
@@ -70,6 +71,7 @@ export class SupabaseBaileysProvider extends BaileysProvider {
             }
 
             if (qr) {
+                this.qrCodeString = qr;
                 this.emit('qr', qr);
                 this.emit('require_action', {
                     title: 'Vincular WhatsApp',
@@ -79,12 +81,22 @@ export class SupabaseBaileysProvider extends BaileysProvider {
             }
 
             if (connection === 'open') {
+                console.log(`[SupabaseBaileysProvider] ✅ Conexión ABIERTA para: ${this.globalVendorArgs.name}`);
                 this.emit('ready', true);
             }
 
             if (connection === 'close') {
-                const shouldReconnect = (lastDisconnect?.error as any)?.output?.statusCode !== DisconnectReason.loggedOut;
-                if (shouldReconnect) this.initProvider();
+                const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
+                const reason = lastDisconnect?.error?.message || 'unknown';
+                console.log(`[SupabaseBaileysProvider] ❌ Conexión CERRADA [${this.globalVendorArgs.name}]. Razón: ${reason} (Código: ${statusCode})`);
+                
+                const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+                if (shouldReconnect) {
+                    console.log(`[SupabaseBaileysProvider] 🔄 Intentando reconexión en 5s...`);
+                    setTimeout(() => this.initProvider(), 5000);
+                } else {
+                    console.log(`[SupabaseBaileysProvider] ⚠️ Sesión cerrada por el usuario o expirada. No se reconectará automáticamente.`);
+                }
             }
         });
 

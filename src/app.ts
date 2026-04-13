@@ -91,7 +91,10 @@ const main = async () => {
     await HistoryHandler.initDatabase();
     
     // Usar un nombre de sesión consistente para evitar desajustes entre SessionSync y el Provider
-    const SESSION_NAME = process.env.BOT_NAME || process.env.ASSISTANT_NAME || 'bot';
+    // Sanitizar para evitar caracteres inválidos en rutas (como *)
+    const rawSessionName = process.env.BOT_NAME || process.env.ASSISTANT_NAME || 'bot';
+    const SESSION_NAME = rawSessionName.replace(/[^a-zA-Z0-9_-]/g, '_');
+    
     await restoreSessionFromDb(SESSION_NAME);
     const qrPath = path.join(process.cwd(), "bot.qr.png");
 

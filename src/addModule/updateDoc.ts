@@ -107,6 +107,11 @@ async function processDocById(DOCX_FILE_ID: string) {
 
 async function attachFileToVectorStore(fileId: string) {
     try {
+        if (!VECTOR_STORE_ID || VECTOR_STORE_ID === "vs_" || VECTOR_STORE_ID.trim() === "") {
+            console.warn("⚠️ Salteando adjuntar archivo: VECTOR_STORE_ID no definido o inválido.");
+            return true;
+        }
+
         console.log(`📡 Adjuntando archivo al vector store: ${fileId}`);
         const response = await openai.vectorStores.fileBatches.createAndPoll(VECTOR_STORE_ID, {
             file_ids: [fileId]

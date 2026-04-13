@@ -13,7 +13,7 @@ const SHEET_IDS = (process.env.SHEET_ID_UPDATE || "")
     .split(",")
     .map(id => id.trim())
     .filter(Boolean);
-const VECTOR_STORE_ID = process.env.VECTOR_STORE_ID ?? "";
+const VECTOR_STORE_ID = process.env.VECTOR_STORE_ID || "";
 let currentFileId: string | null = null;
 
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -291,6 +291,11 @@ export async function uploadDataToAssistant(filePath: string, stateId: string) {
 
 async function attachFileToVectorStore(fileId: string) {
     try {
+        if (!VECTOR_STORE_ID || VECTOR_STORE_ID === "vs_" || VECTOR_STORE_ID.trim() === "") {
+            console.warn("⚠️ Salteando adjuntar archivo: VECTOR_STORE_ID no definido o inválido.");
+            return true;
+        }
+
         console.log(`📡 Adjuntando archivo al vector store: ${fileId}`);
         const response = await openai.vectorStores.fileBatches.createAndPoll(VECTOR_STORE_ID, {
             file_ids: [fileId]
