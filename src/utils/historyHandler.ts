@@ -539,6 +539,21 @@ export class HistoryHandler {
     }
 
     /**
+     * Actualiza la marca de tiempo de la última intervención humana
+     */
+    static async updateLastHumanMessage(chatId: string) {
+        try {
+            await supabase
+                .from('chats')
+                .update({ last_human_message_at: new Date().toISOString() })
+                .eq('id', chatId)
+                .eq('project_id', PROJECT_ID);
+        } catch (err) {
+            console.error('[HistoryHandler] Error en updateLastHumanMessage:', err);
+        }
+    }
+
+    /**
      * Lista todos los chats activos (con tags incluidos)
      */
     static async listChats(limit: number = 20, offset: number = 0, search?: string, tagId?: string, assignedTo?: string | null, platform?: string) {

@@ -497,10 +497,11 @@ class MetaCloudProvider extends ProviderClass {
 
     private processIncomingMessage = (body: any, isEchoWebhook: boolean = false) => {
         try {
-            const { phone_number_id } = this.config;
+            // Normalizar el ID del teléfono de la configuración (puede venir como numberId o phone_number_id)
+            const phone_number_id = this.config.phone_number_id || this.config.numberId;
 
             if (isEchoWebhook) {
-                console.log('📡 [MetaCloudProvider] 🔄 Procesando smb_message_echoes (mensaje manual desde app WhatsApp)');
+                console.log('📡 [MetaCloudProvider] 🔄 Detectado evento de field: smb_message_echoes');
             }
 
             body.entry?.forEach((entry: any) => {
@@ -512,8 +513,13 @@ class MetaCloudProvider extends ProviderClass {
                     if (value?.messages) {
                         
                         // Filtro de número destino para asegurar que es para nosotros
-                        if (phone_number_id && value.metadata?.phone_number_id !== phone_number_id) {
+                        if (phone_number_id && value.metadata?.phone_number_id && value.metadata?.phone_number_id !== String(phone_number_id)) {
+                            console.log(`⚠️ [MetaCloudProvider] Ignorando mensaje (ID mismatch: ${value.metadata?.phone_number_id} != ${phone_number_id})`);
                             return;
+                        }
+
+                        if (isThisChangeEcho) {
+                            console.log(`📡 [MetaCloudProvider] Procesando ${value.messages.length} mensajes de tipo ECO (Manual App)`);
                         }
 
                         const contact = value.contacts?.[0];
@@ -546,6 +552,13 @@ class MetaCloudProvider extends ProviderClass {
                             // Para echos de smb_message_echoes, el "from" contiene el número del destinatario
                             // (la persona a la que el operador le escribió desde la app)
                             const recipientId = msg.recipient_id || wa_id || msg.from;
+
+                            if (isEcho) {
+                                console.log(`📋 [MetaCloudProvider] ECO DETECTADO. Field: ${fieldName}. De: ${msg.from} Para: ${msg.recipient_id || 'N/A'}. Result chatId: ${recipientId}`);
+                                if (recipientId === this.config.phone_number_id || recipientId === this.config.numberId) {
+                                    console.warn(`⚠️ [MetaCloudProvider] ATENCIÓN: El recipientId coincide con el Bot ID. El mensaje podría no verse en el chat del cliente.`);
+                                }
+                            }
 
                             const formatedMessage: any = {
                                 body: messageBody,
