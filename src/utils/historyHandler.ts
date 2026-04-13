@@ -720,17 +720,7 @@ export class HistoryHandler {
         }
     }
 
-    static async updateLastHumanMessage(chatId: string) {
-        try {
-            await supabase
-                .from('chats')
-                .update({ last_human_message_at: new Date().toISOString() })
-                .eq('id', chatId)
-                .eq('project_id', PROJECT_ID);
-        } catch (err) {
-            console.error('[HistoryHandler] Error en updateLastHumanMessage:', err);
-        }
-    }
+
 
     /**
      * Guarda el thread_id de OpenAI en el metadata del chat

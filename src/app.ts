@@ -147,14 +147,27 @@ const main = async () => {
             verify_token: process.env.META_VERIFY_TOKEN || "BotRialWayVerifyToken2026"
         });
         
-        groupProvider = createProvider(SupabaseBaileysProvider, {
-            name: `${SESSION_NAME}_groups`, // <--- Diferente del principal para evitar bloqueo
-            version: baileysVersion,
-            groupsIgnore: false,
-            readStatus: false,
-            disableHttpServer: true,
-        });
-        setGroupProvider(groupProvider);
+        // --- CONFIGURACIÓN DE GRUPOS (AUXILIAR) ---
+        // Solo crear proveedor de grupos si hay una configuración de Meta realmente persistida 
+        // y no solo variables de entorno que podrían estar huérfanas o incompletas.
+        // Esto evita que se genere un QR de grupos innecesario si Meta no está listo.
+        const hasMetaSession = metaConfig && metaConfig.access_token && metaConfig.access_token !== 'PENDING' && metaConfig.phone_number_id !== 'PENDING';
+        
+        if (hasMetaSession) {
+            console.log('🔗 [App] Inicializando conexión auxiliar para grupos...');
+            groupProvider = createProvider(SupabaseBaileysProvider, {
+                name: `${SESSION_NAME}_groups`, 
+                version: baileysVersion,
+                groupsIgnore: false,
+                readStatus: false,
+                disableHttpServer: true,
+            });
+            setGroupProvider(groupProvider);
+        } else {
+            console.log('⚠️ [App] Meta detectado en env pero no hay sesión activa en DB. Saltando conexión auxiliar de grupos para evitar conflictos de sesión.');
+            groupProvider = null;
+            setGroupProvider(null);
+        }
     } else {
         console.log('🚀 [App] Modo Estándar detectado (Baileys para todo)');
         adapterProvider = createProvider(SupabaseBaileysProvider, {
