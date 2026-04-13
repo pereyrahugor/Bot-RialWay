@@ -44,10 +44,26 @@ export class SupabaseBaileysProvider extends BaileysProvider {
         if (this.initialized && this.vendor?.ws?.isOpen) return;
         this.initialized = true;
 
-        const authPath = path.join(process.cwd(), `bot_sessions/${this.globalVendorArgs.name || 'default'}`);
-        if (!fs.existsSync(authPath)) fs.mkdirSync(authPath, { recursive: true });
+        const { useSupabaseAuthState } = await import('../utils/supabaseAdapter');
         
-        const { state, saveCreds } = await useMultiFileAuthState(authPath);
+        const supabaseUrl = process.env.SUPABASE_URL;
+        const supabaseKey = process.env.SUPABASE_KEY;
+        const projectId = process.env.RAILWAY_PROJECT_ID || 'default_project';
+        const botName = this.globalVendorArgs.name || 'default';
+
+        if (!supabaseUrl || !supabaseKey) {
+            console.error('[SupabaseBaileysProvider] ❌ Faltan SUPABASE_URL o SUPABASE_KEY en el entorno.');
+            return;
+        }
+
+        const { state, saveCreds } = await useSupabaseAuthState(
+            supabaseUrl,
+            supabaseKey,
+            projectId,
+            'baileys_session',
+            botName
+        );
+        
         this.saveCreds = saveCreds;
 
         this.vendor = makeWASocket({
@@ -65,7 +81,9 @@ export class SupabaseBaileysProvider extends BaileysProvider {
             ...this.globalVendorArgs
         }) as any;
 
-        this.vendor.ev.on('creds.update', this.saveCreds);
+        this.vendor.ev.on('creds.update', async () => {
+            await this.saveCreds();
+        });
 
         this.vendor.ev.on('connection.update', async (update: any) => {
             const { connection, lastDisconnect, qr } = update;
