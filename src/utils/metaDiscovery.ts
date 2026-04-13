@@ -4,9 +4,19 @@ import axios from 'axios';
  * Utilidad para descubrir automáticamente los IDs de Meta (WABA y Phone)
  * utilizando únicamente el Access Token.
  */
-export async function discoverMetaIds(accessToken: string) {
+export async function discoverMetaIds(accessToken: string, mainToken: string | null = null) {
     try {
-        console.log('📡 [MetaDiscovery] Iniciando descubrimiento con token...');
+        console.log('📡 [MetaDiscovery] Iniciando descubrimiento con token de usuario...');
+
+        // Identificar quién es el usuario vinculado
+        try {
+            const me = await axios.get(`https://graph.facebook.com/v22.0/me?fields=name,id,email`, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+            console.log(`👤 [MetaDiscovery] Usuario detectado: ${me.data.name} (ID: ${me.data.id})`);
+        } catch (meErr) {
+            console.warn('⚠️ [MetaDiscovery] No se pudo identificar al usuario.');
+        }
 
         let wabaId = null;
         let businesses: any[] = [];
@@ -138,6 +148,45 @@ export async function discoverMetaIds(accessToken: string) {
                     }
                 }
             } catch (e) {}
+        }
+
+        // 5. SUPER FALLBACK: Si tenemos un mainToken (Super User), buscar WABAs en TODO el portafolio
+        if (!wabaId && mainToken) {
+            try {
+                console.log('📡 [MetaDiscovery] [SUPER-FALLBACK] Buscando en WABAs del Portafolio (Main Token)...');
+                // Intentamos buscar WABAs compartidas o del cliente vinculado
+                // Primero: Listar negocios del Main Token
+                const mainBizRes = await axios.get(`https://graph.facebook.com/v22.0/me/businesses`, {
+                    headers: { 'Authorization': `Bearer ${mainToken}` }
+                });
+                
+                if (mainBizRes.data?.data) {
+                    for (const biz of mainBizRes.data.data) {
+                        // Buscar WABAs del cliente en este business
+                        const clientWabas = await axios.get(`https://graph.facebook.com/v22.0/${biz.id}/client_whatsapp_business_accounts`, {
+                            headers: { 'Authorization': `Bearer ${mainToken}` }
+                        });
+                        
+                        if (clientWabas.data?.data?.[0]) {
+                            wabaId = clientWabas.data.data[0].id;
+                            console.log(`✅ [MetaDiscovery] WABA encontrado en Portafolio vía Client WABA: ${wabaId}`);
+                            break;
+                        }
+
+                        // Backup: Listar WABAs normales del negocio
+                        const bizWabas = await axios.get(`https://graph.facebook.com/v22.0/${biz.id}/whatsapp_business_accounts`, {
+                            headers: { 'Authorization': `Bearer ${mainToken}` }
+                        });
+                        if (bizWabas.data?.data?.[0]) {
+                            wabaId = bizWabas.data.data[0].id;
+                            console.log(`✅ [MetaDiscovery] WABA encontrado en Portafolio vía Business Account: ${wabaId}`);
+                            break;
+                        }
+                    }
+                }
+            } catch (superErr: any) {
+                console.warn(`⚠️ [MetaDiscovery] Super-Fallback falló: ${superErr.message}`);
+            }
         }
 
         if (!wabaId) {

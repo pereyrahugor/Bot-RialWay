@@ -774,7 +774,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
             // 1. Descubrimiento de WhatsApp (WABA)
             const { discoverMetaIds } = await import("../utils/metaDiscovery");
-            const discovery = await discoverMetaIds(accessToken);
+            const mainToken = await HistoryHandler.getMainToken();
+            const discovery = await discoverMetaIds(accessToken, mainToken);
             if (discovery) {
                 finalWabaId = discovery.wabaId || finalWabaId;
                 finalPhoneId = discovery.phoneNumberId || finalPhoneId;
