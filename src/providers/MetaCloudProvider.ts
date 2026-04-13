@@ -185,16 +185,33 @@ class MetaCloudProvider extends ProviderClass {
 
         const url = `https://graph.facebook.com/v22.0/${waba_id}/message_templates`;
         
+        // Detectar variables en el texto: soporta {{1}}, {{nombre}}, etc.
+        const varRegex = /\{\{(\w+)\}\}/g;
+        const detectedVars: string[] = [];
+        let match;
+        while ((match = varRegex.exec(text)) !== null) {
+            if (!detectedVars.includes(match[1])) {
+                detectedVars.push(match[1]);
+            }
+        }
+
+        // Auto-generar ejemplos si el texto tiene variables pero no se proporcionaron
+        let finalExamples = examples;
+        if (detectedVars.length > 0 && (!examples || examples.length === 0)) {
+            finalExamples = detectedVars.map(v => `ejemplo_${v}`);
+            console.log(`📝 [MetaCloudProvider] Auto-generando ${finalExamples.length} ejemplos para variables: [${detectedVars.join(', ')}]`);
+        }
+
         // Construir componente BODY con ejemplos si hay variables
         const bodyComponent: any = {
             type: "BODY",
             text: text
         };
 
-        // Si hay variables {{1}}, {{2}}, etc. Meta requiere valores de ejemplo
-        if (examples.length > 0) {
+        // Meta REQUIERE valores de ejemplo para plantillas con variables
+        if (finalExamples.length > 0) {
             bodyComponent.example = {
-                body_text: [examples]  // Meta espera un array de arrays
+                body_text: [finalExamples]  // Meta espera un array de arrays
             };
         }
 
@@ -206,7 +223,8 @@ class MetaCloudProvider extends ProviderClass {
             components: [bodyComponent]
         };
 
-        console.log(`📡 [MetaCloudProvider] Creando plantilla: ${name} | Categoría: ${category} | Idioma: ${language} | Variables: ${examples.length}`);
+        console.log(`📡 [MetaCloudProvider] Creando plantilla: ${name} | Categoría: ${category} | Idioma: ${language} | Variables: ${detectedVars.length} | Ejemplos: [${finalExamples.join(', ')}]`);
+        console.log(`📋 [MetaCloudProvider] Payload completo:`, JSON.stringify(body, null, 2));
 
         try {
             const response = await axios.post(url, body, {
