@@ -195,23 +195,8 @@ class MetaCloudProvider extends ProviderClass {
             }
         }
 
-        // --- CONVERSIÓN: Variables con nombre → Variables posicionales ---
-        // Meta Cloud API SOLO acepta formato posicional {{1}}, {{2}}, {{3}} via API.
-        // Las variables con nombre ({{nombre}}) solo funcionan desde el Manager UI.
-        let apiText = text;
-        const varNameToPosition: Record<string, number> = {};
+        // Determinar si usa variables con nombre ({{nombre}}) o posicionales ({{1}})
         const hasNamedVars = detectedVars.some(v => isNaN(Number(v)));
-        
-        if (hasNamedVars) {
-            console.log(`🔄 [MetaCloudProvider] Convirtiendo variables con nombre a posicionales: [${detectedVars.join(', ')}]`);
-            detectedVars.forEach((varName, index) => {
-                const position = index + 1;
-                varNameToPosition[varName] = position;
-                // Reemplazar {{nombre}} por {{1}}, soportando espacios opcionales
-                apiText = apiText.replace(new RegExp(`\\{\\{\\s*${varName}\\s*\\}\\}`, 'g'), `{{${position}}}`);
-            });
-            console.log(`📝 [MetaCloudProvider] Mapeo: ${JSON.stringify(varNameToPosition)}`);
-        }
 
         // Auto-generar ejemplos si el texto tiene variables pero no se proporcionaron
         let finalExamples = examples;
@@ -220,20 +205,34 @@ class MetaCloudProvider extends ProviderClass {
             console.log(`📝 [MetaCloudProvider] Auto-generando ${finalExamples.length} ejemplos para variables: [${detectedVars.join(', ')}]`);
         }
 
-        // Construir componente BODY con ejemplos si hay variables
+        // Construir componente BODY con ejemplos según el tipo de variablesaccording to type
         const bodyComponent: any = {
             type: "BODY",
-            text: apiText  // Usar texto con variables posicionales
+            text: text
         };
 
         // Meta REQUIERE valores de ejemplo para plantillas con variables
-        if (finalExamples.length > 0) {
-            bodyComponent.example = {
-                body_text: [finalExamples]  // Meta espera un array de arrays
-            };
+        if (detectedVars.length > 0 && finalExamples.length > 0) {
+            if (hasNamedVars) {
+                // Formato para variables CON NOMBRE: array de objetos {param_name, example}
+                // Ref: https://developers.facebook.com/docs/whatsapp/business-management-api/message-templates/
+                bodyComponent.example = {
+                    body_text: [
+                        detectedVars.map((varName, i) => ({
+                            param_name: varName,
+                            example: finalExamples[i] || `ejemplo_${varName}`
+                        }))
+                    ]
+                };
+            } else {
+                // Formato para variables POSICIONALES: array de arrays de strings
+                bodyComponent.example = {
+                    body_text: [finalExamples]
+                };
+            }
         }
 
-        const body = {
+        const body: any = {
             name,
             category, // MARKETING, UTILITY, AUTHENTICATION
             allow_category_change: true,
@@ -241,7 +240,12 @@ class MetaCloudProvider extends ProviderClass {
             components: [bodyComponent]
         };
 
-        console.log(`📡 [MetaCloudProvider] Creando plantilla: ${name} | Categoría: ${category} | Idioma: ${language} | Variables: ${detectedVars.length} | Ejemplos: [${finalExamples.join(', ')}]`);
+        // Meta requiere este campo para usar variables con nombre
+        if (hasNamedVars) {
+            body.parameter_format = "named";
+        }
+
+        console.log(`📡 [MetaCloudProvider] Creando plantilla: ${name} | Categoría: ${category} | Idioma: ${language} | Vars: [${detectedVars.join(', ')}] | Formato: ${hasNamedVars ? 'NAMED' : 'POSITIONAL'}`);
         console.log(`📋 [MetaCloudProvider] Payload completo:`, JSON.stringify(body, null, 2));
 
         try {
@@ -253,9 +257,9 @@ class MetaCloudProvider extends ProviderClass {
             });
             console.log(`✅ [MetaCloudProvider] Plantilla '${name}' creada. ID: ${response.data?.id} | Estado: ${response.data?.status}`);
             
-            // Incluir el mapeo de variables en la respuesta para uso posterior (Excel headers)
+            // Incluir info de variables en la respuesta para uso posterior
             if (hasNamedVars) {
-                response.data._varMapping = varNameToPosition;
+                response.data._varNames = detectedVars;
             }
             return response.data;
         } catch (error: any) {
