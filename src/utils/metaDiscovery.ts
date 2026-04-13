@@ -118,6 +118,28 @@ export async function discoverMetaIds(accessToken: string) {
             }
         }
 
+        // 4. Fallback final: Intentar ver si el usuario tiene algún Business ID vía /me/businesses (requiere business_management, pero a veces devuelve algo con whatsapp_business_management)
+        if (!wabaId) {
+            try {
+                console.log('📡 [MetaDiscovery] Intentando buscar Businesses del usuario...');
+                const bizRes = await axios.get(`https://graph.facebook.com/v22.0/me/businesses`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                if (bizRes.data?.data) {
+                    for (const biz of bizRes.data.data) {
+                        const wRes = await axios.get(`https://graph.facebook.com/v22.0/${biz.id}/whatsapp_business_accounts`, {
+                            headers: { 'Authorization': `Bearer ${accessToken}` }
+                        });
+                        if (wRes.data?.data?.[0]) {
+                            wabaId = wRes.data.data[0].id;
+                            console.log(`✅ [MetaDiscovery] WABA encontrado vía Business ${biz.id}: ${wabaId}`);
+                            break;
+                        }
+                    }
+                }
+            } catch (e) {}
+        }
+
         if (!wabaId) {
             console.warn('⚠️ [MetaDiscovery] No se encontraron cuentas asociadas en absoluto.');
             return null;

@@ -1011,21 +1011,43 @@ export class HistoryHandler {
     /**
      * Obtiene los datos de onboarding configurados
      */
-    static async getMetaOnboardingData(projectId: string | null = null) {
+    static async getMetaOnboardingData(projectId: string | null = null, fallbackToMain: boolean = false) {
         try {
             const targetProjectId = projectId || PROJECT_ID;
-            const { data, error } = await supabase
+            let { data, error } = await supabase
                 .from('meta_onboarding')
                 .select('*')
                 .eq('project_id', targetProjectId)
                 .maybeSingle();
 
             if (error) throw error;
+
+            // Si no hay datos y se solicita fallback, buscamos el 'main_token'
+            if (!data && fallbackToMain) {
+                console.log(`ℹ️ [HistoryHandler] No hay token para ${targetProjectId}, intentando obtener 'main_token'...`);
+                const mainRes = await supabase
+                    .from('meta_onboarding')
+                    .select('*')
+                    .eq('project_id', 'main_token')
+                    .maybeSingle();
+                if (!mainRes.error && mainRes.data) {
+                    data = mainRes.data;
+                }
+            }
+
             return data;
         } catch (err) {
             console.error('[HistoryHandler] Error en getMetaOnboardingData:', err);
             return null;
         }
+    }
+
+    /**
+     * Obtiene específicamente el token maestro del sistema
+     */
+    static async getMainToken() {
+        const data = await this.getMetaOnboardingData('main_token');
+        return data?.access_token || null;
     }
 
     static async saveSetting(key: string, value: string, projectId: string | null = null) {

@@ -606,19 +606,36 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     /** Paso 1: Añadir número a Meta y solicitar OTP */
     app.post('/api/backoffice/whatsapp/register-step-1', bodyParser.json(), async (req, res) => {
-        const { phoneNumber, verifiedName, projectId } = req.body;
+        const { phoneNumber, verifiedName, projectId, manualWabaId, manualToken } = req.body;
         try {
-            const config = await HistoryHandler.getMetaOnboardingData(projectId);
-            if (!config || !config.waba_id) throw new Error('No se encontró WABA vinculado. Repite el login de Meta.');
+            let config = await HistoryHandler.getMetaOnboardingData(projectId, true); // Fallback al main_token habilitado
+            
+            // Si el usuario provee un token manual (Super User), lo priorizamos
+            const token = manualToken || config?.access_token;
+            if (!token) throw new Error('No se encontró sesión de Meta ni Token manual provisto.');
+
+            const wabaId = manualWabaId || config?.waba_id;
+            if (!wabaId) throw new Error('No se encontró WABA ID. Búscalo en tu Panel de Meta o ingrésalo manualmente.');
 
             const { addPhoneNumberToWaba, requestPhoneNumberOtp } = await import("../utils/metaDiscovery");
             
             // 1. Añadir el número (esto nos da el Phone ID)
-            const result = await addPhoneNumberToWaba(config.access_token, config.waba_id, phoneNumber, verifiedName);
+            const result = await addPhoneNumberToWaba(token, wabaId, phoneNumber, verifiedName);
             const phoneId = result.id;
 
             // 2. Solicitar OTP
-            await requestPhoneNumberOtp(config.access_token, phoneId, 'SMS');
+            await requestPhoneNumberOtp(token, phoneId, 'SMS');
+
+            // 3. Guardar las credenciales manuales para que persistan
+            if (manualWabaId || manualToken) {
+                await HistoryHandler.saveMetaOnboardingData(
+                    wabaId, 
+                    null, 
+                    token, 
+                    { activatedVia: 'manual-advanced-form' }, 
+                    projectId
+                );
+            }
 
             res.json({ success: true, phoneId });
         } catch (error: any) {
@@ -812,16 +829,31 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                         
                         <div id="step-1" style="background: #fffaf0; padding: 25px; border-radius: 12px; border: 1px solid #feebc8; margin-top: 25px; text-align: left; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
                             <h3 style="margin-top: 0; color: #9c4221;">Paso 1: Vincular tu Número</h3>
-                            <p style="font-size: 14px;">Introduce el número que deseas usar (con código de país, ej: 54911...). Enviaremos un SMS de verificación desde Meta.</p>
+                            <p style="font-size: 14px;">Introduce el número que deseas usar. Enviaremos un SMS de verificación desde Meta.</p>
                             
                             <div style="margin-top: 15px;">
-                                <label style="display: block; font-size: 13px; font-weight: bold; margin-bottom: 5px;">Número de Teléfono:</label>
+                                <label style="display: block; font-size: 13px; font-weight: bold; margin-bottom: 5px;">Número de Teléfono (con código de país):</label>
                                 <input type="text" id="phoneInput" placeholder="5491122334455" style="width: 100%; padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; box-sizing: border-box;">
                             </div>
                             
                             <div style="margin-top: 15px;">
-                                <label style="display: block; font-size: 13px; font-weight: bold; margin-bottom: 5px;">Nombre para mostrar (Verified Name):</label>
-                                <input type="text" id="nameInput" placeholder="Nombre de tu Negocio" style="width: 100%; padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; box-sizing: border-box;">
+                                <label style="display: block; font-size: 13px; font-weight: bold; margin-bottom: 5px;">Nombre para mostrar (Empresa):</label>
+                                <input type="text" id="nameInput" placeholder="Mi Negocio" style="width: 100%; padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; box-sizing: border-box;">
+                            </div>
+
+                            <div style="margin-top: 20px; border-top: 1px solid #fbd38d; padding-top: 15px;">
+                                <button onclick="toggleAdvanced()" style="background: none; border: none; font-size: 12px; color: #718096; cursor: pointer; text-decoration: underline; padding: 0;">Configuración Avanzada (Token Manual/WABA)</button>
+                                
+                                <div id="advancedSection" style="display: none; margin-top: 15px; background: #fff; padding: 15px; border-radius: 6px; border: 1px dashed #cbd5e0;">
+                                    <div style="margin-bottom: 10px;">
+                                        <label style="display: block; font-size: 11px; font-weight: bold; color: #4a5568;">WABA ID:</label>
+                                        <input type="text" id="wabaInput" placeholder="ID de la Cuenta de Negocio" style="width: 100%; padding: 8px; border: 1px solid #e2e8f0; border-radius: 4px; box-sizing: border-box; font-size: 12px;">
+                                    </div>
+                                    <div>
+                                        <label style="display: block; font-size: 11px; font-weight: bold; color: #4a5568;">System / Admin Token:</label>
+                                        <textarea id="tokenInput" placeholder="EAAV..." style="width: 100%; height: 60px; padding: 8px; border: 1px solid #e2e8f0; border-radius: 4px; box-sizing: border-box; font-size: 11px; font-family: monospace;"></textarea>
+                                    </div>
+                                </div>
                             </div>
 
                             <button onclick="submitNumber()" id="btnSubmit" style="background: #38a169; color: white; padding: 12px 20px; border-radius: 6px; border: none; font-weight: bold; width: 100%; margin-top: 20px; cursor: pointer;">
@@ -842,10 +874,17 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                             const projectId = "${projectId}";
                             let tempPhoneId = "";
 
+                            function toggleAdvanced() {
+                                const section = document.getElementById('advancedSection');
+                                section.style.display = section.style.display === 'none' ? 'block' : 'none';
+                            }
+
                             async function submitNumber() {
                                 const phone = document.getElementById('phoneInput').value;
                                 const name = document.getElementById('nameInput').value;
-                                if (!phone || !name) return alert('Por favor completa ambos campos');
+                                const waba = document.getElementById('wabaInput').value;
+                                const manualToken = document.getElementById('tokenInput').value;
+                                if (!phone || !name) return alert('Por favor completa teléfono y nombre');
                                 
                                 document.getElementById('btnSubmit').innerText = 'Procesando...';
                                 document.getElementById('btnSubmit').disabled = true;
@@ -854,7 +893,13 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                                     const res = await fetch('/api/backoffice/whatsapp/register-step-1', {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ phoneNumber: phone, verifiedName: name, projectId: projectId })
+                                        body: JSON.stringify({ 
+                                            phoneNumber: phone, 
+                                            verifiedName: name, 
+                                            projectId: projectId,
+                                            manualWabaId: waba,
+                                            manualToken: manualToken
+                                        })
                                     });
                                     const data = await res.json();
                                     if (data.success) {
