@@ -780,8 +780,9 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                     </div>
                 `;
 
-                // Guardar solo el token antes de salir
-                await HistoryHandler.saveMetaOnboardingData({ accessToken }, projectId);
+                // Guardar solo el token antes de salir, pasando nulls para lo que no descubrimos
+                // Firma: wabaId, phoneId, token, extra, projectId
+                await HistoryHandler.saveMetaOnboardingData(null as any, null as any, accessToken, { debugInfo }, projectId);
                 return res.send(htmlError);
             }
 
