@@ -510,7 +510,9 @@ class MetaCloudProvider extends ProviderClass {
                     const fieldName = change.field || 'messages';
                     const isThisChangeEcho = fieldName === 'smb_message_echoes' || isEchoWebhook;
 
-                    if (value?.messages) {
+                    const messages = value?.messages || value?.message_echoes;
+
+                    if (messages && Array.isArray(messages)) {
                         
                         // Filtro de número destino para asegurar que es para nosotros
                         if (phone_number_id && value.metadata?.phone_number_id && value.metadata?.phone_number_id !== String(phone_number_id)) {
@@ -519,15 +521,15 @@ class MetaCloudProvider extends ProviderClass {
                         }
 
                         if (isThisChangeEcho) {
-                            console.log(`📡 [MetaCloudProvider] Procesando ${value.messages.length} mensajes de tipo ECO (Manual App)`);
+                            console.log(`📡 [MetaCloudProvider] Procesando ${messages.length} mensajes de tipo ECO (Manual App)`);
                         }
 
                         const contact = value.contacts?.[0];
                         const wa_id = contact?.wa_id;
                         // Extraer el BSUID (Business-Scoped User ID)
-                        const bsuid = contact?.user_id || value.messages?.[0]?.from_user_id;
+                        const bsuid = contact?.user_id || messages[0]?.from_user_id;
 
-                        value.messages.forEach((msg: any) => {
+                        messages.forEach((msg: any) => {
                             const mediaObj = msg.image || msg.video || msg.audio || msg.document || msg.voice || msg[msg.type];
                             let type = msg.type;
 
@@ -549,13 +551,13 @@ class MetaCloudProvider extends ProviderClass {
                             // Caso 2: recipient_id presente → Echo estándar de la API
                             const isEcho = isThisChangeEcho || !!msg.recipient_id;
 
-                            // Para echos de smb_message_echoes, el "from" contiene el número del destinatario
-                            // (la persona a la que el operador le escribió desde la app)
-                            const recipientId = msg.recipient_id || wa_id || msg.from;
+                            // Para echos de smb_message_echoes, el "from" contiene nuestro número, 
+                            // y el "to" contiene el número del destinatario.
+                            const recipientId = msg.recipient_id || msg.to || wa_id || msg.from;
 
                             if (isEcho) {
-                                console.log(`📋 [MetaCloudProvider] ECO DETECTADO. Field: ${fieldName}. De: ${msg.from} Para: ${msg.recipient_id || 'N/A'}. Result chatId: ${recipientId}`);
-                                if (recipientId === this.config.phone_number_id || recipientId === this.config.numberId) {
+                                console.log(`📋 [MetaCloudProvider] ECO DETECTADO. Field: ${fieldName}. De: ${msg.from} Para: ${msg.recipient_id || msg.to || 'N/A'}. Result chatId: ${recipientId}`);
+                                if (recipientId === String(this.config.phone_number_id) || recipientId === String(this.config.numberId)) {
                                     console.warn(`⚠️ [MetaCloudProvider] ATENCIÓN: El recipientId coincide con el Bot ID. El mensaje podría no verse en el chat del cliente.`);
                                 }
                             }
