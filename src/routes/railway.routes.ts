@@ -5,7 +5,7 @@ import { backofficeAuth, systemConfigAuth } from "../middleware/auth";
  */
 export const registerRailwayRoutes = (app: any, { RailwayApi }: any) => {
     
-    app.post("/api/restart-bot", systemConfigAuth, async (req: any, res: any) => {
+    app.post("/api/restart-bot", backofficeAuth, async (req: any, res: any) => {
         console.log('POST /api/restart-bot recibido');
         try {
             const result = await RailwayApi.restartActiveDeployment();

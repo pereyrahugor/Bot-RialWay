@@ -198,14 +198,26 @@ class MetaCloudProvider extends ProviderClass {
         // Determinar si usa variables con nombre ({{nombre}}) o posicionales ({{1}})
         const hasNamedVars = detectedVars.some(v => isNaN(Number(v)));
 
-        // Auto-generar ejemplos si el texto tiene variables pero no se proporcionaron
-        let finalExamples = examples;
-        if (detectedVars.length > 0 && (!examples || examples.length === 0)) {
-            finalExamples = detectedVars.map(v => `ejemplo_${v}`);
-            console.log(`📝 [MetaCloudProvider] Auto-generando ${finalExamples.length} ejemplos para variables: [${detectedVars.join(', ')}]`);
+        // Auto-generar o normalizar ejemplos. Meta requiere strings en body_text
+        let finalExamples: string[] = [];
+
+        if (detectedVars.length > 0) {
+            // Si no hay ejemplos, auto-generar
+            if (!examples || examples.length === 0) {
+                finalExamples = detectedVars.map(v => `ejemplo_${v}`);
+            } else {
+                // Normalizar: pueden venir como strings o como objetos {param_name, example}
+                finalExamples = examples.map((ex: any) => {
+                    if (typeof ex === 'string') return ex;
+                    if (ex && typeof ex === 'object' && ex.example) return String(ex.example);
+                    if (ex && typeof ex === 'object' && ex.text) return String(ex.text); // fallback
+                    return String(ex || 'ejemplo');
+                });
+            }
+            console.log(`📝 [MetaCloudProvider] Normalizados ${finalExamples.length} ejemplos para variables: [${detectedVars.join(', ')}]`);
         }
 
-        // Construir componente BODY con ejemplos según el tipo de variablesaccording to type
+        // Construir componente BODY con ejemplos según el tipo de variables
         const bodyComponent: any = {
             type: "BODY",
             text: text
@@ -213,11 +225,20 @@ class MetaCloudProvider extends ProviderClass {
 
         // Meta REQUIERE valores de ejemplo para plantillas con variables
         if (detectedVars.length > 0 && finalExamples.length > 0) {
-            // body_text SIEMPRE es array de arrays de strings, tanto para named como positional
-            // parameter_format: "named" solo afecta el texto, no el formato de examples
-            bodyComponent.example = {
-                body_text: [finalExamples]
-            };
+            if (hasNamedVars) {
+                // ESTRUCTURA PARA PARÁMETROS CON NOMBRE (NAMED)
+                bodyComponent.example = {
+                    body_text_named_params: detectedVars.map((v, i) => ({
+                        param_name: v,
+                        example: finalExamples[i] || `ejemplo_${v}`
+                    }))
+                };
+            } else {
+                // ESTRUCTURA PARA PARÁMETROS POSICIONALES ({{1}}, {{2}}...)
+                bodyComponent.example = {
+                    body_text: [finalExamples]
+                };
+            }
         }
 
         const body: any = {

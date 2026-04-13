@@ -105,6 +105,65 @@ fetchStatus();
 setInterval(fetchStatus, 15000);
 
 // Redirigir a /webreset al hacer click en el botón de reinicio
-document.getElementById('go-reset').addEventListener('click', function() {
-    window.location.href = '/webreset';
-});
+
+// --- REINICIO COMPLETO ---
+const goResetBtn = document.getElementById('go-reset');
+const resetModal = document.getElementById('resetModal');
+const confirmSi = document.getElementById('confirmSi');
+const confirmNo = document.getElementById('confirmNo');
+
+if (goResetBtn) {
+    goResetBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        resetModal.classList.remove('hidden');
+    });
+}
+
+if (confirmNo) {
+    confirmNo.addEventListener('click', () => {
+        resetModal.classList.add('hidden');
+    });
+}
+
+if (confirmSi) {
+    confirmSi.addEventListener('click', async () => {
+        confirmSi.disabled = true;
+        confirmSi.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reiniciando...';
+        
+        try {
+            const token = localStorage.getItem('backoffice_token');
+            
+            // 1. Borrar sesión
+            console.log("📡 Borrando sesión...");
+            const delRes = await fetch(`/api/delete-session?token=${token}`, { method: 'POST' });
+            
+            if (!delRes.ok) throw new Error("Error al borrar la sesión en DB");
+
+            // 2. Reiniciar bot
+            console.log("📡 Solicitando reinicio de bot en Railway...");
+            const restRes = await fetch(`/api/restart-bot?token=${token}`, { method: 'POST' });
+            
+            if (!restRes.ok) throw new Error("Error al solicitar el reinicio del bot");
+
+            // 3. Éxito
+            resetModal.innerHTML = `
+                <div class="modal-content">
+                    <i class="fas fa-check-circle" style="font-size: 3rem; color: #25d366; margin-bottom: 20px;"></i>
+                    <h3>¡Listo!</h3>
+                    <p>El bot se está reiniciando. La página se recargará en 5 segundos.</p>
+                </div>
+            `;
+            
+            setTimeout(() => {
+                window.location.reload();
+            }, 5000);
+
+        } catch (err) {
+            console.error(err);
+            alert("Hubo un error: " + err.message);
+            confirmSi.disabled = false;
+            confirmSi.innerText = 'SÍ, REINICIAR';
+        }
+    });
+}
+
