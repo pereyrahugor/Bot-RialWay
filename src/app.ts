@@ -98,18 +98,9 @@ const main = async () => {
     // await restoreSessionFromDb(SESSION_NAME);
     const qrPath = path.join(process.cwd(), "bot.qr.png");
 
-    // Intentar obtener la última versión de Baileys para evitar el error bad-request en init queries
-    let baileysVersion: any = null; 
-    try {
-        const { fetchLatestBaileysVersion } = await import('@whiskeysockets/baileys');
-        const { version, isLatest } = await fetchLatestBaileysVersion();
-        if (version) {
-            baileysVersion = version;
-            console.log(`📡 [App] Usando versión de WhatsApp Web: ${baileysVersion.join('.')} (Latest: ${isLatest})`);
-        }
-    } catch (e) {
-        console.log(`⚠️ [App] No se pudo obtener la versión de WA Web dinámicamente. Dejaremos que Baileys use su valor por defecto.`);
-    }
+    // Usar versión fija conocida que funciona
+    const baileysVersion: any = [2, 3000, 1030817285]; 
+    console.log(`📡 [App] Usando versión fija de WhatsApp Web: ${baileysVersion.join('.')}`);
 
     // 2. Initialize Providers
     const metaConfig = await HistoryHandler.getMetaOnboardingData();
@@ -183,11 +174,18 @@ const main = async () => {
 
     // 3. Register Provider Events
     registerProviderEvents(adapterProvider);
+
+    // --- INICIALIZACIÓN DE MOTORES ---
+    // Importante: Llamar a initVendor explícitamente solo una vez aquí.
+    if (adapterProvider.initVendor) {
+        console.log('🚀 [App] Inicializando Motor Principal (Baileys)...');
+        await adapterProvider.initVendor();
+    }
+
     if (groupProvider) {
         registerProviderEvents(groupProvider, true);
-        // Inicialización manual si es Baileys
         if (groupProvider.initVendor) {
-            console.log('🚀 [App] Inicializando Motor de Grupos...');
+            console.log('🚀 [App] Inicializando Motor de Grupos (Baileys Auxiliar)...');
             await groupProvider.initVendor();
         }
     }
@@ -326,9 +324,14 @@ const main = async () => {
         // API Session Control
         app.post("/api/delete-session", async (_req: any, res: any) => {
             try {
-                await deleteSessionFromDb();
+                const rawSessionName = process.env.BOT_NAME || process.env.ASSISTANT_NAME || 'bot';
+                const sessionId = rawSessionName.replace(/[^a-zA-Z0-9_-]/g, '_');
+                console.log(`[API] 🗑️ Petición de eliminación para: ${sessionId}`);
+                await deleteSessionFromDb(sessionId);
+                await deleteSessionFromDb(`${sessionId}_groups`);
                 res.json({ success: true });
             } catch (err: any) {
+                console.error('Error en /api/delete-session:', err);
                 res.status(500).json({ success: false, error: err.message });
             }
         });

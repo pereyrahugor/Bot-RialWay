@@ -608,7 +608,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     app.post('/api/backoffice/whatsapp/register-step-1', bodyParser.json(), async (req, res) => {
         const { phoneNumber, verifiedName, projectId, manualWabaId, manualToken } = req.body;
         try {
-            let config = await HistoryHandler.getMetaOnboardingData(projectId, true); // Fallback al main_token habilitado
+            const config = await HistoryHandler.getMetaOnboardingData(projectId, true); // Fallback al main_token habilitado
             
             // Si el usuario provee un token manual (Super User), lo priorizamos
             const token = manualToken || config?.access_token;

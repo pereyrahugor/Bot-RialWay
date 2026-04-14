@@ -19,8 +19,7 @@ const welcomeFlowVideo = addKeyword(EVENTS.MEDIA).addAction(
     if (
       /@broadcast$/.test(userId) ||
       /@newsletter$/.test(userId) ||
-      /@channel$/.test(userId) ||
-      /@lid$/.test(userId)
+      /@channel$/.test(userId)
     ) {
       console.log(`Mensaje de video ignorado por filtro de contacto: ${userId}`);
       return;

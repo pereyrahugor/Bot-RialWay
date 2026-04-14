@@ -7,8 +7,8 @@ const RAILWAY_ENVIRONMENT_ID = process.env.RAILWAY_ENVIRONMENT_ID;
 const RAILWAY_SERVICE_ID = process.env.RAILWAY_SERVICE_ID;
 
 if (!RAILWAY_TEAM_TOKEN || !RAILWAY_PROJECT_ID || !RAILWAY_ENVIRONMENT_ID || !RAILWAY_SERVICE_ID) {
-  throw new Error(
-    "Faltan variables de entorno: RAILWAY_TEAM_TOKEN, RAILWAY_PROJECT_ID, RAILWAY_ENVIRONMENT_ID o RAILWAY_SERVICE_ID"
+  console.warn(
+    "⚠️ [RailwayApi] Variables de entorno de Railway incompletas. Las funciones de control de despliegue y variables estarán deshabilitadas."
   );
 }
 
@@ -33,6 +33,9 @@ export class RailwayApi {
    * Helper privado para realizar peticiones fetch y validar la respuesta JSON
    */
   private static async fetchRailway(query: string, variables: any): Promise<any> {
+    if (!RAILWAY_TEAM_TOKEN) {
+        throw new Error("No se puede realizar la petición a Railway: RAILWAY_TOKEN no configurado.");
+    }
     const body = JSON.stringify({ query, variables });
 
     const res = await fetch(RAILWAY_GRAPHQL_ENDPOINT, {

@@ -14,8 +14,7 @@ export const welcomeFlowButton = addKeyword<BaileysProvider, MemoryDB>(EVENTS.AC
         if (
             /@broadcast$/.test(userId) ||
             /@newsletter$/.test(userId) ||
-            /@channel$/.test(userId) ||
-            /@lid$/.test(userId)
+            /@channel$/.test(userId)
         ) {
             console.log(`Botón ignorado por filtro de contacto: ${userId}`);
             return;

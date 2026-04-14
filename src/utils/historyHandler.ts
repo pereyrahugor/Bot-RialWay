@@ -1004,13 +1004,15 @@ export class HistoryHandler {
     static async getMetaOnboardingData(projectId: string | null = null, fallbackToMain: boolean = false) {
         try {
             const targetProjectId = projectId || PROJECT_ID;
-            let { data, error } = await supabase
+            const { data: initialData, error } = await supabase
                 .from('meta_onboarding')
                 .select('*')
                 .eq('project_id', targetProjectId)
                 .maybeSingle();
 
             if (error) throw error;
+
+            let data = initialData;
 
             // Si no hay datos y se solicita fallback, buscamos el 'main_token'
             if (!data && fallbackToMain) {

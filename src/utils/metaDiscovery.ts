@@ -147,7 +147,9 @@ export async function discoverMetaIds(accessToken: string, mainToken: string | n
                         }
                     }
                 }
-            } catch (e) {}
+            } catch (e) {
+                // Silently ignore failures in business listing to try next discovery method
+            }
         }
 
         // 5. SUPER FALLBACK: Si tenemos un mainToken (Super User), buscar WABAs en TODO el portafolio

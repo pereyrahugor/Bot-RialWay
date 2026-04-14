@@ -1,6 +1,6 @@
 
 import { createClient } from '@supabase/supabase-js';
-import { AuthenticationCreds, AuthenticationState, SignalDataTypeMap, initAuthCreds, BufferJSON } from '@whiskeysockets/baileys';
+import { AuthenticationCreds, AuthenticationState, SignalDataTypeMap, initAuthCreds, BufferJSON } from 'whaileys';
 
 export const useSupabaseAuthState = async (
     supabaseUrl: string,

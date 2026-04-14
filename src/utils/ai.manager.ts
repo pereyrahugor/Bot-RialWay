@@ -190,15 +190,9 @@ export class AiManager {
                 return state;
             }
 
-            // Filtro de Broadcast/Channel/Lid
+            // Filtro de Broadcast/Channel
             if (ctx.from) {
                 if (/@broadcast$/.test(ctx.from) || /@newsletter$/.test(ctx.from) || /@channel$/.test(ctx.from)) return;
-                if (/@lid$/.test(ctx.from)) {
-                    if (provider && typeof provider.sendMessage === 'function') {
-                        await provider.sendMessage('+5491130792789', `⚠️ @lid contacto: ${ctx.from}`);
-                    }
-                    return;
-                }
             }
 
             // --- LÓGICA MULTI-AGENTE ---

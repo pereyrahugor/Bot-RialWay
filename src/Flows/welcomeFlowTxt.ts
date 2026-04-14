@@ -14,8 +14,7 @@ export const welcomeFlowTxt = addKeyword<BaileysProvider, MemoryDB>(EVENTS.WELCO
         if (
             /@broadcast$/.test(userId) ||
             /@newsletter$/.test(userId) ||
-            /@channel$/.test(userId) ||
-            /@lid$/.test(userId)
+            /@channel$/.test(userId)
         ) {
             console.log(`Mensaje ignorado por filtro de contacto: ${userId}`);
             return;

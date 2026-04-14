@@ -65,8 +65,7 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
         if (
             /@broadcast$/.test(userId) ||
             /@newsletter$/.test(userId) ||
-            /@channel$/.test(userId) ||
-            /@lid$/.test(userId)
+            /@channel$/.test(userId)
         ) {
             // console.log(`idleFlow ignorado por filtro de contacto: ${userId}`);
             return endFlow();

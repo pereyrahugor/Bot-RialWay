@@ -1,4 +1,5 @@
 import { backofficeAuth, systemConfigAuth } from "../middleware/auth";
+import { deleteSessionFromDb } from "../utils/sessionSync";
 
 /**
  * Registra las rutas de Railway en la instancia de Polka.
@@ -6,13 +7,23 @@ import { backofficeAuth, systemConfigAuth } from "../middleware/auth";
 export const registerRailwayRoutes = (app: any, { RailwayApi }: any) => {
     
     app.post("/api/restart-bot", backofficeAuth, async (req: any, res: any) => {
-        console.log('POST /api/restart-bot recibido');
+        console.log('POST /api/restart-bot recibido - Solicitando limpieza de sesión y reinicio');
         try {
+            // 1. Calcular nombres de sesión
+            const rawSessionName = process.env.BOT_NAME || process.env.ASSISTANT_NAME || 'bot';
+            const sessionId = rawSessionName.replace(/[^a-zA-Z0-9_-]/g, '_');
+
+            // 2. Eliminar sesiones de la base de datos (Supabase)
+            console.log(`[RailwayRoutes] 🗑️ Eliminando sesiones '${sessionId}' y '${sessionId}_groups' antes del reinicio...`);
+            await deleteSessionFromDb(sessionId);
+            await deleteSessionFromDb(`${sessionId}_groups`);
+
+            // 3. Solicitar reinicio en Railway
             const result = await RailwayApi.restartActiveDeployment();
             if (result.success) {
-                res.json({ success: true, message: "Reinicio solicitado correctamente." });
+                res.json({ success: true, message: "Sesión eliminada y reinicio solicitado correctamente." });
             } else {
-                res.status(500).json({ success: false, error: result.error || "Error desconocido" });
+                res.status(500).json({ success: false, error: result.error || "Error al reiniciar en Railway" });
             }
         } catch (err: any) {
             console.error('Error en /api/restart-bot:', err);

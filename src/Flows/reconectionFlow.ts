@@ -52,8 +52,7 @@ export class ReconectionFlow {
         if (
             /@broadcast$/.test(userId) ||
             /@newsletter$/.test(userId) ||
-            /@channel$/.test(userId) ||
-            /@lid$/.test(userId)
+            /@channel$/.test(userId)
         ) {
             // console.log(`ReconectionFlow ignorado por filtro de contacto: ${userId}`);
             // No continuar con la lógica de reconexión
