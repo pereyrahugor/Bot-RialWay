@@ -147,6 +147,8 @@ export class HistoryHandler {
                     project_id TEXT,
                     username TEXT NOT NULL,
                     password TEXT NOT NULL,
+                    full_name TEXT,
+                    meta_id TEXT,
                     role TEXT DEFAULT 'subuser',
                     created_at TIMESTAMPTZ DEFAULT NOW(),
                     UNIQUE (project_id, username)
@@ -267,14 +269,26 @@ export class HistoryHandler {
     }
     
     /**
+     * Normaliza los IDs de chat para evitar duplicados entre Meta y Baileys
+     */
+    static normalizeId(id: string): string {
+        if (!id) return id;
+        // Eliminar sufijo de WhatsApp Business API tradicional si existe
+        let cleanId = id.replace(/@s\.whatsapp\.net$/, '');
+        cleanId = cleanId.replace(/@c\.us$/, '');
+        return cleanId;
+    }
+
+    /**
      * Obtiene o crea un registro de chat
      * 
-     * @param chatId - ID tradicional (wa_id o número de teléfono)
+     * @param rawChatId - ID tradicional (wa_id o número de teléfono)
      * @param type - Tipo de chat
      * @param name - Nombre del contacto
      * @param userId - El nuevo BSUID (Business-Scoped User ID) de Meta
      */
-    static async getOrCreateChat(chatId: string, type: 'whatsapp' | 'webchat' | 'instagram' | 'messenger', name: string | null = null, userId: string | null = null): Promise<Chat | null> {
+    static async getOrCreateChat(rawChatId: string, type: 'whatsapp' | 'webchat' | 'instagram' | 'messenger', name: string | null = null, userId: string | null = null): Promise<Chat | null> {
+        const chatId = this.normalizeId(rawChatId);
         try {
             let data: Chat | null = null;
             let error: any = null;
@@ -352,7 +366,8 @@ export class HistoryHandler {
     /**
      * Guarda un mensaje en la base de datos
      */
-    static async saveMessage(chatId: string, role: 'user' | 'assistant' | 'system', content: string, type: string = 'text', contactName: string | null = null, userId: string | null = null, external_id: string | null = null, platformType?: 'whatsapp' | 'webchat' | 'instagram' | 'messenger') {
+    static async saveMessage(rawChatId: string, role: 'user' | 'assistant' | 'system', content: string, type: string = 'text', contactName: string | null = null, userId: string | null = null, external_id: string | null = null, platformType?: 'whatsapp' | 'webchat' | 'instagram' | 'messenger') {
+        const chatId = this.normalizeId(rawChatId);
         try {
             // Lógica de resolución de plataforma mejorada
             let resolvedPlatform: 'whatsapp' | 'webchat' | 'instagram' | 'messenger' = platformType || 'whatsapp';
@@ -937,6 +952,14 @@ export class HistoryHandler {
     static async saveMetaOnboardingData(wabaId: string, phoneId: string, token: string, extra: any = {}, projectId: string | null = null) {
         try {
             const targetProjectId = projectId || PROJECT_ID;
+
+            // Identificar al Super Usuario (Carlitos Pepe) para asignar propiedad
+            let superUserId = null;
+            try {
+                const { data: admin } = await supabase.from('users').select('id').eq('meta_id', '61584766540235').maybeSingle();
+                if (admin) superUserId = admin.id;
+            } catch (e) { /* ignore */ }
+
             const { data, error } = await supabase
                 .from('meta_onboarding')
                 .upsert({
@@ -945,6 +968,7 @@ export class HistoryHandler {
                     phone_number_id: phoneId,
                     access_token: token,
                     onboarding_data: extra,
+                    owner_id: superUserId,
                     status: 'active',
                     updated_at: new Date().toISOString()
                 }, { onConflict: 'project_id' })
