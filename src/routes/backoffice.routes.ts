@@ -580,6 +580,22 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
+    app.get('/api/backoffice/whatsapp/library-templates', backofficeAuth, async (req: any, res: any) => {
+        try {
+            await syncMetaProvider();
+            if (!adapterProvider) return res.status(503).json({ success: false, error: 'Provider not ready' });
+            const provider = (adapterProvider.constructor.name === 'MetaCloudProvider') ? adapterProvider : deps.groupProvider;
+            if (!provider || typeof provider.getLibraryTemplates !== 'function') {
+                return res.status(400).json({ success: false, error: 'El proveedor actual no soporta la biblioteca de Meta.' });
+            }
+
+            const templates = await provider.getLibraryTemplates();
+            res.json({ success: true, templates });
+        } catch (error: any) {
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
     app.post('/api/backoffice/whatsapp/templates', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         try {
             await syncMetaProvider();

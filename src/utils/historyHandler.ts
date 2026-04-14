@@ -437,7 +437,7 @@ export class HistoryHandler {
     /**
      * Actualiza los detalles de contacto (CRM)
      */
-    static async updateContactDetails(chatId: string, details: { 
+    static async updateContactDetails(rawChatId: string, details: { 
         name?: string, 
         email?: string, 
         notes?: string, 
@@ -448,6 +448,7 @@ export class HistoryHandler {
         address?: string,
         offered_product?: string
     }) {
+        const chatId = this.normalizeId(rawChatId);
         try {
             const { error } = await supabase
                 .from('chats')
@@ -508,7 +509,8 @@ export class HistoryHandler {
     /**
      * Verifica si el bot está habilitado para un usuario
      */
-    static async isBotEnabled(chatId: string): Promise<boolean> {
+    static async isBotEnabled(rawChatId: string): Promise<boolean> {
+        const chatId = this.normalizeId(rawChatId);
         try {
             const { data, error } = await supabase
                 .from('chats')
@@ -528,7 +530,8 @@ export class HistoryHandler {
     /**
      * Cambia el estado del bot (Intervención humana)
      */
-    static async toggleBot(chatId: string, enabled: boolean) {
+    static async toggleBot(rawChatId: string, enabled: boolean) {
+        const chatId = this.normalizeId(rawChatId);
         try {
             const updateData: any = { bot_enabled: enabled };
             if (enabled === false) {
@@ -556,7 +559,8 @@ export class HistoryHandler {
     /**
      * Actualiza la marca de tiempo de la última intervención humana
      */
-    static async updateLastHumanMessage(chatId: string) {
+    static async updateLastHumanMessage(rawChatId: string) {
+        const chatId = this.normalizeId(rawChatId);
         try {
             await supabase
                 .from('chats')
@@ -785,7 +789,8 @@ export class HistoryHandler {
     /**
      * Crea un nuevo ticket
      */
-    static async createTicket(chatId: string, titulo: string, descripcion: string, tipo: string = 'Soporte', prioridad: string = 'Media') {
+    static async createTicket(rawChatId: string, titulo: string, descripcion: string, tipo: string = 'Soporte', prioridad: string = 'Media') {
+        const chatId = this.normalizeId(rawChatId);
         try {
             const { data, error } = await supabase
                 .from('tickets')
@@ -1166,7 +1171,8 @@ export class HistoryHandler {
         }
     }
 
-    static async assignChatToUser(chatId: string, userId: string | null) {
+    static async assignChatToUser(rawChatId: string, userId: string | null) {
+        const chatId = this.normalizeId(rawChatId);
         try {
             const { error } = await supabase
                 .from('chats')

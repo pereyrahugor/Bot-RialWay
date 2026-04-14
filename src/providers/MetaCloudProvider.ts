@@ -50,7 +50,7 @@ class MetaCloudProvider extends ProviderClass {
         if (!mediaUrl && mediaId && access_token) {
             try {
                 console.log(`📡 [MetaCloudProvider] Obteniendo URL de descarga para media ID: ${mediaId}`);
-                const res = await axios.get(`https://graph.facebook.com/v20.0/${mediaId}`, {
+                const res = await axios.get(`https://graph.facebook.com/v22.0/${mediaId}`, {
                     headers: { 'Authorization': `Bearer ${access_token}` }
                 });
                 mediaUrl = res.data.url;
@@ -322,6 +322,29 @@ class MetaCloudProvider extends ProviderClass {
     }
 
     /**
+     * Obtiene la biblioteca de plantillas pre-configuradas de Meta
+     */
+    public async getLibraryTemplates(): Promise<any[]> {
+        const { waba_id, access_token } = this.config;
+        if (!waba_id || !access_token) {
+            console.error('❌ [MetaCloudProvider] getLibraryTemplates: Faltan IDs o token');
+            return [];
+        }
+
+        try {
+            // Documentación técnica: GET /{waba_id}/message_template_library
+            const url = `https://graph.facebook.com/v22.0/${waba_id}/message_template_library`;
+            const response = await axios.get(url, {
+                headers: { 'Authorization': `Bearer ${access_token}` }
+            });
+            return response.data?.data || [];
+        } catch (error: any) {
+            console.error('❌ [MetaCloudProvider] Error obteniendo biblioteca de plantillas:', error?.response?.data || error.message);
+            return [];
+        }
+    }
+
+    /**
      * Envía mensajes a través de la API oficial de Meta
      */
     public async sendMessage(number: string, message: string, options: any = {}): Promise<any> {
@@ -332,7 +355,7 @@ class MetaCloudProvider extends ProviderClass {
             return;
         }
 
-        const url = `https://graph.facebook.com/v20.0/${phone_number_id}/messages`;
+        const url = `https://graph.facebook.com/v22.0/${phone_number_id}/messages`;
         const cleanNumber = number.replace(/\D/g, '');
         const toFormat = `+${cleanNumber}`;
         console.log(`[MetaCloudProvider] Intentando enviar a: raw=${number}, to=${toFormat}`);
@@ -441,59 +464,8 @@ class MetaCloudProvider extends ProviderClass {
         }
     }
 
-    /**
-     * Obtiene la lista de plantillas disponibles en la WABA
-     */
-    // public async getTemplates(): Promise<any[]> {
-    //     const { waba_id, access_token } = this.config;
-    //     if (!waba_id || !access_token) return [];
+    // El código anterior duplicado de getTemplates y sendTemplate fue removido.
 
-    //     try {
-    //         const url = `https://graph.facebook.com/v20.0/${waba_id}/message_templates`;
-    //         const response = await axios.get(url, {
-    //             headers: { 'Authorization': `Bearer ${access_token}` }
-    //         });
-    //         return response.data?.data || [];
-    //     } catch (error: any) {
-    //         console.error('❌ [MetaCloudProvider] Error obteniendo plantillas:', error?.response?.data || error.message);
-    //         return [];
-    //     }
-    // }
-
-    // /**
-    //  * Envía un mensaje basado en una plantilla
-    //  */
-    // public async sendTemplate(number: string, templateName: string, languageCode: string = 'es', components: any[] = []): Promise<any> {
-    //     const { phone_number_id, access_token } = this.config;
-    //     if (!phone_number_id || !access_token) return null;
-
-    //     const url = `https://graph.facebook.com/v20.0/${phone_number_id}/messages`;
-    //     const cleanNumber = number.replace(/\D/g, '');
-        
-    //     const body = {
-    //         messaging_product: "whatsapp",
-    //         to: cleanNumber,
-    //         type: "template",
-    //         template: {
-    //             name: templateName,
-    //             language: { code: languageCode },
-    //             components: components
-    //         }
-    //     };
-
-    //     try {
-    //         const response = await axios.post(url, body, {
-    //             headers: {
-    //                 'Authorization': `Bearer ${access_token}`,
-    //                 'Content-Type': 'application/json'
-    //             }
-    //         });
-    //         return response.data;
-    //     } catch (error: any) {
-    //         console.error('❌ [MetaCloudProvider] Error enviando plantilla:', error?.response?.data || error.message);
-    //         return null;
-    //     }
-    // }
 
     private processIncomingMessage = (body: any, isEchoWebhook: boolean = false) => {
         try {
@@ -653,7 +625,7 @@ class MetaCloudProvider extends ProviderClass {
         const { access_token } = this.config;
         if (!access_token) return null;
 
-        const url = `https://graph.facebook.com/v20.0/me/messages?access_token=${access_token}`;
+        const url = `https://graph.facebook.com/v22.0/me/messages?access_token=${access_token}`;
         const body = {
             recipient: { id: recipientId },
             message: { text: message }

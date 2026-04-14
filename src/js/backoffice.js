@@ -140,6 +140,8 @@ function handleSearch() {
 
 function renderFilterDropdown() {
     const select = document.getElementById('filter-tag');
+    if (!select) return; // Si no existe el filtro en el HTML, no hacer nada
+    
     const currentValue = select.value;
     select.innerHTML = '<option value="">Todas las etiquetas</option>' + 
         botTags.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
@@ -169,10 +171,8 @@ function renderChatList(listToRender = chats) {
         let platformIcon = '';
         if (chat.type === 'instagram') platformIcon = '<i class="fab fa-instagram platform-instagram"></i>';
         else if (chat.type === 'messenger') platformIcon = '<i class="fab fa-facebook-messenger platform-messenger"></i>';
-        else platformIcon = '<i class="fab fa-whatsapp platform-whatsapp"></i>';
-
-        // Si estamos en "Todos", mostramos el icono como overlay o principal
-        const showIconOverlay = currentPlatform === 'all';
+        
+        const showIconOverlay = currentPlatform === 'all' && chat.type !== 'whatsapp';
         const iconOverlayHtml = showIconOverlay ? `<div class="platform-icon-overlay">${platformIcon}</div>` : '';
 
         const tagsHtml = (chat.tags || []).map(t => 
@@ -180,29 +180,37 @@ function renderChatList(listToRender = chats) {
         ).join('');
 
         const timeStr = formatLastMessageTime(chat.last_message_at);
+        const unreadCount = chat.unread_count || 0;
+        const unreadHtml = unreadCount > 0 ? `<div class="unread-badge">${unreadCount}</div>` : '';
+
         const statusBadge = chat.bot_enabled 
             ? `<div style="text-align:right;"><span style="color: var(--accent); font-size: 0.75rem;">🤖 Bot</span><br/><span style="font-size:0.65rem; opacity:0.7;">${timeStr}</span></div>`
             : `<div style="text-align:right;"><span style="color: #f87171; font-size: 0.75rem;">👤 Humano</span><br/><span style="font-size:0.65rem; opacity:0.7;">${timeStr}</span></div>`;
 
         return `
             <div class="chat-item ${activeChatId === chat.id ? 'active' : ''}" onclick="selectChat('${chat.id}')">
-                <div class="chat-avatar" style="position:relative;">
-                    <span style="position:relative; z-index:1;">${initial}</span>
-                    <img src="${avatarUrl}" onerror="this.style.display='none'">
+                <div class="chat-avatar">
+                   <img src="${avatarUrl}" onerror="this.onerror=null; this.src='https://ui-avatars.com/api/?name=${initial}&background=random'">
                     ${iconOverlayHtml}
                 </div>
                 <div class="chat-info">
                     <div style="display:flex; justify-content:space-between; align-items: baseline;">
-                        <div class="chat-phone">${chat.id.split('@')[0]}</div>
+                        <div style="display:flex; flex-direction:column;">
+                            <span class="chat-name">${chat.name || chat.id.split('@')[0]}</span>
+                            <span style="font-size: 0.75rem; opacity: 0.6; color: var(--text-muted); font-weight: normal;">${chat.id.split('@')[0]}</span>
+                        </div>
                         ${statusBadge}
                     </div>
-                    <div class="chat-name-small">${chat.name || ''}</div>
-                    <div class="chat-tags-list" style="display:flex; flex-wrap:wrap; margin-top:2px;">${tagsHtml}</div>
+                    <div class="chat-info-bottom">
+                       <div class="chat-tags-list" style="display:flex; flex-wrap:wrap; margin-top:2px;">${tagsHtml}</div>
+                       ${unreadHtml}
+                    </div>
                 </div>
             </div>
         `;
     }).join('');
 }
+
 
 async function switchPlatform(platform) {
     if (loadingChats) return;
@@ -286,6 +294,7 @@ async function selectChat(id) {
 function renderActiveChatTags() {
     const chat = chats.find(c => c.id === activeChatId);
     const container = document.getElementById('active-chat-tags');
+    if (!container) return;
     if (chat && chat.tags) {
         container.innerHTML = chat.tags.map(t => 
             `<span class="tag-pill" style="background:${t.color}">${t.name}</span>`
@@ -334,14 +343,19 @@ let allMessages = [];
 
 async function fetchMessages(chatId, reset = false) {
     if (loadingMessages) return;
+    loadingMessages = true;
+
     if (reset) {
         messageOffset = 0;
         allMessagesLoaded = false;
-        allMessages = [];
+        // No limpiamos allMessages aquí para evitar parpadeo blanco, solo marcamos
     }
-    if (allMessagesLoaded && !reset) return;
+    
+    if (allMessagesLoaded && !reset) {
+        loadingMessages = false;
+        return;
+    }
 
-    loadingMessages = true;
     try {
         const res = await fetch(`/api/backoffice/messages/${chatId}?token=${token}&limit=${MSG_LIMIT}&offset=${messageOffset}`);
         const newMessages = await res.json();
@@ -351,8 +365,11 @@ async function fetchMessages(chatId, reset = false) {
         const container = document.getElementById('messages');
         const oldScrollHeight = container.scrollHeight;
 
-        // Concatenar al inicio (los nuevos/viejos mensajes según el offset)
-        allMessages = [...newMessages, ...allMessages];
+        if (reset) {
+            allMessages = newMessages; // REEMPLAZAR en vez de concatenar
+        } else {
+            allMessages = [...newMessages, ...allMessages]; // Infinit scroll up: concatenar al inicio
+        }
         
         renderMessages();
 
@@ -1090,6 +1107,8 @@ document.getElementById('messages').addEventListener('scroll', function() {
 // --- BULK MESSAGING LOGIC ---
 
 let availableTemplates = [];
+let libraryTemplates = [];
+let currentSelectedTemplate = null;
 
 async function checkMetaStatus() {
     try {
@@ -1143,100 +1162,128 @@ async function checkMetaStatus() {
 async function toggleBulkModal() {
     const modal = document.getElementById('bulk-modal');
     modal.classList.toggle('active');
-    
     if (modal.classList.contains('active')) {
-        loadTemplates();
+        switchMetaTab('my');
     }
+}
+
+function switchMetaTab(tab) {
+    const tabsMap = { 'my': 'tab-my-templates', 'library': 'tab-meta-library', 'new': 'tab-new-template' };
+    const viewsMap = { 'my': 'view-my-templates', 'library': 'view-meta-library', 'new': 'view-new-template', 'detail': 'view-template-detail' };
+    
+    // Reset active states
+    Object.values(tabsMap).forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('active');
+    });
+    Object.values(viewsMap).forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+    });
+
+    // Set active
+    if (tabsMap[tab]) document.getElementById(tabsMap[tab]).classList.add('active');
+    if (viewsMap[tab]) {
+        const view = document.getElementById(viewsMap[tab]);
+        if (tab === 'my' || tab === 'library') view.style.display = 'grid';
+        else view.style.display = 'block';
+    }
+
+    if (tab === 'my') loadTemplates();
+    if (tab === 'library') loadLibraryTemplates();
 }
 
 async function loadTemplates() {
-    const select = document.getElementById('bulk-template-select');
-    select.innerHTML = '<option value="">Cargando plantillas...</option>';
-    
+    const container = document.getElementById('view-my-templates');
     try {
         const res = await fetch(`/api/backoffice/whatsapp/templates?token=${token}`);
-        if (!res.ok) throw new Error('Error al obtener plantillas');
-        
         const data = await res.json();
-        availableTemplates = data.templates || [];
-        
-        let options = '<option value="">-- Seleccione Plantilla --</option>';
-        
-        if (availableTemplates.length > 0) {
-            // Separar por estado
-            const approved = availableTemplates.filter(t => t.status === 'APPROVED');
-            const pending = availableTemplates.filter(t => t.status === 'PENDING');
-            const rejected = availableTemplates.filter(t => t.status === 'REJECTED');
-            
-            if (approved.length > 0) {
-                options += '<optgroup label="✅ Aprobadas (listas para enviar)">';
-                options += approved.map(t => `<option value="${t.name}">✅ ${t.name} (${t.language})</option>`).join('');
-                options += '</optgroup>';
-            }
-            if (pending.length > 0) {
-                options += '<optgroup label="⏳ Pendientes de revisión">';
-                options += pending.map(t => `<option value="${t.name}" disabled>⏳ ${t.name} (${t.language}) - En revisión</option>`).join('');
-                options += '</optgroup>';
-            }
-            if (rejected.length > 0) {
-                options += '<optgroup label="❌ Rechazadas">';
-                options += rejected.map(t => `<option value="${t.name}" disabled>❌ ${t.name} (${t.language}) - Rechazada</option>`).join('');
-                options += '</optgroup>';
-            }
-            if (approved.length === 0) {
-                options += '<option value="" disabled>⚠️ No hay plantillas aprobadas para enviar</option>';
-            }
-        } else {
-            options += '<option value="" disabled>Sin plantillas</option>';
+        if (data.success) {
+            availableTemplates = data.templates;
+            renderTemplateCards(container, availableTemplates, false);
         }
-        
-        // La opción de crear nueva debe estar siempre disponible
-        options += '<option value="NEW" style="color:#10b981; font-weight:700;">➕ Crear nueva plantilla...</option>';
-        
-        select.innerHTML = options;
-            
     } catch (e) {
-        console.error('[Bulk] Error loading templates:', e);
-        select.innerHTML = '<option value="">Error al cargar</option>';
-        showToast('❌ No se pudieron cargar las plantillas de Meta', 'error');
+        container.innerHTML = '<p style="grid-column: 1/-1; text-align:center; padding:20px; color:var(--text-muted);">Error al sincronizar con Meta Cloud.</p>';
     }
 }
 
-function onTemplateChange(templateName) {
-    const previewBox = document.getElementById('template-preview-box');
-    const previewText = document.getElementById('template-preview-text');
-    const step2 = document.getElementById('bulk-step-2');
-    const step3 = document.getElementById('bulk-step-3');
-    
-    const newForm = document.getElementById('new-template-form');
-    
-    if (!templateName) {
-        previewBox.style.display = 'none';
-        step2.style.display = 'none';
-        step3.style.display = 'none';
-        newForm.style.display = 'none';
-        return;
-    }
-
-    if (templateName === 'NEW') {
-        previewBox.style.display = 'none';
-        step2.style.display = 'none';
-        step3.style.display = 'none';
-        newForm.style.display = 'block';
-        return;
-    }
-
-    newForm.style.display = 'none';
-    const template = availableTemplates.find(t => t.name === templateName);
-    if (template) {
-        // Extract body text for preview
-        const bodyComp = template.components.find(c => c.type === 'BODY');
-        previewText.innerText = bodyComp ? bodyComp.text : 'Sin texto de cuerpo';
-        previewBox.style.display = 'block';
-        step2.style.display = 'block';
-        step3.style.display = 'block';
+async function loadLibraryTemplates() {
+    const container = document.getElementById('view-meta-library');
+    container.innerHTML = '<div style="grid-column: 1/-1; text-align:center; padding:40px; opacity:0.5;"><i class="fas fa-circle-notch fa-spin fa-2x"></i><p>Explorando Biblioteca de Meta...</p></div>';
+    try {
+        const res = await fetch(`/api/backoffice/whatsapp/library-templates?token=${token}`);
+        const data = await res.json();
+        if (data.success) {
+            libraryTemplates = data.templates;
+            renderTemplateCards(container, libraryTemplates, true);
+        } else {
+            container.innerHTML = `<p style="grid-column: 1/-1; text-align:center; padding:20px; color:var(--text-muted);">${data.error || 'No se pudo cargar la biblioteca.'}</p>`;
+        }
+    } catch (e) {
+        container.innerHTML = '<p style="grid-column: 1/-1; text-align:center; padding:20px; color:var(--text-muted);">Error de conexión con la biblioteca.</p>';
     }
 }
+
+function renderTemplateCards(container, templates, isLibrary = false) {
+    if (!templates || templates.length === 0) {
+        container.innerHTML = '<p style="grid-column: 1/-1; text-align:center; padding:20px; color:var(--text-muted);">No se encontraron plantillas.</p>';
+        return;
+    }
+    container.innerHTML = templates.map(t => {
+        const bodyComp = t.components?.find(c => c.type === 'BODY') || {};
+        const text = bodyComp.text || 'Sin contenido';
+        const statusClass = t.status === 'APPROVED' ? 'meta-status-approved' : (t.status === 'REJECTED' ? 'meta-status-rejected' : 'meta-status-pending');
+        const statusLabel = t.status === 'APPROVED' ? 'Aprobada' : (t.status === 'REJECTED' ? 'Rechazada' : 'Pendiente');
+        return `
+            <div class="meta-card" onclick="showTemplateDetail('${t.name}', ${isLibrary})">
+                <div class="meta-card-tag ${statusClass}">${statusLabel}</div>
+                <div class="meta-card-name">${t.name}</div>
+                <div class="meta-card-desc">${text}</div>
+                <div style="font-size:0.7rem; color:var(--text-muted); display:flex; justify-content:space-between; align-items:center; margin-top:auto;">
+                    <span><i class="fas fa-globe"></i> ${t.language}</span>
+                    <span><i class="fas fa-tag"></i> ${t.category}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function showTemplateDetail(templateName, isLibrary) {
+    const templates = isLibrary ? libraryTemplates : availableTemplates;
+    const template = templates.find(t => t.name === templateName);
+    if (!template) return;
+    currentSelectedTemplate = template;
+    
+    // Hide all views
+    document.getElementById('view-my-templates').style.display = 'none';
+    document.getElementById('view-meta-library').style.display = 'none';
+    document.getElementById('view-new-template').style.display = 'none';
+    
+    // Show detail
+    const detailView = document.getElementById('view-template-detail');
+    detailView.style.display = 'block';
+    document.getElementById('detail-tpl-name').innerText = template.name;
+    const statusEl = document.getElementById('detail-tpl-status');
+    const statusClass = template.status === 'APPROVED' ? 'meta-status-approved' : (template.status === 'REJECTED' ? 'meta-status-rejected' : 'meta-status-pending');
+    statusEl.className = `meta-card-tag ${statusClass}`;
+    statusEl.innerText = template.status;
+
+    // Build Preview Content
+    const bodyComp = template.components?.find(c => c.type === 'BODY') || {};
+    document.getElementById('wa-preview-text-final').innerText = bodyComp.text || '';
+    
+    // Manage Bulk Actions visibility
+    const bulkSection = document.getElementById('bulk-actions-section');
+    if (template.status === 'APPROVED' && !isLibrary) {
+        bulkSection.style.display = 'block';
+    } else {
+        bulkSection.style.display = 'none';
+    }
+
+    document.getElementById('bulk-progress').style.display = 'none';
+    document.getElementById('bulk-file-input').value = '';
+}
+
 
 async function submitTemplateForReview() {
     const name = document.getElementById('tpl-name').value.trim();
@@ -1302,12 +1349,11 @@ async function submitTemplateForReview() {
 }
 
 function cancelTemplateCreation() {
-    document.getElementById('new-template-form').style.display = 'none';
-    document.getElementById('bulk-template-select').value = '';
     document.getElementById('tpl-name').value = '';
     document.getElementById('tpl-body').value = '';
     document.getElementById('tpl-examples-container').style.display = 'none';
     document.getElementById('tpl-examples-fields').innerHTML = '';
+    switchMetaTab('my');
 }
 
 /** Auto-detecta variables {{nombre}} o {{1}} en el textarea y genera campos de ejemplo */
@@ -1345,31 +1391,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-function downloadBulkExcel() {
-    const templateName = document.getElementById('bulk-template-select').value;
-    if (!templateName) return;
-    
-    window.open(`/api/backoffice/whatsapp/template-excel/${templateName}?token=${token}`, '_blank');
-}
 
 async function startBulkSend() {
-    const templateName = document.getElementById('bulk-template-select').value;
+    if (!currentSelectedTemplate) return;
+    const templateName = currentSelectedTemplate.name;
     const fileInput = document.getElementById('bulk-file-input');
     const btn = document.getElementById('send-bulk-btn');
     const progressDiv = document.getElementById('bulk-progress');
     const progressBar = document.getElementById('bulk-progress-bar');
     const statusText = document.getElementById('bulk-status-text');
     
-    if (!templateName || fileInput.files.length === 0) {
-        showToast('⚠️ Seleccione una plantilla y suba un archivo Excel', 'error');
+    if (fileInput.files.length === 0) {
+        showToast('⚠️ Suba un archivo Excel para iniciar', 'error');
         return;
     }
     
     const file = fileInput.files[0];
-    
-    // Buscar el idioma de la plantilla seleccionada
-    const selectedTemplate = availableTemplates.find(t => t.name === templateName);
-    const languageCode = selectedTemplate ? selectedTemplate.language : 'es';
+    const languageCode = currentSelectedTemplate.language || 'es';
 
     const formData = new FormData();
     formData.append('file', file);
@@ -1389,8 +1427,7 @@ async function startBulkSend() {
         });
         
         if (res.status === 202) {
-            // El proceso inició en segundo plano
-            statusText.innerText = '✅ Proceso iniciado en segundo plano. Los mensajes se enviarán gradualmente.';
+            statusText.innerText = '✅ Proceso iniciado en segundo plano.';
             progressBar.style.width = '100%';
             progressBar.style.background = '#10b981';
             showToast('🚀 Envío masivo iniciado correctamente');
@@ -1398,10 +1435,10 @@ async function startBulkSend() {
             setTimeout(() => {
                 toggleBulkModal();
                 btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-paper-plane" style="margin-right:8px;"></i> Iniciar Envío';
+                btn.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar';
                 progressDiv.style.display = 'none';
                 fileInput.value = '';
-            }, 3000);
+            }, 2000);
             
         } else {
             const data = await res.json();
@@ -1412,8 +1449,7 @@ async function startBulkSend() {
         statusText.innerText = '❌ Error: ' + e.message;
         progressBar.style.background = '#ef4444';
         btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-paper-plane" style="margin-right:8px;"></i> Reintentar';
-        showToast('❌ Error al iniciar envío masivo', 'error');
+        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Reintentar';
     }
 }
 
@@ -1425,10 +1461,15 @@ checkMetaStatus();
 
 // Exportaciones globales para HTML
 window.toggleBulkModal = toggleBulkModal;
-window.onTemplateChange = onTemplateChange;
+window.switchMetaTab = switchMetaTab;
+window.showTemplateDetail = showTemplateDetail;
 window.submitTemplateForReview = submitTemplateForReview;
 window.cancelTemplateCreation = cancelTemplateCreation;
-window.downloadBulkExcel = downloadBulkExcel;
+window.downloadBulkExcel = () => {
+    if (currentSelectedTemplate) {
+        window.open(`/api/backoffice/whatsapp/template-excel/${currentSelectedTemplate.name}?token=${token}`, '_blank');
+    }
+};
 window.startBulkSend = startBulkSend;
 window.loadTemplates = loadTemplates;
 window.detectTemplateVariables = detectTemplateVariables;

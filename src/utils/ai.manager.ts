@@ -140,18 +140,8 @@ export class AiManager {
 
             stop(ctx);
 
-            const externalId = ctx.key?.id || ctx.payload?.id || ctx.id;
-
-            await HistoryHandler.saveMessage(
-                ctx.from, 
-                'user', 
-                body || (ctx.type === EVENTS.VOICE_NOTE ? "[Audio]" : "[Media]"), 
-                ctx.type === 'webchat' ? 'text' : ctx.type,
-                ctx.pushName || (ctx.type === 'webchat' ? 'Webchat User' : null),
-                ctx.userId,
-                externalId,
-                ctx.platform
-            );
+            // ELIMINADO: Duplicado con provider.manager.ts
+            // await HistoryHandler.saveMessage( ... );
 
             const isBotActiveForUser = await HistoryHandler.isBotEnabled(ctx.from);
             if (!isBotActiveForUser) {
@@ -270,7 +260,6 @@ export class AiManager {
 
         } catch (error: any) {
             console.warn("⚠️ [AiManager] Comunicación con OpenAI fallida o no configurada. (Ignorando para permitir uso solo como CRM/Pasarela). Detalle:", error.message);
-            // No reportamos al ErrorReporter interno ni enviamos flowDynamic para evitar spam en bots que son solo "pasarela".
             return state;
         }
     };
