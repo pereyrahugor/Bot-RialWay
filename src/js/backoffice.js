@@ -1037,9 +1037,24 @@ function selectLead(chatId) {
 
 function realToggleMeta(e) {
     if (e) e.stopPropagation();
-    const panel = document.getElementById('meta-panel');
-    if (!panel) return;
-    panel.classList.toggle('active');
+    console.log('🔘 [PANEL] Intentando abrir panel Meta...');
+    const metaPanel = document.getElementById('meta-panel');
+    const leadsPanel = document.getElementById('leads-panel');
+    const ticketsPanel = document.getElementById('tickets-panel');
+
+    // Cerrar otros
+    if (leadsPanel) leadsPanel.classList.remove('active');
+    if (ticketsPanel) ticketsPanel.classList.remove('active');
+
+    if (metaPanel) {
+        metaPanel.classList.toggle('active');
+        console.log(`📊 [PANEL] Estado panel Meta: ${metaPanel.classList.contains('active') ? 'ABIERTO' : 'CERRADO'}`);
+        if (metaPanel.classList.contains('active')) {
+            checkMetaStatus();
+        }
+    } else {
+        console.error('❌ [PANEL] No se encontró #meta-panel');
+    }
 }
 window.realToggleMeta = realToggleMeta;
 
@@ -1082,13 +1097,20 @@ function launchMetaOnboarding() {
 
 
 
-// Inicialización
+// Inicialización principal
 fetchPendingTicketsCount();
 setInterval(fetchPendingTicketsCount, 30000);
-
-fetchChats(true);
 fetchBotTags();
 checkMetaStatus(); // Check if bulk messaging should be enabled
+
+// Manejo de URL params
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get('openPanel') === 'meta') {
+    console.log('🚀 [BACKOFFICE] Abriendo panel Meta por URL param');
+    setTimeout(() => {
+        if (typeof window.realToggleMeta === 'function') window.realToggleMeta();
+    }, 500);
+}
 
 // Listeners para Infinite Scroll
 document.getElementById('chat-list').addEventListener('scroll', function() {
@@ -1115,11 +1137,12 @@ async function checkMetaStatus() {
         const res = await fetch(`/api/backoffice/whatsapp/config?token=${token}`);
         const data = await res.json();
         const config = data.config || {};
+        console.log('📡 [META-STATUS] Configuración recibida:', config);
         
         // Mostrar botón de masivos y actualizar panel solo si Meta está vinculado
         if (config.waba_id && config.waba_id !== 'PENDING') {
-            // nav-bulk-btn removido del sidebar por redundancia
-
+            console.log('✅ [META-STATUS] Meta vinculado. Actualizando UI...');
+            
             // Updating Meta Panel UI for Connected State
             const metaPanel = document.getElementById('meta-panel');
             if (metaPanel) {
@@ -1153,6 +1176,8 @@ async function checkMetaStatus() {
                     `;
                 }
             }
+        } else {
+            console.warn('⚠️ [META-STATUS] Meta no vinculado o pendiente.');
         }
     } catch (e) {
         console.error('[Bulk] Error checking Meta status:', e);
@@ -1270,14 +1295,18 @@ function showTemplateDetail(templateName, isLibrary) {
 
     // Build Preview Content
     const bodyComp = template.components?.find(c => c.type === 'BODY') || {};
-    document.getElementById('wa-preview-text-final').innerText = bodyComp.text || '';
-    
-    // Manage Bulk Actions visibility
+    const previewFinal = document.getElementById('wa-preview-text-final');
     const bulkSection = document.getElementById('bulk-actions-section');
-    if (template.status === 'APPROVED' && !isLibrary) {
-        bulkSection.style.display = 'block';
+
+    if (previewFinal) previewFinal.innerText = bodyComp.text || 'Sin contenido';
+    if (bulkSection) {
+        if (template.status === 'APPROVED' && !isLibrary) {
+            bulkSection.style.display = 'block';
+        } else {
+            bulkSection.style.display = 'none';
+        }
     } else {
-        bulkSection.style.display = 'none';
+        console.error('❌ [BULK] No se encontró el elemento #bulk-actions-section');
     }
 
     document.getElementById('bulk-progress').style.display = 'none';
@@ -1453,23 +1482,32 @@ async function startBulkSend() {
     }
 }
 
-// Inicialización
-checkPlatformVisibility();
-fetchChats();
-fetchBotTags();
-checkMetaStatus();
+// --- Registro de Listeners Globales ---
+document.addEventListener('DOMContentLoaded', () => {
+    const tplBody = document.getElementById('tpl-body');
+    if (tplBody) tplBody.addEventListener('input', detectTemplateVariables);
+});
 
-// Exportaciones globales para HTML
+// --- Exportaciones Finales ---
+window.toggleMetaPanel = window.realToggleMeta;
 window.toggleBulkModal = toggleBulkModal;
 window.switchMetaTab = switchMetaTab;
 window.showTemplateDetail = showTemplateDetail;
-window.submitTemplateForReview = submitTemplateForReview;
-window.cancelTemplateCreation = cancelTemplateCreation;
+window.startBulkSend = startBulkSend;
 window.downloadBulkExcel = () => {
     if (currentSelectedTemplate) {
         window.open(`/api/backoffice/whatsapp/template-excel/${currentSelectedTemplate.name}?token=${token}`, '_blank');
     }
 };
-window.startBulkSend = startBulkSend;
+window.launchMetaOnboarding = launchMetaOnboarding;
+window.submitTemplateForReview = submitTemplateForReview;
+window.cancelTemplateCreation = cancelTemplateCreation;
 window.loadTemplates = loadTemplates;
 window.detectTemplateVariables = detectTemplateVariables;
+window.assignTicketToMe = assignTicketToMe;
+window.closeActiveTicket = closeActiveTicket;
+window.reopenActiveTicket = reopenActiveTicket;
+window.deleteActiveTicket = deleteActiveTicket;
+window.toggleIntervention = toggleIntervention;
+
+console.log('✅ [BACKOFFICE] Cargado Correctamente.');
