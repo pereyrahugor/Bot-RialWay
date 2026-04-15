@@ -1444,8 +1444,29 @@ function switchMetaTab(tab) {
         else view.style.display = 'block';
     }
 
-    if (tab === 'my') loadTemplates();
+        if (tab === 'my') loadTemplates();
     if (tab === 'library') loadLibraryTemplates();
+}
+
+function useTemplateAsBase() {
+    if (!currentSelectedTemplate) return;
+    
+    // Cambiar a la pestaña de Nueva Plantilla
+    switchMetaTab('new');
+    
+    // Rellenar formulario
+    document.getElementById('tpl-name').value = `${currentSelectedTemplate.name}_copy`;
+    document.getElementById('tpl-category').value = currentSelectedTemplate.category;
+    document.getElementById('tpl-lang').value = currentSelectedTemplate.language;
+    
+    const bodyComp = currentSelectedTemplate.components?.find(c => c.type === 'BODY') || {};
+    document.getElementById('tpl-body').value = bodyComp.text || '';
+    
+    // Disparar actualización de variables
+    const event = new Event('input', { bubbles: true });
+    document.getElementById('tpl-body').dispatchEvent(event);
+    
+    showToast('✨ Datos cargados. Personaliza tu plantilla y envíala a revisión.');
 }
 
 async function loadTemplates() {
@@ -1494,6 +1515,11 @@ function populateLibraryFilters() {
     langSelect.innerHTML = '<option value="">Todos los idiomas</option>' + 
         langs.map(l => `<option value="${l}">${l.toUpperCase()}</option>`).join('');
 
+    // Seleccionar por defecto es_AR si existe
+    if (langs.includes('es_AR')) {
+        langSelect.value = 'es_AR';
+    }
+
     // Llenar Categorías
     catSelect.innerHTML = '<option value="">Todas las categorías</option>' + 
         cats.map(c => `<option value="${c}">${c}</option>`).join('');
@@ -1535,9 +1561,10 @@ function renderTemplateCards(container, templates, isLibrary = false) {
                 <div class="meta-card-tag ${statusClass}">${statusLabel}</div>
                 <div class="meta-card-name">${t.name}</div>
                 <div class="meta-card-desc">${text}</div>
-                <div style="font-size:0.7rem; color:var(--text-muted); display:flex; justify-content:space-between; align-items:center; margin-top:auto;">
-                    <span><i class="fas fa-globe"></i> ${t.language.toUpperCase()}</span>
-                    <span><i class="fas fa-tag"></i> ${t.category}</span>
+                <div style="font-size:0.7rem; color:var(--text-muted); display:flex; flex-wrap:wrap; gap:8px; margin-top:auto;">
+                    <span title="Idioma"><i class="fas fa-globe"></i> ${t.language.toUpperCase()}</span>
+                    <span title="Categoría"><i class="fas fa-tag"></i> ${t.category}</span>
+                    ${t.topic ? `<span title="Tema" style="color:var(--primary);"><i class="fas fa-bookmark"></i> ${t.topic}</span>` : ''}
                 </div>
             </div>
         `;
@@ -1569,26 +1596,41 @@ function showTemplateDetail(templateName, isLibrary, language) {
     statusEl.className = `meta-card-tag ${statusClass}`;
     statusEl.innerText = template.status || 'LIBRARY';
 
-    // Construir contenido de previsualización (BODY + HEADER)
     const bodyComp = template.components?.find(c => c.type === 'BODY') || {};
     const headerComp = template.components?.find(c => c.type === 'HEADER') || {};
+    const footerComp = template.components?.find(c => c.type === 'FOOTER') || {};
+    const buttonsComp = template.components?.find(c => c.type === 'BUTTONS') || {};
     
     const previewFinal = document.getElementById('wa-preview-text-final');
     if (previewFinal) {
         let content = '';
         if (headerComp.text) content += `*${headerComp.text}*\n`;
         content += bodyComp.text || 'Sin contenido de texto disponible';
+        if (footerComp.text) content += `\n_${footerComp.text}_`;
+        
+        // Renderizar botones si existen
+        if (buttonsComp.buttons) {
+            content += '\n\n' + buttonsComp.buttons.map(b => `[${b.text}]`).join('  ');
+        }
+        
         previewFinal.innerText = content;
     }
+
     const bulkSection = document.getElementById('bulk-actions-section');
+    const adoptSection = document.getElementById('library-adopt-section');
+
     if (bulkSection) {
+        // Solo permitir envío masivo para plantillas aprobadas DEL usuario
         if (template.status === 'APPROVED' && !isLibrary) {
             bulkSection.style.display = 'block';
         } else {
             bulkSection.style.display = 'none';
         }
-    } else {
-        console.error('❌ [BULK] No se encontró el elemento #bulk-actions-section');
+    }
+
+    if (adoptSection) {
+        // Mostrar opción de adoptar solo para plantillas de la librería
+        adoptSection.style.display = isLibrary ? 'block' : 'none';
     }
 
     const progressEl = document.getElementById('bulk-progress');

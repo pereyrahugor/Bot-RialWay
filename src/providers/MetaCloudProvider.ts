@@ -322,7 +322,7 @@ class MetaCloudProvider extends ProviderClass {
     }
 
     /**
-     * Obtiene la biblioteca de plantillas pre-configuradas de Meta
+     * Obtiene la biblioteca de plantillas pre-configuradas de Meta (con paginación completa)
      */
     public async getLibraryTemplates(): Promise<any[]> {
         const { access_token } = this.config;
@@ -331,23 +331,28 @@ class MetaCloudProvider extends ProviderClass {
             return this.getDemoTemplates();
         }
 
-        let templates: any[] = [];
+        let allTemplates: any[] = [];
 
-        // 1. Intentar obtener de la Biblioteca Oficial de Meta (Global)
+        // 1. Intentar obtener de la Biblioteca Oficial de Meta (Paginado)
         try {
-            console.log('📡 [MetaCloudProvider] Consultando Biblioteca Global de Meta...');
-            // El endpoint message_template_library es GLOBAL, no requiere WABA ID
-            // Aumentamos el límite para "traer todas" (o la mayoría)
-            const urlGlobal = `https://graph.facebook.com/v22.0/message_template_library`;
-            const responseGlobal = await axios.get(urlGlobal, {
-                headers: { 'Authorization': `Bearer ${access_token}` },
-                params: { limit: 500 } // Subimos el límite significativamente
-            });
+            console.log('📡 [MetaCloudProvider] Consultando Biblioteca Global de Meta (Full Fetch)...');
+            let nextUrl: string | null = `https://graph.facebook.com/v22.0/message_template_library?limit=100`;
             
-            templates = responseGlobal.data?.data || [];
-            if (templates.length > 0) {
-                console.log(`✅ [MetaCloudProvider] Se cargaron ${templates.length} plantillas de la Biblioteca Global de Meta.`);
-                return templates;
+            while (nextUrl && allTemplates.length < 2000) { // Limitamos a 2000 para evitar loops infinitos
+                const response: any = await axios.get(nextUrl, {
+                    headers: { 'Authorization': `Bearer ${access_token}` }
+                });
+                
+                const data = response.data?.data || [];
+                allTemplates = [...allTemplates, ...data];
+                
+                nextUrl = response.data?.paging?.next || null;
+                if (nextUrl) console.log(`🔄 [MetaCloudProvider] Cargando siguiente página de la biblioteca... (${allTemplates.length} cargadas)`);
+            }
+
+            if (allTemplates.length > 0) {
+                console.log(`✅ [MetaCloudProvider] Se cargaron ${allTemplates.length} plantillas de la Biblioteca Global de Meta.`);
+                return allTemplates;
             }
         } catch (err: any) {
             console.warn('⚠️ [MetaCloudProvider] Error en Biblioteca Global, intentando Master WABA:', err?.response?.data || err.message);
@@ -357,12 +362,10 @@ class MetaCloudProvider extends ProviderClass {
         try {
             const MASTER_WABA_ID = '146603058535041';
             console.log(`📡 [MetaCloudProvider] Consultando Biblioteca Maestra RialWay (${MASTER_WABA_ID})...`);
-            // Usamos message_templates para la maestra pq suelen ser las aprobadas/estándar
-            const urlMaster = `https://graph.facebook.com/v22.0/${MASTER_WABA_ID}/message_templates`;
+            const urlMaster = `https://graph.facebook.com/v22.0/${MASTER_WABA_ID}/message_templates?limit=100`;
             
             const responseMaster = await axios.get(urlMaster, {
-                headers: { 'Authorization': `Bearer ${access_token}` },
-                params: { limit: 50 }
+                headers: { 'Authorization': `Bearer ${access_token}` }
             });
             
             const masterTemplates = responseMaster.data?.data || [];
@@ -374,8 +377,7 @@ class MetaCloudProvider extends ProviderClass {
             console.error('⚠️ [MetaCloudProvider] Error consultando Biblioteca Maestra:', masterErr?.response?.data || masterErr.message);
         }
 
-        // 3. Fallback Final: Templates de demostración hardcoded
-        console.log('⚠️ [MetaCloudProvider] Usando catálogo de demostración como último recurso.');
+        // 3. Fallback Final
         return this.getDemoTemplates();
     }
 
