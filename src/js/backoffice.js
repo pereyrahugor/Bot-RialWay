@@ -37,47 +37,25 @@ socket.on('connect', () => {
     console.log('✅ Conectado al servidor de tiempo real');
 });
 
-socket.on('new_message', (payload) => {
-    console.log('📡 Nuevo mensaje recibido:', payload);
-    
-    // 1. Si es el chat activo, añadir localmente para evitar latencia de recarga
-    if (activeChatId === payload.chatId) {
-        // Evitar duplicados (mismo contenido y timestamp cercano)
-        const isDuplicate = allMessages.some(m => 
-            m.content === payload.content && 
-            Math.abs(new Date(m.created_at).getTime() - new Date(payload.created_at).getTime()) < 2000
-        );
-
-        if (!isDuplicate) {
-            allMessages.push(payload);
-            renderMessages();
-            const container = document.getElementById('messages');
-            if (container) container.scrollTop = container.scrollHeight;
-        }
+socket.on('new_message', (msg) => {
+    // 1. Si es el chat activo, añadir mensaje a la vista
+    if (msg.chat_id === activeChatId) {
+        allMessages.push(msg);
+        renderMessages();
+        scrollToBottom();
     }
     
     // 2. Actualizar lista de chats localmente (Optimización)
-    const chatIndex = chats.findIndex(c => c.id === payload.chatId);
-    if (chatIndex !== -1) {
-        // Chat existente: actualizar timestamp y mover a la cima
-        const chat = chats[chatIndex];
-        chat.last_message_at = new Date().toISOString();
-        
-        // Incrementar contador visual si no estamos en este chat
-        if (activeChatId !== payload.chatId) {
-            chat.unread_count = (chat.unread_count || 0) + 1;
-        }
-
-        // Mover a la primera posición
-        chats.splice(chatIndex, 1);
-        chats.unshift(chat);
+    const chatIdx = chats.findIndex(c => c.id === msg.chat_id);
+    if (chatIdx !== -1) {
+        chats[chatIdx].last_message_at = msg.created_at || new Date().toISOString();
+        chats[chatIdx].last_message = msg.content;
+        sortChats();
         renderChatList();
+        saveChatsToCache(chats);
     } else {
-        // Chat nuevo o fuera de los 50 iniciales: solo aquí refrescamos del servidor
-        // si estamos en el offset 0 (viendo lo más reciente)
-        if (chatOffset <= CHAT_LIMIT) {
-            fetchChats(true);
-        }
+        // Chat nuevo: refrescar del servidor
+        fetchChats(true);
     }
 });
 
@@ -97,8 +75,43 @@ socket.on('bot_toggled', (payload) => {
     renderChatList();
 });
 
+// Sistema de Caché para la lista de chats (Persistencia para carga instantánea al refrescar)
+function saveChatsToCache(chatData) {
+    try {
+        localStorage.setItem('cached_chats_data', JSON.stringify({
+            timestamp: Date.now(),
+            data: chatData
+        }));
+    } catch (e) { console.error('Error guardando cache:', e); }
+}
+
+function loadChatsFromCache() {
+    try {
+        const cached = localStorage.getItem('cached_chats_data');
+        if (cached) {
+            const { timestamp, data } = JSON.parse(cached);
+            // Si el cache tiene menos de 10 minutos, lo usamos
+            if (Date.now() - timestamp < 600000) {
+                return data;
+            }
+        }
+    } catch (e) { console.error('Error cargando cache:', e); }
+    return null;
+}
+
 async function fetchChats(refresh = false) {
     if (loadingChats) return;
+    
+    // Si es la carga inicial y hay caché, renderizamos inmediatamente
+    if (chats.length === 0 && !refresh) {
+        const cachedData = loadChatsFromCache();
+        if (cachedData) {
+            console.log('⚡ [UI] Cargando lista de chats desde caché local...');
+            chats = cachedData;
+            renderChatList();
+        }
+    }
+
     if (refresh) {
         chatOffset = 0;
         allChatsLoaded = false;
@@ -1567,18 +1580,34 @@ function populateLibraryFilters() {
     const catSelect = document.getElementById('filter-lib-cat');
     if (!langSelect || !catSelect) return;
 
-    // Obtener valores únicos
-    const langs = [...new Set(libraryTemplates.map(t => t.language))].sort();
+    // Normalización: es_AR -> ar para el selector
+    const rawLangs = [...new Set(libraryTemplates.map(t => t.language))].sort();
+    const displayLangs = rawLangs.map(l => {
+        if (l.toLowerCase() === 'es_ar') return { value: l, label: 'AR' };
+        if (l.toLowerCase() === 'ar') return { value: l, label: 'AR' };
+        return { value: l, label: l.toUpperCase() };
+    });
+
+    // Eliminar duplicados de etiquetas (ej: si hay 'ar' y 'es_ar' ambos mapeados a 'AR')
+    const finalLangs = [];
+    const seenLabels = new Set();
+    displayLangs.forEach(item => {
+        if (!seenLabels.has(item.label)) {
+            finalLangs.push(item);
+            seenLabels.add(item.label);
+        }
+    });
+
     const cats = [...new Set(libraryTemplates.map(t => t.category))].sort();
 
     // Llenar Idiomas
     langSelect.innerHTML = '<option value="">Todos los idiomas</option>' + 
-        langs.map(l => `<option value="${l}">${l.toUpperCase()}</option>`).join('');
+        finalLangs.map(l => `<option value="${l.value}">${l.label}</option>`).join('');
 
-    // Seleccionar por defecto es_AR si existe
-    const defaultLang = langs.find(l => l.toLowerCase() === 'es_ar') || langs.find(l => l.toLowerCase().includes('es')) || '';
-    if (defaultLang) {
-        langSelect.value = defaultLang;
+    // Seleccionar por defecto 'AR' (ya sea es_AR o ar)
+    const arOption = finalLangs.find(l => l.label === 'AR') || finalLangs.find(l => l.label.includes('ES'));
+    if (arOption) {
+        langSelect.value = arOption.value;
     }
 
     // Llenar Categorías
@@ -1595,7 +1624,13 @@ function applyLibraryFilters() {
     const search = document.getElementById('filter-lib-search').value.toLowerCase().trim();
 
     const filtered = libraryTemplates.filter(t => {
-        const matchLang = !lang || t.language === lang;
+        // Normalización para el match de idioma (el selector usa el valor real, pero el usuario ve AR)
+        // Como el selector ya tiene los valores reales ('es_ar', etc.), el match directo funciona,
+        // pero SI el usuario quiere que 'ar' y 'es_ar' sean lo mismo en el filtro:
+        const matchLang = !lang || t.language === lang || 
+                         (lang === 'es_ar' && t.language === 'ar') || 
+                         (lang === 'ar' && t.language === 'es_ar');
+
         const matchCat = !cat || t.category === cat;
         const matchSearch = !search || t.name.toLowerCase().includes(search);
         return matchLang && matchCat && matchSearch;
@@ -1612,19 +1647,26 @@ function renderTemplateCards(container, templates, isLibrary = false) {
     container.innerHTML = templates.map(t => {
         // Buscar contenido de forma recursiva en los componentes
         let text = 'Sin contenido de previsualización';
+        let headerText = '';
+        
         if (t.components) {
-            const body = t.components.find(c => c.type === 'BODY');
+            // Extraer Body (Prioridad)
+            const body = t.components.find(c => c.type === 'BODY' || c.type === 'message');
             if (body && body.text) {
                 text = body.text;
+            } else if (body && body.content) {
+                text = body.content;
             } else {
-                // Si no hay BODY, buscar cualquier propiedad text en cualquier componente
+                // Fallback: buscar cualquier cosa que parezca texto
                 for (const comp of t.components) {
-                    if (comp.text) {
-                        text = comp.text;
-                        break;
-                    }
+                    if (comp.text) { text = comp.text; break; }
+                    if (comp.content && typeof comp.content === 'string') { text = comp.content; break; }
                 }
             }
+
+            // Extraer Header para la tarjeta (opcional)
+            const header = t.components.find(c => c.type === 'HEADER');
+            if (header && header.text) headerText = header.text;
         }
         
         const statusClass = t.status === 'APPROVED' ? 'meta-status-approved' : (t.status === 'REJECTED' ? 'meta-status-rejected' : 'meta-status-pending');
@@ -1671,35 +1713,46 @@ function showTemplateDetail(templateName, isLibrary, language) {
     statusEl.innerText = template.status || 'LIBRARY';
 
     let bodyText = 'Sin contenido de texto disponible';
+    let headerText = '';
+    let footerText = '';
+    let buttonsHtml = '';
+
     if (template.components) {
-        const bodyComp = template.components.find(c => c.type === 'BODY');
-        if (bodyComp && bodyComp.text) {
-            bodyText = bodyComp.text;
-        } else {
-            for (const comp of template.components) {
-                if (comp.text) {
-                    bodyText = comp.text;
-                    break;
-                }
-            }
+        // BODY
+        const bodyComp = template.components.find(c => c.type === 'BODY' || c.type === 'message');
+        if (bodyComp) {
+            bodyText = bodyComp.text || bodyComp.content || bodyText;
+        }
+
+        // HEADER
+        const headerComp = template.components.find(c => c.type === 'HEADER');
+        if (headerComp) {
+            headerText = headerComp.text || headerComp.content || '';
+        }
+
+        // FOOTER
+        const footerComp = template.components.find(c => c.type === 'FOOTER');
+        if (footerComp) {
+            footerText = footerComp.text || footerComp.content || '';
+        }
+
+        // BUTTONS
+        const buttonsComp = template.components.find(c => c.type === 'BUTTONS');
+        if (buttonsComp && buttonsComp.buttons) {
+            buttonsHtml = '\n\n' + buttonsComp.buttons.map(b => {
+                const typeIcon = b.type === 'PHONE_NUMBER' ? '📞' : (b.type === 'URL' ? '🔗' : '🔘');
+                return `[${typeIcon} ${b.text}]`;
+            }).join('  ');
         }
     }
 
-    const headerComp = template.components?.find(c => c.type === 'HEADER') || {};
-    const footerComp = template.components?.find(c => c.type === 'FOOTER') || {};
-    const buttonsComp = template.components?.find(c => c.type === 'BUTTONS') || {};
-    
     const previewFinal = document.getElementById('wa-preview-text-final');
     if (previewFinal) {
         let content = '';
-        if (headerComp.text) content += `*${headerComp.text}*\n`;
+        if (headerText) content += `*${headerText}*\n\n`;
         content += bodyText;
-        if (footerComp.text) content += `\n_${footerComp.text}_`;
-        
-        // Renderizar botones si existen
-        if (buttonsComp.buttons) {
-            content += '\n\n' + buttonsComp.buttons.map(b => `[${b.text}]`).join('  ');
-        }
+        if (footerText) content += `\n\n_${footerText}_`;
+        if (buttonsHtml) content += buttonsHtml;
         
         previewFinal.innerText = content;
     }
@@ -1931,3 +1984,7 @@ window.deleteActiveTicket = deleteActiveTicket;
 window.toggleIntervention = toggleIntervention;
 
 console.log('✅ [BACKOFFICE] Cargado Correctamente.');
+
+// --- Inicialización automática ---
+fetchChats(true);
+fetchTags();

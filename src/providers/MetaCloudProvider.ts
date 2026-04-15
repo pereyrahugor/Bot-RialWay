@@ -336,7 +336,7 @@ class MetaCloudProvider extends ProviderClass {
         // 1. Intentar obtener de la Biblioteca Oficial de Meta (Paginado)
         try {
             console.log('📡 [MetaCloudProvider] Consultando Biblioteca Global de Meta (Full Fetch)...');
-            let nextUrl: string | null = `https://graph.facebook.com/v22.0/message_template_library?fields=name,components,language,category&limit=100`;
+            let nextUrl: string | null = `https://graph.facebook.com/v22.0/message_template_library?fields=name,components,language,category,status&limit=100`;
             
             while (nextUrl && allTemplates.length < 2000) { // Limitamos a 2000 para evitar loops infinitos
                 const response: any = await axios.get(nextUrl, {
