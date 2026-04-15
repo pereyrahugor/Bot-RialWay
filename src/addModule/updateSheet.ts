@@ -26,7 +26,7 @@ import { createGoogleAuth } from "../utils/googleAuth";
 const auth = createGoogleAuth(["https://www.googleapis.com/auth/spreadsheets"]);
 
 const sheets = google.sheets({ version: "v4", auth });
-const openai = new OpenAI();
+const openai = process.env.OPENAI_API_KEY ? new OpenAI() : null;
 
 // Función principal para procesar todos los sheets
 export async function updateAllSheets(options: { forceRecreate?: boolean } = {}) {
@@ -261,6 +261,10 @@ async function processSheetById(SHEET_ID: string, options: { forceRecreate?: boo
 
 // Función para subir datos al vector store de OpenAI
 export async function uploadDataToAssistant(filePath: string, stateId: string) {
+    if (!openai) {
+        console.warn("⚠️ IA Desactivada: Saltando subida al vector store.");
+        return true; // Continuar aunque no haya IA configurada
+    }
     try {
         if (currentFileId && stateId === currentFileId) {
             console.log("📂 Utilizando archivo existente con ID:", currentFileId);
@@ -290,6 +294,7 @@ export async function uploadDataToAssistant(filePath: string, stateId: string) {
 }
 
 async function attachFileToVectorStore(fileId: string) {
+    if (!openai) return true;
     try {
         if (!VECTOR_STORE_ID || VECTOR_STORE_ID === "vs_" || VECTOR_STORE_ID.trim() === "") {
             console.warn("⚠️ Salteando adjuntar archivo: VECTOR_STORE_ID no definido o inválido.");
@@ -314,6 +319,7 @@ async function attachFileToVectorStore(fileId: string) {
 }
 
 async function deleteOldFiles(filePath: string) {
+    if (!openai) return;
     try {
         const fileName = path.basename(filePath);
         console.log(`🗑️ Eliminando archivo anterior del vector store relacionado con ${fileName}...`);

@@ -20,7 +20,7 @@ import { createGoogleAuth } from "../utils/googleAuth";
 // Construir credenciales usando la utilidad centralizada
 const auth = createGoogleAuth(["https://www.googleapis.com/auth/drive.readonly"]);
 const drive = google.drive({ version: "v3", auth });
-const openai = new OpenAI();
+const openai = process.env.OPENAI_API_KEY ? new OpenAI() : null;
 
 // Función principal para procesar todos los docs
 export async function updateAllDocs() {
@@ -80,8 +80,11 @@ async function processDocById(DOCX_FILE_ID: string) {
             }
         }
         if (!downloaded) throw new Error("No se pudo descargar ni exportar el documento.");
-        // Elimina archivos anteriores en OpenAI usando el nombre real
-        await deleteOldDocxFiles(path.basename(tempDocxPath));
+        if (!openai) {
+            console.warn("⚠️ IA Desactivada: Saltando subida de .docx a OpenAI.");
+            deleteTemporaryDocx(tempDocxPath);
+            return true;
+        }
         // Sube el archivo a OpenAI
         const fileStream = fs.createReadStream(tempDocxPath);
         const response = await openai.files.create({
@@ -106,6 +109,7 @@ async function processDocById(DOCX_FILE_ID: string) {
 }
 
 async function attachFileToVectorStore(fileId: string) {
+    if (!openai) return true;
     try {
         if (!VECTOR_STORE_ID || VECTOR_STORE_ID === "vs_" || VECTOR_STORE_ID.trim() === "") {
             console.warn("⚠️ Salteando adjuntar archivo: VECTOR_STORE_ID no definido o inválido.");
@@ -130,6 +134,7 @@ async function attachFileToVectorStore(fileId: string) {
 }
 
 async function deleteOldDocxFiles(fileName: string) {
+    if (!openai) return;
     try {
         console.log("🗑️ Eliminando archivos .docx anteriores del vector store...");
         const files = await openai.files.list();

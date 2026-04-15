@@ -1,9 +1,9 @@
 import { createReadStream } from "fs";
 import OpenAI from "openai";
 
-const openai = new OpenAI({ 
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({ 
   apiKey: process.env.OPENAI_API_KEY 
-});
+}) : null;
 
 /**
  * Transcribe an audio file using the OpenAI Whisper model.
@@ -11,6 +11,10 @@ const openai = new OpenAI({
  * @returns The transcription of the audio.
  */
 export const transcribeAudioFile = async (filePath: string): Promise<string | null> => {
+  if (!openai) {
+    console.warn("⚠️ IA Desactivada: No se puede transcribir audio sin OPENAI_API_KEY.");
+    return null;
+  }
   try {
     const transcription = await openai.audio.transcriptions.create({
       file: createReadStream(filePath),

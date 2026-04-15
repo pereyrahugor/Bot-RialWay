@@ -2,10 +2,15 @@ import axios from "axios";
 import { OpenAI } from "openai";
 import fs from "fs";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY_IMG });
+const openai = process.env.OPENAI_API_KEY_IMG ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY_IMG }) : null;
 const IMGUR_CLIENT_ID = "dbe415c6bbb950d";
 
 export async function processImageWithVision(buffer: Buffer, flowDynamic: any): Promise<string> {
+  if (!openai) {
+    console.warn("⚠️ OPENAI_API_KEY_IMG no detectada. Procesamiento de imágenes desactivado.");
+    await flowDynamic("Lo siento, el análisis de imágenes no está configurado en este momento.");
+    return "";
+  }
   // Subir imagen a Imgur
   const imgurRes = await axios.post(
     "https://api.imgur.com/3/image",

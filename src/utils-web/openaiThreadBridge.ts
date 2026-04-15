@@ -1,7 +1,7 @@
 import OpenAI from 'openai';
 import { withRetry } from '../utils/retryHelper';
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
 
 /**
  * Obtiene o crea un thread_id para el usuario webchat con reintentos para fallos de red.
@@ -10,6 +10,10 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
  */
 export async function getOrCreateThreadId(store: { thread_id?: string | null }) {
   if (store.thread_id) return store.thread_id;
+  if (!openai) {
+    console.warn("⚠️ IA Desactivada: No se puede crear thread en webchat sin OPENAI_API_KEY.");
+    return "no-thread";
+  }
   
   const thread = await withRetry(async () => {
     return await openai.beta.threads.create();
@@ -30,6 +34,10 @@ export async function getOrCreateThreadId(store: { thread_id?: string | null }) 
  * @returns respuesta del asistente
  */
 export async function sendMessageToThread(threadId: string, userMessage: string, assistantId: string) {
+  if (!openai) {
+    console.warn("⚠️ IA Desactivada: No se puede enviar mensaje en webchat sin OPENAI_API_KEY.");
+    return "Lo siento, el asistente de IA no está configurado.";
+  }
   // CRÍTICO: Esperar a que no haya runs activos antes de enviar mensaje
   try {
     console.log(`[sendMessageToThread] Verificando runs activos en thread ${threadId}...`);

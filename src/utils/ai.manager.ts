@@ -147,7 +147,7 @@ export class AiManager {
             if (!isBotActiveForUser) {
                 try {
                     const threadId = await HistoryHandler.getThreadId(ctx.from);
-                    if (threadId) {
+                    if (threadId && this.openaiMain) {
                         await this.openaiMain.beta.threads.messages.create(threadId, {
                             role: 'user',
                             content: body || '[Media]'
@@ -166,10 +166,14 @@ export class AiManager {
                     await updateMain();
                     
                     // Sincronización del Prompt del asistente (Hot-update)
-                    const assistant = await this.openaiMain.beta.assistants.retrieve(this.assistantId);
-                    if (assistant && assistant.instructions) {
-                        await HistoryHandler.saveSetting('ASSISTANT_PROMPT', assistant.instructions);
-                        console.log('✅ [SYNC] Prompt del asistente sincronizado en base de datos.');
+                    if (this.openaiMain) {
+                        const assistant = await this.openaiMain.beta.assistants.retrieve(this.assistantId);
+                        if (assistant && assistant.instructions) {
+                            await HistoryHandler.saveSetting('ASSISTANT_PROMPT', assistant.instructions);
+                            console.log('✅ [SYNC] Prompt del asistente sincronizado en base de datos.');
+                        }
+                    } else {
+                        console.warn('⚠️ [SYNC] Saltando sincronización de prompt: OpenAI no configurado.');
                     }
 
                     await flowDynamic([{ body: "🔄 Datos actualizados desde Google y Assistant Prompt sincronizado (Hot-update)." }]);

@@ -818,17 +818,6 @@ async function fetchPendingTicketsCount() {
     }
 }
 
-function realToggleTickets(e) {
-    if (e) e.stopPropagation();
-    const panel = document.getElementById('tickets-panel');
-    if (!panel) return;
-    panel.classList.toggle('active');
-    if (panel.classList.contains('active')) {
-        setTicketsFilter('pending'); // Default to pending when opening
-    }
-}
-window.realToggleTickets = realToggleTickets;
-
 function setTicketsFilter(filter) {
     currentTicketsFilter = filter;
     
@@ -980,17 +969,6 @@ async function createTicket() {
 
 // --- LEADS LOGIC ---
 
-function realToggleLeads(e) {
-    if (e) e.stopPropagation();
-    const panel = document.getElementById('leads-panel');
-    if (!panel) return;
-    panel.classList.toggle('active');
-    if (panel.classList.contains('active')) {
-        fetchLeads();
-    }
-}
-window.realToggleLeads = realToggleLeads;
-
 async function fetchLeads() {
     const list = document.getElementById('leads-list');
     list.innerHTML = '<div style="text-align:center; padding:20px; opacity:0.5;">Cargando leads editados...</div>';
@@ -1035,28 +1013,88 @@ function selectLead(chatId) {
     selectChat(chatId);
 }
 
-function realToggleMeta(e) {
-    if (e) e.stopPropagation();
-    console.log('🔘 [PANEL] Intentando abrir panel Meta...');
+function realToggleLeads(e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    console.log('🔘 [PANEL] Intentando abrir panel de Leads...');
+    
+    const leadsPanel = document.getElementById('leads-panel');
+    const ticketsPanel = document.getElementById('tickets-panel');
+    const metaPanel = document.getElementById('meta-panel');
+    const crmPanel = document.getElementById('crm-panel');
+    
+    // Cerrar otros explícitamente
+    if (ticketsPanel) ticketsPanel.classList.remove('active');
+    if (metaPanel) metaPanel.classList.remove('active');
+    if (crmPanel) crmPanel.classList.remove('active');
+    
+    if (leadsPanel) {
+        leadsPanel.classList.toggle('active');
+        const isOpen = leadsPanel.classList.contains('active');
+        console.log(`📊 [PANEL] Leads: ${isOpen ? 'ABIERTO' : 'CERRADO'}`);
+        if (isOpen) fetchLeads();
+    } else {
+        console.error('❌ [PANEL] No se encontró #leads-panel');
+    }
+}
+window.realToggleLeads = realToggleLeads;
+
+function realToggleTickets(e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    console.log('🔘 [PANEL] Intentando abrir panel de Tickets...');
+    
+    const ticketsPanel = document.getElementById('tickets-panel');
+    const leadsPanel = document.getElementById('leads-panel');
+    const metaPanel = document.getElementById('meta-panel');
+    const crmPanel = document.getElementById('crm-panel');
+    
+    // Cerrar otros explícitamente
+    if (leadsPanel) leadsPanel.classList.remove('active');
+    if (metaPanel) metaPanel.classList.remove('active');
+    if (crmPanel) crmPanel.classList.remove('active');
+    
+    if (ticketsPanel) {
+        ticketsPanel.classList.toggle('active');
+        const isOpen = ticketsPanel.classList.contains('active');
+        console.log(`📊 [PANEL] Tickets: ${isOpen ? 'ABIERTO' : 'CERRADO'}`);
+        if (isOpen) setTicketsFilter('pending');
+    } else {
+        console.error('❌ [PANEL] No se encontró #tickets-panel');
+    }
+}
+window.realToggleTickets = realToggleTickets;
+
+function toggleMetaPanel(e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    
+    console.log('🔘 [PANEL] Toggle Meta Panel initiated...');
     const metaPanel = document.getElementById('meta-panel');
     const leadsPanel = document.getElementById('leads-panel');
     const ticketsPanel = document.getElementById('tickets-panel');
+    const crmPanel = document.getElementById('crm-panel');
 
-    // Cerrar otros
+    // Cerrar otros paneles explícitamente para evitar solapamientos
     if (leadsPanel) leadsPanel.classList.remove('active');
     if (ticketsPanel) ticketsPanel.classList.remove('active');
+    if (crmPanel) crmPanel.classList.remove('active');
 
     if (metaPanel) {
         metaPanel.classList.toggle('active');
-        console.log(`📊 [PANEL] Estado panel Meta: ${metaPanel.classList.contains('active') ? 'ABIERTO' : 'CERRADO'}`);
-        if (metaPanel.classList.contains('active')) {
-            checkMetaStatus();
+        const isOpen = metaPanel.classList.contains('active');
+        
+        if (isOpen) {
+            checkMetaStatus(); // Refrescar estado
+        } else {
+            metaPanel.style.transform = 'translateX(100%)';
+            setTimeout(() => { if(!metaPanel.classList.contains('active')) metaPanel.style.visibility = 'hidden'; }, 400);
         }
+
+        console.log(`📊 [PANEL] Meta Panel Status: ${isOpen ? 'OPEN' : 'CLOSED'}`);
     } else {
-        console.error('❌ [PANEL] No se encontró #meta-panel');
+        console.error('❌ [PANEL] Error: #meta-panel not found in DOM');
+        if (typeof showToast === 'function') showToast('❌ Error: No se encontró el componente de Meta', 'error');
     }
 }
-window.realToggleMeta = realToggleMeta;
+window.toggleMetaPanel = toggleMetaPanel;
 
 function launchMetaOnboarding() {
     const activeToken = localStorage.getItem('system_config_token') || localStorage.getItem('backoffice_token');
@@ -1097,6 +1135,113 @@ function launchMetaOnboarding() {
 
 
 
+// --- Ticket Management Actions ---
+
+async function assignTicketToMe() {
+    if (!activeChatId) {
+        showToast('⚠️ Seleccione un chat primero', 'error');
+        return;
+    }
+    
+    // Obtenemos el userId desde el token sub:ID si existe
+    let userId = null;
+    if (token.startsWith('sub:')) {
+        userId = token.split(':')[1];
+    }
+
+    try {
+        const res = await fetch(`/api/backoffice/chat/assign?token=${token}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chatId: activeChatId, userId })
+        });
+        const data = await res.json();
+        if (data.success || res.ok) {
+            showToast('✅ Chat asignado correctamente');
+            fetchChats(true);
+        } else {
+            showToast('❌ Error: ' + (data.error || 'No se pudo asignar'), 'error');
+        }
+    } catch (e) {
+        console.error(e);
+        showToast('❌ Error de conexión al asignar', 'error');
+    }
+}
+
+async function closeActiveTicket() {
+    if (!activeChatId) return;
+    const ticketId = document.getElementById('crm-lead-jump')?.value; 
+    if (!ticketId) {
+        showToast('⚠️ No hay un ticket activo detectado para este chat', 'error');
+        return;
+    }
+
+    if (!confirm('¿Desea cerrar el ticket actual?')) return;
+
+    try {
+        const res = await fetch(`/api/backoffice/tickets/${ticketId}?token=${token}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ estado: 'Cerrado' })
+        });
+        if (res.ok) {
+            showToast('✅ Ticket cerrado correctamente');
+            fetchPendingTicketsCount();
+            loadCRMJump(activeChatId);
+        }
+    } catch (e) {
+        console.error(e);
+        showToast('❌ Error al cerrar ticket', 'error');
+    }
+}
+
+async function reopenActiveTicket() {
+    if (!activeChatId) return;
+    const ticketId = document.getElementById('crm-lead-jump')?.value;
+    if (!ticketId) return;
+
+    try {
+        const res = await fetch(`/api/backoffice/tickets/${ticketId}?token=${token}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ estado: 'Abierto' })
+        });
+        if (res.ok) {
+            showToast('✅ Ticket reabierto');
+            fetchPendingTicketsCount();
+            loadCRMJump(activeChatId);
+        }
+    } catch (e) { console.error(e); }
+}
+
+async function deleteActiveTicket() {
+    if (!activeChatId) return;
+    const ticketId = document.getElementById('crm-lead-jump')?.value;
+    if (!ticketId) return;
+
+    if (!confirm('⚠️ ¿Está seguro de ELIMINAR este ticket? esta acción no se puede deshacer.')) return;
+
+    try {
+        const res = await fetch(`/api/backoffice/tickets/${ticketId}?token=${token}`, {
+            method: 'DELETE'
+        });
+        if (res.ok) {
+            showToast('🗑️ Ticket eliminado');
+            fetchPendingTicketsCount();
+            loadCRMJump(activeChatId);
+        }
+    } catch (e) { console.error(e); }
+}
+
+async function toggleIntervention() {
+    // En RialWay, la intervención se maneja a través del toggleBot
+    const toggle = document.getElementById('bot-toggle');
+    if (toggle) {
+        const newState = !toggle.checked;
+        toggleBot(newState);
+    }
+}
+
 // Inicialización principal
 fetchPendingTicketsCount();
 setInterval(fetchPendingTicketsCount, 30000);
@@ -1131,19 +1276,21 @@ document.getElementById('messages').addEventListener('scroll', function() {
 let availableTemplates = [];
 let libraryTemplates = [];
 let currentSelectedTemplate = null;
+window.isMetaConnected = false; 
 
 async function checkMetaStatus() {
     try {
         const res = await fetch(`/api/backoffice/whatsapp/config?token=${token}`);
         const data = await res.json();
+        console.log('📡 [META-STATUS] Configuración recibida:', data);
+
         const config = data.config || {};
-        console.log('📡 [META-STATUS] Configuración recibida:', config);
-        
-        // Mostrar botón de masivos y actualizar panel solo si Meta está vinculado
-        if (config.waba_id && config.waba_id !== 'PENDING') {
-            console.log('✅ [META-STATUS] Meta vinculado. Actualizando UI...');
+        const isConnected = !!(config.waba_id && config.phone_number_id);
+
+        if (isConnected) {
+            console.log('✅ [META-STATUS] Cuenta vinculada:', config.waba_id);
+            window.isMetaConnected = true;
             
-            // Updating Meta Panel UI for Connected State
             const metaPanel = document.getElementById('meta-panel');
             if (metaPanel) {
                 const content = metaPanel.querySelector('.tickets-list');
@@ -1167,7 +1314,7 @@ async function checkMetaStatus() {
                                 ${config.verified_name ? `<div><strong>Nombre:</strong> ${config.verified_name}</div>` : ''}
                             </div>
                         </div>
-                        <button class="btn-primary" onclick="toggleBulkModal(); toggleMetaPanel();" style="width:100%; height:45px; display:flex; align-items:center; justify-content:center; gap:10px; background:#10b981; border:none; border-radius:12px; font-weight:600; cursor:pointer; color:white; margin-top: 20px;">
+                        <button class="btn-primary" onclick="toggleBulkModal();" style="width:100%; height:45px; display:flex; align-items:center; justify-content:center; gap:10px; background:#10b981; border:none; border-radius:12px; font-weight:600; cursor:pointer; color:white; margin-top: 20px;">
                             <i class="fas fa-layer-group"></i> Abrir Envío Masivo
                         </button>
                         <button class="btn-secondary" onclick="launchMetaOnboarding()" style="width:100%; margin-top:10px; opacity:0.7; font-size:0.8rem;">
@@ -1178,6 +1325,39 @@ async function checkMetaStatus() {
             }
         } else {
             console.warn('⚠️ [META-STATUS] Meta no vinculado o pendiente.');
+            window.isMetaConnected = false;
+            
+            // Revertir a UI de Onboarding si el panel existe
+            const metaPanel = document.getElementById('meta-panel');
+            if (metaPanel) {
+                const content = metaPanel.querySelector('.tickets-list');
+                if (content && !content.querySelector('.fab.fa-meta')) { // Si no tiene el logo de meta (default)
+                    content.innerHTML = `
+                        <div style="background: linear-gradient(135deg, #0668E1, #00F2FE); width: 100px; height: 100px; border-radius: 24px; display: flex; align-items: center; justify-content: center; font-size: 3rem; color: white; box-shadow: 0 15px 30px rgba(6, 104, 225, 0.4); margin-top: 40px;">
+                            <i class="fab fa-meta"></i>
+                        </div>
+                        <div>
+                            <h2 style="margin: 0; color: var(--text-main); font-size: 1.6rem; font-weight: 700;">Conexión Oficial</h2>
+                            <div style="height: 3px; width: 50px; background: #0668E1; margin: 10px auto; border-radius: 10px;"></div>
+                            <p style="color: var(--text-muted); font-size: 1rem; margin-top: 15px; line-height: 1.6;">
+                                Conecta tu cuenta de <strong>WhatsApp Business</strong> oficial para habilitar funciones profesionales de envío masivo y gestión avanzada.
+                            </p>
+                        </div>
+                        <div style="background: var(--bg-header); padding: 24px; border-radius: 20px; border: 1px solid var(--border); width: 100%; text-align: left;">
+                            <h4 style="margin: 0 0 15px 0; color: #0668E1; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700;">Beneficios activos:</h4>
+                            <ul style="font-size: 0.9rem; padding-left: 20px; color: var(--text-main); line-height: 2.2;">
+                                <li>Integración por <strong>Coexistencia</strong> (Usa tu App y el Bot).</li>
+                                <li>Registro instantáneo vía <strong>Popup de Facebook</strong>.</li>
+                                <li>Envío de <strong>Mensajes Masivos (HSM)</strong>.</li>
+                                <li>Soporte para <strong>Imágenes y Audios</strong> oficiales.</li>
+                            </ul>
+                        </div>
+                        <button class="btn-primary" onclick="launchMetaOnboarding()" style="width:100%; height:45px; display:flex; align-items:center; justify-content:center; gap:10px; background:#0668E1; border:none; border-radius:12px; font-weight:600; cursor:pointer; color:white; margin-top: 20px;">
+                            <i class="fab fa-meta"></i> Vincular con Meta Cloud API
+                        </button>
+                    `;
+                }
+            }
         }
     } catch (e) {
         console.error('[Bulk] Error checking Meta status:', e);
@@ -1186,6 +1366,15 @@ async function checkMetaStatus() {
 
 async function toggleBulkModal() {
     const modal = document.getElementById('bulk-modal');
+    const isOpening = !modal.classList.contains('active');
+    
+    if (isOpening) {
+        const metaPanel = document.getElementById('meta-panel');
+        if (metaPanel && metaPanel.classList.contains('active')) {
+            toggleMetaPanel(); // Cerramos el panel de Meta para centrar la atención en el modal
+        }
+    }
+
     modal.classList.toggle('active');
     if (modal.classList.contains('active')) {
         switchMetaTab('my');
@@ -1486,10 +1675,16 @@ async function startBulkSend() {
 document.addEventListener('DOMContentLoaded', () => {
     const tplBody = document.getElementById('tpl-body');
     if (tplBody) tplBody.addEventListener('input', detectTemplateVariables);
+    
+    // Verificar estado de Meta al cargar para inicializar window.isMetaConnected
+    checkMetaStatus();
 });
 
 // --- Exportaciones Finales ---
-window.toggleMetaPanel = window.realToggleMeta;
+window.toggleLeadsPanel = window.realToggleLeads;
+window.toggleTicketsPanel = window.realToggleTickets;
+window.toggleMetaPanel = toggleMetaPanel;
+window.realToggleMeta = toggleMetaPanel;
 window.toggleBulkModal = toggleBulkModal;
 window.switchMetaTab = switchMetaTab;
 window.showTemplateDetail = showTemplateDetail;

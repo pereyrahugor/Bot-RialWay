@@ -25,11 +25,18 @@ import { OpenAI } from "openai";
 import { reset } from "../utils/timeOut";
 import { userQueues, userLocks, handleQueue } from "../utils/queueManager";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY_IMG });
+const openai = process.env.OPENAI_API_KEY_IMG ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY_IMG }) : null;
 const setTime = Number(process.env.timeOutCierre) * 60 * 1000;
 
 const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
   async (ctx, { flowDynamic, provider, gotoFlow, state }) => {
+    if (!openai) {
+      console.warn("⚠️ IA Vision Desactivada: Saltando análisis de imagen en flujo.");
+      const caption = ctx.body && !ctx.body.includes('_event_') ? ctx.body : '';
+      ctx.body = `[Imagen recibida (Sin procesar para IA)]${caption ? ': ' + caption : ''}`;
+      // Continuar al flujo de texto para no romper la experiencia
+      return gotoFlow(welcomeFlowTxt);
+    }
     const userId = ctx.from;
 
     // Verificar si es una imagen (y no un video)

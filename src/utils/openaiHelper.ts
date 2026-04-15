@@ -1,9 +1,13 @@
 import OpenAI from "openai";
 import { HistoryHandler } from "./historyHandler";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
 
 export const askWithFunctions = async (assistantId: string, message: string, state: any): Promise<string> => {
+    if (!openai) {
+        console.warn("⚠️ OPENAI_API_KEY no detectada. El asistente de IA está desactivado.");
+        return "Lo siento, el asistente de IA no está configurado actualmente.";
+    }
     let threadId = state && typeof state.get === 'function' ? state.get('thread_id') : null;
     
     // 1. Obtiene o crea el Thread
@@ -116,7 +120,7 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
  * Antes de cada llamada, verificamos si el hilo tiene procesos activos.
  */
 export async function waitForActiveRuns(threadId: string, maxAttempts = 5) {
-    if (!threadId) return;
+    if (!threadId || !openai) return;
     try {
         let attempt = 0;
         while (attempt < maxAttempts) {
@@ -151,7 +155,7 @@ export async function waitForActiveRuns(threadId: string, maxAttempts = 5) {
  * Cancela todos los runs activos encontrados en un thread
  */
 export async function cancelActiveRuns(threadId: string) {
-    if (!threadId) return;
+    if (!threadId || !openai) return;
     try {
         const runs = await openai.beta.threads.runs.list(threadId, { limit: 10 });
         for (const run of runs.data) {
@@ -181,6 +185,7 @@ export async function renewThreadAndRetry(
     userId: string, 
     errorReporter?: any
 ) {
+    if (!openai) return "IA Desactivada";
     // console.warn(`[ThreadRenewal] Renovando hilo para ${userId} debido a errores persistentes.`);
     
     // 1. Notificar al desarrollador (si hay reporter)

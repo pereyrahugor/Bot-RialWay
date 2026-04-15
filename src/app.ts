@@ -51,9 +51,9 @@ export let groupProvider: any;
 export let errorReporter: any;
 export let aiManagerInstance: AiManager;
 const webChatManager = new WebChatManager();
-const openaiMain = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const openaiVision = new OpenAI({ apiKey: process.env.OPENAI_API_KEY_IMG });
-const ASSISTANT_ID = process.env.ASSISTANT_ID!;
+const openaiMain = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
+const openaiVision = process.env.OPENAI_API_KEY_IMG ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY_IMG }) : null;
+const ASSISTANT_ID = process.env.ASSISTANT_ID || "";
 const PORT = process.env.PORT || 8080;
 
 // Multer config

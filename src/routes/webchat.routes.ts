@@ -42,21 +42,26 @@ export const registerWebchatRoutes = (app: any, {
                         const localPath = path.join(localDir, Date.now() + "." + ext);
                         fs.writeFileSync(localPath, buffer);
 
-                        const visionResponse = await withRetry(async () => {
-                            return await openaiVision.chat.completions.create({
-                                model: "gpt-4o",
-                                messages: [{
-                                    role: "user",
-                                    content: [
-                                        { type: "text", text: "Describe esta imagen detalladamente..." },
-                                        { type: "image_url", image_url: { url: `data:${mimetype};base64,${base64Data}` } }
-                                    ]
-                                }]
-                            });
-                        }, { maxRetries: 3 });
-                        
-                        const result = visionResponse.choices?.[0]?.message?.content || "No se pudo obtener una descripción.";
-                        message = `[Imagen recibida]: ${result} \n${message}`;
+                        if (!openaiVision) {
+                            console.warn("⚠️ IA Vision Desactivada: Saltando análisis de imagen en webchat.");
+                            message = `[Imagen recibida (Sin procesar)]: \n${message}`;
+                        } else {
+                            const visionResponse = await withRetry(async () => {
+                                return await openaiVision.chat.completions.create({
+                                    model: "gpt-4o",
+                                    messages: [{
+                                        role: "user",
+                                        content: [
+                                            { type: "text", text: "Describe esta imagen detalladamente..." },
+                                            { type: "image_url", image_url: { url: `data:${mimetype};base64,${base64Data}` } }
+                                        ]
+                                    }]
+                                });
+                            }, { maxRetries: 3 });
+                            
+                            const result = visionResponse.choices?.[0]?.message?.content || "No se pudo obtener una descripción.";
+                            message = `[Imagen recibida]: ${result} \n${message}`;
+                        }
 
                     } else if (mimetype.startsWith('audio/') || mimetype.startsWith('video/')) {
                         const localDir = path.join("./temp/voiceNote/");

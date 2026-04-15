@@ -476,9 +476,15 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     // --- ONBOARDING META ---
 
     app.get('/api/backoffice/whatsapp/config', async (req, res) => {
-        // Validación manual híbrida
+        // Validación de token
         const q: any = {};
-        try { const url = new URL(req.url || '', 'http://localhost'); url.searchParams.forEach((v, k) => q[k] = v); } catch (e) { /* fallback empty */ }
+        try { 
+            const url = new URL(req.url || '', 'http://localhost'); 
+            url.searchParams.forEach((v, k) => q[k] = v); 
+        } catch (e) {
+            // Ignored: URL parsing fallback
+        }
+        
         let token = req.headers['authorization'] || q.token || '';
         if (typeof token === 'string') {
             if (token.startsWith('token=')) token = token.slice(6);
@@ -489,21 +495,27 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         const isBackoffice = token === process.env.BACKOFFICE_TOKEN;
 
         if (!isConfigAdmin && !isBackoffice) {
+            console.warn(`[AUTH] Intento de acceso a Meta Config denegado. Token: ${token}`);
             return res.status(401).json({ success: false, error: "Unauthorized" });
         }
 
-        const projectId = req.query.projectId as string || process.env.RAILWAY_PROJECT_ID || process.env.PROJECT_ID || "";
-        const config = await HistoryHandler.getMetaOnboardingData(projectId);
+        const projectId = (req.query.projectId as string) || process.env.RAILWAY_PROJECT_ID || "default";
         
-        console.log(`📡 [META-CONFIG] Enviando AppID: ${process.env.META_APP_ID}, ProjectID detectado: ${projectId}`);
+        // Intentar obtener config de la DB
+        let config = await HistoryHandler.getMetaOnboardingData(projectId);
+        
+        // Si no hay config específica, intentar la global (projectId=default)
+        if (!config && projectId !== 'default') {
+            config = await HistoryHandler.getMetaOnboardingData('default');
+        }
         
         res.json({
-            appId: process.env.META_APP_ID || 'MISSING',
-            // Proporcionar el secreto para el flujo de onboarding
-            appSecret: process.env.META_APP_SECRET || 'MISSING',
-            configId: process.env.META_CONFIG_ID || '', // Nuevo campo para el flujo v22.0+
+            success: true,
+            appId: process.env.META_APP_ID || '1493670789148486',
+            appSecret: process.env.META_APP_SECRET || '',
+            configId: process.env.META_CONFIG_ID || '',
             railwayProjectId: projectId,
-            config: config
+            config: config || {}
         });
     });
 

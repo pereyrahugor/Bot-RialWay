@@ -316,13 +316,13 @@
                 </button>
             </div>
         </div>
+    </div>
        <!-- Modal de Gestión de Plantillas (Meta SDK Style) -->
     <div id="bulk-modal" class="modal-overlay">
         <div class="modal-content meta-modal-content animate-pop">
             <div class="modal-header">
                 <div>
                     <h3 style="margin:0;"><i class="fab fa-whatsapp" style="color:#25D366;"></i> Centro de Plantillas Meta</h3>
-                    <p style="font-size:0.75rem; color:var(--text-muted); margin:4px 0 0 0;">Certificado por RialWay Bot v2.0</p>
                 </div>
                 <button class="btn-icon" onclick="toggleBulkModal()"><i class="fas fa-times"></i></button>
             </div>
@@ -484,9 +484,7 @@
             <button class="btn-icon" onclick="toggleMetaPanel(event)"><i class="fas fa-times"></i></button>
         </div>
         <div class="tickets-list" style="padding: 30px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; text-align: center; gap: 24px;">
-            <div style="background: linear-gradient(135deg, #0668E1, #00F2FE); width: 100px; height: 100px; border-radius: 24px; display: flex; align-items: center; justify-content: center; font-size: 3rem; color: white; box-shadow: 0 15px 30px rgba(6, 104, 225, 0.4); margin-top: 40px;">
-                <i class="fab fa-meta"></i>
-            </div>
+            <i class="fas fa-infinity" style="color: #0668E1; font-size: 4.5rem; margin: 40px 0 10px 0;"></i>
             <div>
                 <h2 style="margin: 0; color: var(--text-main); font-size: 1.6rem; font-weight: 700;">Conexión Oficial</h2>
                 <div style="height: 3px; width: 50px; background: #0668E1; margin: 10px auto; border-radius: 10px;"></div>
@@ -494,7 +492,7 @@
                     Conecta tu cuenta de <strong>WhatsApp Business</strong> oficial para habilitar funciones profesionales de envío masivo y gestión avanzada.
                 </p>
             </div>
-            <div style="background: var(--bg-header); padding: 24px; border-radius: 20px; border: 1px solid var(--border); width: 100%; text-align: left;">
+            <div style="background: var(--bg-header, rgba(0,0,0,0.05)); padding: 24px; border-radius: 20px; border: 1px solid var(--border); width: 100%; text-align: left;">
                 <h4 style="margin: 0 0 15px 0; color: #0668E1; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700;">Beneficios activos:</h4>
                 <ul style="font-size: 0.9rem; padding-left: 20px; color: var(--text-main); line-height: 2.2;">
                     <li>Integración por <strong>Coexistencia</strong> (Usa tu App y el Bot).</li>
@@ -531,6 +529,6 @@
       };
     </script>
     <script src="/js/crm-common.js"></script>
-    <script src="/js/backoffice.js"></script>
+    <script src="/js/backoffice.js?v=2"></script>
 </body>
 </html>

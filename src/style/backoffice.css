@@ -313,18 +313,19 @@ input:checked + .slider:before { transform: translateX(20px); background-color: 
     gap: 4px; /* WhatsApp use smaller gaps between bubbles from same sender */
     background-color: #efeae2;
     background-image: url('/assets/wa-bg-light.jpg');
-    background-attachment: scroll;
-    background-size: 500px auto; /* Mantener tamaño constante del logo */
-    background-position: center 40%; /* Un poco más arriba del centro absoluto */
-    background-repeat: no-repeat;
+    background-repeat: no-repeat !important;
+    background-size: cover !important;
+    background-position: center !important;
+    background-attachment: scroll !important;
 }
 
 [data-theme="dark"] #messages {
     background-image: url('/assets/wa-bg-dark.jpg') !important;
     background-color: #0b141a !important;
-    background-size: 500px auto;
-    background-position: center 40%;
-    background-repeat: no-repeat;
+    background-repeat: no-repeat !important;
+    background-size: cover !important;
+    background-position: center !important;
+    background-attachment: scroll !important;
 }
 
 .welcome-container {
@@ -543,7 +544,7 @@ input:checked + .slider:before { transform: translateX(20px); background-color: 
     height: 100vh;
     background: var(--bg-main);
     box-shadow: -10px 0 30px rgba(0,0,0,0.15);
-    z-index: 1000;
+    z-index: 1100;
     transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
     flex-direction: column;
@@ -738,28 +739,53 @@ input:checked + .slider:before { transform: translateX(20px); background-color: 
     to { opacity: 1; transform: scale(1); }
 }
 
-/* Panel Lateral de Tickets */
+/* Panel Lateral Universal (Tickets / Meta / Leads) */
 .tickets-panel {
-    position: fixed;
-    right: -420px;
-    top: 0;
-    width: 400px;
-    height: 100vh;
-    background: var(--bg-main);
-    box-shadow: -10px 0 30px rgba(0,0,0,0.15);
+    position: fixed !important;
+    top: 0 !important;
+    right: 0 !important;
+    width: 450px !important;
+    min-width: 450px !important;
+    height: 100vh !important;
+    background: var(--bg-card, #ffffff);
+    color: var(--text-main);
+    border-left: 1px solid var(--border);
     z-index: 1000;
-    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
     flex-direction: column;
-    border-left: 1px solid var(--border);
+    transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+    box-shadow: -10px 0 30px rgba(0,0,0,0.3);
     visibility: hidden;
+    pointer-events: none;
+    overflow: hidden;
     opacity: 0;
+    transform: translateX(100%); /* Escondido a la derecha */
+    pointer-events: none;
 }
 
-.tickets-panel.active {
-    right: 0;
-    visibility: visible;
-    opacity: 1;
+.tickets-panel.active, 
+#meta-panel.active,
+#leads-panel.active,
+#crm-panel.active {
+    visibility: visible !important;
+    opacity: 1 !important;
+    transform: translateX(0) !important;
+    display: flex !important;
+    z-index: 999999 !important;
+    pointer-events: all !important;
+    border-left: 3px solid #0668E1 !important;
+    box-shadow: -20px 0 50px rgba(0,0,0,0.5) !important;
+}
+
+/* Modo oscuro específico para paneles laterales */
+[data-theme="dark"] .tickets-panel {
+    background: #1e293b !important;
+    border-left: 1px solid rgba(255,255,255,0.1) !important;
+}
+
+[data-theme="dark"] .tickets-panel .panel-header {
+    background: #0f172a !important;
+    border-bottom: 1px solid rgba(255,255,255,0.1) !important;
 }
 
 .panel-header {
@@ -934,11 +960,22 @@ input:checked + .slider:before { transform: translateX(20px); background-color: 
 
     /* Paneles laterales en móvil abrazan toda la vista interactiva */
     #crm-panel, .tickets-panel {
-        width: 100%;
-        right: -100%;
-        height: calc(100vh - 65px);
-        top: auto;
-        bottom: 65px; /* Por encima del tab bar */
+        width: 100% !important;
+        right: 0 !important;
+        transform: translateX(100%);
+        height: calc(100vh - 65px) !important;
+        top: auto !important;
+        bottom: 65px !important;
+        visibility: hidden;
+        opacity: 0;
+    }
+
+    #crm-panel.active, .tickets-panel.active {
+        transform: translateX(0) !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        display: flex !important;
+        z-index: 999999 !important;
     }
 
     #crm-jump-container {
@@ -1260,3 +1297,5 @@ input:checked + .slider:before { transform: translateX(20px); background-color: 
         top: auto;
     }
 }
+
+

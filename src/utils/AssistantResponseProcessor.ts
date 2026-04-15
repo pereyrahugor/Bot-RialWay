@@ -24,9 +24,9 @@ import { transcribeAudioFile } from './audioTranscriptior';
 import { HistoryHandler } from './historyHandler';
 //import { handleToolFunctionCall } from '../Api-BotAsistente/handleToolFunctionCall.js';
 
-const openai = new OpenAI({
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
-});
+}) : null;
 
 import { waitForActiveRuns, cancelActiveRuns } from './openaiHelper';
 
