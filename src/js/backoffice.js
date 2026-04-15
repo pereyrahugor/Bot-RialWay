@@ -467,7 +467,7 @@ function updateInputState(botEnabled) {
     }
 }
 
-let allMessages = [];
+
 
 async function fetchMessages(chatId, reset = false) {
     if (loadingMessages) return;
