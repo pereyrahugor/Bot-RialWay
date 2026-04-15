@@ -20,7 +20,9 @@ import { createGoogleAuth } from "../utils/googleAuth";
 // Construir credenciales usando la utilidad centralizada
 const auth = createGoogleAuth(["https://www.googleapis.com/auth/drive.readonly"]);
 const drive = google.drive({ version: "v3", auth });
-const openai = process.env.OPENAI_API_KEY ? new OpenAI() : null;
+const openai = (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.length > 5) 
+    ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) 
+    : null;
 
 // Función principal para procesar todos los docs
 export async function updateAllDocs() {

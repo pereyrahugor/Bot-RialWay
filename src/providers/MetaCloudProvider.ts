@@ -325,23 +325,91 @@ class MetaCloudProvider extends ProviderClass {
      * Obtiene la biblioteca de plantillas pre-configuradas de Meta
      */
     public async getLibraryTemplates(): Promise<any[]> {
-        const { waba_id, access_token } = this.config;
-        if (!waba_id || !access_token) {
-            console.error('❌ [MetaCloudProvider] getLibraryTemplates: Faltan IDs o token');
-            return [];
+        const { access_token } = this.config;
+        if (!access_token) {
+            console.error('❌ [MetaCloudProvider] getLibraryTemplates: Falta token de acceso');
+            return this.getDemoTemplates();
         }
 
+        let templates: any[] = [];
+
+        // 1. Intentar obtener de la Biblioteca Oficial de Meta (Global)
         try {
-            // Documentación técnica: GET /{waba_id}/message_template_library
-            const url = `https://graph.facebook.com/v22.0/${waba_id}/message_template_library`;
-            const response = await axios.get(url, {
+            console.log('📡 [MetaCloudProvider] Consultando Biblioteca Global de Meta...');
+            // El endpoint message_template_library es GLOBAL, no requiere WABA ID
+            const urlGlobal = `https://graph.facebook.com/v22.0/message_template_library`;
+            const responseGlobal = await axios.get(urlGlobal, {
                 headers: { 'Authorization': `Bearer ${access_token}` }
             });
-            return response.data?.data || [];
-        } catch (error: any) {
-            console.error('❌ [MetaCloudProvider] Error obteniendo biblioteca de plantillas:', error?.response?.data || error.message);
-            return [];
+            
+            templates = responseGlobal.data?.data || [];
+            if (templates.length > 0) {
+                console.log(`✅ [MetaCloudProvider] Se cargaron ${templates.length} plantillas de la Biblioteca Global de Meta.`);
+                return templates;
+            }
+        } catch (err: any) {
+            console.warn('⚠️ [MetaCloudProvider] Error en Biblioteca Global, intentando Master WABA:', err?.response?.data || err.message);
         }
+
+        // 2. Fallback: Intentar obtener de la Biblioteca Maestra de RialWay
+        try {
+            const MASTER_WABA_ID = '146603058535041';
+            console.log(`📡 [MetaCloudProvider] Consultando Biblioteca Maestra RialWay (${MASTER_WABA_ID})...`);
+            // Usamos message_templates para la maestra pq suelen ser las aprobadas/estándar
+            const urlMaster = `https://graph.facebook.com/v22.0/${MASTER_WABA_ID}/message_templates`;
+            
+            const responseMaster = await axios.get(urlMaster, {
+                headers: { 'Authorization': `Bearer ${access_token}` },
+                params: { limit: 50 }
+            });
+            
+            const masterTemplates = responseMaster.data?.data || [];
+            if (masterTemplates.length > 0) {
+                console.log(`✅ [MetaCloudProvider] Se cargaron ${masterTemplates.length} plantillas de la Biblioteca Maestra.`);
+                return masterTemplates.map((t: any) => ({ ...t, isShared: true }));
+            }
+        } catch (masterErr: any) {
+            console.error('⚠️ [MetaCloudProvider] Error consultando Biblioteca Maestra:', masterErr?.response?.data || masterErr.message);
+        }
+
+        // 3. Fallback Final: Templates de demostración hardcoded
+        console.log('⚠️ [MetaCloudProvider] Usando catálogo de demostración como último recurso.');
+        return this.getDemoTemplates();
+    }
+
+    /**
+     * Templates de demostración por defecto
+     */
+    private getDemoTemplates(): any[] {
+        return [
+            {
+                name: "bienvenida_rialway",
+                category: "MARKETING",
+                language: "es",
+                components: [
+                    { type: "BODY", text: "¡Hola {{1}}! Bienvenido a nuestra tienda. ¿En qué podemos ayudarte hoy?" }
+                ],
+                isDemo: true
+            },
+            {
+                name: "recordatorio_cita",
+                category: "UTILITY",
+                language: "es",
+                components: [
+                    { type: "BODY", text: "Hola {{1}}, te recordamos tu cita para el día {{2}} a las {{3}}. ¡Te esperamos!" }
+                ],
+                isDemo: true
+            },
+            {
+                name: "soporte_tecnico",
+                category: "UTILITY",
+                language: "es",
+                components: [
+                    { type: "BODY", text: "Hola {{1}}, hemos recibido tu solicitud de soporte con el ticket {{2}}. Un agente te contactará pronto." }
+                ],
+                isDemo: true
+            }
+        ];
     }
 
     /**

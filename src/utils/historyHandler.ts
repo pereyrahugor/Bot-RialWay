@@ -427,7 +427,13 @@ export class HistoryHandler {
                 .eq('project_id', PROJECT_ID);
 
             // Emitir evento para WebSockets
-            historyEvents.emit('new_message', { chatId, role, content, type });
+            historyEvents.emit('new_message', { 
+                chatId, 
+                role, 
+                content, 
+                type,
+                created_at: new Date().toISOString()
+            });
 
         } catch (err) {
             console.error('[HistoryHandler] Error en saveMessage:', err);
@@ -577,9 +583,10 @@ export class HistoryHandler {
      */
     static async listChats(limit: number = 20, offset: number = 0, search?: string, tagId?: string, assignedTo?: string | null, platform?: string) {
         try {
+            // Campos mínimos para la lista (se excluyen notas, address, email, etc. para rendimiento)
             let query = supabase
                 .from('chats')
-                .select('*, chat_tags(tag_id, tags(*))')
+                .select('id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, chat_tags(tag_id, tags(*))')
                 .eq('project_id', PROJECT_ID);
 
             if (platform && platform !== 'all') {
@@ -593,8 +600,8 @@ export class HistoryHandler {
             }
 
             if (search) {
-                // Filtro por nombre, ID, email, notas o fuente
-                query = query.or(`name.ilike.%${search}%,id.ilike.%${search}%,email.ilike.%${search}%,notes.ilike.%${search}%,source.ilike.%${search}%`);
+                // Filtro optimizado: solo por nombre o ID (evitamos ILIKE en 'notes' que es pesado)
+                query = query.or(`name.ilike.%${search}%,id.ilike.%${search}%`);
             }
 
             if (tagId) {
@@ -614,6 +621,29 @@ export class HistoryHandler {
         } catch (err) {
             console.error('[HistoryHandler] Error en listChats:', err);
             return [];
+        }
+    }
+
+    /**
+     * Obtiene los detalles completos de un chat
+     */
+    static async getChat(chatId: string) {
+        try {
+            const { data, error } = await supabase
+                .from('chats')
+                .select('*, chat_tags(tag_id, tags(*))')
+                .eq('id', chatId)
+                .eq('project_id', PROJECT_ID)
+                .single();
+
+            if (error) throw error;
+            if (data) {
+                data.tags = data.chat_tags ? data.chat_tags.map((ct: any) => ct.tags).filter((t: any) => t !== null) : [];
+            }
+            return data;
+        } catch (err) {
+            console.error('[HistoryHandler] Error en getChat:', err);
+            return null;
         }
     }
 

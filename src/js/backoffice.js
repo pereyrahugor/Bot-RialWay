@@ -39,21 +39,62 @@ socket.on('connect', () => {
 
 socket.on('new_message', (payload) => {
     console.log('📡 Nuevo mensaje recibido:', payload);
+    
+    // 1. Si es el chat activo, añadir localmente para evitar latencia de recarga
     if (activeChatId === payload.chatId) {
-        fetchMessages(activeChatId, true);
+        // Evitar duplicados (mismo contenido y timestamp cercano)
+        const isDuplicate = allMessages.some(m => 
+            m.content === payload.content && 
+            Math.abs(new Date(m.created_at).getTime() - new Date(payload.created_at).getTime()) < 2000
+        );
+
+        if (!isDuplicate) {
+            allMessages.push(payload);
+            renderMessages();
+            const container = document.getElementById('messages');
+            if (container) container.scrollTop = container.scrollHeight;
+        }
     }
-    fetchChats(true);
+    
+    // 2. Actualizar lista de chats localmente (Optimización)
+    const chatIndex = chats.findIndex(c => c.id === payload.chatId);
+    if (chatIndex !== -1) {
+        // Chat existente: actualizar timestamp y mover a la cima
+        const chat = chats[chatIndex];
+        chat.last_message_at = new Date().toISOString();
+        
+        // Incrementar contador visual si no estamos en este chat
+        if (activeChatId !== payload.chatId) {
+            chat.unread_count = (chat.unread_count || 0) + 1;
+        }
+
+        // Mover a la primera posición
+        chats.splice(chatIndex, 1);
+        chats.unshift(chat);
+        renderChatList();
+    } else {
+        // Chat nuevo o fuera de los 50 iniciales: solo aquí refrescamos del servidor
+        // si estamos en el offset 0 (viendo lo más reciente)
+        if (chatOffset <= CHAT_LIMIT) {
+            fetchChats(true);
+        }
+    }
 });
 
 socket.on('bot_toggled', (payload) => {
     console.log('📡 Bot toggled:', payload);
+    const chat = chats.find(c => c.id === payload.chatId);
+    if (chat) {
+        chat.bot_enabled = payload.enabled;
+    }
+    
     if (activeChatId === payload.chatId) {
         const toggle = document.getElementById('bot-toggle');
-        toggle.checked = payload.enabled;
+        if (toggle) toggle.checked = payload.enabled;
         updateBotStatusText(payload.enabled);
         updateInputState(payload.enabled);
     }
-    fetchChats(true);
+    renderChatList();
 });
 
 async function fetchChats(refresh = false) {
@@ -1333,8 +1374,8 @@ async function checkMetaStatus() {
                 const content = metaPanel.querySelector('.tickets-list');
                 if (content && !content.querySelector('.fab.fa-meta')) { // Si no tiene el logo de meta (default)
                     content.innerHTML = `
-                        <div style="background: linear-gradient(135deg, #0668E1, #00F2FE); width: 100px; height: 100px; border-radius: 24px; display: flex; align-items: center; justify-content: center; font-size: 3rem; color: white; box-shadow: 0 15px 30px rgba(6, 104, 225, 0.4); margin-top: 40px;">
-                            <i class="fab fa-meta"></i>
+                        <div style="color: #0668E1; font-size: 4rem; margin-top: 40px; margin-bottom: 20px;">
+                            <i class="fas fa-infinity"></i>
                         </div>
                         <div>
                             <h2 style="margin: 0; color: var(--text-main); font-size: 1.6rem; font-weight: 700;">Conexión Oficial</h2>
@@ -1594,9 +1635,9 @@ function detectTemplateVariables() {
 
     container.style.display = 'block';
     fieldsDiv.innerHTML = varNames.map(varName => {
-        return `<div style="display:flex; align-items:center; gap:8px; margin-top:6px;">
-            <span style="font-size:0.8rem; min-width:80px; font-weight:700;">{{${varName}}}</span>
-            <input type="text" id="tpl-example-${varName}" class="crm-input" placeholder="ej: Juan" style="flex:1;">
+        return `<div style="display:flex; align-items:center; gap:12px; margin-top:12px;">
+            <span style="font-size:0.85rem; min-width:110px; font-weight:700; color:var(--text-main);"><span style="color:var(--primary)">{{</span>${varName}<span style="color:var(--primary)">}}</span></span>
+            <input type="text" id="tpl-example-${varName}" class="crm-input" placeholder="ej: Valor para ${varName}" style="flex:1; margin-bottom:0;">
         </div>`;
     }).join('');
 }

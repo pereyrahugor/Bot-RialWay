@@ -601,9 +601,13 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                 return res.status(400).json({ success: false, error: 'El proveedor actual no soporta la biblioteca de Meta.' });
             }
 
+            console.log('📡 [BACKOFFICE-ROUTES] Solicitando plantillas de biblioteca...');
             const templates = await provider.getLibraryTemplates();
+            console.log(`✅ [BACKOFFICE-ROUTES] Se obtuvieron ${templates?.length || 0} plantillas.`);
+            
             res.json({ success: true, templates });
         } catch (error: any) {
+            console.error('❌ [BACKOFFICE-ROUTES] Error en library-templates:', error);
             res.status(500).json({ success: false, error: error.message });
         }
     });
@@ -624,10 +628,20 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             const result = await provider.createTemplate(name, category, language, text, examples || []);
             res.json({ success: true, result });
         } catch (error: any) {
-            console.error('Error creando plantilla Meta:', error.response?.data || error.message);
+            const metaError = error.response?.data?.error;
+            let errorMessage = error.message;
+
+            if (metaError) {
+                // Priorizar el mensaje amigable de Meta si existe
+                const title = metaError.error_user_title;
+                const detail = metaError.error_user_msg || metaError.message;
+                errorMessage = title ? `${title}: ${detail}` : detail;
+            }
+
+            console.error('Error creando plantilla Meta:', metaError || error.message);
             res.status(error.response?.status || 500).json({ 
                 success: false, 
-                error: error.response?.data?.error?.message || error.message 
+                error: errorMessage 
             });
         }
     });
@@ -667,8 +681,20 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
             res.json({ success: true, phoneId });
         } catch (error: any) {
-            console.error('❌ [Register-Step-1] Error:', error.response?.data || error.message);
-            res.status(400).json({ success: false, error: error.response?.data?.error?.message || error.message });
+            const metaError = error.response?.data?.error;
+            let errorMessage = error.message;
+
+            if (metaError) {
+                const title = metaError.error_user_title;
+                const detail = metaError.error_user_msg || metaError.message;
+                errorMessage = title ? `${title}: ${detail}` : detail;
+            }
+
+            console.error('❌ [Register-Step-1] Error:', metaError || error.message);
+            res.status(error.response?.status || 400).json({ 
+                success: false, 
+                error: errorMessage 
+            });
         }
     });
 
@@ -689,8 +715,20 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
             res.json({ success: true });
         } catch (error: any) {
-            console.error('❌ [Register-Step-2] Error:', error.response?.data || error.message);
-            res.status(400).json({ success: false, error: error.response?.data?.error?.message || error.message });
+            const metaError = error.response?.data?.error;
+            let errorMessage = error.message;
+
+            if (metaError) {
+                const title = metaError.error_user_title;
+                const detail = metaError.error_user_msg || metaError.message;
+                errorMessage = title ? `${title}: ${detail}` : detail;
+            }
+
+            console.error('❌ [Register-Step-2] Error:', metaError || error.message);
+            res.status(error.response?.status || 400).json({ 
+                success: false, 
+                error: errorMessage 
+            });
         }
     });
 
