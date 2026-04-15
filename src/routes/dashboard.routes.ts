@@ -1,4 +1,4 @@
-import { supabase } from '../utils/historyHandler';
+import { supabase, HistoryHandler } from '../utils/historyHandler';
 import { backofficeAuth } from '../middleware/auth';
 
 /**
@@ -8,7 +8,7 @@ export const registerDashboardRoutes = (app: any) => {
     
     app.get('/api/dashboard/stats', async (req: any, res: any) => {
         try {
-            const PROJECT_ID = process.env.RAILWAY_PROJECT_ID || "default_project";
+            const PROJECT_ID = HistoryHandler.PROJECT_IDENTIFIER;
 
             // 1. Tasa de Conversión y Distribución de Leads
             const { data: chats } = await supabase

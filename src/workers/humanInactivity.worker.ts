@@ -15,7 +15,7 @@ export const startHumanInactivityWorker = (timeoutMinutes = 15) => {
             const { data: inactiveChats, error } = await supabase
                 .from('chats')
                 .select('id, last_human_message_at')
-                .eq('project_id', process.env.RAILWAY_PROJECT_ID || 'default_project')
+                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER)
                 .eq('bot_enabled', false)
                 .or(`last_human_message_at.lte.${threshold.toISOString()},last_human_message_at.is.null`);
 
