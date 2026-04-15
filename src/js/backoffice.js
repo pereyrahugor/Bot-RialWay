@@ -1440,7 +1440,7 @@ function switchMetaTab(tab) {
     if (tabsMap[tab]) document.getElementById(tabsMap[tab]).classList.add('active');
     if (viewsMap[tab]) {
         const view = document.getElementById(viewsMap[tab]);
-        if (tab === 'my' || tab === 'library') view.style.display = 'grid';
+        if (tab === 'my') view.style.display = 'grid';
         else view.style.display = 'block';
     }
 
@@ -1463,20 +1463,58 @@ async function loadTemplates() {
 }
 
 async function loadLibraryTemplates() {
-    const container = document.getElementById('view-meta-library');
-    container.innerHTML = '<div style="grid-column: 1/-1; text-align:center; padding:40px; opacity:0.5;"><i class="fas fa-circle-notch fa-spin fa-2x"></i><p>Explorando Biblioteca de Meta...</p></div>';
+    const grid = document.getElementById('library-templates-grid');
+    if (grid) grid.innerHTML = '<div style="grid-column: 1/-1; text-align:center; padding:40px; opacity:0.5;"><i class="fas fa-circle-notch fa-spin fa-2x"></i><p>Explorando Biblioteca de Meta...</p></div>';
+    
     try {
         const res = await fetch(`/api/backoffice/whatsapp/library-templates?token=${token}`);
         const data = await res.json();
         if (data.success) {
             libraryTemplates = data.templates;
-            renderTemplateCards(container, libraryTemplates, true);
+            populateLibraryFilters();
+            applyLibraryFilters();
         } else {
-            container.innerHTML = `<p style="grid-column: 1/-1; text-align:center; padding:20px; color:var(--text-muted);">${data.error || 'No se pudo cargar la biblioteca.'}</p>`;
+            if (grid) grid.innerHTML = `<p style="grid-column: 1/-1; text-align:center; padding:20px; color:var(--text-muted);">${data.error || 'No se pudo cargar la biblioteca.'}</p>`;
         }
     } catch (e) {
-        container.innerHTML = '<p style="grid-column: 1/-1; text-align:center; padding:20px; color:var(--text-muted);">Error de conexión con la biblioteca.</p>';
+        if (grid) grid.innerHTML = '<p style="grid-column: 1/-1; text-align:center; padding:20px; color:var(--text-muted);">Error de conexión con la biblioteca.</p>';
     }
+}
+
+function populateLibraryFilters() {
+    const langSelect = document.getElementById('filter-lib-lang');
+    const catSelect = document.getElementById('filter-lib-cat');
+    if (!langSelect || !catSelect) return;
+
+    // Obtener valores únicos
+    const langs = [...new Set(libraryTemplates.map(t => t.language))].sort();
+    const cats = [...new Set(libraryTemplates.map(t => t.category))].sort();
+
+    // Llenar Idiomas
+    langSelect.innerHTML = '<option value="">Todos los idiomas</option>' + 
+        langs.map(l => `<option value="${l}">${l.toUpperCase()}</option>`).join('');
+
+    // Llenar Categorías
+    catSelect.innerHTML = '<option value="">Todas las categorías</option>' + 
+        cats.map(c => `<option value="${c}">${c}</option>`).join('');
+}
+
+function applyLibraryFilters() {
+    const grid = document.getElementById('library-templates-grid');
+    if (!grid) return;
+
+    const lang = document.getElementById('filter-lib-lang').value;
+    const cat = document.getElementById('filter-lib-cat').value;
+    const search = document.getElementById('filter-lib-search').value.toLowerCase().trim();
+
+    const filtered = libraryTemplates.filter(t => {
+        const matchLang = !lang || t.language === lang;
+        const matchCat = !cat || t.category === cat;
+        const matchSearch = !search || t.name.toLowerCase().includes(search);
+        return matchLang && matchCat && matchSearch;
+    });
+
+    renderTemplateCards(grid, filtered, true);
 }
 
 function renderTemplateCards(container, templates, isLibrary = false) {
@@ -1485,17 +1523,20 @@ function renderTemplateCards(container, templates, isLibrary = false) {
         return;
     }
     container.innerHTML = templates.map(t => {
-        const bodyComp = t.components?.find(c => c.type === 'BODY') || {};
-        const text = bodyComp.text || 'Sin contenido';
+        // Buscar contenido en cualquier componente que lo tenga (BODY, o HEADER si falla)
+        const contentComp = t.components?.find(c => c.type === 'BODY') || t.components?.find(c => c.text);
+        const text = contentComp?.text || 'Sin contenido de previsualización';
+        
         const statusClass = t.status === 'APPROVED' ? 'meta-status-approved' : (t.status === 'REJECTED' ? 'meta-status-rejected' : 'meta-status-pending');
         const statusLabel = t.status === 'APPROVED' ? 'Aprobada' : (t.status === 'REJECTED' ? 'Rechazada' : 'Pendiente');
+        
         return `
-            <div class="meta-card" onclick="showTemplateDetail('${t.name}', ${isLibrary})">
+            <div class="meta-card" onclick="showTemplateDetail('${t.name}', ${isLibrary}, '${t.language}')">
                 <div class="meta-card-tag ${statusClass}">${statusLabel}</div>
                 <div class="meta-card-name">${t.name}</div>
                 <div class="meta-card-desc">${text}</div>
                 <div style="font-size:0.7rem; color:var(--text-muted); display:flex; justify-content:space-between; align-items:center; margin-top:auto;">
-                    <span><i class="fas fa-globe"></i> ${t.language}</span>
+                    <span><i class="fas fa-globe"></i> ${t.language.toUpperCase()}</span>
                     <span><i class="fas fa-tag"></i> ${t.category}</span>
                 </div>
             </div>
@@ -1503,32 +1544,43 @@ function renderTemplateCards(container, templates, isLibrary = false) {
     }).join('');
 }
 
-function showTemplateDetail(templateName, isLibrary) {
+function showTemplateDetail(templateName, isLibrary, language) {
     const templates = isLibrary ? libraryTemplates : availableTemplates;
-    const template = templates.find(t => t.name === templateName);
+    // Identificar unívocamente por nombre e idioma
+    const template = templates.find(t => t.name === templateName && (!language || t.language === language));
     if (!template) return;
     currentSelectedTemplate = template;
     
-    // Hide all views
+    // Ocultar vistas principales
     document.getElementById('view-my-templates').style.display = 'none';
     document.getElementById('view-meta-library').style.display = 'none';
     document.getElementById('view-new-template').style.display = 'none';
     
-    // Show detail
+    // Mostrar detalle
     const detailView = document.getElementById('view-template-detail');
     detailView.style.display = 'block';
+    
     document.getElementById('detail-tpl-name').innerText = template.name;
+    document.getElementById('detail-tpl-lang-badge').innerHTML = `<i class="fas fa-globe"></i> ${template.language.toUpperCase()}`;
+    document.getElementById('detail-tpl-cat-badge').innerHTML = `<i class="fas fa-tag"></i> ${template.category}`;
+    
     const statusEl = document.getElementById('detail-tpl-status');
     const statusClass = template.status === 'APPROVED' ? 'meta-status-approved' : (template.status === 'REJECTED' ? 'meta-status-rejected' : 'meta-status-pending');
     statusEl.className = `meta-card-tag ${statusClass}`;
-    statusEl.innerText = template.status;
+    statusEl.innerText = template.status || 'LIBRARY';
 
-    // Build Preview Content
+    // Construir contenido de previsualización (BODY + HEADER)
     const bodyComp = template.components?.find(c => c.type === 'BODY') || {};
+    const headerComp = template.components?.find(c => c.type === 'HEADER') || {};
+    
     const previewFinal = document.getElementById('wa-preview-text-final');
+    if (previewFinal) {
+        let content = '';
+        if (headerComp.text) content += `*${headerComp.text}*\n`;
+        content += bodyComp.text || 'Sin contenido de texto disponible';
+        previewFinal.innerText = content;
+    }
     const bulkSection = document.getElementById('bulk-actions-section');
-
-    if (previewFinal) previewFinal.innerText = bodyComp.text || 'Sin contenido';
     if (bulkSection) {
         if (template.status === 'APPROVED' && !isLibrary) {
             bulkSection.style.display = 'block';
@@ -1539,8 +1591,10 @@ function showTemplateDetail(templateName, isLibrary) {
         console.error('❌ [BULK] No se encontró el elemento #bulk-actions-section');
     }
 
-    document.getElementById('bulk-progress').style.display = 'none';
-    document.getElementById('bulk-file-input').value = '';
+    const progressEl = document.getElementById('bulk-progress');
+    const fileInput = document.getElementById('bulk-file-input');
+    if (progressEl) progressEl.style.display = 'none';
+    if (fileInput) fileInput.value = '';
 }
 
 

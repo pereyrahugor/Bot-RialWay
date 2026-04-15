@@ -349,8 +349,28 @@
                 </div>
 
                 <!-- Biblioteca Meta -->
-                <div id="view-meta-library" class="meta-grid" style="display:none;">
-                    <!-- Aquí se cargarán las plantillas de la librería -->
+                <div id="view-meta-library" style="display:none;">
+                    <div class="meta-filters" style="display:flex; gap:10px; padding:15px; background:rgba(255,255,255,0.05); border-bottom:1px solid var(--border); margin-bottom:15px; border-radius:10px;">
+                        <div style="flex:1">
+                            <label style="font-size:0.75rem; font-weight:700; display:block; margin-bottom:5px;">Idioma</label>
+                            <select id="filter-lib-lang" class="crm-input" style="margin-bottom:0;" onchange="applyLibraryFilters()">
+                                <option value="">Todos los idiomas</option>
+                            </select>
+                        </div>
+                        <div style="flex:1">
+                            <label style="font-size:0.75rem; font-weight:700; display:block; margin-bottom:5px;">Categoría</label>
+                            <select id="filter-lib-cat" class="crm-input" style="margin-bottom:0;" onchange="applyLibraryFilters()">
+                                <option value="">Todas las categorías</option>
+                            </select>
+                        </div>
+                        <div style="width:150px">
+                            <label style="font-size:0.75rem; font-weight:700; display:block; margin-bottom:5px;">Búsqueda</label>
+                            <input type="text" id="filter-lib-search" class="crm-input" placeholder="Buscar..." style="margin-bottom:0;" onkeyup="applyLibraryFilters()">
+                        </div>
+                    </div>
+                    <div id="library-templates-grid" class="meta-grid">
+                        <!-- Aquí se cargarán las plantillas de la librería -->
+                    </div>
                 </div>
 
                 <!-- Nueva Plantilla -->
@@ -416,7 +436,15 @@
 
                         <div>
                             <h3 id="detail-tpl-name" style="margin-top:0;">Nombre Plantilla</h3>
-                            <div id="detail-tpl-status" class="meta-card-tag" style="position:static; display:inline-block; margin-bottom:20px;">ESTADO</div>
+                            <div style="display:flex; gap:10px; margin-bottom:20px; align-items:center;">
+                                <div id="detail-tpl-status" class="meta-card-tag" style="position:static; display:inline-block;">ESTADO</div>
+                                <span id="detail-tpl-lang-badge" style="font-size:0.7rem; background:rgba(0,0,0,0.1); padding:4px 8px; border-radius:10px; color:var(--text-muted);">
+                                    <i class="fas fa-globe"></i> ES
+                                </span>
+                                <span id="detail-tpl-cat-badge" style="font-size:0.7rem; background:rgba(0,0,0,0.1); padding:4px 8px; border-radius:10px; color:var(--text-muted);">
+                                    <i class="fas fa-tag"></i> MARKETING
+                                </span>
+                            </div>
                             
                             <!-- Panel de Acciones Masivas (Se muestra al seleccionar plantilla) -->
                             <div id="bulk-actions-section" class="bulk-template-actions" style="display: none; border-top: 1px solid var(--border); padding-top: 20px;">

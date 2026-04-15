@@ -337,9 +337,11 @@ class MetaCloudProvider extends ProviderClass {
         try {
             console.log('📡 [MetaCloudProvider] Consultando Biblioteca Global de Meta...');
             // El endpoint message_template_library es GLOBAL, no requiere WABA ID
+            // Aumentamos el límite para "traer todas" (o la mayoría)
             const urlGlobal = `https://graph.facebook.com/v22.0/message_template_library`;
             const responseGlobal = await axios.get(urlGlobal, {
-                headers: { 'Authorization': `Bearer ${access_token}` }
+                headers: { 'Authorization': `Bearer ${access_token}` },
+                params: { limit: 500 } // Subimos el límite significativamente
             });
             
             templates = responseGlobal.data?.data || [];
