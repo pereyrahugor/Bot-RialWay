@@ -1520,18 +1520,23 @@ function useTemplateAsBase() {
     document.getElementById('tpl-lang').value = currentSelectedTemplate.language;
     
     let bodyText = '';
-    if (currentSelectedTemplate.components) {
-        const bodyComp = currentSelectedTemplate.components.find(c => c.type === 'BODY');
-        if (bodyComp && bodyComp.text) {
-            bodyText = bodyComp.text;
-        } else {
+    if (currentSelectedTemplate.components && Array.isArray(currentSelectedTemplate.components)) {
+        const bodyComp = currentSelectedTemplate.components.find(c => c.type === 'BODY' || c.type === 'message' || c.type?.toUpperCase() === 'BODY');
+        if (bodyComp) {
+            bodyText = bodyComp.text || bodyComp.content || (bodyComp.example?.body_text?.[0]?.[0]) || '';
+        }
+        
+        // Fallback si el body está vacío
+        if (!bodyText) {
             for (const comp of currentSelectedTemplate.components) {
-                if (comp.text) {
-                    bodyText = comp.text;
+                if (comp.text || comp.content) {
+                    bodyText = comp.text || comp.content;
                     break;
                 }
             }
         }
+    } else if (currentSelectedTemplate.body) {
+        bodyText = currentSelectedTemplate.body;
     }
     document.getElementById('tpl-body').value = bodyText;
     
@@ -1583,18 +1588,18 @@ function populateLibraryFilters() {
     // Normalización: es_AR -> ar para el selector
     const rawLangs = [...new Set(libraryTemplates.map(t => t.language))].sort();
     const displayLangs = rawLangs.map(l => {
-        if (l.toLowerCase() === 'es_ar') return { value: l, label: 'AR' };
-        if (l.toLowerCase() === 'ar') return { value: l, label: 'AR' };
+        const lowerL = l.toLowerCase();
+        if (lowerL === 'es_ar' || lowerL === 'ar') return { value: 'ar', label: 'AR' };
         return { value: l, label: l.toUpperCase() };
     });
 
     // Eliminar duplicados de etiquetas (ej: si hay 'ar' y 'es_ar' ambos mapeados a 'AR')
     const finalLangs = [];
-    const seenLabels = new Set();
+    const seenValues = new Set();
     displayLangs.forEach(item => {
-        if (!seenLabels.has(item.label)) {
+        if (!seenValues.has(item.value)) {
             finalLangs.push(item);
-            seenLabels.add(item.label);
+            seenValues.add(item.value);
         }
     });
 
@@ -1604,10 +1609,14 @@ function populateLibraryFilters() {
     langSelect.innerHTML = '<option value="">Todos los idiomas</option>' + 
         finalLangs.map(l => `<option value="${l.value}">${l.label}</option>`).join('');
 
-    // Seleccionar por defecto 'AR' (ya sea es_AR o ar)
-    const arOption = finalLangs.find(l => l.label === 'AR') || finalLangs.find(l => l.label.includes('ES'));
-    if (arOption) {
-        langSelect.value = arOption.value;
+    // Forzar selección de 'AR' (valor 'ar')
+    const hasAR = finalLangs.some(l => l.value === 'ar');
+    if (hasAR) {
+        langSelect.value = 'ar';
+    } else if (finalLangs.length > 0) {
+        // Fallback a cualquier español si no hay AR directo
+        const anyEs = finalLangs.find(l => l.value.startsWith('es'));
+        if (anyEs) langSelect.value = anyEs.value;
     }
 
     // Llenar Categorías
@@ -1624,12 +1633,9 @@ function applyLibraryFilters() {
     const search = document.getElementById('filter-lib-search').value.toLowerCase().trim();
 
     const filtered = libraryTemplates.filter(t => {
-        // Normalización para el match de idioma (el selector usa el valor real, pero el usuario ve AR)
-        // Como el selector ya tiene los valores reales ('es_ar', etc.), el match directo funciona,
-        // pero SI el usuario quiere que 'ar' y 'es_ar' sean lo mismo en el filtro:
-        const matchLang = !lang || t.language === lang || 
-                         (lang === 'es_ar' && t.language === 'ar') || 
-                         (lang === 'ar' && t.language === 'es_ar');
+        // Normalización para el match de idioma
+        const tLang = t.language.toLowerCase();
+        const matchLang = !lang || (lang === 'ar' && (tLang === 'ar' || tLang === 'es_ar')) || tLang === lang.toLowerCase();
 
         const matchCat = !cat || t.category === cat;
         const matchSearch = !search || t.name.toLowerCase().includes(search);
@@ -1645,42 +1651,50 @@ function renderTemplateCards(container, templates, isLibrary = false) {
         return;
     }
     container.innerHTML = templates.map(t => {
-        // Buscar contenido de forma recursiva en los componentes
+        // DEBUG: Descomentar para ver estructura en consola si falta contenido
+        if (isLibrary && !t.body && (!t.components || t.components.length === 0)) {
+            console.warn('[Backoffice] Plantilla de biblioteca sin estructura conocida:', t);
+        }
+
+        // Buscar contenido de forma agresiva en los componentes
         let text = 'Sin contenido de previsualización';
-        let headerText = '';
         
-        if (t.components) {
-            // Extraer Body (Prioridad)
-            const body = t.components.find(c => c.type === 'BODY' || c.type === 'message');
-            if (body && body.text) {
-                text = body.text;
-            } else if (body && body.content) {
-                text = body.content;
-            } else {
-                // Fallback: buscar cualquier cosa que parezca texto
+        if (t.components && Array.isArray(t.components)) {
+            // 1. Buscar el componente BODY (el más común para el mensaje principal)
+            const body = t.components.find(c => c.type === 'BODY' || c.type === 'message' || c.type?.toUpperCase() === 'BODY');
+            if (body) {
+                text = body.text || body.content || (body.example?.header_text?.[0]) || (body.example?.body_text?.[0]?.[0]) || text;
+            }
+            
+            // 2. Si no hay body o está vacío, buscar en cualquier componente que tenga texto
+            if (text === 'Sin contenido de previsualización') {
                 for (const comp of t.components) {
-                    if (comp.text) { text = comp.text; break; }
-                    if (comp.content && typeof comp.content === 'string') { text = comp.content; break; }
+                    const fallbackText = comp.text || comp.content;
+                    if (fallbackText && typeof fallbackText === 'string') {
+                        text = fallbackText;
+                        break;
+                    }
                 }
             }
-
-            // Extraer Header para la tarjeta (opcional)
-            const header = t.components.find(c => c.type === 'HEADER');
-            if (header && header.text) headerText = header.text;
+        } else if (t.body) {
+            // Soporte para objetos planos que vienen con .body
+            text = t.body;
         }
+        
+        // Limpiar variables {{1}} para que no se vea feo si son muchas
+        const cleanText = text.length > 150 ? text.substring(0, 147) + '...' : text;
         
         const statusClass = t.status === 'APPROVED' ? 'meta-status-approved' : (t.status === 'REJECTED' ? 'meta-status-rejected' : 'meta-status-pending');
         const statusLabel = t.status === 'APPROVED' ? 'Aprobada' : (t.status === 'REJECTED' ? 'Rechazada' : 'Pendiente');
         
         return `
             <div class="meta-card" onclick="showTemplateDetail('${t.name}', ${isLibrary}, '${t.language}')">
-                <div class="meta-card-tag ${statusClass}">${statusLabel}</div>
-                <div class="meta-card-name">${t.name}</div>
-                <div class="meta-card-desc">${text}</div>
-                <div style="font-size:0.7rem; color:var(--text-muted); display:flex; flex-wrap:wrap; gap:8px; margin-top:auto;">
-                    <span title="Idioma"><i class="fas fa-globe"></i> ${t.language.toUpperCase()}</span>
-                    <span title="Categoría"><i class="fas fa-tag"></i> ${t.category}</span>
-                    ${t.topic ? `<span title="Tema" style="color:var(--primary);"><i class="fas fa-bookmark"></i> ${t.topic}</span>` : ''}
+                <div class="meta-card-tag ${statusClass}">${isLibrary ? 'BIBLIOTECA' : statusLabel}</div>
+                <div class="meta-card-name" style="font-weight:700;">${t.name}</div>
+                <div class="meta-card-desc" style="font-size:0.85rem; line-height:1.4; color:var(--text-main);">${cleanText}</div>
+                <div style="font-size:0.7rem; color:var(--text-muted); display:flex; flex-wrap:wrap; gap:8px; margin-top:auto; padding-top:10px; border-top:1px solid rgba(0,0,0,0.05);">
+                    <span title="Idioma" style="background:rgba(0,0,0,0.05); padding:2px 6px; border-radius:4px;"><i class="fas fa-globe"></i> ${t.language.toUpperCase()}</span>
+                    <span title="Categoría" style="background:rgba(0,0,0,0.05); padding:2px 6px; border-radius:4px;"><i class="fas fa-tag"></i> ${t.category}</span>
                 </div>
             </div>
         `;
@@ -1717,33 +1731,35 @@ function showTemplateDetail(templateName, isLibrary, language) {
     let footerText = '';
     let buttonsHtml = '';
 
-    if (template.components) {
+    if (template.components && Array.isArray(template.components)) {
         // BODY
-        const bodyComp = template.components.find(c => c.type === 'BODY' || c.type === 'message');
+        const bodyComp = template.components.find(c => c.type === 'BODY' || c.type === 'message' || c.type?.toUpperCase() === 'BODY');
         if (bodyComp) {
-            bodyText = bodyComp.text || bodyComp.content || bodyText;
+            bodyText = bodyComp.text || bodyComp.content || (bodyComp.example?.body_text?.[0]?.[0]) || bodyText;
         }
 
         // HEADER
-        const headerComp = template.components.find(c => c.type === 'HEADER');
+        const headerComp = template.components.find(c => c.type === 'HEADER' || c.type?.toUpperCase() === 'HEADER');
         if (headerComp) {
-            headerText = headerComp.text || headerComp.content || '';
+            headerText = headerComp.text || headerComp.content || (headerComp.example?.header_text?.[0]) || '';
         }
 
         // FOOTER
-        const footerComp = template.components.find(c => c.type === 'FOOTER');
+        const footerComp = template.components.find(c => c.type === 'FOOTER' || c.type?.toUpperCase() === 'FOOTER');
         if (footerComp) {
             footerText = footerComp.text || footerComp.content || '';
         }
 
         // BUTTONS
-        const buttonsComp = template.components.find(c => c.type === 'BUTTONS');
+        const buttonsComp = template.components.find(c => c.type === 'BUTTONS' || c.type?.toUpperCase() === 'BUTTONS');
         if (buttonsComp && buttonsComp.buttons) {
             buttonsHtml = '\n\n' + buttonsComp.buttons.map(b => {
                 const typeIcon = b.type === 'PHONE_NUMBER' ? '📞' : (b.type === 'URL' ? '🔗' : '🔘');
                 return `[${typeIcon} ${b.text}]`;
             }).join('  ');
         }
+    } else if (template.body) {
+        bodyText = template.body;
     }
 
     const previewFinal = document.getElementById('wa-preview-text-final');

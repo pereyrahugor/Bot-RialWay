@@ -386,10 +386,21 @@ export class AssistantResponseProcessor {
                 }
             }
         } else if (cleanTextResponse.length > 0 || pdfPaths.length > 0) {
-            // ELIMINADO: Duplicado, el proveedor emitirá un ECHO que provider.manager guardará con ID real
-            // if (ctx && ctx.from) {
-            //     await HistoryHandler.saveMessage(ctx.from, 'assistant', cleanTextResponse, 'text', null, ctx.userId, null, ctx.platform);
-            // }
+            // GUARDAR RESPUESTA DEL ASISTENTE EN EL HISTORIAL
+            if (ctx && ctx.from) {
+                // Obtenemos la plataforma del contexto si está disponible, sino fallback a 'whatsapp'
+                const platform = ctx.platform || 'whatsapp';
+                await HistoryHandler.saveMessage(
+                    ctx.from, 
+                    'assistant', 
+                    cleanTextResponse, 
+                    'text', 
+                    null, 
+                    ctx.userId, 
+                    null, 
+                    platform
+                );
+            }
             
             const chunks = cleanTextResponse.split(/\n\n+/);
             for (const chunk of chunks) {

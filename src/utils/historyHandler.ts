@@ -45,10 +45,13 @@ export interface Message {
 }
 
 export class HistoryHandler {
-    static readonly PROJECT_IDENTIFIER = "default_project";
+    static readonly PROJECT_IDENTIFIER = process.env.RAILWAY_PROJECT_ID || "default_project";
     static readonly PROJECT_ID = process.env.RAILWAY_PROJECT_ID || "default_project";
+    static initialized = false;
 
     static async initDatabase() {
+        if (this.initialized) return;
+        console.log(`[HistoryHandler] Initializing DB for Project: ${this.PROJECT_IDENTIFIER}`);
         if (!supabase) return;
 
         console.log('🔍 [HistoryHandler] Verificando tablas de historial...');
@@ -80,6 +83,15 @@ export class HistoryHandler {
                 );`
             },
             {
+                name: 'indices',
+                sql: `
+                    CREATE INDEX IF NOT EXISTS idx_messages_chat_project ON messages(chat_id, project_id);
+                    CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
+                    CREATE INDEX IF NOT EXISTS idx_chats_project_id ON chats(project_id);
+                    CREATE INDEX IF NOT EXISTS idx_chats_last_message ON chats(last_message_at DESC);
+                `
+            },
+            {
                 name: 'chat_tags',
                 sql: `CREATE TABLE IF NOT EXISTS chat_tags (
                     chat_id TEXT,
@@ -98,6 +110,7 @@ export class HistoryHandler {
                     role TEXT NOT NULL,
                     content TEXT NOT NULL,
                     type TEXT DEFAULT 'text',
+                    external_id TEXT UNIQUE,
                     created_at TIMESTAMPTZ DEFAULT NOW(),
                     FOREIGN KEY (chat_id, project_id) REFERENCES chats(id, project_id)
                 );`
@@ -405,29 +418,30 @@ export class HistoryHandler {
                 .upsert(msgData, { onConflict: 'external_id' });
 
             if (error) {
-                // Si el error es por falta de columna external_id, intentamos insert normal
-                if (error.code === '42703') {
-                   await supabase.from('messages').insert({
-                        chat_id: chatId,
-                        project_id: HistoryHandler.PROJECT_IDENTIFIER,
-                        role,
-                        content,
-                        type,
-                        created_at: new Date().toISOString()
-                   });
-                } else {
-                    throw error;
+                // FALLBACK: Si falla el upsert (ej: columna external_id no existe aún), intentamos insert normal
+                const { error: insertError } = await supabase.from('messages').insert({
+                    chat_id: chatId,
+                    project_id: HistoryHandler.PROJECT_IDENTIFIER,
+                    role,
+                    content,
+                    type,
+                    external_id: external_id || null,
+                    created_at: new Date().toISOString()
+                });
+                
+                if (insertError) {
+                    console.error('[HistoryHandler] CRITICAL: Falló guardado de mensaje en Supabase:', insertError);
                 }
             }
 
-            // Actualizar timestamp del último mensaje en el chat
+            // Actualizar timestamp del último mensaje en el chat para el ordenamiento de la lista
             await supabase
                 .from('chats')
                 .update({ last_message_at: new Date().toISOString() })
                 .eq('id', chatId)
                 .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
 
-            // Emitir evento para WebSockets
+            // Emitir evento para WebSockets (esto actualiza la UI en tiempo real)
             historyEvents.emit('new_message', { 
                 chatId, 
                 role, 
@@ -437,7 +451,7 @@ export class HistoryHandler {
             });
 
         } catch (err) {
-            console.error('[HistoryHandler] Error en saveMessage:', err);
+            console.error('[HistoryHandler] Exception en saveMessage:', err);
         }
     }
 
@@ -589,11 +603,8 @@ export class HistoryHandler {
                 .from('chats')
                 .select('id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, chat_tags(tag_id, tags(*))');
             
-            // Si queremos filtrar por proyecto, lo hacemos, pero por defecto permitimos ver todo el historial de este bot
-            if (PROJECT_ID !== 'default_project') {
-                // query = query.eq('project_id', PROJECT_ID); 
-                // Comentado para permitir ver chats de sesiones anteriores
-            }
+            // Filtrar estrictamente por el ID único de este bot en Railway
+            query = query.eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
 
             if (platform && platform !== 'all') {
                 query = query.eq('type', platform);
@@ -663,7 +674,7 @@ export class HistoryHandler {
                 .from('messages')
                 .select('*')
                 .eq('chat_id', chatId)
-                // .eq('project_id', PROJECT_ID) // Eliminamos el filtro estricto de proyecto para ver todo el historial
+                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER)
                 .order('created_at', { ascending: false }) // Primero los más nuevos para el LIMIT
                 .range(offset, offset + limit - 1);
             
