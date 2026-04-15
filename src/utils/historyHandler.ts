@@ -16,7 +16,7 @@ export const historyEvents = new EventEmitter();
 // Identificador único para este bot específico
 // Identificador único para este bot específico (Usamos el UUID para consistencia total)
 const PROJECT_ID = process.env.RAILWAY_PROJECT_ID || "default_project";
-const PROJECT_IDENTIFIER = PROJECT_ID; // Unificamos para evitar discrepancias entre tablas
+const PROJECT_IDENTIFIER = "default_project"; 
 const PROJECT_NAME = process.env.RAILWAY_SERVICE_NAME || "Bot-RialWay";
 
 export interface Chat {
@@ -299,7 +299,7 @@ export class HistoryHandler {
                     .from('chats')
                     .select('*')
                     .eq('user_id', userId)
-                    .eq('project_id', PROJECT_ID)
+                    .eq('project_id', PROJECT_IDENTIFIER);
                     .maybeSingle();
                 
                 data = byUserId;
@@ -312,7 +312,7 @@ export class HistoryHandler {
                     .from('chats')
                     .select('*')
                     .eq('id', chatId)
-                    .eq('project_id', PROJECT_ID)
+                    .eq('project_id', PROJECT_IDENTIFIER);
                     .maybeSingle();
                 
                 data = byChatId;
@@ -388,7 +388,7 @@ export class HistoryHandler {
 
             const msgData: any = {
                 chat_id: chatId,
-                project_id: PROJECT_ID,
+                        project_id: PROJECT_IDENTIFIER,
                 role,
                 content,
                 type,
@@ -522,7 +522,7 @@ export class HistoryHandler {
                 .from('chats')
                 .select('bot_enabled')
                 .eq('id', chatId)
-                .eq('project_id', PROJECT_ID)
+                .eq('project_id', PROJECT_IDENTIFIER);
                 .maybeSingle();
 
             if (error) throw error;
@@ -586,8 +586,13 @@ export class HistoryHandler {
             // Campos mínimos para la lista (se excluyen notas, address, email, etc. para rendimiento)
             let query = supabase
                 .from('chats')
-                .select('id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, chat_tags(tag_id, tags(*))')
-                .eq('project_id', PROJECT_ID);
+                .select('id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, chat_tags(tag_id, tags(*))');
+            
+            // Si queremos filtrar por proyecto, lo hacemos, pero por defecto permitimos ver todo el historial de este bot
+            if (PROJECT_ID !== 'default_project') {
+                // query = query.eq('project_id', PROJECT_ID); 
+                // Comentado para permitir ver chats de sesiones anteriores
+            }
 
             if (platform && platform !== 'all') {
                 query = query.eq('type', platform);
@@ -633,7 +638,7 @@ export class HistoryHandler {
                 .from('chats')
                 .select('*, chat_tags(tag_id, tags(*))')
                 .eq('id', chatId)
-                .eq('project_id', PROJECT_ID)
+                .eq('project_id', PROJECT_IDENTIFIER);
                 .single();
 
             if (error) throw error;
@@ -650,13 +655,14 @@ export class HistoryHandler {
     /**
      * Obtiene los mensajes de un chat específico
      */
-    static async getMessages(chatId: string, limit: number = 50, offset: number = 0) {
+    static async getMessages(rawChatId: string, limit: number = 50, offset: number = 0) {
+        const chatId = this.normalizeId(rawChatId);
         try {
             const { data, error } = await supabase
                 .from('messages')
                 .select('*')
                 .eq('chat_id', chatId)
-                .eq('project_id', PROJECT_ID)
+                // .eq('project_id', PROJECT_ID) // Eliminamos el filtro estricto de proyecto para ver todo el historial
                 .order('created_at', { ascending: false }) // Primero los más nuevos para el LIMIT
                 .range(offset, offset + limit - 1);
             
@@ -675,7 +681,7 @@ export class HistoryHandler {
             const { data, error } = await supabase
                 .from('tags')
                 .select('*')
-                .eq('project_id', PROJECT_ID)
+                .eq('project_id', PROJECT_IDENTIFIER);
                 .order('name');
             if (error) throw error;
             return data;
@@ -689,7 +695,7 @@ export class HistoryHandler {
         try {
             const { data, error } = await supabase
                 .from('tags')
-                .insert({ name, color, project_id: PROJECT_ID })
+                .insert({ name, color, project_id: PROJECT_IDENTIFIER })
                 .select()
                 .single();
             if (error) throw error;
@@ -731,7 +737,7 @@ export class HistoryHandler {
         try {
             const { error } = await supabase
                 .from('chat_tags')
-                .insert({ chat_id: chatId, tag_id: tagId, project_id: PROJECT_ID });
+                .insert({ chat_id: chatId, tag_id: tagId, project_id: PROJECT_IDENTIFIER });
             if (error) throw error;
             return { success: true };
         } catch (err: any) {
@@ -781,7 +787,7 @@ export class HistoryHandler {
                 .from('chats')
                 .select('metadata')
                 .eq('id', chatId)
-                .eq('project_id', PROJECT_ID)
+                .eq('project_id', PROJECT_IDENTIFIER);
                 .maybeSingle();
 
             const currentMetadata = data?.metadata || {};
@@ -806,7 +812,7 @@ export class HistoryHandler {
                 .from('chats')
                 .select('metadata')
                 .eq('id', chatId)
-                .eq('project_id', PROJECT_ID)
+                .eq('project_id', PROJECT_IDENTIFIER);
                 .maybeSingle();
 
             return data?.metadata?.thread_id || null;
@@ -856,7 +862,7 @@ export class HistoryHandler {
             let query = supabase
                 .from('tickets')
                 .select('*', { count: 'exact', head: true })
-                .eq('project_id', PROJECT_ID)
+                .eq('project_id', PROJECT_IDENTIFIER);
                 .in('estado', ['Abierto', 'En progreso']);
 
             if (tipo) {
@@ -881,7 +887,7 @@ export class HistoryHandler {
             let query = supabase
                 .from('tickets')
                 .select('*, chats(name, id)')
-                .eq('project_id', PROJECT_ID);
+                .eq('project_id', PROJECT_IDENTIFIER);
 
             if (chatId && chatId !== 'null' && chatId !== 'undefined' && chatId !== '') {
                 query = query.eq('chat_id', chatId);
@@ -911,7 +917,7 @@ export class HistoryHandler {
                     let fallbackQuery = supabase
                         .from('tickets')
                         .select('*')
-                        .eq('project_id', PROJECT_ID);
+                        .eq('project_id', PROJECT_IDENTIFIER);
                     
                     if (chatId) fallbackQuery = fallbackQuery.eq('chat_id', chatId);
                     if (estado) fallbackQuery = fallbackQuery.eq('estado', estado);
@@ -944,7 +950,7 @@ export class HistoryHandler {
                 .from('tickets')
                 .update({ estado: nuevoEstado, updated_at: new Date().toISOString() })
                 .eq('id', ticketId)
-                .eq('project_id', PROJECT_ID)
+                .eq('project_id', PROJECT_IDENTIFIER);
                 .select()
                 .maybeSingle();
 
@@ -969,7 +975,7 @@ export class HistoryHandler {
             const { data, error } = await supabase
                 .from('chats')
                 .select('*')
-                .eq('project_id', PROJECT_ID)
+                .eq('project_id', PROJECT_IDENTIFIER);
                 .eq('is_lead', true)
                 .order('last_human_message_at', { ascending: false })
                 .range(offset, offset + limit - 1);
@@ -1159,7 +1165,7 @@ export class HistoryHandler {
         try {
             const { data, error } = await supabase
                 .from('users')
-                .insert({ project_id: PROJECT_ID, username, password: pass, role })
+                .insert({ project_id: PROJECT_IDENTIFIER, username, password: pass, role })
                 .select()
                 .single();
             if (error) throw error;
@@ -1175,7 +1181,7 @@ export class HistoryHandler {
             const { data, error } = await supabase
                 .from('users')
                 .select('id, username, role, created_at')
-                .eq('project_id', PROJECT_ID);
+                .eq('project_id', PROJECT_IDENTIFIER);
             if (error) throw error;
             return data || [];
         } catch (err) {
@@ -1189,7 +1195,7 @@ export class HistoryHandler {
             const { data, error } = await supabase
                 .from('users')
                 .select('*')
-                .eq('project_id', PROJECT_ID)
+                .eq('project_id', PROJECT_IDENTIFIER);
                 .eq('username', username)
                 .eq('password', pass)
                 .maybeSingle();
