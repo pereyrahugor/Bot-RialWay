@@ -202,11 +202,17 @@ function formatLastMessageTime(dateStr) {
     return date.toLocaleDateString([], { day: '2-digit', month: '2-digit' });
 }
 
+// Local cache for avatar URLs to avoid re-requesting during current session
+const avatarCache = new Map();
+
 function renderChatList(listToRender = chats) {
     const list = document.getElementById('chat-list');
     list.innerHTML = listToRender.map(chat => {
         const initial = (chat.name || chat.id).charAt(0).toUpperCase();
         const avatarUrl = `/api/backoffice/profile-pic/${chat.id}?token=${token}`;
+        
+        // Si ya lo tenemos en caché local, usarlo directamente
+        const finalSrc = avatarCache.has(chat.id) ? avatarCache.get(chat.id) : '';
         
         // Icono de plataforma
         let platformIcon = '';
@@ -231,7 +237,9 @@ function renderChatList(listToRender = chats) {
         return `
             <div class="chat-item ${activeChatId === chat.id ? 'active' : ''}" onclick="selectChat('${chat.id}')">
                 <div class="chat-avatar">
-                   <img src="${avatarUrl}" onerror="this.onerror=null; this.src='https://ui-avatars.com/api/?name=${initial}&background=random'">
+                   <img data-src="${avatarUrl}" src="${finalSrc || `https://ui-avatars.com/api/?name=${initial}&background=random`}" 
+                        class="avatar-img"
+                        onerror="this.onerror=null; this.src='https://ui-avatars.com/api/?name=${initial}&background=random'">
                     ${iconOverlayHtml}
                 </div>
                 <div class="chat-info">
@@ -250,6 +258,44 @@ function renderChatList(listToRender = chats) {
             </div>
         `;
     }).join('');
+
+    // Activar Lazy Loading para las nuevas imágenes
+    observeAvatars();
+}
+
+function observeAvatars() {
+    const options = {
+        root: document.getElementById('chat-list'),
+        rootMargin: '100px',
+        threshold: 0.01
+    };
+
+    const observer = new IntersectionObserver((entries, obs) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                const img = entry.target;
+                const src = img.getAttribute('data-src');
+                if (src) {
+                    // Si ya tiene el src correcto, no hacer nada
+                    if (img.getAttribute('src') === src) return;
+                    
+                    // Cargar imagen
+                    img.src = src;
+                    img.removeAttribute('data-src');
+                    
+                    // Guardar en caché local para que si se re-renderiza la lista no parpadee
+                    const chatIdMatch = src.match(/\/profile-pic\/([^?]+)/);
+                    if (chatIdMatch) {
+                        const chatId = chatIdMatch[1];
+                        avatarCache.set(chatId, src);
+                    }
+                }
+                obs.unobserve(img);
+            }
+        });
+    }, options);
+
+    document.querySelectorAll('.avatar-img[data-src]').forEach(img => observer.observe(img));
 }
 
 
@@ -1288,6 +1334,7 @@ fetchPendingTicketsCount();
 setInterval(fetchPendingTicketsCount, 30000);
 fetchBotTags();
 checkMetaStatus(); // Check if bulk messaging should be enabled
+fetchChats(true);  // CARGA INICIAL (CORRECCIÓN)
 
 // Manejo de URL params
 const urlParams = new URLSearchParams(window.location.search);
@@ -1459,8 +1506,21 @@ function useTemplateAsBase() {
     document.getElementById('tpl-category').value = currentSelectedTemplate.category;
     document.getElementById('tpl-lang').value = currentSelectedTemplate.language;
     
-    const bodyComp = currentSelectedTemplate.components?.find(c => c.type === 'BODY') || {};
-    document.getElementById('tpl-body').value = bodyComp.text || '';
+    let bodyText = '';
+    if (currentSelectedTemplate.components) {
+        const bodyComp = currentSelectedTemplate.components.find(c => c.type === 'BODY');
+        if (bodyComp && bodyComp.text) {
+            bodyText = bodyComp.text;
+        } else {
+            for (const comp of currentSelectedTemplate.components) {
+                if (comp.text) {
+                    bodyText = comp.text;
+                    break;
+                }
+            }
+        }
+    }
+    document.getElementById('tpl-body').value = bodyText;
     
     // Disparar actualización de variables
     const event = new Event('input', { bubbles: true });
@@ -1516,8 +1576,9 @@ function populateLibraryFilters() {
         langs.map(l => `<option value="${l}">${l.toUpperCase()}</option>`).join('');
 
     // Seleccionar por defecto es_AR si existe
-    if (langs.includes('es_AR')) {
-        langSelect.value = 'es_AR';
+    const defaultLang = langs.find(l => l.toLowerCase() === 'es_ar') || langs.find(l => l.toLowerCase().includes('es')) || '';
+    if (defaultLang) {
+        langSelect.value = defaultLang;
     }
 
     // Llenar Categorías
@@ -1549,9 +1610,22 @@ function renderTemplateCards(container, templates, isLibrary = false) {
         return;
     }
     container.innerHTML = templates.map(t => {
-        // Buscar contenido en cualquier componente que lo tenga (BODY, o HEADER si falla)
-        const contentComp = t.components?.find(c => c.type === 'BODY') || t.components?.find(c => c.text);
-        const text = contentComp?.text || 'Sin contenido de previsualización';
+        // Buscar contenido de forma recursiva en los componentes
+        let text = 'Sin contenido de previsualización';
+        if (t.components) {
+            const body = t.components.find(c => c.type === 'BODY');
+            if (body && body.text) {
+                text = body.text;
+            } else {
+                // Si no hay BODY, buscar cualquier propiedad text en cualquier componente
+                for (const comp of t.components) {
+                    if (comp.text) {
+                        text = comp.text;
+                        break;
+                    }
+                }
+            }
+        }
         
         const statusClass = t.status === 'APPROVED' ? 'meta-status-approved' : (t.status === 'REJECTED' ? 'meta-status-rejected' : 'meta-status-pending');
         const statusLabel = t.status === 'APPROVED' ? 'Aprobada' : (t.status === 'REJECTED' ? 'Rechazada' : 'Pendiente');
@@ -1596,7 +1670,21 @@ function showTemplateDetail(templateName, isLibrary, language) {
     statusEl.className = `meta-card-tag ${statusClass}`;
     statusEl.innerText = template.status || 'LIBRARY';
 
-    const bodyComp = template.components?.find(c => c.type === 'BODY') || {};
+    let bodyText = 'Sin contenido de texto disponible';
+    if (template.components) {
+        const bodyComp = template.components.find(c => c.type === 'BODY');
+        if (bodyComp && bodyComp.text) {
+            bodyText = bodyComp.text;
+        } else {
+            for (const comp of template.components) {
+                if (comp.text) {
+                    bodyText = comp.text;
+                    break;
+                }
+            }
+        }
+    }
+
     const headerComp = template.components?.find(c => c.type === 'HEADER') || {};
     const footerComp = template.components?.find(c => c.type === 'FOOTER') || {};
     const buttonsComp = template.components?.find(c => c.type === 'BUTTONS') || {};
@@ -1605,7 +1693,7 @@ function showTemplateDetail(templateName, isLibrary, language) {
     if (previewFinal) {
         let content = '';
         if (headerComp.text) content += `*${headerComp.text}*\n`;
-        content += bodyComp.text || 'Sin contenido de texto disponible';
+        content += bodyText;
         if (footerComp.text) content += `\n_${footerComp.text}_`;
         
         // Renderizar botones si existen
