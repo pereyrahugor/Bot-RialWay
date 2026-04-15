@@ -443,7 +443,7 @@ export class HistoryHandler {
 
             // Emitir evento para WebSockets (esto actualiza la UI en tiempo real)
             historyEvents.emit('new_message', { 
-                chatId, 
+                chat_id: chatId, 
                 role, 
                 content, 
                 type,
@@ -541,7 +541,8 @@ export class HistoryHandler {
                     .maybeSingle();
 
             if (error) throw error;
-            return data ? data.bot_enabled : true;
+            // Si no hay datos, o bot_enabled es null, asumimos que está habilitado (true)
+            return data ? (data.bot_enabled !== false) : true;
         } catch (err) {
             console.error('[HistoryHandler] Error en isBotEnabled:', err);
             return true;

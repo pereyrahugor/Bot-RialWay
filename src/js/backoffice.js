@@ -4,9 +4,28 @@ if (!token) window.location.href = '/login';
 
 let activeChatId = null;
 let chats = [];
+let allMessages = [];
 let botTags = [];
 let selectedFile = null;
 let isSending = false;
+
+// Función para scroll al fondo del chat
+function scrollToBottom() {
+    const container = document.getElementById('messages');
+    if (container) {
+        container.scrollTop = container.scrollHeight;
+    }
+}
+
+// Función para ordenar chats por fecha de último mensaje
+function sortChats() {
+    if (!chats || chats.length === 0) return;
+    chats.sort((a, b) => {
+        const dateA = new Date(a.last_message_at || 0);
+        const dateB = new Date(b.last_message_at || 0);
+        return dateB - dateA;
+    });
+}
 
 // --- Tema Claro// El tema ahora se maneja en crm-common.js
 
@@ -38,15 +57,24 @@ socket.on('connect', () => {
 });
 
 socket.on('new_message', (msg) => {
+    console.log('📩 Nuevo mensaje recibido por socket:', msg);
+    // Normalizar chat_id por si el servidor lo envía como chatId
+    const cid = msg.chat_id || msg.chatId;
+    if (!msg.chat_id) msg.chat_id = cid;
+
     // 1. Si es el chat activo, añadir mensaje a la vista
-    if (msg.chat_id === activeChatId) {
-        allMessages.push(msg);
-        renderMessages();
-        scrollToBottom();
+    if (cid === activeChatId) {
+        // Evitar duplicados si el mensaje ya está en la lista (por si acaso)
+        const isDuplicate = allMessages.some(m => m.id === msg.id && msg.id !== undefined);
+        if (!isDuplicate) {
+            allMessages.push(msg);
+            renderMessages();
+            scrollToBottom();
+        }
     }
     
     // 2. Actualizar lista de chats localmente (Optimización)
-    const chatIdx = chats.findIndex(c => c.id === msg.chat_id);
+    const chatIdx = chats.findIndex(c => c.id === cid);
     if (chatIdx !== -1) {
         chats[chatIdx].last_message_at = msg.created_at || new Date().toISOString();
         chats[chatIdx].last_message = msg.content;

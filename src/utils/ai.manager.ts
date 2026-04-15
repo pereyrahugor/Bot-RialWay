@@ -222,9 +222,9 @@ export class AiManager {
                 this.userAssignedAssistant.set(ctx.from, destino);
 
                 // Enviar respuesta parcial si existe (sin bloques técnicos)
-                if (cleanResponse && cleanResponse.length > 0) {
+                if (response && response.trim().length > 0) {
                     await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
-                        cleanResponse, ctx, flowDynamic, state, provider, gotoFlow,
+                        response, ctx, flowDynamic, state, provider, gotoFlow,
                         this.getAssistantResponse, currentAssistantId
                     );
                 }
@@ -241,18 +241,18 @@ export class AiManager {
                         .replace(/^[ \t]*\n/gm, '')
                         .trim();
 
-                    if (nextClean) {
+                    if (nextResponseRaw && nextResponseRaw.trim().length > 0) {
                         await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
-                           nextClean, ctx, flowDynamic, state, provider, gotoFlow,
+                           nextResponseRaw, ctx, flowDynamic, state, provider, gotoFlow,
                            this.getAssistantResponse, nextAssistantId
                         );
                     }
                 }
             } else {
                 // Sin derivación o derivación redundante
-                if (cleanResponse) {
+                if (response && response.trim().length > 0) {
                     await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
-                        cleanResponse, ctx, flowDynamic, state, provider, gotoFlow,
+                        response, ctx, flowDynamic, state, provider, gotoFlow,
                         this.getAssistantResponse, currentAssistantId
                     );
                 }

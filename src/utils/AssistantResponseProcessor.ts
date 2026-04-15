@@ -74,6 +74,11 @@ function limpiarBloquesJSON(texto: string): string {
     // 2d. Filtrar SYSTEM_DB_RESULT o SYSTEM_API_RESULT filtrados por error del asistente
     limpio = limpio.replace(/\[?\s*SYSTEM_(DB|API)_RESULT[\s\S]*?(?:\]|$)/gi, "");
 
+    // 2e. Filtrar bloques técnicos de derivación y resumen (procedentes de AiManager)
+    limpio = limpio.replace(/GET_RESUMEN[\s\S]+/gi, "");
+    limpio = limpio.replace(/^[ \t]*derivar(?:ndo)? a (asistente\s*[1-5]|asesor humano)\.?\s*$/gim, "");
+    limpio = limpio.replace(/\[Enviando.*$/gim, "");
+
 
     // 3. Restaurar bloques especiales
     specialBlocks.forEach((block, index) => {
