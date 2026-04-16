@@ -29,6 +29,7 @@ import { registerProviderEvents, hasActiveSession } from "./providers/provider.m
 import { startHumanInactivityWorker } from "./workers/humanInactivity.worker";
 import { AiManager } from "./utils/ai.manager";
 import { registerDashboardRoutes } from "./routes/dashboard.routes";
+import { syncAssistantTools } from "./utils/openaiHelper";
 import { smartBodyParser, compatibilityLayer, rootRedirect } from "./middleware/global";
 import { backofficeAuth } from "./middleware/auth";
 import bodyParser from 'body-parser';
@@ -89,6 +90,11 @@ function registerSafeErrorHandlers() {
 const main = async () => {
     // 1. Storage cleanup and session restoration
     await HistoryHandler.initDatabase();
+    
+    // Sincronizar herramientas con OpenAI Assistant
+    if (ASSISTANT_ID) {
+        await syncAssistantTools(ASSISTANT_ID);
+    }
     
     // Usar un nombre de sesión consistente para evitar desajustes entre SessionSync y el Provider
     // Sanitizar para evitar caracteres inválidos en rutas (como *)

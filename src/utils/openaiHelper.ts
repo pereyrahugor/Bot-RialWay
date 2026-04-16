@@ -1,10 +1,38 @@
 import OpenAI from "openai";
 import { HistoryHandler } from "./historyHandler";
 import { getArgentinaDatetimeString } from "./ArgentinaTime";
+import { executeDbQuery } from "./dbHandler";
 
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
 
-export const askWithFunctions = async (assistantId: string, message: string, state: any, userId: string = 'unknown', forceDb: boolean = false): Promise<string> => {
+/**
+ * Sincroniza las herramientas (tools) definidas en las variables de entorno con el asistente de OpenAI.
+ * Esto evita tener que configurar manualmente el Dashboard.
+ */
+export async function syncAssistantTools(assistantId: string) {
+    if (!openai || !assistantId) return;
+
+    try {
+        const toolsJson = process.env.OPENAI_TOOLS_DEFINITION;
+        if (!toolsJson) {
+            console.log("[openaiHelper] No se detectó OPENAI_TOOLS_DEFINITION. Omitiendo sincronización de tools.");
+            return;
+        }
+
+        const tools = JSON.parse(toolsJson);
+        console.log(`[openaiHelper] 🔄 Sincronizando ${tools.length} herramientas con el asistente ${assistantId}...`);
+
+        await openai.beta.assistants.update(assistantId, {
+            tools: tools
+        });
+
+        console.log("[openaiHelper] ✅ Herramientas sincronizadas correctamente.");
+    } catch (error: any) {
+        console.error("[openaiHelper] ❌ Error sincronizando herramientas:", error.message);
+    }
+}
+
+export const askWithFunctions = async (assistantId: string, message: string, state: any, userId: string = 'unknown', forceDb: boolean = false, projectId: string | null = null, directMode: boolean = true): Promise<string> => {
     if (!openai) {
         console.warn("⚠️ OPENAI_API_KEY no detectada. El asistente de IA está desactivado.");
         return "Lo siento, el asistente de IA no está configurado actualmente.";
@@ -60,13 +88,27 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
                 
                 let result = "";
                 try {
-                    // =========================================================
-                    // 🚨 AQUÍ MAPEAR Y EJECUTAR TUS FUNCIONES REALES DEL BACKEND
-                    // =========================================================
-                    // Mantenemos esto por defecto ya que las llamadas a DB y API se manejan como texto plano
-                    // sin embargo, si algún día creas tools en OpenAI, colócalas aquí.
-                    result = JSON.stringify({ error: `Function ${funcName} not implemented in bot environment` });
+                    if (funcName === "query_database") {
+                        const { tabla, dato } = args as any;
+                        const allowedTables = (process.env.DB_TABLES || "").split(',').map(t => t.trim());
+
+                        if (!allowedTables.includes(tabla)) {
+                            console.warn(`[FunctionCall] Intento de acceso a tabla no permitida: ${tabla}`);
+                            result = JSON.stringify({ error: `Acceso denegado a la tabla ${tabla}.`, success: false });
+                        } else {
+                            // Construir consulta SQL segura (usando sintaxis sugerida por el usuario)
+                            const safeDato = dato.replace(/'/g, "''"); // Escape simple de comillas
+                            const sql = `SELECT * FROM "${tabla}" WHERE "${tabla}"::text ~* '${safeDato}' LIMIT 10;`;
+                            
+                            console.log(`[FunctionCall] Ejecutando query_database en ${tabla} -> SQL: ${sql}`);
+                            const dbResult = await executeDbQuery(sql);
+                            result = dbResult; // executeDbQuery ya devuelve un string (JSON o error)
+                        }
+                    } else {
+                        result = JSON.stringify({ error: `Function ${funcName} not implemented in bot environment` });
+                    }
                 } catch (e: any) {
+                    console.error(`[FunctionCall] Error ejecutando ${funcName}:`, e);
                     result = JSON.stringify({ error: e.message || String(e) });
                 }
 
@@ -103,32 +145,38 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
         assistant_id: assistantId
     };
 
-    // Prioridad: 1. Base de Datos (Hot-Update) | 2. Environment Variable | 3. OpenAI Dashboard (default)
-    const dbPrompt = await HistoryHandler.getSetting('ASSISTANT_PROMPT');
-    const localPrompt = dbPrompt || process.env.ASSISTANT_PROMPT;
+    // --- REVERT NOTE ---
+    // Si necesitas volver a usar el prompt de la base de datos y la inyección de contexto dinámica,
+    // cambia 'directMode' a false en las llamadas a safeToAsk() o desactiva este bloque if (directMode).
+    if (!directMode) {
+        // Prioridad: 1. Base de Datos (Hot-Update) | 2. Environment Variable | 3. OpenAI Dashboard (default)
+        const dbPrompt = await HistoryHandler.getSetting('ASSISTANT_PROMPT', projectId);
+        const localPrompt = dbPrompt || process.env.ASSISTANT_PROMPT;
 
-    if (localPrompt) {
-        console.log(`[openaiHelper] 📝 Aplicando instrucciones de prompt (DB: ${!!dbPrompt}, LocalEnv: ${!!process.env.ASSISTANT_PROMPT})`);
-        runOptions.instructions = localPrompt;
+        if (localPrompt) {
+            console.log(`[openaiHelper] 📝 Aplicando instrucciones de prompt (DB: ${!!dbPrompt}, LocalEnv: ${!!process.env.ASSISTANT_PROMPT})`);
+            runOptions.instructions = localPrompt;
+        }
+
+        // Inyectar fecha y hora actual como instrucciones adicionales
+        const currentDatetimeArg = getArgentinaDatetimeString();
+        runOptions.additional_instructions = `Fecha, hora y día de la semana de referencia (Horario Argentina): ${currentDatetimeArg}`;
+        
+        if (userId && userId !== 'unknown') {
+            runOptions.additional_instructions += `\nNúmero de contacto del usuario: ${userId}`;
+        }
+
+        // Si hay un prompt de refuerzo en el entorno, lo sumamos aquí también
+        if (process.env.EXTRA_SYSTEM_PROMPT) {
+            runOptions.additional_instructions += `\nInstrucción de refuerzo: ${process.env.EXTRA_SYSTEM_PROMPT}`;
+        }
+
+        console.log(`[openaiHelper] 🚀 Iniciando Run (Override Mode). context injected.`);
     } else {
-        console.log(`[openaiHelper] ⚠️ No se encontró ASSISTANT_PROMPT en DB ni LocalEnv. Usando instrucciones por defecto del dashboard.`);
-    }
-
-    // Inyectar fecha y hora actual como instrucciones adicionales para no ensuciar el historial de mensajes
-    const currentDatetimeArg = getArgentinaDatetimeString();
-    runOptions.additional_instructions = `Fecha, hora y día de la semana de referencia (Horario Argentina): ${currentDatetimeArg}`;
-    
-    if (userId && userId !== 'unknown') {
-        runOptions.additional_instructions += `\nNúmero de contacto del usuario: ${userId}`;
-    }
-
-    // Si hay un prompt de refuerzo en el entorno, lo sumamos aquí también
-    if (process.env.EXTRA_SYSTEM_PROMPT) {
-        runOptions.additional_instructions += `\nInstrucción de refuerzo: ${process.env.EXTRA_SYSTEM_PROMPT}`;
-    }
-
-    if (forceDb) {
-        runOptions.additional_instructions += `\n[SISTEMA: MODO ESTRICTO] DEBES USAR SIEMPRE la etiqueta [DB:...] para responder sobre precios, promociones, horarios, menús o reservas. Si no tienes la información exacta en este mensaje, BÚSCALA en la base de datos. NUNCA inventes precios ni uses el conocimiento previo del modelo.`;
+        // En modo directo (Dashboard), aún inyectamos lo vital (Fecha/Hora/ID) como additional_instructions
+        const currentDatetimeArg = getArgentinaDatetimeString();
+        runOptions.additional_instructions = `Fecha/Hora Actual: ${currentDatetimeArg}\nContacto ID: ${userId}`;
+        console.log(`[openaiHelper] 🚀 Iniciando Run (DIRECT MODE).`);
     }
 
     const run = await openai.beta.threads.runs.createAndPoll(threadId, runOptions);
@@ -205,7 +253,9 @@ export async function renewThreadAndRetry(
     state: any, 
     userId: string, 
     errorReporter?: any,
-    forceDb = false
+    forceDb = false,
+    projectId: string | null = null,
+    directMode: boolean = true
 ) {
     if (!openai) return "IA Desactivada";
     
@@ -235,7 +285,7 @@ export async function renewThreadAndRetry(
         await state.update({ thread_id: newThread.id });
     }
     
-    return await askWithFunctions(assistantId, message, state, userId, forceDb);
+    return await askWithFunctions(assistantId, message, state, userId, forceDb, projectId, directMode);
 }
 
 /**
@@ -249,7 +299,9 @@ export const safeToAsk = async (
     userId: string = 'unknown',
     errorReporter?: any,
     maxRetries = 5,
-    forceDb = false
+    forceDb = false,
+    projectId: string | null = null,
+    directMode: boolean = true
 ) => {
     const SAFE_TIMEOUT = 120000; // 2 minutos de timeout total de seguridad
     
@@ -264,7 +316,7 @@ export const safeToAsk = async (
                 }
 
                 try {
-                    return await askWithFunctions(assistantId, message, state, userId, forceDb);
+                    return await askWithFunctions(assistantId, message, state, userId, forceDb, projectId, directMode);
                 } catch (err: any) {
                     attempt++;
                     const errorMessage = err?.message || String(err);
@@ -278,13 +330,14 @@ export const safeToAsk = async (
                                 await new Promise(r => setTimeout(r, 3000));
                                 continue; // Reintento inmediato
                             } catch (cancelErr) {
+                                // Ignorar error al cancelar run (ya podría estar cancelado o finalizado)
                             }
                         }
                     }
 
                     if (attempt >= maxRetries) {
                         // CAPA 3: Renovación de Hilo
-                        return await renewThreadAndRetry(assistantId, message, state, userId, errorReporter, forceDb);
+                        return await renewThreadAndRetry(assistantId, message, state, userId, errorReporter, forceDb, projectId, directMode);
                     }
                     
                     const waitTime = attempt * 2000;

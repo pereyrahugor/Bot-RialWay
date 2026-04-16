@@ -193,7 +193,7 @@ export class ReconectionFlow {
             }
 
             // Si no respondió, intentar obtener el resumen nuevamente desde el asistente
-            const resumen = await safeToAsk(this.ASSISTANT_ID, "GET_RESUMEN", this.state) as string;
+            const resumen = await safeToAsk(this.ASSISTANT_ID, "GET_RESUMEN", this.state, this.ctx.from, undefined, 5, false, process.env.RAILWAY_PROJECT_ID, true) as string;
             const data: GenericResumenData = extraerDatosResumen(resumen);
             const tipo = data.tipo || "SI_RESUMEN";
             if (tipo === "SI_RESUMEN") {

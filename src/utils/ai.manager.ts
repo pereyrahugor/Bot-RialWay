@@ -49,7 +49,7 @@ export class AiManager {
             this.userTimeouts.set(userId, timeoutId);
 
             const isWhatsApp = userId && userId.includes('@s.whatsapp.net');
-            safeToAsk(assistantId, message, state, userId, this.errorReporter, 5, isWhatsApp)
+            safeToAsk(assistantId, message, state, userId, this.errorReporter, 5, isWhatsApp, process.env.RAILWAY_PROJECT_ID, true)
                 .then(result => {
                     if (this.userTimeouts.has(userId)) {
                         clearTimeout(this.userTimeouts.get(userId)!);

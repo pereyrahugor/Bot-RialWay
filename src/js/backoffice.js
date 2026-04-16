@@ -2034,4 +2034,4 @@ console.log('✅ [BACKOFFICE] Cargado Correctamente.');
 
 // --- Inicialización automática ---
 fetchChats(true);
-fetchTags();
+fetchBotTags();

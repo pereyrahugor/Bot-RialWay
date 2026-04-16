@@ -40,20 +40,6 @@ function limpiarBloquesJSON(texto: string): string {
     const specialBlocks: string[] = [];
     let textoConMarcadores = texto;
     
-    // Preservar [DB_QUERY: ...] (Permitiendo espacios opcionales tras el corchete y el separador opcional)
-    textoConMarcadores = textoConMarcadores.replace(/\[\s*DB_QUERY\s*:?\s*[\s\S]*?\]/gi, (match) => {
-        const index = specialBlocks.length;
-        specialBlocks.push(match);
-        return `___SPECIAL_BLOCK_${index}___`;
-    });
-
-    // Preservar [DB: "T":"tabla", "D":"dato"] o [DB{"T":"..."}]
-    textoConMarcadores = textoConMarcadores.replace(/\[\s*DB\s*:?\s*[\s\S]*?\]/gi, (match) => {
-        const index = specialBlocks.length;
-        specialBlocks.push(match);
-        return `___SPECIAL_BLOCK_${index}___`;
-    });
-    
     // Preservar [API]...[/API] (Tolerante a espacios)
     textoConMarcadores = textoConMarcadores.replace(/\[\s*API\s*\][\s\S]*?\[\/\s*API\s*\]/gi, (match) => {
         const index = specialBlocks.length;
@@ -65,7 +51,6 @@ function limpiarBloquesJSON(texto: string): string {
     let limpio = textoConMarcadores.replace(/【.*?】/g, "");
 
     // 2b. Limpiar bloques JSON de "queries" que a veces fuga el asistente de OpenAI (File Search / Web Search)
-    // Se incluye opcionalmente una coma al final por si el asistente lo envía como parte de un array incompleto
     limpio = limpio.replace(/\{\s*"queries"\s*:\s*\[[\s\S]*?\]\s*\}[\s,]*?/gi, "");
     
     // 2c. Limpiar bloques de PDF [PDF: ID]
@@ -121,25 +106,13 @@ export class AssistantResponseProcessor {
             await flowDynamic([{ body: "Lo siento, hubo un problema procesando la respuesta. Por favor, intenta de nuevo." }]);
             return;
         }
-        // if (response && typeof response === 'object' && response.tool_call) {
-        //     // Espera que response.tool_call tenga { name, parameters }
-        //     const toolResponse = handleToolFunctionCall(response.tool_call);
-        //     // Enviar la respuesta al asistente (como tool response)
-        //     await flowDynamic([{ body: JSON.stringify(toolResponse, null, 2) }]);
-        //     return;
-        // }
         // Log de mensaje entrante del asistente (antes de cualquier filtro)
         if (ctx && ctx.type === 'webchat') {
             console.log('[Webchat Debug] Mensaje entrante del asistente:', response);
         } else {
             console.log('[WhatsApp Debug] Mensaje entrante del asistente:', response);
-            // Si el usuario está bloqueado por una operación API, evitar procesar nuevos mensajes
-            // BLOQUEO ELIMINADO: Se detectó que interfiere con respuestas de API
-            // if (userApiBlockMap.has(ctx.from)) {
-            //     // console.log(`[API Block] Mensaje ignorado de usuario bloqueado: ${ctx.from}`);
-            //     return;
-            // }
         }
+
         let jsonData: any = null;
         // Sanitización y normalización del texto de respuesta
         const textResponseRaw = typeof response === "string" ? response : String(response || "");
@@ -151,111 +124,8 @@ export class AssistantResponseProcessor {
         } else {
             console.log('[WhatsApp Debug] Mensaje saliente al usuario (sin filtrar):', textResponse.substring(0, 500));
         }
-        
-        // Log específico para debug de DB_QUERY
-        // console.log('[DEBUG] Buscando [DB_QUERY] en:', textResponse.substring(0, 200));
-        
-        let dbQueryMatchRegexResult = false;
-        let sqlQueryToExecute = "";
-        const sanitizedTextResponse = textResponse; // Alias para compatibilidad con mis edits anteriores fallidos si los hubiera
 
-        // 0.a) Detectar y procesar DB QUERY [DB_QUERY: ...] (Permitiendo espacios opcionales tras el corchete y el separador opcional)
-        const dbQueryRegex = /\[\s*DB_QUERY\s*:?\s*([\s\S]*?)\]/i;
-        const dbMatch = textResponse.match(dbQueryRegex);
-        
-        // 0.b) Detectar y procesar DB simple [DB: "T":"tabla", "D":"dato"] o [DB{"T":"..."}]
-        const dbSimpleRegex = /\[\s*DB\s*:?\s*([\s\S]*?)\]/i;
-        const dbSimpleMatch = textResponse.match(dbSimpleRegex);
-        
-        if (dbMatch) {
-             console.log(`[AssistantResponseProcessor] 🔍 [DB_QUERY] detectado en ${ctx?.type || 'unknown'}`);
-             sqlQueryToExecute = dbMatch[1].trim();
-             dbQueryMatchRegexResult = true;
-        } else if (dbSimpleMatch) {
-             console.log(`[AssistantResponseProcessor] 🔍 [DB] simple detectado en ${ctx?.type || 'unknown'}`);
-             let jsonContent = dbSimpleMatch[1].trim();
-             
-             // Reparación de JSON: Limpiar posibles backslashes de escape que OpenAI a veces pone por error
-             // o porque se le pidió en el prompt (como vimos en el prompt de Supabase)
-             jsonContent = jsonContent.replace(/\\"/g, '"');
-             
-             let cleanJson = jsonContent;
-             if (!cleanJson.startsWith('{')) cleanJson = '{' + cleanJson + '}';
-             
-             // Intentar reparar comillas faltantes en claves comunes (T o D) para que JSON.parse no falle
-             cleanJson = cleanJson.replace(/([{,]\s*)(T|D)(\s*:)/g, '$1"$2"$3');
-             
-             try {
-                 let parsedData: any = null;
-                 try {
-                     parsedData = JSON.parse(cleanJson);
-                 } catch (e) {
-                     // Si falla JSON.parse, intentar extracción vía regex como último recurso
-                     const tMatch = cleanJson.match(/"?T"?\s*:\s*"([^"]+)"/i);
-                     const dMatch = cleanJson.match(/"?D"?\s*:\s*"([^"]+)"/i);
-                     if (tMatch && dMatch) {
-                         parsedData = { T: tMatch[1], D: dMatch[1] };
-                     }
-                 }
-
-                 if (parsedData && parsedData.T && parsedData.D) {
-                     // Escapar comillas simples en el dato para evitar errores de SQL
-                     const safeDato = String(parsedData.D).replace(/'/g, "''");
-                     sqlQueryToExecute = `SELECT * FROM "${parsedData.T}" WHERE "${parsedData.T}"::text ~* '${safeDato}'`;
-                     dbQueryMatchRegexResult = true;
-                     console.log(`[AssistantResponseProcessor] ✅ SQL Generado: ${sqlQueryToExecute}`);
-                 } else {
-                     console.warn('[AssistantResponseProcessor] ⚠️ JSON en [DB] no contiene T o D validos:', parsedData);
-                 }
-             } catch (e: any) {
-                 console.error('[AssistantResponseProcessor] ❌ Error procesando contenido en [DB]:', e.message, 'Content:', cleanJson);
-             }
-        }
-        else {
-             // console.log('[DEBUG] No hay coincidencia de DB');
-        }
-
-        if (dbQueryMatchRegexResult) {
-            // Ejecutar Query
-            const queryResult = await executeDbQuery(sqlQueryToExecute);
-            // console.log(`[AssistantResponseProcessor] 📝 Resultado DB RAW:`, queryResult.substring(0, 500) + (queryResult.length > 500 ? "..." : "")); 
-            const feedbackMsg = `[SYSTEM_DB_RESULT]: ${queryResult}`;
-            
-            // Obtener threadId de forma segura
-            let threadId = ctx && ctx.thread_id;
-            if (!threadId && state && typeof state.get === 'function') {
-                threadId = state.get('thread_id');
-            }
-
-            // Esperar a que el Run anterior haya finalizado realmente en OpenAI
-            if (threadId) {
-                await waitForActiveRuns(threadId);
-            } else {
-                 await new Promise(resolve => setTimeout(resolve, 2000));
-            }
-
-            // Obtener nueva respuesta del asistente
-            let newResponse: any;
-            try {
-                 newResponse = await getAssistantResponse(ASSISTANT_ID, feedbackMsg, state, "Error procesando resultado DB.", ctx ? ctx.from : null, threadId);
-            } catch (err: any) {
-                // Si aún así falla por run activo, intentamos una vez más tras una espera larga
-                if (err?.message?.includes('active')) {
-                    // console.log("[AssistantResponseProcessor] Re-intentando tras detectar run activo residual (DB)...");
-                    await new Promise(resolve => setTimeout(resolve, 5000));
-                    newResponse = await getAssistantResponse(ASSISTANT_ID, feedbackMsg, state, "Error procesando resultado DB.", ctx ? ctx.from : null, threadId);
-                } else {
-                    // console.error("Error al obtener respuesta recursiva (DB):", err);
-                    return;
-                }
-            }
-            
-            // Recursión: procesar la nueva respuesta
-            await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
-                newResponse, ctx, flowDynamic, state, provider, gotoFlow, getAssistantResponse, ASSISTANT_ID, recursionDepth + 1
-            );
-            return; // Terminar ejecución actual
-        }
+        const sanitizedTextResponse = textResponse; // Alias para compatibilidad
 
         // 1) Extraer bloque [API] ... [/API] (Tolerante a espacios)
         const apiBlockRegex = /\[\s*API\s*\]([\s\S]*?)\[\/\s*API\s*\]/is;

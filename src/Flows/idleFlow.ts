@@ -75,7 +75,7 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
 
         try {
             // Obtener el resumen del asistente de OpenAI con reintentos y reporte de errores
-            const resumen = await safeToAsk(ASSISTANT_ID, "GET_RESUMEN", state, userId, errorReporter) as string;
+            const resumen = await safeToAsk(ASSISTANT_ID, "GET_RESUMEN", state, userId, errorReporter, 5, false, process.env.RAILWAY_PROJECT_ID, true) as string;
 
             if (!resumen) {
                 // console.warn("No se pudo obtener el resumen.");
