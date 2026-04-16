@@ -64,8 +64,11 @@ socket.on('new_message', (msg) => {
 
     // 1. Si es el chat activo, añadir mensaje a la vista
     if (cid === activeChatId) {
-        // Evitar duplicados si el mensaje ya está en la lista (por si acaso)
-        const isDuplicate = allMessages.some(m => m.id === msg.id && msg.id !== undefined);
+        // Evitar duplicados si el mensaje ya está en la lista (comparando ID y external_id)
+        const isDuplicate = allMessages.some(m => 
+            (m.id === msg.id && msg.id !== undefined) || 
+            (m.external_id === msg.external_id && msg.external_id !== undefined && msg.external_id !== null)
+        );
         if (!isDuplicate) {
             allMessages.push(msg);
             renderMessages();
@@ -659,7 +662,11 @@ async function sendMessage() {
             input.placeholder = "Escribe un mensaje aquí";
             selectedFile = null;
             document.getElementById('file-input').value = '';
-            fetchMessages(activeChatId, true);
+            
+            // Forzar habilitación inmediata del input para mejor UX
+            updateInputState(false);
+            const toggle = document.getElementById('bot-toggle');
+            if (toggle) toggle.checked = false;
         } else {
             let errorMsg = 'Error desconocido';
             const text = await res.text();

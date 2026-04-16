@@ -100,8 +100,13 @@ export const processSendMessage = async (
             // Builderbot/Baileys retorna el objeto mensaje, Meta retorna un objeto con { messages: [ { id: ... } ] }
             const externalId = providerResponse?.key?.id || providerResponse?.messages?.[0]?.id || providerResponse?.id;
             
+            // Registrar ID en el caché de deduplicación para que el ECO no genere un segundo evento
+            const { trackSentMessage } = await import('../providers/provider.manager');
+            trackSentMessage(externalId);
+
             await HistoryHandler.saveMessage(chatId, 'assistant', finalContent, finalType, null, null, externalId);
             await HistoryHandler.updateLastHumanMessage(chatId);
+            await HistoryHandler.toggleBot(chatId, false);
 
             res.json({ success: true, fileUrl: file ? fileUrl : undefined });
         } catch (waError) {

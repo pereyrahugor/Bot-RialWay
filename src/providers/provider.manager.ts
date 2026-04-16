@@ -3,6 +3,20 @@ import fs from 'fs';
 import QRCode from 'qrcode';
 import { EVENTS } from "@builderbot/bot";
 import { isSessionInDb } from "../utils/sessionSync";
+import { HistoryHandler } from '../utils/historyHandler';
+
+/**
+ * Cache temporal para IDs de mensajes enviados desde el backoffice.
+ * Evita procesar los "ecos" (message_from_me) de lo que nosotros mismos mandamos.
+ */
+const sentMessageCache = new Set<string>();
+
+export const trackSentMessage = (id: string) => {
+    if (!id) return;
+    sentMessageCache.add(id);
+    // Limpiar después de 10 segundos
+    setTimeout(() => sentMessageCache.delete(id), 10000);
+};
 
 /**
  * Registra los listeners de los proveedores (Meta/Baileys) para QR, fallos y mensajes entrantes.
@@ -91,6 +105,12 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
             
             // Extraer un ID único del mensaje para evital duplicados (external_id)
             const externalId = ctx.key?.id || ctx.payload?.id || ctx.id;
+
+            // DEDUPLICACIÓN: Si el ID está en el caché, es un eco de algo que enviamos desde el backoffice
+            if (externalId && sentMessageCache.has(externalId)) {
+                // console.log(`${prefix} ⏩ Ignorando eco de mensaje enviado desde backoffice (ID: ${externalId})`);
+                return;
+            }
 
             // Guardamos como 'assistant' para que aparezca en el lado derecho del chat en el backoffice
             await HistoryHandler.saveMessage(

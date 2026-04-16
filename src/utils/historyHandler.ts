@@ -450,7 +450,8 @@ export class HistoryHandler {
                 role, 
                 content, 
                 type,
-                created_at: new Date().toISOString()
+                created_at: new Date().toISOString(),
+                external_id: external_id || null
             });
 
         } catch (err) {
