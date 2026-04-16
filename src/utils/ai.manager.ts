@@ -48,7 +48,8 @@ export class AiManager {
             }, this.TIMEOUT_MS);
             this.userTimeouts.set(userId, timeoutId);
 
-            safeToAsk(assistantId, message, state, userId, this.errorReporter)
+            const isWhatsApp = userId && userId.includes('@s.whatsapp.net');
+            safeToAsk(assistantId, message, state, userId, this.errorReporter, 5, isWhatsApp)
                 .then(result => {
                     if (this.userTimeouts.has(userId)) {
                         clearTimeout(this.userTimeouts.get(userId)!);
@@ -97,6 +98,17 @@ export class AiManager {
         const projectIdFromEnv = process.env.RAILWAY_PROJECT_ID || 'NO_DEFINIDO';
         const assigned = this.userAssignedAssistant.get(ctx.from) || 'asistente1';
         console.log(`[AiManager] 📥 Procesando mensaje de ${ctx.from}. ProjectID: ${projectIdFromEnv}. Asistente: ${assigned}. Mensaje: ${ctx.body}`);
+        
+        // --- COMANDO DE REINICIO ---
+        if (ctx.body && ctx.body.trim().toUpperCase() === '#RESET#') {
+            const chatId = ctx.from;
+            console.log(`[AiManager] ♻️ Reiniciando historial para ${chatId}`);
+            await HistoryHandler.saveThreadId(chatId, null as any); // null as any para evitar problemas de tipos si thread_id espera string
+            if (state && typeof state.update === 'function') {
+                await state.update({ thread_id: null });
+            }
+            return await flowDynamic("✅ Historial de conversación reiniciado. El asistente ya no recordará los mensajes anteriores.");
+        }
         
         await typing(ctx, provider);
         try {

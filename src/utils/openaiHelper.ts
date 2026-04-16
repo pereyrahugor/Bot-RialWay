@@ -4,7 +4,7 @@ import { getArgentinaDatetimeString } from "./ArgentinaTime";
 
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
 
-export const askWithFunctions = async (assistantId: string, message: string, state: any, userId: string = 'unknown'): Promise<string> => {
+export const askWithFunctions = async (assistantId: string, message: string, state: any, userId: string = 'unknown', forceDb: boolean = false): Promise<string> => {
     if (!openai) {
         console.warn("⚠️ OPENAI_API_KEY no detectada. El asistente de IA está desactivado.");
         return "Lo siento, el asistente de IA no está configurado actualmente.";
@@ -127,6 +127,10 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
         runOptions.additional_instructions += `\nInstrucción de refuerzo: ${process.env.EXTRA_SYSTEM_PROMPT}`;
     }
 
+    if (forceDb) {
+        runOptions.additional_instructions += `\n[SISTEMA: MODO ESTRICTO] DEBES USAR SIEMPRE la etiqueta [DB:...] para responder sobre precios, promociones, horarios, menús o reservas. Si no tienes la información exacta en este mensaje, BÚSCALA en la base de datos. NUNCA inventes precios ni uses el conocimiento previo del modelo.`;
+    }
+
     const run = await openai.beta.threads.runs.createAndPoll(threadId, runOptions);
 
     return await handleRunStatus(run);
@@ -200,10 +204,10 @@ export async function renewThreadAndRetry(
     message: string, 
     state: any, 
     userId: string, 
-    errorReporter?: any
+    errorReporter?: any,
+    forceDb = false
 ) {
     if (!openai) return "IA Desactivada";
-    // console.warn(`[ThreadRenewal] Renovando hilo para ${userId} debido a errores persistentes.`);
     
     // 1. Notificar al desarrollador (si hay reporter)
     if (errorReporter && typeof errorReporter.reportError === 'function') {
@@ -225,14 +229,13 @@ export async function renewThreadAndRetry(
     }
 
     const newThread = await openai.beta.threads.create(threadOptions);
-    // console.log(`[ThreadRenewal] Nuevo hilo creado: ${newThread.id}`);
 
     // 4. Actualizar estado y reintentar
     if (state && typeof state.update === 'function') {
         await state.update({ thread_id: newThread.id });
     }
     
-    return await askWithFunctions(assistantId, message, state, userId);
+    return await askWithFunctions(assistantId, message, state, userId, forceDb);
 }
 
 /**
@@ -245,7 +248,8 @@ export const safeToAsk = async (
     state: any,
     userId: string = 'unknown',
     errorReporter?: any,
-    maxRetries = 5
+    maxRetries = 5,
+    forceDb = false
 ) => {
     const SAFE_TIMEOUT = 120000; // 2 minutos de timeout total de seguridad
     
@@ -260,34 +264,30 @@ export const safeToAsk = async (
                 }
 
                 try {
-                    return await askWithFunctions(assistantId, message, state, userId);
+                    return await askWithFunctions(assistantId, message, state, userId, forceDb);
                 } catch (err: any) {
                     attempt++;
                     const errorMessage = err?.message || String(err);
-                    // console.error(`[safeToAsk] Error (Intento ${attempt}/${maxRetries}):`, errorMessage);
 
                     // Si OpenAI nos dice qué run está bloqueando, lo cancelamos de inmediato
                     if (errorMessage.includes('while a run') && errorMessage.includes('is active') && threadId) {
                         const runIdMatch = errorMessage.match(/run_[a-zA-Z0-9]+/);
                         if (runIdMatch) {
-                            // console.log(`[safeToAsk] Cancelando run bloqueante detectado: ${runIdMatch[0]}`);
                             try {
                                 await openai.beta.threads.runs.cancel(threadId, runIdMatch[0]);
                                 await new Promise(r => setTimeout(r, 3000));
                                 continue; // Reintento inmediato
                             } catch (cancelErr) {
-                                // console.error(`[safeToAsk] Error cancelando ${runIdMatch[0]}:`, cancelErr);
                             }
                         }
                     }
 
                     if (attempt >= maxRetries) {
                         // CAPA 3: Renovación de Hilo
-                        return await renewThreadAndRetry(assistantId, message, state, userId, errorReporter);
+                        return await renewThreadAndRetry(assistantId, message, state, userId, errorReporter, forceDb);
                     }
                     
                     const waitTime = attempt * 2000;
-                    // console.log(`[safeToAsk] Esperando ${waitTime/1000}s para reintentar...`);
                     await new Promise(r => setTimeout(r, waitTime));
                 }
             }
@@ -295,3 +295,4 @@ export const safeToAsk = async (
         new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT_SAFE_TO_ASK')), SAFE_TIMEOUT))
     ]);
 };
+
