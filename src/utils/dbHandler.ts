@@ -41,6 +41,9 @@ export async function executeDbQuery(sqlQuery: string): Promise<string> {
             const { data, error } = await supabase.rpc(rpcName, { query: cleanQuery });
 
             console.log(`🐛 [dbHandler] RPC (${rpcName}) Response (Attempt ${attempts}):`, error ? "Error" : "Success");
+            if (!error && data) {
+                console.log(`📊 [dbHandler] Data returned (${Array.isArray(data) ? data.length : 1} rows):`, JSON.stringify(data).substring(0, 200) + "...");
+            }
 
             if (error) {
                 // ... (manejo de errores existente)

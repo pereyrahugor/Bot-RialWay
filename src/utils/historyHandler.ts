@@ -1163,7 +1163,7 @@ export class HistoryHandler {
     static async getSetting(key: string, projectId: string | null = null): Promise<string | null> {
         if (!supabase) return null;
         const targetProjectId = projectId || HistoryHandler.PROJECT_IDENTIFIER;
-        console.log(`[HistoryHandler] 🔍 Fetching setting: ${key} for project: ${targetProjectId}`);
+        // console.log(`[HistoryHandler] 🔍 Fetching setting: ${key} for project: ${targetProjectId}`);
         const { data, error } = await supabase
             .from('settings')
             .select('value')

@@ -102,6 +102,7 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
                             
                             console.log(`[FunctionCall] Ejecutando query_database en ${tabla} -> SQL: ${sql}`);
                             const dbResult = await executeDbQuery(sql);
+                            console.log(`[FunctionCall] Resultado DB:`, dbResult.substring(0, 500) + (dbResult.length > 500 ? "..." : ""));
                             result = dbResult; // executeDbQuery ya devuelve un string (JSON o error)
                         }
                     } else {
