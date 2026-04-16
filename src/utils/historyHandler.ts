@@ -303,6 +303,8 @@ export class HistoryHandler {
      */
     static async getOrCreateChat(rawChatId: string, type: 'whatsapp' | 'webchat' | 'instagram' | 'messenger', name: string | null = null, userId: string | null = null): Promise<Chat | null> {
         const chatId = this.normalizeId(rawChatId);
+            if (name === '[-]') name = null;
+
         try {
             let data: Chat | null = null;
             let error: any = null;
@@ -317,10 +319,10 @@ export class HistoryHandler {
                     .maybeSingle();
                 
                 data = byUserId;
-            // 0. Limpiar nombre si viene como marcador de posición común en algunas plataformas
-            if (name === '[-]') name = null;
+                if (errUser) error = errUser;
+            }
 
-            // 1. Intentar buscar por user_id (BSUID) si está presente
+            // 2. Si no se encontró por BSUID, intentar por chatId (Phone)
             if (!data && !error) {
                 const { data: byChatId, error: errChat } = await supabase
                     .from('chats')
@@ -332,9 +334,9 @@ export class HistoryHandler {
                 data = byChatId;
                 error = errChat;
 
-                // Si lo encontramos por Phone pero no tiene el user_id guardado, lo actualizamos ahora
+                // Si lo encontramos por Phone pero no tiene el user_id (BSUID) guardado, lo actualizamos
                 if (data && userId && !data.user_id) {
-                    console.log(`🔗 Mapeando BSUID ${userId} al chat existente ${chatId}`);
+                    console.log(`[HistoryHandler] 🔗 Mapeando BSUID ${userId} al chat existente ${chatId}`);
                     await supabase.from('chats')
                         .update({ user_id: userId })
                         .eq('id', chatId)
