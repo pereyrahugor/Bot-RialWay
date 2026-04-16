@@ -1215,7 +1215,13 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                 await openaiMain.beta.assistants.update(assistantId, {
                     instructions: prompt
                 });
-                console.log(`✅ [SYNC] Prompt de Asistente ${idx} actualizado en OpenAI exitosamente.`);
+                
+                // CRITICAL FIX: Después de actualizar instrucciones, volvemos a sincronizar las tools
+                // para evitar que queden vacías si el update sobreescribió el objeto.
+                const { syncAssistantTools } = await import("../utils/openaiHelper");
+                await syncAssistantTools(assistantId);
+                
+                console.log(`✅ [SYNC] Prompt y Herramientas de Asistente ${idx} actualizados en OpenAI exitosamente.`);
             }
 
             res.json({ 

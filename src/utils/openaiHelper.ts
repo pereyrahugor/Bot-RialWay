@@ -9,14 +9,14 @@ const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPE
  * Sincroniza las herramientas (tools) definidas en las variables de entorno con el asistente de OpenAI.
  * Esto evita tener que configurar manualmente el Dashboard.
  */
-export async function syncAssistantTools(assistantId: string) {
-    if (!openai || !assistantId) return;
+export async function syncAssistantTools(assistantId: string): Promise<boolean> {
+    if (!openai || !assistantId) return false;
 
     try {
         const toolsJson = process.env.OPENAI_TOOLS_DEFINITION;
         if (!toolsJson) {
             console.log("[openaiHelper] No se detectó OPENAI_TOOLS_DEFINITION. Omitiendo sincronización de tools.");
-            return;
+            return false;
         }
 
         const tools = JSON.parse(toolsJson);
@@ -27,8 +27,10 @@ export async function syncAssistantTools(assistantId: string) {
         });
 
         console.log("[openaiHelper] ✅ Herramientas sincronizadas correctamente.");
+        return true;
     } catch (error: any) {
         console.error("[openaiHelper] ❌ Error sincronizando herramientas:", error.message);
+        return false;
     }
 }
 
@@ -178,6 +180,16 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
         const currentDatetimeArg = getArgentinaDatetimeString();
         runOptions.additional_instructions = `Fecha/Hora Actual: ${currentDatetimeArg}\nContacto ID: ${userId}`;
         console.log(`[openaiHelper] 🚀 Iniciando Run (DIRECT MODE).`);
+    }
+
+    // Cargar herramientas para inyección explícita
+    const toolsJson = process.env.OPENAI_TOOLS_DEFINITION;
+    if (toolsJson) {
+        try {
+            runOptions.tools = JSON.parse(toolsJson);
+        } catch (e) {
+            console.error("[openaiHelper] Error parseando tools para inyección explícita:", e);
+        }
     }
 
     const run = await openai.beta.threads.runs.createAndPoll(threadId, runOptions);
