@@ -1,9 +1,10 @@
 import OpenAI from "openai";
 import { HistoryHandler } from "./historyHandler";
+import { getArgentinaDatetimeString } from "./ArgentinaTime";
 
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
 
-export const askWithFunctions = async (assistantId: string, message: string, state: any): Promise<string> => {
+export const askWithFunctions = async (assistantId: string, message: string, state: any, userId: string = 'unknown'): Promise<string> => {
     if (!openai) {
         console.warn("⚠️ OPENAI_API_KEY no detectada. El asistente de IA está desactivado.");
         return "Lo siento, el asistente de IA no está configurado actualmente.";
@@ -113,6 +114,19 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
         console.log(`[openaiHelper] ⚠️ No se encontró ASSISTANT_PROMPT en DB ni LocalEnv. Usando instrucciones por defecto del dashboard.`);
     }
 
+    // Inyectar fecha y hora actual como instrucciones adicionales para no ensuciar el historial de mensajes
+    const currentDatetimeArg = getArgentinaDatetimeString();
+    runOptions.additional_instructions = `Fecha, hora y día de la semana de referencia (Horario Argentina): ${currentDatetimeArg}`;
+    
+    if (userId && userId !== 'unknown') {
+        runOptions.additional_instructions += `\nNúmero de contacto del usuario: ${userId}`;
+    }
+
+    // Si hay un prompt de refuerzo en el entorno, lo sumamos aquí también
+    if (process.env.EXTRA_SYSTEM_PROMPT) {
+        runOptions.additional_instructions += `\nInstrucción de refuerzo: ${process.env.EXTRA_SYSTEM_PROMPT}`;
+    }
+
     const run = await openai.beta.threads.runs.createAndPoll(threadId, runOptions);
 
     return await handleRunStatus(run);
@@ -218,7 +232,7 @@ export async function renewThreadAndRetry(
         await state.update({ thread_id: newThread.id });
     }
     
-    return await askWithFunctions(assistantId, message, state);
+    return await askWithFunctions(assistantId, message, state, userId);
 }
 
 /**
@@ -246,7 +260,7 @@ export const safeToAsk = async (
                 }
 
                 try {
-                    return await askWithFunctions(assistantId, message, state);
+                    return await askWithFunctions(assistantId, message, state, userId);
                 } catch (err: any) {
                     attempt++;
                     const errorMessage = err?.message || String(err);

@@ -37,18 +37,6 @@ export class AiManager {
     }
 
     public getAssistantResponse = async (assistantId: string, message: string, state: any, fallbackMessage: string | undefined, userId: string, thread_id: string | null = null) => {
-        const currentDatetimeArg = getArgentinaDatetimeString();
-        let systemPrompt = `Fecha, hora y día de la semana de referencia: ${currentDatetimeArg}`;
-        
-        if (process.env.EXTRA_SYSTEM_PROMPT) {
-            systemPrompt += `\nInstrucción de refuerzo: ${process.env.EXTRA_SYSTEM_PROMPT}`;
-        }
-
-        if (fallbackMessage) systemPrompt += `\n${fallbackMessage}`;
-        if (userId) systemPrompt += `\nNúmero de contacto: ${userId}`;
-        
-        const finalMessage = systemPrompt + "\n" + message;
-
         if (this.userTimeouts.has(userId)) {
             clearTimeout(this.userTimeouts.get(userId)!);
             this.userTimeouts.delete(userId);
@@ -60,7 +48,7 @@ export class AiManager {
             }, this.TIMEOUT_MS);
             this.userTimeouts.set(userId, timeoutId);
 
-            safeToAsk(assistantId, finalMessage, state, userId, this.errorReporter)
+            safeToAsk(assistantId, message, state, userId, this.errorReporter)
                 .then(result => {
                     if (this.userTimeouts.has(userId)) {
                         clearTimeout(this.userTimeouts.get(userId)!);
