@@ -286,7 +286,7 @@ function renderChatList(listToRender = chats) {
                 <div class="chat-info">
                     <div style="display:flex; justify-content:space-between; align-items: baseline;">
                         <div style="display:flex; flex-direction:column;">
-                            <span class="chat-name">${chat.name || chat.id.split('@')[0]}</span>
+                            <span class="chat-name">${(chat.name && chat.name !== '[-]') ? chat.name : chat.id.split('@')[0]}</span>
                             <span style="font-size: 0.75rem; opacity: 0.6; color: var(--text-muted); font-weight: normal;">${chat.id.split('@')[0]}</span>
                         </div>
                         ${statusBadge}
@@ -390,10 +390,12 @@ async function selectChat(id) {
     const chat = chats.find(c => c.id === id);
     
     document.getElementById('active-chat-phone').innerText = chat.id.split('@')[0];
-    document.getElementById('active-chat-name').innerText = chat.name || 'Sin nombre';
+    const displayName = (chat.name && chat.name !== '[-]') ? chat.name : 'Sin nombre';
+    document.getElementById('active-chat-name').innerText = displayName;
     
     const headerAvatar = document.getElementById('active-chat-avatar');
-    const initial = (chat.name || chat.id).charAt(0).toUpperCase();
+    const nameForInitial = (chat.name && chat.name !== '[-]') ? chat.name : chat.id;
+    const initial = nameForInitial.charAt(0).toUpperCase();
     const avatarUrl = `/api/backoffice/profile-pic/${chat.id}?token=${token}`;
     
     headerAvatar.innerHTML = `
@@ -730,7 +732,7 @@ function jumpToCRM() {
 
 function populateCRMFields(chat) {
     if (!chat) return;
-    document.getElementById('crm-name').value = chat.name || '';
+    document.getElementById('crm-name').value = (chat.name && chat.name !== '[-]') ? chat.name : '';
     document.getElementById('crm-email').value = chat.email || '';
     document.getElementById('crm-source').value = chat.source || '';
     document.getElementById('crm-notes').value = chat.notes || '';
@@ -766,7 +768,8 @@ async function saveCRMDetails() {
             const chat = chats.find(c => c.id === activeChatId);
             if (chat) {
                 Object.assign(chat, details);
-                document.getElementById('active-chat-name').innerText = chat.name || 'Sin nombre';
+                const updatedName = (chat.name && chat.name !== '[-]') ? chat.name : 'Sin nombre';
+                document.getElementById('active-chat-name').innerText = updatedName;
             }
             renderChatList();
             showToast('✅ Información guardada correctamente');

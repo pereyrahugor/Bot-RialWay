@@ -168,16 +168,17 @@ export class AssistantResponseProcessor {
         const dbSimpleMatch = textResponse.match(dbSimpleRegex);
         
         if (dbMatch) {
-             // console.log('[DEBUG] DB Match result: FOUND [DB_QUERY]');
+             console.log(`[AssistantResponseProcessor] 🔍 [DB_QUERY] detectado en ${ctx?.type || 'unknown'}`);
              sqlQueryToExecute = dbMatch[1].trim();
              dbQueryMatchRegexResult = true;
-             // if (ctx && ctx.type === 'webchat') console.log(`[Webchat Debug] 🔄 Detectada solicitud de DB Query: ${sqlQueryToExecute}`);
-             // else console.log(`[WhatsApp Debug] 🔄 Detectada solicitud de DB Query: ${sqlQueryToExecute}`);
         } else if (dbSimpleMatch) {
-             // console.log('[DEBUG] DB Match result: FOUND [DB] simple');
-             const jsonContent = dbSimpleMatch[1].trim();
+             console.log(`[AssistantResponseProcessor] 🔍 [DB] simple detectado en ${ctx?.type || 'unknown'}`);
+             let jsonContent = dbSimpleMatch[1].trim();
              
-             // Reparación de JSON: envolver en llaves si faltan y asegurar comillas en claves T y D
+             // Reparación de JSON: Limpiar posibles backslashes de escape que OpenAI a veces pone por error
+             // o porque se le pidió en el prompt (como vimos en el prompt de Supabase)
+             jsonContent = jsonContent.replace(/\\"/g, '"');
+             
              let cleanJson = jsonContent;
              if (!cleanJson.startsWith('{')) cleanJson = '{' + cleanJson + '}';
              
@@ -202,17 +203,16 @@ export class AssistantResponseProcessor {
                      const safeDato = String(parsedData.D).replace(/'/g, "''");
                      sqlQueryToExecute = `SELECT * FROM "${parsedData.T}" WHERE "${parsedData.T}"::text ~* '${safeDato}'`;
                      dbQueryMatchRegexResult = true;
-                     // if (ctx && ctx.type === 'webchat') console.log(`[Webchat Debug] 🔄 Detectada solicitud de DB simple: ${sqlQueryToExecute}`);
-                     // else console.log(`[WhatsApp Debug] 🔄 Detectada solicitud de DB simple: ${sqlQueryToExecute}`);
+                     console.log(`[AssistantResponseProcessor] ✅ SQL Generado: ${sqlQueryToExecute}`);
                  } else {
-                     // console.log('[DEBUG] JSON en [DB] no contiene T o D validos:', parsedData);
+                     console.warn('[AssistantResponseProcessor] ⚠️ JSON en [DB] no contiene T o D validos:', parsedData);
                  }
-             } catch (e) {
-                 // console.log('[DEBUG] Error procesando contenido en [DB]:', e.message, 'Content:', cleanJson);
+             } catch (e: any) {
+                 console.error('[AssistantResponseProcessor] ❌ Error procesando contenido en [DB]:', e.message, 'Content:', cleanJson);
              }
         }
- else {
-             // console.log('[DEBUG] DB Match result: NULL');
+        else {
+             // console.log('[DEBUG] No hay coincidencia de DB');
         }
 
         if (dbQueryMatchRegexResult) {

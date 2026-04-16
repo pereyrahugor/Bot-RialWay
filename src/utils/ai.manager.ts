@@ -106,6 +106,10 @@ export class AiManager {
     }
 
     public processUserMessage = async (ctx: any, { flowDynamic, state, provider, gotoFlow }: any) => {
+        const projectIdFromEnv = process.env.RAILWAY_PROJECT_ID || 'NO_DEFINIDO';
+        const assigned = this.userAssignedAssistant.get(ctx.from) || 'asistente1';
+        console.log(`[AiManager] 📥 Procesando mensaje de ${ctx.from}. ProjectID: ${projectIdFromEnv}. Asistente: ${assigned}. Mensaje: ${ctx.body}`);
+        
         await typing(ctx, provider);
         try {
             const body = ctx.body && ctx.body.trim();

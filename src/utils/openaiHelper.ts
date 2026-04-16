@@ -107,7 +107,10 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
     const localPrompt = dbPrompt || process.env.ASSISTANT_PROMPT;
 
     if (localPrompt) {
+        console.log(`[openaiHelper] 📝 Aplicando instrucciones de prompt (DB: ${!!dbPrompt}, LocalEnv: ${!!process.env.ASSISTANT_PROMPT})`);
         runOptions.instructions = localPrompt;
+    } else {
+        console.log(`[openaiHelper] ⚠️ No se encontró ASSISTANT_PROMPT en DB ni LocalEnv. Usando instrucciones por defecto del dashboard.`);
     }
 
     const run = await openai.beta.threads.runs.createAndPoll(threadId, runOptions);

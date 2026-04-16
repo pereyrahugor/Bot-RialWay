@@ -317,10 +317,10 @@ export class HistoryHandler {
                     .maybeSingle();
                 
                 data = byUserId;
-                error = errUser;
-            }
+            // 0. Limpiar nombre si viene como marcador de posición común en algunas plataformas
+            if (name === '[-]') name = null;
 
-            // 2. Si no se encontró por BSUID (o no venía), buscar por el ID tradicional (Phone)
+            // 1. Intentar buscar por user_id (BSUID) si está presente
             if (!data && !error) {
                 const { data: byChatId, error: errChat } = await supabase
                     .from('chats')
@@ -382,6 +382,7 @@ export class HistoryHandler {
      */
     static async saveMessage(rawChatId: string, role: 'user' | 'assistant' | 'system', content: string, type: string = 'text', contactName: string | null = null, userId: string | null = null, external_id: string | null = null, platformType?: 'whatsapp' | 'webchat' | 'instagram' | 'messenger') {
         const chatId = this.normalizeId(rawChatId);
+        if (contactName === '[-]') contactName = null;
         try {
             // Lógica de resolución de plataforma mejorada
             let resolvedPlatform: 'whatsapp' | 'webchat' | 'instagram' | 'messenger' = platformType || 'whatsapp';
@@ -470,6 +471,7 @@ export class HistoryHandler {
         offered_product?: string
     }) {
         const chatId = this.normalizeId(rawChatId);
+        if (details.name === '[-]') details.name = undefined;
         try {
             const { error } = await supabase
                 .from('chats')
@@ -1159,6 +1161,7 @@ export class HistoryHandler {
     static async getSetting(key: string, projectId: string | null = null): Promise<string | null> {
         if (!supabase) return null;
         const targetProjectId = projectId || HistoryHandler.PROJECT_IDENTIFIER;
+        console.log(`[HistoryHandler] 🔍 Fetching setting: ${key} for project: ${targetProjectId}`);
         const { data, error } = await supabase
             .from('settings')
             .select('value')
