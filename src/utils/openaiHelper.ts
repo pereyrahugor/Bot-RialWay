@@ -6,6 +6,23 @@ import { executeDbQuery } from "./dbHandler";
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
 
 /**
+ * Limpia y parsea un string JSON que puede venir envuelto en comillas literales (común en variables de entorno).
+ */
+function safeParseJson(jsonStr: string | undefined): any {
+    if (!jsonStr) return null;
+    let clean = jsonStr.trim();
+    // Eliminar comillas simples o dobles envolventes si existen
+    if ((clean.startsWith("'") && clean.endsWith("'")) || (clean.startsWith('"') && clean.endsWith('"'))) {
+        clean = clean.slice(1, -1);
+    }
+    try {
+        return JSON.parse(clean);
+    } catch (e) {
+        throw e;
+    }
+}
+
+/**
  * Sincroniza las herramientas (tools) definidas en las variables de entorno con el asistente de OpenAI.
  * Esto evita tener que configurar manualmente el Dashboard.
  */
@@ -19,7 +36,7 @@ export async function syncAssistantTools(assistantId: string): Promise<boolean> 
             return false;
         }
 
-        const tools = JSON.parse(toolsJson);
+        const tools = safeParseJson(toolsJson);
         console.log(`[openaiHelper] 🔄 Sincronizando ${tools.length} herramientas con el asistente ${assistantId}...`);
 
         await openai.beta.assistants.update(assistantId, {
@@ -186,7 +203,7 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
     const toolsJson = process.env.OPENAI_TOOLS_DEFINITION;
     if (toolsJson) {
         try {
-            runOptions.tools = JSON.parse(toolsJson);
+            runOptions.tools = safeParseJson(toolsJson);
         } catch (e) {
             console.error("[openaiHelper] Error parseando tools para inyección explícita:", e);
         }
