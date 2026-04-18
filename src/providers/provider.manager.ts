@@ -68,12 +68,13 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
             }
 
             // Opcional: Guardar en el historial de Supabase si no es un comando de sistema
-            if (ctx.body && !ctx.body.startsWith('_event_')) {
-                const { HistoryHandler } = await import('../utils/historyHandler');
-                const chatId = ctx.from?.includes('@') ? ctx.from.split('@')[0] : ctx.from;
-                
                 // Extraer un ID único del mensaje para evital duplicados (external_id)
                 const externalId = ctx.key?.id || ctx.payload?.id || ctx.id;
+
+                // Resolución dinámica del Project ID (Solo para Meta)
+                // En el proveedor de Meta, ctx.phoneNumberId contiene el ID del número receptor
+                const recipientId = ctx.phoneNumberId || null;
+                const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(recipientId);
                 
                 await HistoryHandler.saveMessage(
                     chatId, 
@@ -83,9 +84,9 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
                     null, 
                     ctx.userId,
                     externalId,
-                    ctx.platform // 'whatsapp', 'instagram' or 'messenger'
+                    ctx.platform, // 'whatsapp', 'instagram' or 'messenger'
+                    dynamicProjectId
                 );
-            }
         } catch (err) {
             console.error(`❌ ${prefix} Error en el logger de mensajes entrantes:`, err);
         }
@@ -112,6 +113,11 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
                 return;
             }
 
+            // Resolución dinámica del Project ID (Solo para Meta)
+            // En ecos de Meta, el recipientId suele estar en el payload o guardado en el proveedor
+            const recipientId = ctx.phoneNumberId || provider.options?.phone_number_id || null;
+            const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(recipientId);
+
             // Guardamos como 'assistant' para que aparezca en el lado derecho del chat en el backoffice
             await HistoryHandler.saveMessage(
                 chatId, 
@@ -121,7 +127,8 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
                 null, 
                 null,
                 externalId,
-                ctx.platform || 'whatsapp'
+                ctx.platform || 'whatsapp',
+                dynamicProjectId
             );
 
             // Si fue una intervención manual desde la app de WhatsApp (smb_message_echoes),

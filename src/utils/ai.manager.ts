@@ -36,7 +36,7 @@ export class AiManager {
         return this.ASSISTANT_MAP[assigned] || this.assistantId;
     }
 
-    public getAssistantResponse = async (assistantId: string, message: string, state: any, fallbackMessage: string | undefined, userId: string, thread_id: string | null = null) => {
+    public getAssistantResponse = async (assistantId: string, message: string, state: any, fallbackMessage: string | undefined, userId: string, thread_id: string | null = null, forcedProjectId?: string) => {
         if (this.userTimeouts.has(userId)) {
             clearTimeout(this.userTimeouts.get(userId)!);
             this.userTimeouts.delete(userId);
@@ -49,7 +49,9 @@ export class AiManager {
             this.userTimeouts.set(userId, timeoutId);
 
             const isWhatsApp = userId && userId.includes('@s.whatsapp.net');
-            safeToAsk(assistantId, message, state, userId, this.errorReporter, 5, isWhatsApp, process.env.RAILWAY_PROJECT_ID, false)
+            const currentProjectId = forcedProjectId || process.env.RAILWAY_PROJECT_ID;
+
+            safeToAsk(assistantId, message, state, userId, this.errorReporter, 5, isWhatsApp, currentProjectId, false)
                 .then(result => {
                     if (this.userTimeouts.has(userId)) {
                         clearTimeout(this.userTimeouts.get(userId)!);
@@ -95,9 +97,12 @@ export class AiManager {
     }
 
     public processUserMessage = async (ctx: any, { flowDynamic, state, provider, gotoFlow }: any) => {
-        const projectIdFromEnv = process.env.RAILWAY_PROJECT_ID || 'NO_DEFINIDO';
+        // Resolución dinámica del Project ID
+        const recipientId = ctx.phoneNumberId || null;
+        const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(recipientId);
+        
         const assigned = this.userAssignedAssistant.get(ctx.from) || 'asistente1';
-        console.log(`[AiManager] 📥 Procesando mensaje de ${ctx.from}. ProjectID: ${projectIdFromEnv}. Asistente: ${assigned}. Mensaje: ${ctx.body}`);
+        console.log(`[AiManager] 📥 Procesando mensaje de ${ctx.from}. ProjectID: ${dynamicProjectId}. Asistente: ${assigned}. Mensaje: ${ctx.body}`);
         
         // --- COMANDO DE REINICIO ---
         if (ctx.body && ctx.body.trim().toUpperCase() === '#RESET#') {
@@ -115,23 +120,18 @@ export class AiManager {
             const body = ctx.body && ctx.body.trim();
 
             // COMANDOS DE CONTROL (WhatsApp Admin)
-            if (body === "#ON#") {
-                await HistoryHandler.toggleBot(ctx.from, true);
-                if (ctx.pushName) await HistoryHandler.getOrCreateChat(ctx.from, 'whatsapp', ctx.pushName, ctx.userId);
-                const msg = "🤖 Bot activado para este chat.";
                 await flowDynamic([{ body: msg }]);
-                await HistoryHandler.saveMessage(ctx.from, 'assistant', msg, 'text', null, ctx.userId, null, ctx.platform);
+                await HistoryHandler.saveMessage(ctx.from, 'assistant', msg, 'text', null, ctx.userId, null, ctx.platform, dynamicProjectId);
                 return state;
             }
 
             if (body === "#OFF#") {
                 await HistoryHandler.toggleBot(ctx.from, false);
-                if (ctx.pushName) await HistoryHandler.getOrCreateChat(ctx.from, 'whatsapp', ctx.pushName, ctx.userId);
+                if (ctx.pushName) await HistoryHandler.getOrCreateChat(ctx.from, 'whatsapp', ctx.pushName, ctx.userId, dynamicProjectId);
                 const msg = "🛑 Bot desactivado. (Intervención humana activa)";
                 await flowDynamic([{ body: msg }]);
-                await HistoryHandler.saveMessage(ctx.from, 'assistant', msg, 'text', null, ctx.userId, null, ctx.platform);
+                await HistoryHandler.saveMessage(ctx.from, 'assistant', msg, 'text', null, ctx.userId, null, ctx.platform, dynamicProjectId);
                 return state;
-            }
 
             // Filtro de Eco (Mejorado para BSUID)
             const botNumber = (process.env.YCLOUD_WABA_NUMBER || '').replace(/\D/g, '');
@@ -197,7 +197,7 @@ export class AiManager {
             const assigned = this.userAssignedAssistant.get(ctx.from) || 'asistente1';
             const currentAssistantId = this.ASSISTANT_MAP[assigned] || this.assistantId;
 
-            const response = (await this.getAssistantResponse(currentAssistantId, ctx.body, state, undefined, ctx.from, ctx.thread_id)) as string;
+            const response = (await this.getAssistantResponse(currentAssistantId, ctx.body, state, undefined, ctx.from, ctx.thread_id, dynamicProjectId)) as string;
 
             if (!response) return state;
 
@@ -229,7 +229,7 @@ export class AiManager {
                 if (response && response.trim().length > 0) {
                     await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
                         response, ctx, flowDynamic, state, provider, gotoFlow,
-                        this.getAssistantResponse, currentAssistantId
+                        this.getAssistantResponse, currentAssistantId, 0, dynamicProjectId
                     );
                 }
 
@@ -248,7 +248,7 @@ export class AiManager {
                     if (nextResponseRaw && nextResponseRaw.trim().length > 0) {
                         await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
                            nextResponseRaw, ctx, flowDynamic, state, provider, gotoFlow,
-                           this.getAssistantResponse, nextAssistantId
+                           this.getAssistantResponse, nextAssistantId, 0, dynamicProjectId
                         );
                     }
                 }
@@ -257,7 +257,7 @@ export class AiManager {
                 if (response && response.trim().length > 0) {
                     await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
                         response, ctx, flowDynamic, state, provider, gotoFlow,
-                        this.getAssistantResponse, currentAssistantId
+                        this.getAssistantResponse, currentAssistantId, 0, dynamicProjectId
                     );
                 }
             }

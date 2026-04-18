@@ -18,6 +18,9 @@ export const historyEvents = new EventEmitter();
 const PROJECT_ID = process.env.RAILWAY_PROJECT_ID || "default_project";
 const PROJECT_NAME = process.env.RAILWAY_SERVICE_NAME || "Bot-RialWay";
 
+// Cache en memoria para mapeo de Phone ID -> Project ID (Evita consultas excesivas a Supabase)
+const projectMappingCache = new Map<string, string>();
+
 export interface Chat {
     id: string; // WAID (Teléfono) o identificador de Webchat
     user_id?: string | null; // BSUID (Meta Business-Scoped User ID)
@@ -48,6 +51,53 @@ export class HistoryHandler {
     static readonly PROJECT_IDENTIFIER = process.env.RAILWAY_PROJECT_ID || "default_project";
     static readonly PROJECT_ID = process.env.RAILWAY_PROJECT_ID || "default_project";
     static initialized = false;
+
+    
+    /**
+     * Resuelve el Project ID basado en el Phone Number ID de Meta.
+     * Si no se encuentra, devuelve el PROJECT_ID por defecto del entorno.
+     */
+    static async getProjectIdByRecipient(recipientId: string | null): Promise<string> {
+        if (!recipientId) return this.PROJECT_IDENTIFIER;
+
+        // 1. Probar caché
+        if (projectMappingCache.has(recipientId)) {
+            return projectMappingCache.get(recipientId)!;
+        }
+
+        try {
+            // 2. Consultar en la tabla de ruteo/onboarding
+            const { data, error } = await supabase
+                .from('meta_onboarding')
+                .select('project_id')
+                .eq('phone_number_id', recipientId)
+                .maybeSingle();
+
+            if (data?.project_id) {
+                console.log(`[HistoryHandler] 🚀 Project ID resuelto dinámicamente: ${data.project_id} para Phone: ${recipientId}`);
+                projectMappingCache.set(recipientId, data.project_id);
+                return data.project_id;
+            }
+
+            // 3. Fallback: Probar en routing_table si existe
+            const { data: routingData } = await supabase
+                .from('routing_table')
+                .select('project_id')
+                .eq('phone_id', recipientId)
+                .maybeSingle();
+
+            if (routingData?.project_id) {
+                console.log(`[HistoryHandler] 🚀 Project ID resuelto desde routing_table: ${routingData.project_id}`);
+                projectMappingCache.set(recipientId, routingData.project_id);
+                return routingData.project_id;
+            }
+
+        } catch (err) {
+            console.error('[HistoryHandler] Error resolviendo Project ID dinámico:', err);
+        }
+
+        return this.PROJECT_IDENTIFIER;
+    }
 
     static async initDatabase() {
         if (this.initialized) return;
@@ -300,10 +350,12 @@ export class HistoryHandler {
      * @param type - Tipo de chat
      * @param name - Nombre del contacto
      * @param userId - El nuevo BSUID (Business-Scoped User ID) de Meta
+     * @param forcedProjectId - ID de proyecto forzado (opcional)
      */
-    static async getOrCreateChat(rawChatId: string, type: 'whatsapp' | 'webchat' | 'instagram' | 'messenger', name: string | null = null, userId: string | null = null): Promise<Chat | null> {
+    static async getOrCreateChat(rawChatId: string, type: 'whatsapp' | 'webchat' | 'instagram' | 'messenger', name: string | null = null, userId: string | null = null, forcedProjectId?: string): Promise<Chat | null> {
         const chatId = this.normalizeId(rawChatId);
-            if (name === '[-]') name = null;
+        const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+        if (name === '[-]') name = null;
 
         try {
             let data: Chat | null = null;
@@ -315,7 +367,7 @@ export class HistoryHandler {
                     .from('chats')
                     .select('*')
                     .eq('user_id', userId)
-                    .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER)
+                    .eq('project_id', currentProjectId)
                     .maybeSingle();
                 
                 data = byUserId;
@@ -382,9 +434,13 @@ export class HistoryHandler {
     /**
      * Guarda un mensaje en la base de datos
      */
-    static async saveMessage(rawChatId: string, role: 'user' | 'assistant' | 'system', content: string, type: string = 'text', contactName: string | null = null, userId: string | null = null, external_id: string | null = null, platformType?: 'whatsapp' | 'webchat' | 'instagram' | 'messenger') {
+    static async saveMessage(rawChatId: string, role: 'user' | 'assistant' | 'system', content: string, type: string = 'text', contactName: string | null = null, userId: string | null = null, external_id: string | null = null, platformType?: 'whatsapp' | 'webchat' | 'instagram' | 'messenger', forcedProjectId?: string) {
         const chatId = this.normalizeId(rawChatId);
         if (contactName === '[-]') contactName = null;
+        
+        // Resolución del Project ID: Prioridad al forzado, luego al dinámico, luego al estático
+        const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+
         try {
             // Lógica de resolución de plataforma mejorada
             let resolvedPlatform: 'whatsapp' | 'webchat' | 'instagram' | 'messenger' = platformType || 'whatsapp';
@@ -401,11 +457,11 @@ export class HistoryHandler {
             }
 
             // Asegurar que el chat existe
-            await this.getOrCreateChat(chatId, resolvedPlatform, contactName, userId);
+            await this.getOrCreateChat(chatId, resolvedPlatform, contactName, userId, currentProjectId);
 
             const msgData: any = {
                 chat_id: chatId,
-                        project_id: HistoryHandler.PROJECT_IDENTIFIER,
+                        project_id: currentProjectId,
                 role,
                 content,
                 type,
@@ -424,7 +480,7 @@ export class HistoryHandler {
                 // FALLBACK: Si falla el upsert (ej: columna external_id no existe aún), intentamos insert normal
                 const { error: insertError } = await supabase.from('messages').insert({
                     chat_id: chatId,
-                    project_id: HistoryHandler.PROJECT_IDENTIFIER,
+                    project_id: currentProjectId,
                     role,
                     content,
                     type,
@@ -442,7 +498,7 @@ export class HistoryHandler {
                 .from('chats')
                 .update({ last_message_at: new Date().toISOString() })
                 .eq('id', chatId)
-                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
+                .eq('project_id', currentProjectId);
 
             // Emitir evento para WebSockets (esto actualiza la UI en tiempo real)
             historyEvents.emit('new_message', { 

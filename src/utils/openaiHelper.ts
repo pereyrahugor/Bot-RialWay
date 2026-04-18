@@ -15,11 +15,7 @@ function safeParseJson(jsonStr: string | undefined): any {
     if ((clean.startsWith("'") && clean.endsWith("'")) || (clean.startsWith('"') && clean.endsWith('"'))) {
         clean = clean.slice(1, -1);
     }
-    try {
-        return JSON.parse(clean);
-    } catch (e) {
-        throw e;
-    }
+    return JSON.parse(clean);
 }
 
 /**

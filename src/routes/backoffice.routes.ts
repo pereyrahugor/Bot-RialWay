@@ -832,10 +832,18 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     // --- ONBOARDING META ---
 
     app.get('/api/backoffice/whatsapp/onboard-callback', async (req, res) => {
-        const { code, wabaId: queryWabaId, phoneId: queryPhoneId, projectId: queryProjectId } = req.query;
-        const projectId = (queryProjectId as string) || process.env.RAILWAY_PROJECT_ID || 'default_project';
+        // Mapeo robusto de parámetros (Meta usa snake_case, nosotros a veces camelCase o nombres personalizados)
+        const q = req.query as any;
+        const code = q.code as string;
+        const queryWabaId = (q.wabaId || q.waba_id || q.whatsapp_business_account_id || q.shared_waba_id) as string;
+        const queryPhoneId = (q.phoneId || q.phone_id || q.phone_number_id || q.phoneNumberId) as string;
+        const queryProjectId = (q.projectId || q.railwayProjectId || q.project_id) as string;
+
+        const projectId = queryProjectId || process.env.RAILWAY_PROJECT_ID || 'default_project';
         
         console.log(`📡 [CALLBACK] Iniciando onboard-callback para Proyecto: ${projectId}`);
+        // Log de parámetros para depuración (sin el código sensible si es posible, aunque aquí el code es temporal)
+        console.log(`ℹ️ [CALLBACK] Params recibidos: waba=${queryWabaId}, phone=${queryPhoneId}, project=${queryProjectId}`);
         if (!code) return res.send('<h2>❌ Error: No se recibió el código de Meta</h2>');
 
         try {

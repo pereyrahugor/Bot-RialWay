@@ -99,7 +99,8 @@ export class AssistantResponseProcessor {
         gotoFlow: any,
         getAssistantResponse: Function,
         ASSISTANT_ID: string,
-        recursionDepth: number = 0
+        recursionDepth: number = 0,
+        forcedProjectId?: string
     ) {
         if (recursionDepth > 5) {
             console.error('[AssistantResponseProcessor] Límite de recursión alcanzado (5). Abortando para evitar bucle infinito.');
@@ -194,7 +195,7 @@ export class AssistantResponseProcessor {
 
                 let newResponse: any;
                 try {
-                    newResponse = await getAssistantResponse(ASSISTANT_ID, feedbackMsg, state, "Error procesando resultado API.", ctx?.from, threadId);
+                    newResponse = await getAssistantResponse(ASSISTANT_ID, feedbackMsg, state, "Error procesando resultado API.", ctx?.from, threadId, forcedProjectId);
                 } catch (err: any) {
                     // Si falla por run activo, intentamos una vez más tras una espera larga
                     if (err?.message?.includes('active')) {
@@ -212,7 +213,7 @@ export class AssistantResponseProcessor {
 
                 // Recursión: procesar la respuesta final del asistente
                 await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
-                    newResponse, ctx, flowDynamic, state, provider, gotoFlow, getAssistantResponse, ASSISTANT_ID, recursionDepth + 1
+                    newResponse, ctx, flowDynamic, state, provider, gotoFlow, getAssistantResponse, ASSISTANT_ID, recursionDepth + 1, forcedProjectId
                 );
                 return;
             }
@@ -249,7 +250,7 @@ export class AssistantResponseProcessor {
             while (assistantApiResponse && /(ID:\s*\w+)/.test(assistantApiResponse)) {
                 // console.log('[Debug] Respuesta contiene ID de reserva, esperando 10s y reenviando ok...');
                 await new Promise(res => setTimeout(res, 10000));
-                assistantApiResponse = await getAssistantResponse(ASSISTANT_ID, 'ok', state, undefined, ctx.from, threadId);
+                assistantApiResponse = await getAssistantResponse(ASSISTANT_ID, 'ok', state, undefined, ctx.from, threadId, forcedProjectId);
             }
             // Cuando la respuesta no contiene el ID, envíala al usuario
             if (assistantApiResponse) {
@@ -273,7 +274,8 @@ export class AssistantResponseProcessor {
                     null, 
                     ctx.userId, 
                     null, 
-                    platform
+                    platform,
+                    forcedProjectId
                 );
             }
             

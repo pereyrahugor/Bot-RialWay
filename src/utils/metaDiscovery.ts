@@ -10,6 +10,7 @@ export async function discoverMetaIds(accessToken: string, mainToken: string | n
 
         // Identificar quién es el usuario vinculado
         try {
+            console.log(`ℹ️ [MetaDiscovery] Usando token: ${accessToken.substring(0, 10)}... (longitud: ${accessToken.length})`);
             const me = await axios.get(`https://graph.facebook.com/v22.0/me?fields=name,id,email`, {
                 headers: { 'Authorization': `Bearer ${accessToken}` }
             });
@@ -111,9 +112,11 @@ export async function discoverMetaIds(accessToken: string, mainToken: string | n
                 const debugData = debugResponse.data.data;
                 console.log(`ℹ️ [MetaDiscovery] Token Info: AppID=${debugData.app_id}, UserID=${debugData.user_id}, Scopes=${debugData.scopes?.join(',')}`);
                 
-                // Si el debug token nos da el Business ID, podemos buscar WABAs ahí
-                const businessId = debugData.business_id;
-                if (businessId) {
+                // Si el debug token nos da el Business ID o el WABA ID directamente, los usamos
+                const businessId = debugData.business_id || debugData.metadata?.business_id;
+                wabaId = debugData.metadata?.whatsapp_business_account_id || wabaId;
+
+                if (businessId && !wabaId) {
                     console.log(`📡 [MetaDiscovery] Buscando WABAs para el Business ID: ${businessId}...`);
                     const bizWabas = await axios.get(`https://graph.facebook.com/v22.0/${businessId}/whatsapp_business_accounts`, {
                         headers: { 'Authorization': `Bearer ${accessToken}` }
