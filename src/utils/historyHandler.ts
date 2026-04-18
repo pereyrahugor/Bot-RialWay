@@ -52,51 +52,107 @@ export class HistoryHandler {
     static readonly PROJECT_ID = process.env.RAILWAY_PROJECT_ID || "default_project";
     static initialized = false;
 
-    
+    private static normalizeId(id: string): string {
+        return id.replace(/[^a-zA-Z0-9]/g, '');
+    }
+
     /**
      * Resuelve el Project ID basado en el Phone Number ID de Meta.
      * Si no se encuentra, devuelve el PROJECT_ID por defecto del entorno.
      */
     static async getProjectIdByRecipient(recipientId: string | null): Promise<string> {
         if (!recipientId) return this.PROJECT_IDENTIFIER;
-
-        // 1. Probar caché
+        
+        // 1. Verificar caché
         if (projectMappingCache.has(recipientId)) {
             return projectMappingCache.get(recipientId)!;
         }
 
         try {
-            // 2. Consultar en la tabla de ruteo/onboarding
-            const { data, error } = await supabase
+            // 2. Consultar tabla de onboarding de Meta
+            const { data: onboarding } = await supabase
                 .from('meta_onboarding')
                 .select('project_id')
                 .eq('phone_number_id', recipientId)
                 .maybeSingle();
 
-            if (data?.project_id) {
-                console.log(`[HistoryHandler] 🚀 Project ID resuelto dinámicamente: ${data.project_id} para Phone: ${recipientId}`);
-                projectMappingCache.set(recipientId, data.project_id);
-                return data.project_id;
+            if (onboarding) {
+                projectMappingCache.set(recipientId, onboarding.project_id);
+                return onboarding.project_id;
             }
 
-            // 3. Fallback: Probar en routing_table si existe
-            const { data: routingData } = await supabase
+            // 3. Consultar tabla de ruteo como backup
+            const { data: routing } = await supabase
                 .from('routing_table')
                 .select('project_id')
                 .eq('phone_id', recipientId)
                 .maybeSingle();
 
-            if (routingData?.project_id) {
-                console.log(`[HistoryHandler] 🚀 Project ID resuelto desde routing_table: ${routingData.project_id}`);
-                projectMappingCache.set(recipientId, routingData.project_id);
-                return routingData.project_id;
+            if (routing) {
+                projectMappingCache.set(recipientId, routing.project_id);
+                return routing.project_id;
             }
 
+            return this.PROJECT_IDENTIFIER;
         } catch (err) {
-            console.error('[HistoryHandler] Error resolviendo Project ID dinámico:', err);
+            return this.PROJECT_IDENTIFIER;
         }
+    }
 
-        return this.PROJECT_IDENTIFIER;
+    static async getThreadId(rawChatId: string, forcedProjectId?: string): Promise<string | null> {
+        const chatId = this.normalizeId(rawChatId);
+        const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+        const { data, error } = await supabase
+            .from('chats')
+            .select('thread_id')
+            .eq('id', chatId)
+            .eq('project_id', currentProjectId)
+            .maybeSingle();
+        
+        if (error) {
+            console.error('[HistoryHandler] Error al obtener thread_id:', error);
+            return null;
+        }
+        return data ? (data as any).thread_id : null;
+    }
+
+    static async saveThreadId(rawChatId: string, threadId: string, forcedProjectId?: string) {
+        const chatId = this.normalizeId(rawChatId);
+        const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+        const { error } = await supabase
+            .from('chats')
+            .update({ thread_id: threadId })
+            .eq('id', chatId)
+            .eq('project_id', currentProjectId);
+        
+        if (error) console.error('[HistoryHandler] Error al guardar thread_id:', error);
+    }
+
+    static async updateContactDetails(rawChatId: string, details: any, forcedProjectId?: string) {
+        const chatId = this.normalizeId(rawChatId);
+        const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+        const { error } = await supabase
+            .from('chats')
+            .update(details)
+            .eq('id', chatId)
+            .eq('project_id', currentProjectId);
+        
+        if (error) console.error('[HistoryHandler] Error al actualizar contacto:', error);
+    }
+
+    static async createNewLeadManual(chatId: string, name: string, forcedProjectId?: string) {
+        const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+        const { error } = await supabase
+            .from('chats')
+            .insert({
+                id: chatId,
+                project_id: currentProjectId,
+                name: name,
+                type: 'whatsapp',
+                bot_enabled: true
+            });
+        
+        if (error) console.error('[HistoryHandler] Error al crear lead manual:', error);
     }
 
     static async initDatabase() {
@@ -352,7 +408,7 @@ export class HistoryHandler {
      * @param userId - El nuevo BSUID (Business-Scoped User ID) de Meta
      * @param forcedProjectId - ID de proyecto forzado (opcional)
      */
-    static async getOrCreateChat(rawChatId: string, type: 'whatsapp' | 'webchat' | 'instagram' | 'messenger', name: string | null = null, userId: string | null = null, forcedProjectId?: string): Promise<Chat | null> {
+    static async getOrCreateChat(rawChatId: string, type: 'whatsapp' | 'webchat' | 'instagram' | 'messenger' = 'whatsapp', name: string | null = null, userId: string | null = null, forcedProjectId?: string): Promise<Chat | null> {
         const chatId = this.normalizeId(rawChatId);
         const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
         if (name === '[-]') name = null;
@@ -380,7 +436,7 @@ export class HistoryHandler {
                     .from('chats')
                     .select('*')
                     .eq('id', chatId)
-                    .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER)
+                    .eq('project_id', currentProjectId)
                     .maybeSingle();
                 
                 data = byChatId;
@@ -392,7 +448,7 @@ export class HistoryHandler {
                     await supabase.from('chats')
                         .update({ user_id: userId })
                         .eq('id', chatId)
-                        .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
+                        .eq('project_id', currentProjectId);
                     data.user_id = userId;
                 }
             }
@@ -404,7 +460,7 @@ export class HistoryHandler {
                     .insert({
                         id: chatId,
                         user_id: userId,
-                        project_id: HistoryHandler.PROJECT_IDENTIFIER,
+                        project_id: currentProjectId,
                         type,
                         name,
                         bot_enabled: true,
@@ -421,7 +477,7 @@ export class HistoryHandler {
 
             // Actualizar nombre si es null y ahora tenemos uno
             if (name && !data.name) {
-                await supabase.from('chats').update({ name }).eq('id', chatId).eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
+                await supabase.from('chats').update({ name }).eq('id', chatId).eq('project_id', currentProjectId);
             }
 
             return data;
@@ -528,15 +584,16 @@ export class HistoryHandler {
         tax_status?: string,
         address?: string,
         offered_product?: string
-    }) {
+    }, forcedProjectId?: string) {
         const chatId = this.normalizeId(rawChatId);
+        const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
         if (details.name === '[-]') details.name = undefined;
         try {
             const { error } = await supabase
                 .from('chats')
                 .update(details)
                 .eq('id', chatId)
-                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
+                .eq('project_id', currentProjectId);
 
             if (error) throw error;
             return { success: true };
@@ -549,14 +606,15 @@ export class HistoryHandler {
     /**
      * Crea un lead manualmente desde la interfaz (sin necesidad de chat previo)
      */
-    static async createNewLeadManual(chatId: string, details: any) {
+    static async createNewLeadManual(chatId: string, details: any, forcedProjectId?: string) {
+        const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
         try {
             // 1. Crear o actualizar el chat (Lead)
             const { error: chatErr } = await supabase
                 .from('chats')
                 .upsert({
                     id: chatId,
-                    project_id: HistoryHandler.PROJECT_IDENTIFIER,
+                    project_id: currentProjectId,
                     ...details,
                     is_lead: true,
                     created_at: new Date().toISOString()
@@ -569,7 +627,7 @@ export class HistoryHandler {
                 .from('tickets')
                 .insert({
                     chat_id: chatId,
-                    project_id: HistoryHandler.PROJECT_IDENTIFIER,
+                    project_id: currentProjectId,
                     titulo: `Lead: ${details.name || chatId}`,
                     descripcion: details.notes || 'Lead creado manualmente',
                     tipo: details.offered_product || 'Nuevo Lead',
@@ -591,15 +649,16 @@ export class HistoryHandler {
     /**
      * Verifica si el bot está habilitado para un usuario
      */
-    static async isBotEnabled(rawChatId: string): Promise<boolean> {
+    static async isBotEnabled(rawChatId: string, forcedProjectId?: string): Promise<boolean> {
         const chatId = this.normalizeId(rawChatId);
+        const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
         try {
             const { data, error } = await supabase
                 .from('chats')
                 .select('bot_enabled')
                 .eq('id', chatId)
-                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER)
-                    .maybeSingle();
+                .eq('project_id', currentProjectId)
+                .maybeSingle();
 
             if (error) throw error;
             // Si no hay datos, o bot_enabled es null, asumimos que está habilitado (true)
@@ -613,8 +672,9 @@ export class HistoryHandler {
     /**
      * Cambia el estado del bot (Intervención humana)
      */
-    static async toggleBot(rawChatId: string, enabled: boolean) {
+    static async toggleBot(rawChatId: string, enabled: boolean, forcedProjectId?: string) {
         const chatId = this.normalizeId(rawChatId);
+        const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
         try {
             const updateData: any = { bot_enabled: enabled };
             if (enabled === false) {

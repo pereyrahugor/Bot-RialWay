@@ -108,7 +108,7 @@ export class AiManager {
         if (ctx.body && ctx.body.trim().toUpperCase() === '#RESET#') {
             const chatId = ctx.from;
             console.log(`[AiManager] ♻️ Reiniciando historial para ${chatId}`);
-            await HistoryHandler.saveThreadId(chatId, null as any); // null as any para evitar problemas de tipos si thread_id espera string
+            await HistoryHandler.saveThreadId(chatId, null as any, dynamicProjectId); // null as any para evitar problemas de tipos si thread_id espera string
             if (state && typeof state.update === 'function') {
                 await state.update({ thread_id: null });
             }
@@ -121,7 +121,7 @@ export class AiManager {
 
             // COMANDOS DE CONTROL (WhatsApp Admin)
             if (body === "#ON#") {
-                await HistoryHandler.toggleBot(ctx.from, true);
+                await HistoryHandler.toggleBot(ctx.from, true, dynamicProjectId);
                 if (ctx.pushName) await HistoryHandler.getOrCreateChat(ctx.from, 'whatsapp', ctx.pushName, ctx.userId, dynamicProjectId);
                 const msg = "🤖 Bot activado para este chat.";
                 await flowDynamic([{ body: msg }]);
@@ -130,7 +130,7 @@ export class AiManager {
             }
 
             if (body === "#OFF#") {
-                await HistoryHandler.toggleBot(ctx.from, false);
+                await HistoryHandler.toggleBot(ctx.from, false, dynamicProjectId);
                 if (ctx.pushName) await HistoryHandler.getOrCreateChat(ctx.from, 'whatsapp', ctx.pushName, ctx.userId, dynamicProjectId);
                 const msg = "🛑 Bot desactivado. (Intervención humana activa)";
                 await flowDynamic([{ body: msg }]);
@@ -152,10 +152,10 @@ export class AiManager {
             // ELIMINADO: Duplicado con provider.manager.ts
             // await HistoryHandler.saveMessage( ... );
 
-            const isBotActiveForUser = await HistoryHandler.isBotEnabled(ctx.from);
+            const isBotActiveForUser = await HistoryHandler.isBotEnabled(ctx.from, dynamicProjectId);
             if (!isBotActiveForUser) {
                 try {
-                    const threadId = await HistoryHandler.getThreadId(ctx.from);
+                    const threadId = await HistoryHandler.getThreadId(ctx.from, dynamicProjectId);
                     if (threadId && this.openaiMain) {
                         await this.openaiMain.beta.threads.messages.create(threadId, {
                             role: 'user',
@@ -209,7 +209,7 @@ export class AiManager {
             try {
                 const currentThreadId = state && typeof state.get === 'function' ? state.get('thread_id') : null;
                 if (currentThreadId && ctx.from) {
-                    await HistoryHandler.saveThreadId(ctx.from, currentThreadId);
+                    await HistoryHandler.saveThreadId(ctx.from, currentThreadId, dynamicProjectId);
                 }
             } catch (e: any) {
                 console.error("[AiManager] Error guardando threadId:", e.message);
