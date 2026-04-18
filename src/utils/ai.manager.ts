@@ -120,6 +120,10 @@ export class AiManager {
             const body = ctx.body && ctx.body.trim();
 
             // COMANDOS DE CONTROL (WhatsApp Admin)
+            if (body === "#ON#") {
+                await HistoryHandler.toggleBot(ctx.from, true);
+                if (ctx.pushName) await HistoryHandler.getOrCreateChat(ctx.from, 'whatsapp', ctx.pushName, ctx.userId, dynamicProjectId);
+                const msg = "🤖 Bot activado para este chat.";
                 await flowDynamic([{ body: msg }]);
                 await HistoryHandler.saveMessage(ctx.from, 'assistant', msg, 'text', null, ctx.userId, null, ctx.platform, dynamicProjectId);
                 return state;
@@ -132,6 +136,7 @@ export class AiManager {
                 await flowDynamic([{ body: msg }]);
                 await HistoryHandler.saveMessage(ctx.from, 'assistant', msg, 'text', null, ctx.userId, null, ctx.platform, dynamicProjectId);
                 return state;
+            }
 
             // Filtro de Eco (Mejorado para BSUID)
             const botNumber = (process.env.YCLOUD_WABA_NUMBER || '').replace(/\D/g, '');
