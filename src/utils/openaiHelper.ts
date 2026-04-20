@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { HistoryHandler } from "./historyHandler";
+// Borramos importación estática circular: import { HistoryHandler } from "./historyHandler";
 import { getArgentinaDatetimeString } from "./ArgentinaTime";
 import { executeDbQuery } from "./dbHandler";
 
@@ -180,6 +180,7 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
     // cambia 'directMode' a false en las llamadas a safeToAsk() o desactiva este bloque if (directMode).
     if (!directMode) {
         // Prioridad: 1. Base de Datos (Hot-Update) | 2. Environment Variable | 3. OpenAI Dashboard (default)
+        const { HistoryHandler } = await import("./historyHandler");
         const dbPrompt = await HistoryHandler.getSetting('ASSISTANT_PROMPT', projectId);
         const localPrompt = dbPrompt || process.env.ASSISTANT_PROMPT;
 
@@ -305,6 +306,7 @@ export async function renewThreadAndRetry(
     }
 
     // 2. Traer el historial reciente (últimos 10 mensajes)
+    const { HistoryHandler } = await import("./historyHandler");
     const history = await HistoryHandler.getMessages(userId, 10);
     
     // 3. Crear nuevo hilo en OpenAI con ese contexto

@@ -11,5 +11,5 @@ temp/voiceNote
 *qr.png
 instructivo_variables_entorno.txt
 node_modules
-info_meta_template,md
-scratch/test_meta_token.js
+test/
+md_planning/

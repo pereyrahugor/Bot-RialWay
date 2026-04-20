@@ -33,13 +33,15 @@ export const registerStaticRoutes = (app: any, { __dirname }: { __dirname: strin
                     let htmlContent = fs.readFileSync(htmlPath, 'utf8');
                     const botName = process.env.ASSISTANT_NAME || process.env.RAILWAY_PROJECT_NAME || "Neurolinks";
                     
-                    console.log(`[Static] Sirviendo ${filename} para ${route}. botName=${botName}`);
+                    console.log(`[Static] 🟢 Sirviendo ${filename} para ${route}. botName=${botName}`);
 
-                    // Obtener configuración de visibilidad desde DB (con fallback a env)
-                    const dbWa = await HistoryHandler.getSetting('WHATSAPP_VISIBLE');
-                    const dbIg = await HistoryHandler.getSetting('INSTAGRAM_VISIBLE');
-                    const dbMs = await HistoryHandler.getSetting('MESSENGER_VISIBLE');
-                    const dbCRM = await HistoryHandler.getSetting('CRM_VISIBLE');
+                    // Obtener configuración de visibilidad desde DB en paralelo para mayor velocidad
+                    const [dbWa, dbIg, dbMs, dbCRM] = await Promise.all([
+                        HistoryHandler.getSetting('WHATSAPP_VISIBLE'),
+                        HistoryHandler.getSetting('INSTAGRAM_VISIBLE'),
+                        HistoryHandler.getSetting('MESSENGER_VISIBLE'),
+                        HistoryHandler.getSetting('CRM_VISIBLE')
+                    ]);
                     
                     // Si cualquiera de las plataformas está activa, mostrar backoffice
                     const isAnyPlatformActive = (dbWa !== 'false') || (dbIg === 'true') || (dbMs === 'true');
@@ -54,8 +56,10 @@ export const registerStaticRoutes = (app: any, { __dirname }: { __dirname: strin
                     
                     res.setHeader('Content-Type', 'text/html');
                     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+                    console.log(`[Static] ✅ ${filename} procesado y enviado.`);
                     res.end(htmlContent);
                 } else {
+                    console.warn(`[Static] ❌ Archivo ${filename} no encontrado para la ruta ${route}`);
                     res.status(404).send('HTML no encontrado en el servidor');
                 }
             } catch (err) {

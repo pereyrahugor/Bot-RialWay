@@ -109,6 +109,11 @@ export const smartBodyParser = (req: any, res: any, next: () => void) => {
         return next(); 
     }
 
+    // Solo procesar body si el método lo requiere y no es multipart
+    if (req.method === 'GET' || req.method === 'HEAD') {
+        return next();
+    }
+
     const contentType = req.headers['content-type'] || '';
     if (contentType.includes('multipart/form-data')) {
         // NO procesar body-parser si es multipart, dejar que Multer lo haga
