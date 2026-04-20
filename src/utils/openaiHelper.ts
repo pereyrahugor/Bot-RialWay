@@ -162,17 +162,27 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
     };
 
     // Pre-validación de tipo para assistantId (Evita error 400 'expected a string, but got an object')
-    if (typeof assistantId !== 'string') {
-        console.warn(`[openaiHelper] ⚠️ assistantId no es string: ${typeof assistantId}. Intentando normalizar...`, assistantId);
-        if (assistantId && (assistantId as any).id) {
-            assistantId = (assistantId as any).id;
-        } else {
-            assistantId = String(assistantId);
-        }
+    // Robustez: Asegurar que assistantId sea un string. Si es una Promesa, esperarla.
+    let resolvedAssistantId = assistantId;
+    if (resolvedAssistantId && typeof (resolvedAssistantId as any).then === 'function') {
+        console.log(`[openaiHelper] ⏳ Resolviendo assistantId (Promesa detectada)...`);
+        resolvedAssistantId = await resolvedAssistantId;
     }
 
+    if (typeof resolvedAssistantId !== 'string') {
+        console.warn(`[openaiHelper] ⚠️ assistantId no es string tras resolución: ${typeof resolvedAssistantId}. Intentando normalizar...`, resolvedAssistantId);
+        if (resolvedAssistantId && (resolvedAssistantId as any).id) {
+            resolvedAssistantId = (resolvedAssistantId as any).id;
+        } else {
+            resolvedAssistantId = String(resolvedAssistantId);
+        }
+    }
+    
+    const finalAssistantId = resolvedAssistantId as string;
+
+
     const runOptions: any = {
-        assistant_id: assistantId
+        assistant_id: finalAssistantId
     };
 
     // --- REVERT NOTE ---

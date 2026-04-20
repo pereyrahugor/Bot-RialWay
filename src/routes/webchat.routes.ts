@@ -117,7 +117,7 @@ export const registerWebchatRoutes = (app: any, {
                     clear: async () => session.clear(),
                 };
 
-                const currentAssistantId = aiManager.getAssignedAssistantId(ip);
+                const currentAssistantId = await aiManager.getAssignedAssistantId(ip);
                 
                 // Función adaptadora para recursión en AssistantResponseProcessor
                 const webChatAdapterFn = async (asId: string, msg: string, st: any, _fb: any, uid: any, _tid?: string, forceDb = false) => {
