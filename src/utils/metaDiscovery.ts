@@ -216,11 +216,31 @@ export async function discoverMetaIds(accessToken: string, mainToken: string | n
 
         console.log(`✅ [MetaDiscovery] Phone ID detectado: ${phoneNumberId} (${verifiedName})`);
 
+        // 3. Obtener Información detallada (Verificación y Límites)
+        let verificationStatus = 'unknown';
+        let messagingLimit = 'unknown';
+
+        try {
+            const wabaStatus = await getWabaStatus(wabaId, accessToken);
+            verificationStatus = wabaStatus.verification_status;
+        } catch (e) {
+            console.warn(`⚠️ [MetaDiscovery] No se pudo obtener el estado de verificación de la WABA.`);
+        }
+
+        try {
+            const limitInfo = await getPhoneLimit(phoneNumberId, accessToken);
+            messagingLimit = limitInfo.messaging_limit_tier;
+        } catch (e) {
+            console.warn(`⚠️ [MetaDiscovery] No se pudo obtener el límite de mensajería.`);
+        }
+
         return {
             wabaId,
             phoneNumberId,
             verifiedName,
-            status: 'active'
+            status: 'active',
+            verificationStatus,
+            messagingLimit
         };
     } catch (error: any) {
         console.error('❌ [MetaDiscovery] Error durante el descubrimiento:', error.response?.data || error.message);
@@ -303,6 +323,43 @@ export async function verifyPhoneNumberOtp(accessToken: string, phoneId: string,
         return response.data;
     } catch (error: any) {
         console.error('❌ [MetaDiscovery] Error verificando OTP:', error.response?.data || error.message);
+        throw error;
+    }
+}
+
+/**
+ * Consulta el estado de verificación de la WABA
+ * Requiere permiso business_management
+ */
+export async function getWabaStatus(wabaId: string, accessToken: string) {
+    try {
+        const response = await axios.get(`https://graph.facebook.com/v22.0/${wabaId}`, {
+            params: {
+                fields: 'id,name,verification_status,account_review_status',
+                access_token: accessToken
+            }
+        });
+        return response.data;
+    } catch (error: any) {
+        console.error('❌ [MetaDiscovery] Error consultando estado WABA:', error.response?.data || error.message);
+        throw error;
+    }
+}
+
+/**
+ * Consulta el límite de mensajería del número de teléfono
+ */
+export async function getPhoneLimit(phoneId: string, accessToken: string) {
+    try {
+        const response = await axios.get(`https://graph.facebook.com/v22.0/${phoneId}`, {
+            params: {
+                fields: 'id,messaging_limit_tier,display_phone_number,quality_rating',
+                access_token: accessToken
+            }
+        });
+        return response.data;
+    } catch (error: any) {
+        console.error('❌ [MetaDiscovery] Error consultando límites del teléfono:', error.response?.data || error.message);
         throw error;
     }
 }

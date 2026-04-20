@@ -99,7 +99,8 @@ export class AssistantResponseProcessor {
         gotoFlow: any,
         getAssistantResponse: Function,
         ASSISTANT_ID: string,
-        recursionDepth: number = 0
+        recursionDepth: number = 0,
+        projectId?: string
     ) {
         if (recursionDepth > 5) {
             console.error('[AssistantResponseProcessor] Límite de recursión alcanzado (5). Abortando para evitar bucle infinito.');
@@ -212,7 +213,7 @@ export class AssistantResponseProcessor {
 
                 // Recursión: procesar la respuesta final del asistente
                 await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
-                    newResponse, ctx, flowDynamic, state, provider, gotoFlow, getAssistantResponse, ASSISTANT_ID, recursionDepth + 1
+                    newResponse, ctx, flowDynamic, state, provider, gotoFlow, getAssistantResponse, ASSISTANT_ID, recursionDepth + 1, projectId
                 );
                 return;
             }
@@ -273,7 +274,8 @@ export class AssistantResponseProcessor {
                     null, 
                     ctx.userId, 
                     null, 
-                    platform
+                    platform,
+                    projectId
                 );
             }
             

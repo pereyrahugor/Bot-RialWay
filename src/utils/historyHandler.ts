@@ -66,6 +66,7 @@ export class HistoryHandler {
                     type TEXT NOT NULL,
                     name TEXT,
                     bot_enabled BOOLEAN DEFAULT true,
+                    assigned_agent TEXT DEFAULT 'asistente1',
                     last_message_at TIMESTAMPTZ DEFAULT NOW(),
                     last_human_message_at TIMESTAMPTZ,
                     metadata JSONB DEFAULT '{}'::jsonb,
@@ -297,12 +298,17 @@ export class HistoryHandler {
      * Obtiene o crea un registro de chat
      * 
      * @param rawChatId - ID tradicional (wa_id o número de teléfono)
+    /**
+     * Obtiene o crea un chat en un proyecto específico
+     * @param rawChatId - ID del chat (ej: número de teléfono)
      * @param type - Tipo de chat
      * @param name - Nombre del contacto
      * @param userId - El nuevo BSUID (Business-Scoped User ID) de Meta
+     * @param forcedProjectId - ID opcional del proyecto para forzar el ruteo
      */
-    static async getOrCreateChat(rawChatId: string, type: 'whatsapp' | 'webchat' | 'instagram' | 'messenger', name: string | null = null, userId: string | null = null): Promise<Chat | null> {
+    static async getOrCreateChat(rawChatId: string, type: 'whatsapp' | 'webchat' | 'instagram' | 'messenger', name: string | null = null, userId: string | null = null, forcedProjectId?: string): Promise<Chat | null> {
         const chatId = this.normalizeId(rawChatId);
+        const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
             if (name === '[-]') name = null;
 
         try {
@@ -315,7 +321,7 @@ export class HistoryHandler {
                     .from('chats')
                     .select('*')
                     .eq('user_id', userId)
-                    .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER)
+                    .eq('project_id', currentProjectId)
                     .maybeSingle();
                 
                 data = byUserId;
@@ -328,7 +334,7 @@ export class HistoryHandler {
                     .from('chats')
                     .select('*')
                     .eq('id', chatId)
-                    .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER)
+                    .eq('project_id', currentProjectId)
                     .maybeSingle();
                 
                 data = byChatId;
@@ -352,10 +358,11 @@ export class HistoryHandler {
                     .insert({
                         id: chatId,
                         user_id: userId,
-                        project_id: HistoryHandler.PROJECT_IDENTIFIER,
+                        project_id: currentProjectId,
                         type,
                         name,
                         bot_enabled: true,
+                        assigned_agent: 'asistente1',
                         last_message_at: new Date().toISOString()
                     })
                     .select()
@@ -382,8 +389,9 @@ export class HistoryHandler {
     /**
      * Guarda un mensaje en la base de datos
      */
-    static async saveMessage(rawChatId: string, role: 'user' | 'assistant' | 'system', content: string, type: string = 'text', contactName: string | null = null, userId: string | null = null, external_id: string | null = null, platformType?: 'whatsapp' | 'webchat' | 'instagram' | 'messenger') {
+    static async saveMessage(rawChatId: string, role: 'user' | 'assistant' | 'system', content: string, type: string = 'text', contactName: string | null = null, userId: string | null = null, external_id: string | null = null, platformType?: 'whatsapp' | 'webchat' | 'instagram' | 'messenger', forcedProjectId?: string) {
         const chatId = this.normalizeId(rawChatId);
+        const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
         if (contactName === '[-]') contactName = null;
         try {
             // Lógica de resolución de plataforma mejorada
@@ -401,11 +409,11 @@ export class HistoryHandler {
             }
 
             // Asegurar que el chat existe
-            await this.getOrCreateChat(chatId, resolvedPlatform, contactName, userId);
+            await this.getOrCreateChat(chatId, resolvedPlatform, contactName, userId, currentProjectId);
 
             const msgData: any = {
                 chat_id: chatId,
-                        project_id: HistoryHandler.PROJECT_IDENTIFIER,
+                project_id: currentProjectId,
                 role,
                 content,
                 type,
@@ -424,7 +432,7 @@ export class HistoryHandler {
                 // FALLBACK: Si falla el upsert (ej: columna external_id no existe aún), intentamos insert normal
                 const { error: insertError } = await supabase.from('messages').insert({
                     chat_id: chatId,
-                    project_id: HistoryHandler.PROJECT_IDENTIFIER,
+                    project_id: currentProjectId,
                     role,
                     content,
                     type,
@@ -455,7 +463,46 @@ export class HistoryHandler {
             });
 
         } catch (err) {
-            console.error('[HistoryHandler] Exception en saveMessage:', err);
+            console.error('[HistoryHandler] Error en saveMessage:', err);
+        }
+    }
+
+    /**
+     * Obtiene el asistente asignado al chat
+     */
+    static async getAssignedAgent(rawChatId: string, forcedProjectId?: string): Promise<string> {
+        const chatId = this.normalizeId(rawChatId);
+        const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+        try {
+            const { data, error } = await supabase
+                .from('chats')
+                .select('assigned_agent')
+                .eq('id', chatId)
+                .eq('project_id', currentProjectId)
+                .maybeSingle();
+            
+            if (error || !data || !data.assigned_agent) return 'asistente1';
+            return data.assigned_agent;
+        } catch (err) {
+            console.error('[HistoryHandler] Error en getAssignedAgent:', err);
+            return 'asistente1';
+        }
+    }
+
+    /**
+     * Actualiza el asistente asignado al chat
+     */
+    static async setAssignedAgent(rawChatId: string, agentName: string, forcedProjectId?: string) {
+        const chatId = this.normalizeId(rawChatId);
+        const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+        try {
+            await supabase
+                .from('chats')
+                .update({ assigned_agent: agentName })
+                .eq('id', chatId)
+                .eq('project_id', currentProjectId);
+        } catch (err) {
+            console.error('[HistoryHandler] Error en setAssignedAgent:', err);
         }
     }
 
@@ -798,14 +845,15 @@ export class HistoryHandler {
     /**
      * Guarda el thread_id de OpenAI en el metadata del chat
      */
-    static async saveThreadId(chatId: string, threadId: string) {
+    static async saveThreadId(chatId: string, threadId: string, forcedProjectId?: string) {
+        const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
         try {
             // Primero obtenemos metadata actual
             const { data } = await supabase
                 .from('chats')
                 .select('metadata')
                 .eq('id', chatId)
-                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER)
+                .eq('project_id', currentProjectId)
                     .maybeSingle();
 
             const currentMetadata = data?.metadata || {};
@@ -815,7 +863,7 @@ export class HistoryHandler {
                 .from('chats')
                 .update({ metadata: updatedMetadata })
                 .eq('id', chatId)
-                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
+                .eq('project_id', currentProjectId);
         } catch (err) {
             console.error('[HistoryHandler] Error en saveThreadId:', err);
         }
@@ -824,13 +872,14 @@ export class HistoryHandler {
     /**
      * Obtiene el thread_id de OpenAI del metadata del chat
      */
-    static async getThreadId(chatId: string): Promise<string | null> {
+    static async getThreadId(chatId: string, forcedProjectId?: string): Promise<string | null> {
+        const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
         try {
             const { data } = await supabase
                 .from('chats')
                 .select('metadata')
                 .eq('id', chatId)
-                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER)
+                .eq('project_id', currentProjectId)
                     .maybeSingle();
 
             return data?.metadata?.thread_id || null;
@@ -1239,6 +1288,39 @@ export class HistoryHandler {
         } catch (err: any) {
             console.error('[HistoryHandler] Error en assignChatToUser:', err);
             return { success: false, error: err.message };
+        }
+    }
+
+    /**
+     * Resuelve el project_id a partir del número de teléfono o ID del bot.
+     * Útil para ruteo multitenant dinámico.
+     */
+    static async getProjectIdByRecipient(recipientId: string | null): Promise<string | null> {
+        if (!recipientId || !supabase) return null;
+        
+        try {
+            // 1. Intentar buscar por phone_number_id en meta_onboarding
+            const { data: metaData } = await supabase
+                .from('meta_onboarding')
+                .select('project_id')
+                .eq('phone_number_id', recipientId)
+                .maybeSingle();
+
+            if (metaData) return metaData.project_id;
+
+            // 2. Fallback: buscar en settings por un valor que coincida (ej: WABA_NUMBER)
+            const { data: settingsData } = await supabase
+                .from('settings')
+                .select('project_id')
+                .eq('value', recipientId)
+                .maybeSingle();
+
+            if (settingsData) return settingsData.project_id;
+
+            return null;
+        } catch (err) {
+            console.error('[HistoryHandler] Error en getProjectIdByRecipient:', err);
+            return null;
         }
     }
 }

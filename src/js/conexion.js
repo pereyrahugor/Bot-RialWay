@@ -35,7 +35,20 @@ async function fetchStatus() {
             statusEl.textContent = '✅ Principal: META';
             statusEl.style.color = '#0668E1'; // Azul Meta
             sessionInfo.style.display = 'block';
-            sessionInfo.innerHTML = `<div><strong>Configuración:</strong> Meta Cloud API Activa</div>`;
+            
+            let extraInfo = '';
+            if (data.metaOnboarding.onboarding_data) {
+                const { verificationStatus, messagingLimit } = data.metaOnboarding.onboarding_data;
+                const vStatusLabel = verificationStatus === 'verified' ? '✅ Verificado' : (verificationStatus === 'not_verified' ? '❌ No Verificado' : `⏳ ${verificationStatus || 'Pendiente'}`);
+                extraInfo = `
+                    <div class="meta-stats" style="margin-top: 10px; padding: 10px; background: rgba(6, 104, 225, 0.1); border-radius: 8px; border: 1px solid rgba(6, 104, 225, 0.2);">
+                        <div style="margin-bottom: 5px;"><strong>Verificación:</strong> ${vStatusLabel}</div>
+                        <div><strong>Límite de Mensajes:</strong> <span class="badge" style="background: #0668E1; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem;">${messagingLimit || 'Desconocido'}</span></div>
+                    </div>
+                `;
+            }
+            
+            sessionInfo.innerHTML = `<div><strong>Configuración:</strong> Meta Cloud API Activa</div>${extraInfo}`;
         } else if (hasMetaConfig) {
             statusEl.textContent = '⏳ Principal: META (En curso)';
             statusEl.style.color = '#f59e0b';

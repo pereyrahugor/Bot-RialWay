@@ -6,7 +6,7 @@ import { HistoryHandler, supabase } from "../utils/historyHandler";
  */
 export const startHumanInactivityWorker = (timeoutMinutes = 15) => {
     console.log(`🤖 [Worker] Iniciando worker de inactividad humana (${timeoutMinutes} min)...`);
-    
+
     setInterval(async () => {
         try {
             const now = new Date();
