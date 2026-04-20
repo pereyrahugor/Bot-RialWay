@@ -161,6 +161,16 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
         }
     };
 
+    // Pre-validación de tipo para assistantId (Evita error 400 'expected a string, but got an object')
+    if (typeof assistantId !== 'string') {
+        console.warn(`[openaiHelper] ⚠️ assistantId no es string: ${typeof assistantId}. Intentando normalizar...`, assistantId);
+        if (assistantId && (assistantId as any).id) {
+            assistantId = (assistantId as any).id;
+        } else {
+            assistantId = String(assistantId);
+        }
+    }
+
     const runOptions: any = {
         assistant_id: assistantId
     };
