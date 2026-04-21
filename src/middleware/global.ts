@@ -38,6 +38,13 @@ export const compatibilityLayer = (req: any, res: any, next: () => void) => {
         return res;
     };
 
+    res.redirect = (url: string) => {
+        if (res.headersSent) return res;
+        res.writeHead(302, { 'Location': url });
+        res.end();
+        return res;
+    };
+
     res.sendFile = (filepath: string) => {
         if (res.headersSent) return;
         try {

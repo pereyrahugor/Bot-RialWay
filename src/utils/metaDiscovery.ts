@@ -4,18 +4,59 @@ import axios from 'axios';
  * Utilidad para descubrir automáticamente los IDs de Meta (WABA y Phone)
  * utilizando únicamente el Access Token.
  */
-export async function discoverMetaIds(accessToken: string, mainToken: string | null = null) {
+export interface DiagnosticEntry {
+    step: string;
+    description: string;
+    status: 'success' | 'failed' | 'empty';
+    details?: any;
+    error?: string;
+    fbtrace_id?: string;
+}
+
+export interface DiscoveryResult {
+    found: boolean;
+    data?: {
+        wabaId: string | null;
+        phoneNumberId: string | null;
+        verifiedName?: string;
+        status?: string;
+        verificationStatus?: string;
+        messagingLimit?: string;
+    };
+    diagnostics: DiagnosticEntry[];
+}
+
+/**
+ * Utilidad para descubrir automáticamente los IDs de Meta (WABA y Phone)
+ * utilizando únicamente el Access Token.
+ */
+export async function discoverMetaIds(accessToken: string, mainToken: string | null = null): Promise<DiscoveryResult> {
+    const diagnostics: DiagnosticEntry[] = [];
+    
+    const logDiag = (step: string, description: string, status: 'success' | 'failed' | 'empty', details?: any, error?: any) => {
+        const entry: DiagnosticEntry = {
+            step,
+            description,
+            status,
+            details: details || null,
+            error: error?.response?.data?.error?.message || error?.message || null,
+            fbtrace_id: error?.response?.data?.error?.fbtrace_id || null
+        };
+        diagnostics.push(entry);
+        console.log(`[MetaDiscovery][${status.toUpperCase()}] ${step}: ${description}`);
+    };
+
     try {
         console.log('📡 [MetaDiscovery] Iniciando descubrimiento con token de usuario...');
 
-        // Identificar quién es el usuario vinculado
+        // 0. Identificar quién es el usuario vinculado
         try {
             const me = await axios.get(`https://graph.facebook.com/v22.0/me?fields=name,id,email`, {
                 headers: { 'Authorization': `Bearer ${accessToken}` }
             });
-            console.log(`👤 [MetaDiscovery] Usuario detectado: ${me.data.name} (ID: ${me.data.id})`);
-        } catch (meErr) {
-            console.warn('⚠️ [MetaDiscovery] No se pudo identificar al usuario.');
+            logDiag('User Identification', `Usuario detectado: ${me.data.name}`, 'success', { name: me.data.name, id: me.data.id });
+        } catch (meErr: any) {
+            logDiag('User Identification', 'No se pudo identificar al usuario.', 'failed', null, meErr);
         }
 
         let wabaId = null;
@@ -27,8 +68,9 @@ export async function discoverMetaIds(accessToken: string, mainToken: string | n
                 headers: { 'Authorization': `Bearer ${accessToken}` }
             });
             businesses = businessesResponse.data?.data || [];
+            logDiag('Business Discovery', `Se encontraron ${businesses.length} negocios.`, businesses.length > 0 ? 'success' : 'empty', businesses);
         } catch (e: any) {
-            console.warn(`⚠️ [MetaDiscovery] No se pudo acceder a me/businesses (${e.response?.data?.error?.message || e.message}). Intentando rutas secundarias...`);
+            logDiag('Business Discovery', 'Error consultando me/businesses', 'failed', null, e);
         }
 
         // Buscar en los negocios si los obtuvimos
@@ -37,26 +79,31 @@ export async function discoverMetaIds(accessToken: string, mainToken: string | n
                 const accountsResponse = await axios.get(`https://graph.facebook.com/v22.0/${business.id}/owned_whatsapp_business_accounts`, {
                     headers: { 'Authorization': `Bearer ${accessToken}` }
                 });
-                if (accountsResponse.data?.data && accountsResponse.data.data.length > 0) {
-                    wabaId = accountsResponse.data.data[0].id;
+                const owned = accountsResponse.data?.data || [];
+                logDiag(`Business ${business.id}`, `Owned WABAs: ${owned.length}`, owned.length > 0 ? 'success' : 'empty', owned);
+                
+                if (owned.length > 0) {
+                    wabaId = owned[0].id;
                     break;
                 }
                 
                 const clientResponse = await axios.get(`https://graph.facebook.com/v22.0/${business.id}/client_whatsapp_business_accounts`, {
                     headers: { 'Authorization': `Bearer ${accessToken}` }
                 });
-                if (clientResponse.data?.data && clientResponse.data.data.length > 0) {
-                    wabaId = clientResponse.data.data[0].id;
+                const client = clientResponse.data?.data || [];
+                logDiag(`Business ${business.id}`, `Client WABAs: ${client.length}`, client.length > 0 ? 'success' : 'empty', client);
+                
+                if (client.length > 0) {
+                    wabaId = client[0].id;
                     break;
                 }
-            } catch (e) {
-                // Ignorar
+            } catch (e: any) {
+                logDiag(`Business ${business.id} Detail`, `Búsqueda en negocio fallida`, 'failed', null, e);
             }
         }
 
         // 2. Fallback: Intentar obtener WABAs directamente asociadas al usuario vía 'me/whatsapp_business_accounts'
         if (!wabaId) {
-            console.log('📡 [MetaDiscovery] Intentando buscar WABAs directamente asociadas al usuario vía endpoint específico...');
             try {
                 const directResponse = await axios.get(`https://graph.facebook.com/v22.0/me/whatsapp_business_accounts`, {
                     headers: { 'Authorization': `Bearer ${accessToken}` }
@@ -65,18 +112,18 @@ export async function discoverMetaIds(accessToken: string, mainToken: string | n
                 const accounts = directResponse.data?.data || [];
                 if (accounts.length > 0) {
                     wabaId = accounts[0].id;
-                    console.log(`✅ [MetaDiscovery] WABA encontrado vía 'me/whatsapp_business_accounts': ${wabaId}`);
+                    logDiag('Direct WABA Access', `WABA encontrado vía me/whatsapp_business_accounts: ${wabaId}`, 'success', accounts);
+                } else {
+                    logDiag('Direct WABA Access', 'No se encontraron WABAs en me/whatsapp_business_accounts', 'empty');
                 }
             } catch (e: any) {
-                console.warn(`⚠️ [MetaDiscovery] Error en me/whatsapp_business_accounts: ${e.response?.data?.error?.message || e.message}`);
+                logDiag('Direct WABA Access', 'Error en me/whatsapp_business_accounts', 'failed', null, e);
             }
         }
 
         // 3. Fallback: Intentar directamente en el usuario/sistema si no se obtuvo WABA (campos genéricos)
         if (!wabaId) {
-            console.log('📡 [MetaDiscovery] Intentando buscar WABAs directamente asociadas al usuario vía campos...');
             try {
-                // Probamos campos directos que a veces funcionan dependiendo del tipo de token
                 const directResponse = await axios.get(`https://graph.facebook.com/v22.0/me?fields=id,name,whatsapp_business_accounts,owned_whatsapp_business_accounts,client_whatsapp_business_accounts`, {
                     headers: { 'Authorization': `Bearer ${accessToken}` }
                 });
@@ -88,18 +135,18 @@ export async function discoverMetaIds(accessToken: string, mainToken: string | n
 
                 if (accounts.length > 0) {
                     wabaId = accounts[0].id;
-                    console.log(`✅ [MetaDiscovery] WABA encontrado vía campos directos en 'me': ${wabaId}`);
+                    logDiag('Me Fields Discovery', `WABA encontrado vía campos directos: ${wabaId}`, 'success', accounts);
+                } else {
+                    logDiag('Me Fields Discovery', 'No se encontraron WABAs en campos directos de me', 'empty');
                 }
             } catch (e: any) {
-                console.warn(`⚠️ [MetaDiscovery] Error en búsqueda directa por campos: ${e.response?.data?.error?.message || e.message}`);
+                logDiag('Me Fields Discovery', 'Error en búsqueda directa por campos de me', 'failed', null, e);
             }
         }
 
-        // 3. Fallback Final: Debug Token para obtener contexto de la App
+        // 4. Fallback Final: Debug Token para obtener contexto de la App
         if (!wabaId) {
-            console.log('📡 [MetaDiscovery] Intentando obtener información vía debug_token...');
             try {
-                // Necesitamos el App Token (AppID|AppSecret)
                 const appToken = `${process.env.META_APP_ID}|${process.env.META_APP_SECRET}`;
                 const debugResponse = await axios.get(`https://graph.facebook.com/v22.0/debug_token`, {
                     params: {
@@ -109,142 +156,139 @@ export async function discoverMetaIds(accessToken: string, mainToken: string | n
                 });
                 
                 const debugData = debugResponse.data.data;
-                console.log(`ℹ️ [MetaDiscovery] Token Info: AppID=${debugData.app_id}, UserID=${debugData.user_id}, Scopes=${debugData.scopes?.join(',')}`);
+                logDiag('Debug Token Path', `Token Info: AppID=${debugData.app_id}, UserID=${debugData.user_id}`, 'success', debugData);
                 
-                // Si el debug token nos da el Business ID, podemos buscar WABAs ahí
-                const businessId = debugData.business_id;
+                let businessId = debugData.business_id;
+                
+                // Buscar IDs en scopes granulares si no hay business_id directo
+                if (!businessId && debugData.granular_scopes) {
+                    // Buscar Business ID
+                    const bizScope = debugData.granular_scopes.find((s: any) => s.scope === 'business_management');
+                    if (bizScope && bizScope.target_ids && bizScope.target_ids.length > 0) {
+                        businessId = bizScope.target_ids[0];
+                        logDiag('Debug Token Path', `Business ID detectado en scopes: ${businessId}`, 'info');
+                    }
+                    
+                    // Buscar WABA ID directamente
+                    const wabaScope = debugData.granular_scopes.find((s: any) => s.scope === 'whatsapp_business_management');
+                    if (wabaScope && wabaScope.target_ids && wabaScope.target_ids.length > 0) {
+                        const potentialWabaId = wabaScope.target_ids[0];
+                        if (!wabaId) {
+                            wabaId = potentialWabaId;
+                            logDiag('Debug Token Path', `WABA ID detectado en scopes: ${wabaId}`, 'info');
+                        }
+                    }
+                }
+
                 if (businessId) {
-                    console.log(`📡 [MetaDiscovery] Buscando WABAs para el Business ID: ${businessId}...`);
                     const bizWabas = await axios.get(`https://graph.facebook.com/v22.0/${businessId}/whatsapp_business_accounts`, {
                         headers: { 'Authorization': `Bearer ${accessToken}` }
                     });
                     if (bizWabas.data?.data && bizWabas.data.data.length > 0) {
                         wabaId = bizWabas.data.data[0].id;
-                        console.log(`✅ [MetaDiscovery] WABA encontrado vía Business ID del Token: ${wabaId}`);
+                        logDiag('Debug Token Business', `WABA encontrado vía Business ID ${businessId}: ${wabaId}`, 'success');
+                    } else {
+                        logDiag('Debug Token Business', `No se encontraron WABAs para el Business ID ${businessId}`, 'empty');
                     }
                 }
             } catch (e: any) {
-                console.warn(`⚠️ [MetaDiscovery] Error en debug_token o búsqueda por Business ID: ${e.response?.data?.error?.message || e.message}`);
-            }
-        }
-
-        // 4. Fallback final: Intentar ver si el usuario tiene algún Business ID vía /me/businesses (requiere business_management, pero a veces devuelve algo con whatsapp_business_management)
-        if (!wabaId) {
-            try {
-                console.log('📡 [MetaDiscovery] Intentando buscar Businesses del usuario...');
-                const bizRes = await axios.get(`https://graph.facebook.com/v22.0/me/businesses`, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
-                });
-                if (bizRes.data?.data) {
-                    for (const biz of bizRes.data.data) {
-                        const wRes = await axios.get(`https://graph.facebook.com/v22.0/${biz.id}/whatsapp_business_accounts`, {
-                            headers: { 'Authorization': `Bearer ${accessToken}` }
-                        });
-                        if (wRes.data?.data?.[0]) {
-                            wabaId = wRes.data.data[0].id;
-                            console.log(`✅ [MetaDiscovery] WABA encontrado vía Business ${biz.id}: ${wabaId}`);
-                            break;
-                        }
-                    }
-                }
-            } catch (e) {
-                // Silently ignore failures in business listing to try next discovery method
+                logDiag('Debug Token Path', 'Error en debug_token o búsqueda por Business ID', 'failed', null, e);
             }
         }
 
         // 5. SUPER FALLBACK: Si tenemos un mainToken (Super User), buscar WABAs en TODO el portafolio
         if (!wabaId && mainToken) {
             try {
-                console.log('📡 [MetaDiscovery] [SUPER-FALLBACK] Buscando en WABAs del Portafolio (Main Token)...');
-                // Intentamos buscar WABAs compartidas o del cliente vinculado
-                // Primero: Listar negocios del Main Token
                 const mainBizRes = await axios.get(`https://graph.facebook.com/v22.0/me/businesses`, {
                     headers: { 'Authorization': `Bearer ${mainToken}` }
                 });
                 
                 if (mainBizRes.data?.data) {
                     for (const biz of mainBizRes.data.data) {
-                        // Buscar WABAs del cliente en este business
                         const clientWabas = await axios.get(`https://graph.facebook.com/v22.0/${biz.id}/client_whatsapp_business_accounts`, {
                             headers: { 'Authorization': `Bearer ${mainToken}` }
                         });
                         
                         if (clientWabas.data?.data?.[0]) {
                             wabaId = clientWabas.data.data[0].id;
-                            console.log(`✅ [MetaDiscovery] WABA encontrado en Portafolio vía Client WABA: ${wabaId}`);
+                            logDiag('Main Token Fallback', `WABA encontrado en Portafolio vía Client WABA: ${wabaId}`, 'success');
                             break;
                         }
 
-                        // Backup: Listar WABAs normales del negocio
                         const bizWabas = await axios.get(`https://graph.facebook.com/v22.0/${biz.id}/whatsapp_business_accounts`, {
                             headers: { 'Authorization': `Bearer ${mainToken}` }
                         });
                         if (bizWabas.data?.data?.[0]) {
                             wabaId = bizWabas.data.data[0].id;
-                            console.log(`✅ [MetaDiscovery] WABA encontrado en Portafolio vía Business Account: ${wabaId}`);
+                            logDiag('Main Token Fallback', `WABA encontrado en Portafolio vía Business Account: ${wabaId}`, 'success');
                             break;
                         }
                     }
                 }
             } catch (superErr: any) {
-                console.warn(`⚠️ [MetaDiscovery] Super-Fallback falló: ${superErr.message}`);
+                logDiag('Main Token Fallback', 'Super-Fallback falló', 'failed', null, superErr);
             }
         }
 
         if (!wabaId) {
-            console.warn('⚠️ [MetaDiscovery] No se encontraron cuentas asociadas en absoluto.');
-            return null;
+            return { found: false, diagnostics };
         }
 
-        console.log(`✅ [MetaDiscovery] WABA ID detectado: ${wabaId}`);
-
-        // 2. Obtener el Phone Number ID
-        // Consultamos los números de teléfono de esa WABA
-        const phoneResponse = await axios.get(`https://graph.facebook.com/v22.0/${wabaId}/phone_numbers`, {
-            headers: { 'Authorization': `Bearer ${accessToken}` }
-        });
-
-        const phoneData = phoneResponse.data.data?.[0]; // Tomamos el primer número
-
-        if (!phoneData) {
-            console.warn(`⚠️ [MetaDiscovery] No se encontraron números de teléfono en la WABA ${wabaId}.`);
-            return { wabaId, phoneNumberId: null };
+        // Obtener el Phone Number ID
+        let phoneNumberId = null;
+        let verifiedName = "";
+        try {
+            const phoneResponse = await axios.get(`https://graph.facebook.com/v22.0/${wabaId}/phone_numbers`, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+            const phoneData = phoneResponse.data.data?.[0];
+            if (phoneData) {
+                phoneNumberId = phoneData.id;
+                verifiedName = phoneData.verified_name || "Nombre pendiente";
+                logDiag('Phone ID Discovery', `Phone ID detectado: ${phoneNumberId} (${verifiedName})`, 'success', phoneData);
+            } else {
+                logDiag('Phone ID Discovery', `No se encontraron números en la WABA ${wabaId}`, 'empty');
+            }
+        } catch (phoneErr: any) {
+            logDiag('Phone ID Discovery', `Error consultando números de la WABA ${wabaId}`, 'failed', null, phoneErr);
         }
 
-        const phoneNumberId = phoneData.id;
-        const verifiedName = phoneData.verified_name;
-
-        console.log(`✅ [MetaDiscovery] Phone ID detectado: ${phoneNumberId} (${verifiedName})`);
-
-        // 3. Obtener Información detallada (Verificación y Límites)
         let verificationStatus = 'unknown';
         let messagingLimit = 'unknown';
 
-        try {
-            const wabaStatus = await getWabaStatus(wabaId, accessToken);
-            verificationStatus = wabaStatus.verification_status;
-        } catch (e) {
-            console.warn(`⚠️ [MetaDiscovery] No se pudo obtener el estado de verificación de la WABA.`);
+        if (wabaId) {
+            try {
+                const wabaStatus = await getWabaStatus(wabaId, accessToken);
+                verificationStatus = wabaStatus.verification_status;
+            } catch (e) {
+                /* ignore failure to fetch extended status */
+            }
         }
 
-        try {
-            const limitInfo = await getPhoneLimit(phoneNumberId, accessToken);
-            messagingLimit = limitInfo.messaging_limit_tier;
-        } catch (e) {
-            console.warn(`⚠️ [MetaDiscovery] No se pudo obtener el límite de mensajería.`);
+        if (phoneNumberId) {
+            try {
+                const limitInfo = await getPhoneLimit(phoneNumberId, accessToken);
+                messagingLimit = limitInfo.messaging_limit_tier;
+            } catch (e) {
+                /* ignore failure to fetch limit info */
+            }
         }
 
         return {
-            wabaId,
-            phoneNumberId,
-            verifiedName,
-            status: 'active',
-            verificationStatus,
-            messagingLimit
+            found: !!phoneNumberId,
+            data: {
+                wabaId,
+                phoneNumberId,
+                verifiedName,
+                status: 'active',
+                verificationStatus,
+                messagingLimit
+            },
+            diagnostics
         };
     } catch (error: any) {
-        console.error('❌ [MetaDiscovery] Error durante el descubrimiento:', error.response?.data || error.message);
-        return null;
+        logDiag('General Discovery Flow', 'Error crítico durante el descubrimiento', 'failed', null, error);
+        return { found: false, diagnostics };
     }
 }
 
@@ -335,7 +379,7 @@ export async function getWabaStatus(wabaId: string, accessToken: string) {
     try {
         const response = await axios.get(`https://graph.facebook.com/v22.0/${wabaId}`, {
             params: {
-                fields: 'id,name,verification_status,account_review_status',
+                fields: 'id,name,account_review_status,timezone_id,message_template_namespace',
                 access_token: accessToken
             }
         });

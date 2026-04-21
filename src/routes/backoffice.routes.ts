@@ -539,24 +539,32 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     });
 
     app.post('/api/backoffice/whatsapp/sync-manual', systemConfigAuth, bodyParser.json(), async (req, res) => {
-        const { token: manualToken } = req.body;
+        const { token: manualToken, wabaId, phoneNumberId, projectId: bodyProjectId } = req.body;
         if (!manualToken) return res.status(400).json({ success: false, error: 'Token is required' });
 
         try {
-            const { discoverMetaIds } = await import("../utils/metaDiscovery");
-            console.log(`📡 [META-SYNC-MANUAL] Iniciando descubrimiento manual...`);
-            
-            const discovery = await discoverMetaIds(manualToken);
-            if (!discovery || !discovery.phoneNumberId) {
-                return res.status(404).json({ success: false, error: 'No se encontraron datos de WhatsApp asociados a este token.' });
+            const projectId = bodyProjectId || req.query.projectId || process.env.RAILWAY_PROJECT_ID;
+            let finalWabaId = wabaId;
+            let finalPhoneId = phoneNumberId;
+            let extra: any = { syncedBy: 'manual-sync-tool' };
+
+            if (!finalWabaId || !finalPhoneId) {
+                const { discoverMetaIds } = await import("../utils/metaDiscovery");
+                console.log(`📡 [META-SYNC-MANUAL] Iniciando descubrimiento manual por falta de IDs...`);
+                const discovery = await discoverMetaIds(manualToken);
+                if (!discovery.found || !discovery.data?.phoneNumberId) {
+                    return res.status(404).json({ success: false, error: 'No se pudieron encontrar los datos automáticamente. Por favor ingresa los IDs manualmente.' });
+                }
+                finalWabaId = discovery.data.wabaId;
+                finalPhoneId = discovery.data.phoneNumberId;
+                extra = { ...discovery.data, ...extra };
             }
 
-            const projectId = req.body.projectId || req.query.projectId || process.env.RAILWAY_PROJECT_ID;
             const result = await HistoryHandler.saveMetaOnboardingData(
-                discovery.wabaId, 
-                discovery.phoneNumberId, 
+                finalWabaId, 
+                finalPhoneId, 
                 manualToken,
-                { ...discovery, syncedBy: 'manual-sync-tool' },
+                extra,
                 projectId
             );
 
@@ -861,10 +869,11 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             const { discoverMetaIds } = await import("../utils/metaDiscovery");
             const mainToken = await HistoryHandler.getMainToken();
             const discovery = await discoverMetaIds(accessToken, mainToken);
-            if (discovery) {
-                finalWabaId = discovery.wabaId || finalWabaId;
-                finalPhoneId = discovery.phoneNumberId || finalPhoneId;
-                finalVerifiedName = discovery.verifiedName || "";
+            
+            if (discovery.found && discovery.data) {
+                finalWabaId = discovery.data.wabaId || finalWabaId;
+                finalPhoneId = discovery.data.phoneNumberId || finalPhoneId;
+                finalVerifiedName = discovery.data.verifiedName || "";
             }
 
             // 2. Descubrimiento de Páginas (Messenger / Instagram)
@@ -886,153 +895,112 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             }
 
             // 3. Verificación de resultados y depuración de scopes si falló todo
-            if (!finalWabaId && !pageDiscovery) {
+            if (!discovery.found && !pageDiscovery) {
                 console.warn('⚠️ [CALLBACK] No se pudo descubrir ningún recurso automáticamente.');
                 
-                // Obtener scopes para ayudar al diagnóstico
-                let debugInfo = "";
-                try {
-                    const appToken = `${process.env.META_APP_ID}|${process.env.META_APP_SECRET}`;
-                    const debugResponse = await axios.get(`https://graph.facebook.com/v22.0/debug_token`, {
-                        params: { input_token: accessToken, access_token: appToken }
-                    });
-                    const scopes = debugResponse.data.data.scopes || [];
-                    debugInfo = `Permisos detectados: ${scopes.join(', ')}`;
-                    console.log(`ℹ️ [CALLBACK] Scopes del token: ${debugInfo}`);
-                } catch (e) {
-                    debugInfo = "No se pudo obtener el detalle de permisos del token.";
-                }
+                const diagHtml = discovery.diagnostics.map(d => `
+                    <div style="margin-bottom: 15px; border-bottom: 1px solid #edf2f7; padding-bottom: 10px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <strong style="font-size: 14px; color: #2d3748;">${d.step}</strong>
+                            <span style="font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: bold; text-transform: uppercase; 
+                                background: ${d.status === 'success' ? '#c6f6d5' : d.status === 'empty' ? '#feebc8' : '#fed7d7'}; 
+                                color: ${d.status === 'success' ? '#22543d' : d.status === 'empty' ? '#744210' : '#822727'};">
+                                ${d.status}
+                            </span>
+                        </div>
+                        <p style="font-size: 13px; color: #4a5568; margin: 4px 0;">${d.description}</p>
+                        ${d.error ? `<p style="font-size: 12px; color: #e53e3e; font-family: monospace; background: #fff5f5; padding: 5px; border-radius: 4px; margin: 2px 0;">${d.error}</p>` : ''}
+                        ${d.fbtrace_id ? `<p style="font-size: 10px; color: #a0aec0;">fbtrace_id: ${d.fbtrace_id}</p>` : ''}
+                    </div>
+                `).join('');
 
-                // En lugar de lanzar un error que bloquea todo, podemos permitir que continúe
-                // pero marcando que la configuración está incompleta.
-                // Sin embargo, para evitar que el usuario se confunda, le mostraremos el aviso
-                // pero guardaremos el token para que no tenga que repetir el login.
-                
                 const htmlError = `
-                    <div style="font-family: sans-serif; padding: 40px; text-align: center; color: #333; max-width: 700px; margin: 0 auto; line-height: 1.6;">
-                        <h1 style="color: #e53e3e; margin-bottom: 20px;">⚠️ Configuración Incompleta</h1>
-                        <p>Hemos vinculado tu cuenta de Meta, pero no pudimos encontrar automáticamente una cuenta de WhatsApp Cloud API.</p>
-                        
-                        <div id="step-1" style="background: #fffaf0; padding: 25px; border-radius: 12px; border: 1px solid #feebc8; margin-top: 25px; text-align: left; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-                            <h3 style="margin-top: 0; color: #9c4221;">Paso 1: Vincular tu Número</h3>
-                            <p style="font-size: 14px;">Introduce el número que deseas usar. Enviaremos un SMS de verificación desde Meta.</p>
+                    <div style="font-family: sans-serif; padding: 40px; color: #2d3748; max-width: 800px; margin: 0 auto; line-height: 1.6; background: #f7fafc; min-height: 100vh;">
+                        <div style="background: white; padding: 40px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); border: 1px solid #e2e8f0;">
+                            <h1 style="color: #e53e3e; margin-bottom: 10px; font-size: 28px; font-weight: 800; text-align: center;">Configuración Incompleta</h1>
+                            <p style="color: #718096; margin-bottom: 30px; text-align: center;">Hemos vinculado tu cuenta de Meta, pero no pudimos encontrar automáticamente una cuenta de WhatsApp Cloud API activa.</p>
                             
-                            <div style="margin-top: 15px;">
-                                <label style="display: block; font-size: 13px; font-weight: bold; margin-bottom: 5px;">Número de Teléfono (con código de país):</label>
-                                <input type="text" id="phoneInput" placeholder="5491122334455" style="width: 100%; padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; box-sizing: border-box;">
-                            </div>
-                            
-                            <div style="margin-top: 15px;">
-                                <label style="display: block; font-size: 13px; font-weight: bold; margin-bottom: 5px;">Nombre para mostrar (Empresa):</label>
-                                <input type="text" id="nameInput" placeholder="Mi Negocio" style="width: 100%; padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; box-sizing: border-box;">
-                            </div>
-
-                            <div style="margin-top: 20px; border-top: 1px solid #fbd38d; padding-top: 15px;">
-                                <button onclick="toggleAdvanced()" style="background: none; border: none; font-size: 12px; color: #718096; cursor: pointer; text-decoration: underline; padding: 0;">Configuración Avanzada (Token Manual/WABA)</button>
+                            <div style="margin-top: 30px; background: #ebf8ff; padding: 25px; border-radius: 12px; border: 1px solid #bee3f8; text-align: left;">
+                                <h3 style="margin-top: 0; color: #2b6cb0; font-size: 18px;">Opción 1: Configuración Manual (Recomendado)</h3>
+                                <p style="font-size: 14px; margin-bottom: 20px;">Si conoces tus IDs de WhatsApp, ingrésalos aquí. Esto activará el bot directamente sin validación por SMS.</p>
                                 
-                                <div id="advancedSection" style="display: none; margin-top: 15px; background: #fff; padding: 15px; border-radius: 6px; border: 1px dashed #cbd5e0;">
-                                    <div style="margin-bottom: 10px;">
-                                        <label style="display: block; font-size: 11px; font-weight: bold; color: #4a5568;">WABA ID:</label>
-                                        <input type="text" id="wabaInput" placeholder="ID de la Cuenta de Negocio" style="width: 100%; padding: 8px; border: 1px solid #e2e8f0; border-radius: 4px; box-sizing: border-box; font-size: 12px;">
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                                    <div>
+                                        <label style="display: block; font-size: 12px; font-weight: bold; margin-bottom: 5px; color: #4a5568;">WABA ID (Account):</label>
+                                        <input type="text" id="wabaManual" placeholder="1234567890..." style="width: 100%; padding: 12px; border: 1px solid #cbd5e0; border-radius: 8px; box-sizing: border-box;">
                                     </div>
                                     <div>
-                                        <label style="display: block; font-size: 11px; font-weight: bold; color: #4a5568;">System / Admin Token:</label>
-                                        <textarea id="tokenInput" placeholder="EAAV..." style="width: 100%; height: 60px; padding: 8px; border: 1px solid #e2e8f0; border-radius: 4px; box-sizing: border-box; font-size: 11px; font-family: monospace;"></textarea>
+                                        <label style="display: block; font-size: 12px; font-weight: bold; margin-bottom: 5px; color: #4a5568;">Phone Number ID:</label>
+                                        <input type="text" id="phoneManual" placeholder="9876543210..." style="width: 100%; padding: 12px; border: 1px solid #cbd5e0; border-radius: 8px; box-sizing: border-box;">
                                     </div>
+                                </div>
+
+                                <button onclick="saveManual()" id="btnSaveManual" style="background: #3182ce; color: white; padding: 15px 25px; border-radius: 10px; border: none; font-weight: bold; width: 100%; margin-top: 20px; cursor: pointer; transition: all 0.2s;">
+                                    Vincular con estos IDs
+                                </button>
+                            </div>
+
+                            <div style="margin-top: 35px; border-top: 1px solid #edf2f7; padding-top: 25px; text-align: center;">
+                                <button onclick="toggleLogs()" style="background: #edf2f7; border: none; padding: 10px 20px; border-radius: 8px; font-size: 13px; color: #4a5568; cursor: pointer; font-weight: 600;">
+                                    🔍 Ver Diagnóstico Técnico del Descubrimiento
+                                </button>
+
+                                <div id="logSection" style="display: none; margin-top: 20px; text-align: left; background: white; border: 1px solid #e2e8f0; padding: 20px; border-radius: 12px; max-height: 400px; overflow-y: auto;">
+                                    ${diagHtml}
                                 </div>
                             </div>
 
-                            <button onclick="submitNumber()" id="btnSubmit" style="background: #38a169; color: white; padding: 12px 20px; border-radius: 6px; border: none; font-weight: bold; width: 100%; margin-top: 20px; cursor: pointer;">
-                                Solicitar Código SMS
-                            </button>
-                        </div>
-
-                        <div id="step-2" style="display: none; background: #ebf8ff; padding: 25px; border-radius: 12px; border: 1px solid #bee3f8; margin-top: 25px; text-align: left;">
-                            <h3 style="margin-top: 0; color: #2b6cb0;">Paso 2: Confirmar Código</h3>
-                            <p style="font-size: 14px;">Introduce el código de 6 dígitos que recibiste en tu celular.</p>
-                            <input type="text" id="codeInput" placeholder="000000" maxlength="6" style="width: 100%; padding: 15px; border: 1px solid #63b3ed; border-radius: 6px; font-size: 24px; text-align: center; letter-spacing: 10px;">
-                            <button onclick="verifyCode()" id="btnVerify" style="background: #3182ce; color: white; padding: 12px 20px; border-radius: 6px; border: none; font-weight: bold; width: 100%; margin-top: 20px; cursor: pointer;">
-                                Activar WhatsApp
-                            </button>
+                            <div style="margin-top: 40px; font-size: 13px; color: #a0aec0; text-align: center;">
+                                <p>Tip: Asegúrate de que tu cuenta de WhatsApp esté validada en el panel de Meta Developer antes de intentar la vinculación.</p>
+                            </div>
                         </div>
 
                         <script>
                             const projectId = "${projectId}";
-                            let tempPhoneId = "";
+                            const accessToken = "${accessToken}";
 
-                            function toggleAdvanced() {
-                                const section = document.getElementById('advancedSection');
+                            function toggleLogs() {
+                                const section = document.getElementById('logSection');
                                 section.style.display = section.style.display === 'none' ? 'block' : 'none';
                             }
 
-                            async function submitNumber() {
-                                const phone = document.getElementById('phoneInput').value;
-                                const name = document.getElementById('nameInput').value;
-                                const waba = document.getElementById('wabaInput').value;
-                                const manualToken = document.getElementById('tokenInput').value;
-                                if (!phone || !name) return alert('Por favor completa teléfono y nombre');
+                            async function saveManual() {
+                                const waba = document.getElementById('wabaManual').value;
+                                const phone = document.getElementById('phoneManual').value;
+                                if (!waba || !phone) return alert('Por favor completa ambos IDs');
                                 
-                                document.getElementById('btnSubmit').innerText = 'Procesando...';
-                                document.getElementById('btnSubmit').disabled = true;
+                                document.getElementById('btnSaveManual').innerText = 'Guardando...';
+                                document.getElementById('btnSaveManual').disabled = true;
 
                                 try {
-                                    const res = await fetch('/api/backoffice/whatsapp/register-step-1', {
+                                    const res = await fetch('/api/backoffice/whatsapp/sync-manual', {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json' },
                                         body: JSON.stringify({ 
-                                            phoneNumber: phone, 
-                                            verifiedName: name, 
-                                            projectId: projectId,
-                                            manualWabaId: waba,
-                                            manualToken: manualToken
+                                            token: accessToken,
+                                            wabaId: waba,
+                                            phoneNumberId: phone,
+                                            projectId: projectId
                                         })
                                     });
                                     const data = await res.json();
                                     if (data.success) {
-                                        tempPhoneId = data.phoneId;
-                                        document.getElementById('step-1').style.display = 'none';
-                                        document.getElementById('step-2').style.display = 'block';
+                                        window.location.href = window.location.origin + "/dashboard.html?metaStatus=success";
                                     } else {
                                         alert('Error: ' + data.error);
-                                        document.getElementById('btnSubmit').innerText = 'Solicitar Código SMS';
-                                        document.getElementById('btnSubmit').disabled = false;
+                                        document.getElementById('btnSaveManual').innerText = 'Vincular con estos IDs';
+                                        document.getElementById('btnSaveManual').disabled = false;
                                     }
                                 } catch (e) {
                                     alert('Error de conexión: ' + e.message);
                                 }
                             }
-
-                            async function verifyCode() {
-                                const code = document.getElementById('codeInput').value;
-                                if (!code) return alert('Introduce el código');
-
-                                try {
-                                    const res = await fetch('/api/backoffice/whatsapp/register-step-2', {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ phoneId: tempPhoneId, code: code, projectId: projectId })
-                                    });
-                                    const data = await res.json();
-                                    if (data.success) {
-                                        window.location.href = "https://duskcodes.com.ar/dashboard.html?metaStatus=success";
-                                    } else {
-                                        alert('Error: ' + data.error);
-                                    }
-                                } catch (e) {
-                                    alert('Error: ' + e.message);
-                                }
-                            }
                         </script>
-
-                        <div style="margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 20px;">
-                            <a href="/backoffice/whatsapp/config" style="color: #718096; text-decoration: none; font-size: 14px;">Omitir y configurar manualmente luego</a>
-                        </div>
                     </div>
                 `;
 
-                // Guardar solo el token antes de salir, pasando nulls para lo que no descubrimos
-                // Firma: wabaId, phoneId, token, extra, projectId
-                await HistoryHandler.saveMetaOnboardingData(null as any, null as any, accessToken, { debugInfo }, projectId);
+                // Guardar solo el token para futuras referencias
+                await HistoryHandler.saveMetaOnboardingData(null as any, null as any, accessToken, { diagnostics: discovery.diagnostics }, projectId);
                 return res.send(htmlError);
             }
 

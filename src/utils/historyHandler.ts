@@ -140,6 +140,7 @@ export class HistoryHandler {
                     phone_number_id TEXT,
                     access_token TEXT,
                     onboarding_data JSONB DEFAULT '{}'::jsonb,
+                    owner_id uuid REFERENCES users(id),
                     status TEXT DEFAULT 'active',
                     created_at TIMESTAMPTZ DEFAULT NOW(),
                     updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -250,6 +251,15 @@ export class HistoryHandler {
                         if (assignedErr && assignedErr.code === '42703') {
                             console.log(`🔧 Agregando columna assigned_to a chats...`);
                             await supabase.rpc('exec_sql', { query: `ALTER TABLE chats ADD COLUMN IF NOT EXISTS assigned_to uuid REFERENCES users(id);` });
+                        }
+                    }
+
+                    // Migración para owner_id en meta_onboarding
+                    if (table.name === 'meta_onboarding') {
+                        const { error: ownerErr } = await supabase.from('meta_onboarding').select('owner_id').limit(1);
+                        if (ownerErr && ownerErr.code === '42703') {
+                            console.log(`🔧 Agregando columna owner_id a meta_onboarding...`);
+                            await supabase.rpc('exec_sql', { query: `ALTER TABLE meta_onboarding ADD COLUMN IF NOT EXISTS owner_id uuid REFERENCES users(id);` });
                         }
                     }
 
@@ -1120,9 +1130,11 @@ export class HistoryHandler {
 
             // --- PASO ADICIONAL: Sincronizar con la routing_table para habilitar webhooks globales ---
             // Solo si tenemos un dominio público configurado
-            const publicDomain = process.env.RAILWAY_PUBLIC_DOMAIN;
+            const publicDomain = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PROJECT_URL;
             if (publicDomain && phoneId) {
-                const projectUrl = publicDomain.startsWith('http') ? publicDomain : `https://${publicDomain}`;
+                let projectUrl = publicDomain.startsWith('http') ? publicDomain : `https://${publicDomain}`;
+                // Asegurar que termina sin barra lateral para consistencia
+                if (projectUrl.endsWith('/')) projectUrl = projectUrl.slice(0, -1);
                 console.log(`📡 [HistoryHandler] Sincronizando routing_table para ${phoneId} -> ${projectUrl}`);
                 
                 await supabase
@@ -1154,6 +1166,20 @@ export class HistoryHandler {
                 } catch (apiErr: any) {
                     console.warn(`⚠️ [HistoryHandler] No se pudo confirmar la suscripción de webhooks:`, apiErr.response?.data || apiErr.message);
                 }
+            }
+
+            // --- PASO ADICIONAL 3: Migrar al token maestro si existe ---
+            try {
+                const mainToken = await this.getMainToken();
+                if (mainToken && token !== mainToken) {
+                    console.log(`📡 [HistoryHandler] Migrando token de cliente a 'main_token' para WABA ${wabaId}...`);
+                    await supabase
+                        .from('meta_onboarding')
+                        .update({ access_token: mainToken })
+                        .eq('waba_id', wabaId);
+                }
+            } catch (swapErr) {
+                console.warn('⚠️ [HistoryHandler] No se pudo migrar al main_token:', swapErr);
             }
 
             return { success: true, data };
@@ -1192,7 +1218,15 @@ export class HistoryHandler {
                 }
             }
 
-            return data;
+            if (data) {
+                return {
+                    ...data,
+                    whatsappToken: data.access_token,
+                    whatsappNumberId: data.phone_number_id,
+                    whatsappBusinessId: data.waba_id
+                };
+            }
+            return null;
         } catch (err) {
             console.error('[HistoryHandler] Error en getMetaOnboardingData:', err);
             return null;
@@ -1224,9 +1258,10 @@ export class HistoryHandler {
         } else {
             // --- PASO ADICIONAL: Si configuramos IDs de Meta, registrar en la routing_table para triangulación ---
             if ((key === 'FACEBOOK_PAGE_ID' || key === 'INSTAGRAM_BUSINESS_ID') && value) {
-                const publicDomain = process.env.RAILWAY_PUBLIC_DOMAIN;
+                const publicDomain = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PROJECT_URL;
                 if (publicDomain && value) {
-                    const projectUrl = publicDomain.startsWith('http') ? publicDomain : `https://${publicDomain}`;
+                    let projectUrl = publicDomain.startsWith('http') ? publicDomain : `https://${publicDomain}`;
+                    if (projectUrl.endsWith('/')) projectUrl = projectUrl.slice(0, -1);
                     console.log(`📡 [HistoryHandler] Sincronizando routing_table para ${key}: ${value} -> ${projectUrl}`);
                     
                     await supabase
