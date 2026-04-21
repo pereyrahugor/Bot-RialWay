@@ -420,29 +420,62 @@ export class HistoryHandler {
                 created_at: new Date().toISOString()
             };
 
+            // --- DEDUPLICACIÓN MULTI-ESTRATEGIA ---
+            // 1. Si viene external_id, intentamos upsert directamente para aprovechar el índice único
             if (external_id) {
                 msgData.external_id = external_id;
+                const { data: existingMsg, error: upsertError } = await supabase
+                    .from('messages')
+                    .upsert(msgData, { onConflict: 'external_id' })
+                    .select();
+                
+                if (!upsertError && existingMsg && existingMsg.length > 0) return existingMsg;
+                // Si falla el upsert (ej: la columna no existe o hay conflicto complejo), seguimos a la estrategia 2
             }
 
-            const { error } = await supabase
+            // 2. BUSQUEDA POR CONTENIDO + TIEMPO (Deduplicación Difusa)
+            // Esto evita duplicados cuando el sistema guarda el mensaje antes de enviarlo (ID nulo)
+            // y luego llega el webhook (ID real) o viceversa, lo cual es común en Meta Cloud API.
+            const twentySecondsAgo = new Date(Date.now() - 20000).toISOString();
+            
+            const { data: recentlySaved, error: searchError } = await supabase
                 .from('messages')
-                .upsert(msgData, { onConflict: 'external_id' });
+                .select('id, external_id')
+                .eq('chat_id', chatId)
+                .eq('project_id', currentProjectId)
+                .eq('role', role)
+                .eq('content', content)
+                .gt('created_at', twentySecondsAgo)
+                .order('created_at', { ascending: false })
+                .limit(1);
 
-            if (error) {
-                // FALLBACK: Si falla el upsert (ej: columna external_id no existe aún), intentamos insert normal
-                const { error: insertError } = await supabase.from('messages').insert({
-                    chat_id: chatId,
-                    project_id: currentProjectId,
-                    role,
-                    content,
-                    type,
-                    external_id: external_id || null,
-                    created_at: new Date().toISOString()
-                });
+            if (recentlySaved && recentlySaved.length > 0) {
+                const existing = recentlySaved[0];
                 
-                if (insertError) {
-                    console.error('[HistoryHandler] CRITICAL: Falló guardado de mensaje en Supabase:', insertError);
+                // Si el mensaje existente no tiene external_id y ahora lo tenemos, lo actualizamos
+                if (!existing.external_id && external_id) {
+                    console.log(`[HistoryHandler] 🔄 Vinculando ID externo a mensaje existente: ${existing.id} -> ${external_id}`);
+                    await supabase
+                        .from('messages')
+                        .update({ external_id })
+                        .eq('id', existing.id);
                 }
+                return recentlySaved;
+            }
+
+            // 3. INSERCIÓN NORMAL (Si no se encontró duplicado)
+            const { error: insertError } = await supabase.from('messages').insert({
+                chat_id: chatId,
+                project_id: currentProjectId,
+                role,
+                content,
+                type,
+                external_id: external_id || null,
+                created_at: msgData.created_at
+            });
+
+            if (insertError) {
+                console.error('[HistoryHandler] Error en inserción de mensaje fallback:', insertError);
             }
 
             // Actualizar timestamp del último mensaje en el chat para el ordenamiento de la lista

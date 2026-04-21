@@ -255,8 +255,12 @@ export class AssistantResponseProcessor {
             // Cuando la respuesta no contiene el ID, envíala al usuario
             if (assistantApiResponse) {
                 try {
-                    await flowDynamic([{ body: limpiarBloquesJSON(String(assistantApiResponse)).trim() }]);
-                    // flowDynamic ejecutado correctamente
+                    const cleanRes = limpiarBloquesJSON(String(assistantApiResponse)).trim();
+                    await flowDynamic([{ body: cleanRes }]);
+                    // Guardar en el historial
+                    if (ctx?.from) {
+                        await HistoryHandler.saveMessage(ctx.from, 'assistant', cleanRes, 'text', null, ctx.userId, null, ctx.platform, projectId);
+                    }
                 } catch (err) {
                     console.error('[WhatsApp Debug] Error en flowDynamic:', err);
                 }
@@ -264,7 +268,6 @@ export class AssistantResponseProcessor {
         } else if (cleanTextResponse.length > 0 || pdfPaths.length > 0) {
             // GUARDAR RESPUESTA DEL ASISTENTE EN EL HISTORIAL
             if (ctx && ctx.from) {
-                // Obtenemos la plataforma del contexto si está disponible, sino fallback a 'whatsapp'
                 const platform = ctx.platform || 'whatsapp';
                 await HistoryHandler.saveMessage(
                     ctx.from, 
