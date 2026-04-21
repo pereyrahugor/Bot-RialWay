@@ -74,6 +74,36 @@
                 </div>
             </div>
 
+            <!-- Centro de Control Maestro -->
+            <div class="card" style="border-left: 4px solid #3b82f6; padding: 30px;">
+                <h2 style="margin-bottom: 20px;"><i class="fas fa-sliders-h"></i> Centro de Control Maestro</h2>
+                
+                <div style="display: flex; flex-direction: column; gap: 20px;">
+                    <!-- Toggle Bot Global -->
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 15px; background: rgba(59, 130, 246, 0.05); border-radius: 12px; border: 1px solid rgba(59, 130, 246, 0.1);">
+                        <div style="text-align: left;">
+                            <div style="font-weight: 700; color: #1e293b;">Estado Global del Bot (IA)</div>
+                            <div style="font-size: 0.85rem; color: #64748b;">Cuando está desactivado, el bot no responderá a ningún mensaje (Modo Humano).</div>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" id="global-bot-toggle" checked>
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+
+                    <!-- Botón Hot Reload -->
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 15px; background: rgba(16, 185, 129, 0.05); border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.1);">
+                        <div style="text-align: left;">
+                            <div style="font-weight: 700; color: #064e3b;">Recargar Motor del Bot</div>
+                            <div style="font-size: 0.85rem; color: #065f46;">Aplica cambios de Meta o Google Sheets sin entrar a Railway. (Downtime: 30-45s)</div>
+                        </div>
+                        <button id="system-reload-btn" class="btn" style="background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-sync-alt"></i> Reiniciar
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Zona de Peligro -->
             <div class="card" style="border-top: 4px solid #f87171; text-align: center; padding: 30px;">
                 <h2 style="color: #f87171;">⚠️ Zona de Peligro</h2>
@@ -145,6 +175,37 @@
         #confirmSi:hover { background: #dc2626; transform: scale(1.05); }
         #confirmNo { background: #4b5563; color: white; border: none; }
         #confirmNo:hover { background: #374151; }
+
+        /* The switch - the box around the slider */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 28px;
+        }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #cbd5e1;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider { background-color: #3b82f6; }
+        input:focus + .slider { box-shadow: 0 0 1px #3b82f6; }
+        input:checked + .slider:before { transform: translateX(22px); }
     </style>
 
     <!-- Modal de Confirmación de Reinicio -->

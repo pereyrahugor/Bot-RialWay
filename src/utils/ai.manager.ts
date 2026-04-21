@@ -147,8 +147,14 @@ export class AiManager {
             // ELIMINADO: Duplicado con provider.manager.ts
             // await HistoryHandler.saveMessage( ... );
 
+            // --- FILTRO DE BOT GLOBAL ---
+            const isGlobalBotEnabled = await HistoryHandler.getSetting('GLOBAL_BOT_ENABLED', dynamicProjectId);
             const isBotActiveForUser = await HistoryHandler.isBotEnabled(ctx.from);
-            if (!isBotActiveForUser) {
+
+            if (isGlobalBotEnabled === 'false' || !isBotActiveForUser) {
+                if (isGlobalBotEnabled === 'false') {
+                    console.log(`[AiManager] 🛑 Bot DESACTIVADO GLOBALMENTE paratodo el sistema.`);
+                }
                 try {
                     const threadId = await HistoryHandler.getThreadId(ctx.from);
                     if (threadId && this.openaiMain) {

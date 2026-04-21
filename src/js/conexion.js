@@ -114,8 +114,66 @@ function renderProviderStatus(status, label) {
     }
 }
 
+// --- MASTER CONTROL LOGIC ---
+const botToggle = document.getElementById('global-bot-toggle');
+const reloadBtn = document.getElementById('system-reload-btn');
+
+async function fetchBotStatus() {
+    try {
+        const res = await fetch(`/api/backoffice/settings/bot-status?token=${localStorage.getItem('backoffice_token')}`);
+        const data = await res.json();
+        if (data.success) {
+            botToggle.checked = data.enabled;
+        }
+    } catch (e) { console.error("Error fetching bot status", e); }
+}
+
+if (botToggle) {
+    botToggle.addEventListener('change', async () => {
+        const enabled = botToggle.checked;
+        try {
+            await fetch('/api/backoffice/settings/toggle-bot', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: localStorage.getItem('backoffice_token'), enabled })
+            });
+        } catch (e) { 
+            alert("Error al cambiar el estado del bot"); 
+            botToggle.checked = !enabled;
+        }
+    });
+}
+
+if (reloadBtn) {
+    reloadBtn.addEventListener('click', async () => {
+        if (!confirm("¿Estás seguro de que deseas reiniciar el motor del bot? Esto aplicará cambios de Meta y Google Sheets. El servicio estará fuera de línea unos 30-45 segundos.")) return;
+        
+        reloadBtn.disabled = true;
+        reloadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reiniciando...';
+        
+        try {
+            const res = await fetch('/api/backoffice/system/restart', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: localStorage.getItem('backoffice_token') })
+            });
+            if (res.ok) {
+                alert("Reinicio solicitado con éxito. La página se recargará en 10 segundos.");
+                setTimeout(() => window.location.reload(), 10000);
+            }
+        } catch (e) {
+            alert("Error al solicitar el reinicio");
+            reloadBtn.disabled = false;
+            reloadBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Reiniciar';
+        }
+    });
+}
+
+// Inicializar
+fetchBotStatus();
 fetchStatus();
 setInterval(fetchStatus, 15000);
+setInterval(fetchBotStatus, 30000); // Polling lento para el estado del bot
 
 // Redirigir a /webreset al hacer click en el botón de reinicio
 

@@ -1038,6 +1038,13 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             }
 
             console.log(`✅ [CALLBACK] Onboarding finalizado con éxito para Proyecto: ${projectId}`);
+            
+            // Programar un reinicio automático para aplicar el cambio de motor (Baileys -> Meta)
+            setTimeout(() => {
+                console.log('🔄 [SYSTEM] Reiniciando bot automáticamente para aplicar la configuración de Meta...');
+                process.exit(1);
+            }, 5000);
+
             return res.redirect("https://duskcodes.com.ar/dashboard.html?metaStatus=success");
 
         } catch (error: any) {
