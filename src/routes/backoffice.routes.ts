@@ -229,10 +229,15 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                     const msgId = resApi.messages[0].id;
                     await HistoryHandler.saveMessage(phone, 'assistant', `[Plantilla Masiva: ${templateName}]`, 'text', null, null, msgId);
                     sent++;
+                } else {
+                    // Si resApi es null o no trae mensajes, es un error
+                    errors++;
+                    console.error(`❌ [BULK] Fallo al enviar a ${phone}: Meta no devolvió ID de mensaje.`);
                 }
             } catch (e: any) {
                 errors++;
-                console.error(`❌ [BULK] Error enviando a ${phone}:`, e?.response?.data?.error?.message || e.message || e);
+                const errorMsg = e?.response?.data?.error?.message || e.message || e;
+                console.error(`❌ [BULK] Error enviando a ${phone}:`, errorMsg);
             }
             // Pequeño delay para no saturar la API
             await new Promise(r => setTimeout(r, 200));

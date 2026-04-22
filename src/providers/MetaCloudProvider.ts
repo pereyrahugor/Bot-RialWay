@@ -317,7 +317,7 @@ class MetaCloudProvider extends ProviderClass {
             return response.data;
         } catch (error: any) {
             console.error('❌ [MetaCloudProvider] Error enviando plantilla:', error?.response?.data || error.message);
-            return null;
+            throw error; // Lanzamos el error para que el proceso masivo lo capture
         }
     }
 
