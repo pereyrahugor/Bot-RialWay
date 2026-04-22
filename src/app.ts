@@ -122,11 +122,11 @@ const main = async () => {
         try {
             const { discoverMetaIds } = await import("./utils/metaDiscovery");
             const discovery = await discoverMetaIds(metaToken);
-            if (discovery && discovery.phoneNumberId && discovery.wabaId) {
-                console.log(`✅ [App] Recuperación exitosa: PhoneID=${discovery.phoneNumberId}, WABAID=${discovery.wabaId}`);
-                metaPhoneId = discovery.phoneNumberId;
-                metaWabaId = discovery.wabaId;
-                await HistoryHandler.saveMetaOnboardingData(metaWabaId, metaPhoneId, metaToken, { ...discovery, syncedAt: new Date().toISOString() });
+            if (discovery && discovery.data?.phoneNumberId && discovery.data?.wabaId) {
+                console.log(`✅ [App] Recuperación exitosa: PhoneID=${discovery.data.phoneNumberId}, WABAID=${discovery.data.wabaId}`);
+                metaPhoneId = discovery.data.phoneNumberId;
+                metaWabaId = discovery.data.wabaId;
+                await HistoryHandler.saveMetaOnboardingData(metaWabaId, metaPhoneId, metaToken, { ...discovery.data, syncedAt: new Date().toISOString() });
             }
         } catch (e: any) {
             console.error('⚠️ [App] Error en auto-descubrimiento de Meta:', e.message);

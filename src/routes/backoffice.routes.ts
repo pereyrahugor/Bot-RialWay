@@ -172,13 +172,19 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
         const headerComp = template.components.find((c: any) => c.type === 'HEADER');
         const mediaFormat = headerComp && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComp.format) ? headerComp.format.toLowerCase() : null;
 
-        console.log(`📊 [BULK] Iniciando envío masivo: ${templateName} | Filas: ${data.length}`);
+        const languageCode = template.language || 'es';
+        console.log(`📊 [BULK] Iniciando envío masivo: ${templateName} | Idioma: ${languageCode} | Filas: ${data.length}`);
 
         sendJson(res, 202, { success: true, message: 'Proceso masivo iniciado.', total: data.length });
 
         let sent = 0, errors = 0;
+        let firstRowLogged = false;
 
         for (const row of data) {
+            if (!firstRowLogged) {
+                console.log('🔍 [BULK] Ejemplo de datos de la primera fila:', JSON.stringify(row));
+                firstRowLogged = true;
+            }
             // Detección de teléfono más flexible (phone, tel, movil, cel, celular, etc.)
             const phoneKey = Object.keys(row).find(k => 
                 ['phone', 'tel', 'movil', 'cel', 'celular', 'telefono', 'whatsapp'].some(p => k.toLowerCase().includes(p))
@@ -233,20 +239,22 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
             }
 
             try {
+                console.log(`[BULK] Preparando envío para ${phone}. Componentes:`, JSON.stringify(components, null, 2));
                 const resApi = await provider.sendTemplate(phone, templateName, languageCode || 'es_AR', components);
+                
                 if (resApi?.messages) {
                     const msgId = resApi.messages[0].id;
+                    console.log(`✅ [BULK] Mensaje aceptado por Meta para ${phone}. ID: ${msgId}`);
                     await HistoryHandler.saveMessage(phone, 'assistant', `[Plantilla Masiva: ${templateName}]`, 'text', null, null, msgId);
                     sent++;
                 } else {
-                    // Si resApi es null o no trae mensajes, es un error
                     errors++;
-                    console.error(`❌ [BULK] Fallo al enviar a ${phone}: Meta no devolvió ID de mensaje.`);
+                    console.error(`❌ [BULK] Fallo al enviar a ${phone}: Meta no devolvió ID de mensaje. Respuesta:`, JSON.stringify(resApi));
                 }
             } catch (e: any) {
                 errors++;
-                const errorMsg = e?.response?.data?.error?.message || e.message || e;
-                console.error(`❌ [BULK] Error enviando a ${phone}:`, errorMsg);
+                const errorData = e?.response?.data || e.message || e;
+                console.error(`❌ [BULK] Error de Meta para ${phone}:`, JSON.stringify(errorData, null, 2));
             }
             // Pequeño delay para no saturar la API
             await new Promise(r => setTimeout(r, 200));
