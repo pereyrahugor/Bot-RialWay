@@ -179,8 +179,17 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
         let sent = 0, errors = 0;
 
         for (const row of data) {
-            const phone = String(row.phone || row.PHONE || row.Phone || '').replace(/\D/g, '');
-            if (!phone) continue;
+            // Detección de teléfono más flexible (phone, tel, movil, cel, celular, etc.)
+            const phoneKey = Object.keys(row).find(k => 
+                ['phone', 'tel', 'movil', 'cel', 'celular', 'telefono', 'whatsapp'].some(p => k.toLowerCase().includes(p))
+            );
+            
+            const phone = phoneKey ? String(row[phoneKey] ?? '').replace(/\D/g, '') : '';
+            
+            if (!phone) {
+                console.warn(`⚠️ [BULK] Fila omitida: No se encontró columna de teléfono válida o está vacía. Columnas: [${Object.keys(row).join(', ')}]`);
+                continue;
+            }
 
             const components: any[] = [];
             

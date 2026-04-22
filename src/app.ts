@@ -223,10 +223,10 @@ const main = async () => {
                     const metaOnboarding = await HistoryHandler.getMetaOnboardingData();
                     if (metaOnboarding && adapterProvider && adapterProvider.updateConfig) {
                         adapterProvider.updateConfig({
-                            jwtToken: metaOnboarding.whatsappToken,
-                            numberId: metaOnboarding.whatsappNumberId,
-                            verifyToken: process.env.META_VERIFY_TOKEN,
-                            businessId: metaOnboarding.whatsappBusinessId
+                            access_token: metaOnboarding.whatsappToken,
+                            phone_number_id: metaOnboarding.whatsappNumberId,
+                            verify_token: process.env.META_VERIFY_TOKEN,
+                            waba_id: metaOnboarding.whatsappBusinessId
                         });
                     }
 
