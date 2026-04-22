@@ -147,28 +147,32 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
             return sendJson(res, 400, { success: false, error: 'Falta el archivo o el nombre de la plantilla.' });
         }
 
-        // Import dinámico para evitar problemas ESM/CJS con esbuild
         const xlsxModule = await import('xlsx');
         const xlsxLib = xlsxModule.default || xlsxModule;
 
         const workbook = xlsxLib.readFile(file.path);
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        // defval: '' asegura que celdas vacías aparezcan como '' en vez de ser omitidas
         const data: any[] = xlsxLib.utils.sheet_to_json(worksheet, { defval: '' });
 
         if (data.length === 0) {
             return sendJson(res, 400, { success: false, error: 'El Excel está vacío.' });
         }
 
-        // Detectar columnas de parámetros: todas las que NO sean 'phone'
         const allKeys = Object.keys(data[0]);
         const paramKeys = allKeys.filter(k => k.toLowerCase() !== 'phone');
 
-        console.log(`📊 [BULK] Excel cargado: ${data.length} filas | Columnas: [${allKeys.join(', ')}] | Parámetros de plantilla: [${paramKeys.join(', ')}]`);
-
-        // Determinar proveedor
+        // Determinar proveedor y obtener detalles de la plantilla
         const provider = (adapterProvider.constructor.name === 'MetaCloudProvider') ? adapterProvider : (deps as any).groupProvider;
+        const templates = await provider.getTemplates();
+        const template = templates.find((t: any) => t.name === templateName);
+        if (!template) throw new Error("Plantilla no encontrada al procesar envío masivo.");
+
+        // Detectar tipo de cabecera multimedia
+        const headerComp = template.components.find((c: any) => c.type === 'HEADER');
+        const mediaFormat = headerComp && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComp.format) ? headerComp.format.toLowerCase() : null;
+
+        console.log(`📊 [BULK] Iniciando envío masivo: ${templateName} | Filas: ${data.length}`);
 
         sendJson(res, 202, { success: true, message: 'Proceso masivo iniciado.', total: data.length });
 
@@ -178,14 +182,46 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
             const phone = String(row.phone || row.PHONE || row.Phone || '').replace(/\D/g, '');
             if (!phone) continue;
 
-            // Construir parámetros en el orden de las columnas del Excel (excluyendo phone)
-            const parameters: any[] = [];
+            const components: any[] = [];
+            
+            // 1. BODY Params
+            const bodyParams: any[] = [];
             for (const key of paramKeys) {
+                // Saltar columnas especiales
+                if (key === 'header_media_url' || key.startsWith('button_')) continue;
                 const val = String(row[key] ?? '');
-                parameters.push({ type: 'text', parameter_name: key, text: val || '-' });
+                bodyParams.push({ type: 'text', text: val || '-' });
+            }
+            if (bodyParams.length > 0) {
+                components.push({ type: 'body', parameters: bodyParams });
             }
 
-            const components = parameters.length > 0 ? [{ type: 'body', parameters }] : [];
+            // 2. HEADER Media
+            if (mediaFormat && row.header_media_url) {
+                components.push({
+                    type: 'header',
+                    parameters: [{
+                        type: mediaFormat,
+                        [mediaFormat]: { link: row.header_media_url }
+                    }]
+                });
+            }
+
+            // 3. BUTTONS Dinámicos
+            for (const key of paramKeys) {
+                if (key.startsWith('button_') && key.endsWith('_url_suffix') && row[key]) {
+                    const idxMatch = key.match(/button_(\d+)_/);
+                    if (idxMatch) {
+                        const btnIdx = parseInt(idxMatch[1]) - 1;
+                        components.push({
+                            type: 'button',
+                            sub_type: 'url',
+                            index: String(btnIdx),
+                            parameters: [{ type: 'text', text: row[key] }]
+                        });
+                    }
+                }
+            }
 
             try {
                 const resApi = await provider.sendTemplate(phone, templateName, languageCode || 'es_AR', components);
@@ -198,13 +234,14 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                 errors++;
                 console.error(`❌ [BULK] Error enviando a ${phone}:`, e?.response?.data?.error?.message || e.message || e);
             }
-            await new Promise(r => setTimeout(r, 250));
+            // Pequeño delay para no saturar la API
+            await new Promise(r => setTimeout(r, 200));
         }
 
         console.log(`✅ [BULK] Proceso finalizado: ${sent} enviados, ${errors} errores de ${data.length} filas.`);
     } catch (e: any) {
         console.error('Error en processBulkTemplate:', e);
-        sendJson(res, 500, { success: false, error: e.message });
+        // Nota: El res ya fue enviado (202), este error solo va a logs si ocurre después
     } finally {
         if (file && fs.existsSync(file.path)) fs.unlinkSync(file.path);
     }
@@ -775,45 +812,57 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                 return res.status(404).json({ success: false, error: 'Plantilla no encontrada.' });
             }
 
-            // Detectar variables en BODY — soporta {{1}} y {{nombre}}
+            // 1. Detectar variables en BODY
             const bodyComponent = template.components.find((c: any) => c.type === 'BODY');
             const text = bodyComponent?.text || '';
-            // Extrae los nombres de las variables en orden de aparición
             const varNames: string[] = [];
             const varRegex = /\{\{(\w+)\}\}/g;
             let match;
             while ((match = varRegex.exec(text)) !== null) {
                 if (!varNames.includes(match[1])) {
-                    varNames.push(match[1]); // ej: ['nombre'] o ['1', '2']
+                    varNames.push(match[1]); 
                 }
             }
 
+            // 2. Detectar HEADER Multimedia
+            const headerComp = template.components.find((c: any) => c.type === 'HEADER');
+            const hasMediaHeader = headerComp && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComp.format);
+
+            // 3. Detectar BUTTONS dinámicos (URL con {{1}})
+            const buttonsComp = template.components.find((c: any) => c.type === 'BUTTONS');
+            const dynamicButtonIndices: number[] = [];
+            if (buttonsComp && buttonsComp.buttons) {
+                buttonsComp.buttons.forEach((btn: any, idx: number) => {
+                    if (btn.type === 'URL' && btn.url && btn.url.includes('{{1}}')) {
+                        dynamicButtonIndices.push(idx);
+                    }
+                });
+            }
+
             // Obtener contactos existentes del proyecto
-            const chats = await HistoryHandler.listChats(2000, 0); // Hasta 2000 contactos recientes
+            const chats = await HistoryHandler.listChats(2000, 0); 
 
             const XLSX = await import('xlsx');
             const wb = XLSX.utils.book_new();
             
-            // Cabeceras: phone + los nombres reales de cada variable
+            // Cabeceras: phone + variables body + media + botones
             const headers = ['phone', ...varNames];
+            if (hasMediaHeader) headers.push('header_media_url');
+            dynamicButtonIndices.forEach(idx => headers.push(`button_${idx + 1}_url_suffix`));
 
-            // Preparar filas de datos
             const rows = [headers];
             
             if (chats && chats.length > 0) {
                 chats.forEach((chat: any) => {
                     const cleanPhone = chat.id.split('@')[0];
                     const row = [cleanPhone];
-                    // Dejar las columnas de variables vacías para que el usuario complete
-                    for (let i = 0; i < varNames.length; i++) {
-                        row.push('');
-                    }
+                    // Columnas vacías para completar
+                    for (let i = 1; i < headers.length; i++) row.push('');
                     rows.push(row);
                 });
             } else {
-                // Fila de ejemplo si no hay contactos
-                const exampleRow = ['54911... (sin el +)'];
-                varNames.forEach(v => exampleRow.push(`ejemplo_${v}`));
+                const exampleRow = ['54911...'];
+                for (let i = 1; i < headers.length; i++) exampleRow.push(`valor_${headers[i]}`);
                 rows.push(exampleRow);
             }
 

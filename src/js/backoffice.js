@@ -107,11 +107,6 @@ socket.on('bot_toggled', (payload) => {
         if (toggle) toggle.checked = payload.enabled;
         updateBotStatusText(payload.enabled);
         updateInputState(payload.enabled);
-        
-        // Si hay un panel de info del chat, podríamos refrescarlo aquí
-        if (payload.assigned_agent && typeof renderActiveChatAgent === 'function') {
-            renderActiveChatAgent(payload.assigned_agent);
-        }
     }
     renderChatList();
 });
@@ -1751,17 +1746,16 @@ function renderTemplateCards(container, templates, isLibrary = false) {
 
 function showTemplateDetail(templateName, isLibrary, language) {
     const templates = isLibrary ? libraryTemplates : availableTemplates;
-    // Identificar unívocamente por nombre e idioma
     const template = templates.find(t => t.name === templateName && (!language || t.language === language));
     if (!template) return;
     currentSelectedTemplate = template;
     
-    // Ocultar vistas principales
+    // Hide main views
     document.getElementById('view-my-templates').style.display = 'none';
     document.getElementById('view-meta-library').style.display = 'none';
     document.getElementById('view-new-template').style.display = 'none';
     
-    // Mostrar detalle
+    // Show detail
     const detailView = document.getElementById('view-template-detail');
     detailView.style.display = 'block';
     
@@ -1777,34 +1771,21 @@ function showTemplateDetail(templateName, isLibrary, language) {
     let bodyText = 'Sin contenido de texto disponible';
     let headerText = '';
     let footerText = '';
-    let buttonsHtml = '';
 
     if (template.components && Array.isArray(template.components)) {
-        // BODY
         const bodyComp = template.components.find(c => c.type === 'BODY' || c.type === 'message' || c.type?.toUpperCase() === 'BODY');
         if (bodyComp) {
             bodyText = bodyComp.text || bodyComp.content || (bodyComp.example?.body_text?.[0]?.[0]) || bodyText;
         }
 
-        // HEADER
         const headerComp = template.components.find(c => c.type === 'HEADER' || c.type?.toUpperCase() === 'HEADER');
         if (headerComp) {
             headerText = headerComp.text || headerComp.content || (headerComp.example?.header_text?.[0]) || '';
         }
 
-        // FOOTER
         const footerComp = template.components.find(c => c.type === 'FOOTER' || c.type?.toUpperCase() === 'FOOTER');
         if (footerComp) {
             footerText = footerComp.text || footerComp.content || '';
-        }
-
-        // BUTTONS
-        const buttonsComp = template.components.find(c => c.type === 'BUTTONS' || c.type?.toUpperCase() === 'BUTTONS');
-        if (buttonsComp && buttonsComp.buttons) {
-            buttonsHtml = '\n\n' + buttonsComp.buttons.map(b => {
-                const typeIcon = b.type === 'PHONE_NUMBER' ? '📞' : (b.type === 'URL' ? '🔗' : '🔘');
-                return `[${typeIcon} ${b.text}]`;
-            }).join('  ');
         }
     } else if (template.body) {
         bodyText = template.body;
@@ -1812,20 +1793,66 @@ function showTemplateDetail(templateName, isLibrary, language) {
 
     const previewFinal = document.getElementById('wa-preview-text-final');
     if (previewFinal) {
-        let content = '';
-        if (headerText) content += `*${headerText}*\n\n`;
-        content += bodyText;
-        if (footerText) content += `\n\n_${footerText}_`;
-        if (buttonsHtml) content += buttonsHtml;
+        // Limpiar botones previos si existen
+        const bubble = previewFinal.closest('.wa-preview-bubble');
+        if (bubble) {
+            const existingBtns = bubble.parentNode.querySelectorAll('.wa-preview-btns-container');
+            existingBtns.forEach(b => b.remove());
+        }
+
+        let html = '';
         
-        previewFinal.innerText = content;
+        // 1. Header Media (IMAGE, VIDEO, DOCUMENT)
+        const headerComp = template.components?.find(c => c.type === 'HEADER');
+        if (headerComp && headerComp.format && headerComp.format !== 'TEXT') {
+            const format = headerComp.format.toLowerCase();
+            if (format === 'image') {
+                const imgUrl = headerComp.example?.header_handle?.[0] || 'https://via.placeholder.com/300x150?text=Imagen+de+Cabecera';
+                html += `<img src="${imgUrl}" style="width:calc(100% + 30px); margin: -12px -15px 12px -15px; border-radius:10px 10px 0 0; display:block; object-fit:cover; max-height:200px;">`;
+            } else if (format === 'video') {
+                html += `<div style="width:calc(100% + 30px); margin: -12px -15px 12px -15px; aspect-ratio:16/9; background:#000; border-radius:10px 10px 0 0; display:flex; align-items:center; justify-content:center; color:white;"><i class="fas fa-play-circle fa-3x"></i></div>`;
+            } else if (format === 'document') {
+                html += `<div style="width:calc(100% + 30px); margin: -12px -15px 12px -15px; padding:15px; background:rgba(0,0,0,0.05); border-radius:10px 10px 0 0; display:flex; align-items:center; gap:10px; border-bottom:1px solid rgba(0,0,0,0.05);"><i class="fas fa-file-pdf fa-2x" style="color:#ef4444;"></i> <span style="font-size:0.85rem; font-weight:600;">Documento PDF</span></div>`;
+            }
+        }
+
+        if (headerText) html += `<div style="font-weight:700; margin-bottom:8px;">${headerText}</div>`;
+        
+        html += `<div style="white-space: pre-wrap;">${bodyText}</div>`;
+        
+        if (footerText) html += `<div style="color:var(--text-muted); font-size:0.8rem; margin-top:8px;">${footerText}</div>`;
+        
+        previewFinal.innerHTML = html;
+
+        // 2. Botones Reales
+        const buttonsComp = template.components?.find(c => c.type === 'BUTTONS');
+        if (buttonsComp && buttonsComp.buttons) {
+            if (bubble) {
+                const btnsContainer = document.createElement('div');
+                btnsContainer.className = 'wa-preview-btns-container';
+                btnsContainer.style = 'margin-top:2px; display:flex; flex-direction:column; gap:2px; width:100%; max-width:320px;';
+                
+                buttonsComp.buttons.forEach(b => {
+                    const btn = document.createElement('div');
+                    btn.className = 'wa-preview-btn';
+                    btn.style = 'background:white; padding:10px; border-radius:10px; text-align:center; color:#00a884; font-weight:600; font-size:0.9rem; box-shadow:0 1px 2px rgba(0,0,0,0.1); cursor:default; display:flex; align-items:center; justify-content:center; gap:8px;';
+                    
+                    let icon = '<i class="fas fa-reply"></i>';
+                    if (b.type === 'URL') icon = '<i class="fas fa-external-link-alt"></i>';
+                    if (b.type === 'PHONE_NUMBER') icon = '<i class="fas fa-phone"></i>';
+                    
+                    btn.innerHTML = `${icon} ${b.text}`;
+                    btnsContainer.appendChild(btn);
+                });
+                bubble.parentNode.insertBefore(btnsContainer, bubble.nextSibling);
+            }
+        }
     }
 
     const bulkSection = document.getElementById('bulk-actions-section');
     const adoptSection = document.getElementById('library-adopt-section');
 
     if (bulkSection) {
-        // Solo permitir envío masivo para plantillas aprobadas DEL usuario
         if (template.status === 'APPROVED' && !isLibrary) {
             bulkSection.style.display = 'block';
         } else {
@@ -1834,7 +1861,6 @@ function showTemplateDetail(templateName, isLibrary, language) {
     }
 
     if (adoptSection) {
-        // Mostrar opción de adoptar solo para plantillas de la librería
         adoptSection.style.display = isLibrary ? 'block' : 'none';
     }
 
