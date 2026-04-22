@@ -179,11 +179,26 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
 
         let sent = 0, errors = 0;
         let firstRowLogged = false;
+        let defaultMediaUrl = '';
 
         for (const row of data) {
             if (!firstRowLogged) {
                 console.log('🔍 [BULK] Ejemplo de datos de la primera fila:', JSON.stringify(row));
                 firstRowLogged = true;
+                // Guardamos la primera URL encontrada como default
+                defaultMediaUrl = row.header_media_url || '';
+            }
+
+            // Si la fila actual no tiene URL pero tenemos una default, la usamos
+            if (!row.header_media_url && defaultMediaUrl) {
+                row.header_media_url = defaultMediaUrl;
+            }
+
+            // Validación básica de URL de imagen si existe
+            if (row.header_media_url && row.header_media_url.includes('docs.google.com/forms')) {
+                console.error(`❌ [BULK] Error: La URL de cabecera parece ser un formulario, no una imagen: ${row.header_media_url}`);
+                errors++;
+                continue;
             }
             // Detección de teléfono más flexible (phone, tel, movil, cel, celular, etc.)
             const phoneKey = Object.keys(row).find(k => 
