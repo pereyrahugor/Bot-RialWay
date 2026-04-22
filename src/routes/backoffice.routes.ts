@@ -194,6 +194,16 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                 row.header_media_url = defaultMediaUrl;
             }
 
+            // AUTO-CORRECCIÓN: Convertir links de Google Drive a links directos
+            if (row.header_media_url && row.header_media_url.includes('drive.google.com')) {
+                const driveIdMatch = row.header_media_url.match(/\/d\/([^\/]+)/) || row.header_media_url.match(/id=([^\&]+)/);
+                if (driveIdMatch && driveIdMatch[1]) {
+                    const driveId = driveIdMatch[1];
+                    row.header_media_url = `https://drive.google.com/uc?export=download&id=${driveId}`;
+                    console.log(`🔄 [BULK] URL de Google Drive convertida a link directo: ${row.header_media_url}`);
+                }
+            }
+
             // Validación básica de URL de imagen si existe
             if (row.header_media_url && row.header_media_url.includes('docs.google.com/forms')) {
                 console.error(`❌ [BULK] Error: La URL de cabecera parece ser un formulario, no una imagen: ${row.header_media_url}`);
