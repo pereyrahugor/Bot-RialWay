@@ -148,12 +148,13 @@ export class AiManager {
             // await HistoryHandler.saveMessage( ... );
 
             // --- FILTRO DE BOT GLOBAL ---
-            const isGlobalBotEnabled = await HistoryHandler.getSetting('GLOBAL_BOT_ENABLED', dynamicProjectId);
+            const isGlobalBotEnabledSetting = await HistoryHandler.getSetting('GLOBAL_BOT_ENABLED', dynamicProjectId);
+            const isGlobalBotEnabled = isGlobalBotEnabledSetting !== 'false';
             const isBotActiveForUser = await HistoryHandler.isBotEnabled(ctx.from);
 
-            if (isGlobalBotEnabled === 'false' || !isBotActiveForUser) {
-                if (isGlobalBotEnabled === 'false') {
-                    console.log(`[AiManager] 🛑 Bot DESACTIVADO GLOBALMENTE paratodo el sistema.`);
+            if (!isGlobalBotEnabled || !isBotActiveForUser) {
+                if (!isGlobalBotEnabled) {
+                    console.log(`[AiManager] 🛑 Bot DESACTIVADO GLOBALMENTE para el proyecto ${dynamicProjectId}.`);
                 }
                 try {
                     const threadId = await HistoryHandler.getThreadId(ctx.from);

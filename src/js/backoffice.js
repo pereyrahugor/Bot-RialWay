@@ -95,6 +95,11 @@ socket.on('bot_toggled', (payload) => {
     const chat = chats.find(c => c.id === payload.chatId);
     if (chat) {
         chat.bot_enabled = payload.enabled;
+        if (payload.assigned_agent) {
+            chat.assigned_agent = payload.assigned_agent;
+            // Si el backend lo devuelve como assigned_to (usado en la tabla), lo actualizamos también
+            chat.assigned_to = payload.assigned_agent; 
+        }
     }
     
     if (activeChatId === payload.chatId) {
@@ -102,6 +107,11 @@ socket.on('bot_toggled', (payload) => {
         if (toggle) toggle.checked = payload.enabled;
         updateBotStatusText(payload.enabled);
         updateInputState(payload.enabled);
+        
+        // Si hay un panel de info del chat, podríamos refrescarlo aquí
+        if (payload.assigned_agent && typeof renderActiveChatAgent === 'function') {
+            renderActiveChatAgent(payload.assigned_agent);
+        }
     }
     renderChatList();
 });

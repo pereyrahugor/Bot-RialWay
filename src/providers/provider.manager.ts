@@ -57,8 +57,11 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
     provider.on('qr', handleQR);
     provider.on('require_action', handleQR);
     provider.on('auth_require', handleQR);
-
-    provider.on('message', async (ctx: any) => {
+    
+    // Solo registrar eventos de procesamiento de mensajes si NO es el proveedor de grupos
+    // El proveedor de grupos solo se utiliza para enviar mensajes (backoffice)
+    if (!isGroupProvider) {
+        provider.on('message', async (ctx: any) => {
         try {
             console.log(`${prefix} 📩 Mensaje entrante - Tipo: ${ctx.type}, De: ${ctx.from}`);
             
@@ -135,6 +138,7 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
             console.error(`❌ ${prefix} Error guardando mensaje saliente manual:`, err);
         }
     });
+    }
 
     provider.on('ready', () => {
         console.log(`✅ ${prefix} READY: El proveedor está conectado.`);

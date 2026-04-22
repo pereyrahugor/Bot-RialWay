@@ -446,7 +446,7 @@ export class HistoryHandler {
             // 2. BUSQUEDA POR CONTENIDO + TIEMPO (Deduplicación Difusa)
             // Esto evita duplicados cuando el sistema guarda el mensaje antes de enviarlo (ID nulo)
             // y luego llega el webhook (ID real) o viceversa, lo cual es común en Meta Cloud API.
-            const twentySecondsAgo = new Date(Date.now() - 20000).toISOString();
+            const thirtySecondsAgo = new Date(Date.now() - 30000).toISOString();
             
             const { data: recentlySaved, error: searchError } = await supabase
                 .from('messages')
@@ -455,7 +455,7 @@ export class HistoryHandler {
                 .eq('project_id', currentProjectId)
                 .eq('role', role)
                 .eq('content', content)
-                .gt('created_at', twentySecondsAgo)
+                .gt('created_at', thirtySecondsAgo)
                 .order('created_at', { ascending: false })
                 .limit(1);
 
@@ -653,6 +653,9 @@ export class HistoryHandler {
             const updateData: any = { bot_enabled: enabled };
             if (enabled === false) {
                 updateData.last_human_message_at = new Date().toISOString();
+            } else {
+                // BUGFIX: Cuando el bot se vuelve a activar, el agente asignado DEBE volver al recepcionista (asistente1)
+                updateData.assigned_agent = 'asistente1';
             }
 
             const { error } = await supabase
@@ -663,8 +666,8 @@ export class HistoryHandler {
             
             if (error) throw error;
             
-            // Emitir evento para WebSockets
-            historyEvents.emit('bot_toggled', { chatId, enabled });
+            // Emitir evento para WebSockets (ahora incluimos el agente para sincronización frontend)
+            historyEvents.emit('bot_toggled', { chatId, enabled, assigned_agent: 'asistente1' });
 
             return { success: true };
         } catch (err: any) {
@@ -1066,7 +1069,23 @@ export class HistoryHandler {
 
             if (error) throw error;
             
-            // Notificar cambios
+            // Si el ticket se cierra, reseteamos el agente en el chat asociado
+            if (nuevoEstado === 'Cerrado' && data?.chat_id) {
+                console.log(`[HistoryHandler] Ticket ${ticketId} cerrado. Reseteando agente para chat ${data.chat_id} a asistente1`);
+                await supabase
+                    .from('chats')
+                    .update({ 
+                        assigned_agent: 'asistente1',
+                        bot_enabled: true // Re-activamos bot por defecto al cerrar thread
+                    })
+                    .eq('id', data.chat_id)
+                    .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
+                    
+                // Emitir también el evento de bot_toggled para que el front se refresque
+                historyEvents.emit('bot_toggled', { chatId: data.chat_id, enabled: true, assigned_agent: 'asistente1' });
+            }
+
+            // Notificar cambios del ticket
             historyEvents.emit('ticket_updated', data);
             
             return { success: true, data };
