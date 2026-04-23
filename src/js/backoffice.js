@@ -1547,8 +1547,21 @@ function switchMetaTab(tab) {
         else view.style.display = 'block';
     }
 
-        if (tab === 'my') loadTemplates();
-    if (tab === 'library') loadLibraryTemplates();
+    if (tab === 'library') {
+        const iframe = document.getElementById('iframe-meta-library');
+        if (iframe && !iframe.src) {
+            iframe.src = 'https://business.facebook.com/latest/whatsapp_manager/template_library';
+        }
+    }
+    
+    if (tab === 'new') {
+        const iframe = document.getElementById('iframe-meta-new');
+        if (iframe && !iframe.src) {
+            iframe.src = 'https://business.facebook.com/latest/whatsapp_manager/message_templates';
+        }
+    }
+
+    if (tab === 'my') loadTemplates();
 }
 
 function useTemplateAsBase() {
