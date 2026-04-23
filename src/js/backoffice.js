@@ -1429,6 +1429,7 @@ async function checkMetaStatus() {
         console.log('📡 [META-STATUS] Configuración recibida:', data);
 
         const config = data.config || {};
+        window.metaConfig = config; // Guardar globalmente
         const isConnected = !!(config.waba_id && config.phone_number_id);
 
         if (isConnected) {
@@ -1771,6 +1772,15 @@ function showTemplateDetail(templateName, isLibrary, language) {
     const statusClass = template.status === 'APPROVED' ? 'meta-status-approved' : (template.status === 'REJECTED' ? 'meta-status-rejected' : 'meta-status-pending');
     statusEl.className = `meta-card-tag ${statusClass}`;
     statusEl.innerText = template.status || 'LIBRARY';
+
+    // Configurar botón "Editar en META"
+    const editBtn = document.getElementById('btn-edit-in-meta');
+    if (editBtn && window.metaConfig && window.metaConfig.waba_id && template.status !== 'LIBRARY') {
+        editBtn.href = `https://business.facebook.com/latest/whatsapp_manager/message_templates?asset_id=${window.metaConfig.waba_id}&edit_template=${template.name}`;
+        editBtn.style.display = 'flex';
+    } else if (editBtn) {
+        editBtn.style.display = 'none';
+    }
 
     let bodyText = 'Sin contenido de texto disponible';
     let headerText = '';
