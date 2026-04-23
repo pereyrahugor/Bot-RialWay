@@ -1756,10 +1756,8 @@ function showTemplateDetail(templateName, isLibrary, language) {
     if (!template) return;
     currentSelectedTemplate = template;
     
-    // Hide main views
-    document.getElementById('view-my-templates').style.display = 'none';
-    document.getElementById('view-meta-library').style.display = 'none';
-    document.getElementById('view-new-template').style.display = 'none';
+    // Usar la lógica centralizada de pestañas para mostrar el detalle
+    switchMetaTab('detail');
     
     // Show detail
     const detailView = document.getElementById('view-template-detail');
