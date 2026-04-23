@@ -1435,6 +1435,14 @@ async function checkMetaStatus() {
             console.log('✅ [META-STATUS] Cuenta vinculada:', config.waba_id);
             window.isMetaConnected = true;
             
+            // Actualizar enlaces dinámicos con el WABA ID para abrir la cuenta correcta directamente
+            if (config.waba_id) {
+                const libLink = document.getElementById('link-meta-library');
+                const newLink = document.getElementById('link-meta-new');
+                if (libLink) libLink.href = `https://business.facebook.com/latest/whatsapp_manager/template_library?asset_id=${config.waba_id}`;
+                if (newLink) newLink.href = `https://business.facebook.com/latest/whatsapp_manager/message_templates?asset_id=${config.waba_id}`;
+            }
+            
             const metaPanel = document.getElementById('meta-panel');
             if (metaPanel) {
                 const content = metaPanel.querySelector('.tickets-list');
