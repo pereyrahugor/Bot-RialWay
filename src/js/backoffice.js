@@ -1807,11 +1807,14 @@ function showTemplateDetail(templateName, isLibrary, language) {
 
     const previewFinal = document.getElementById('wa-preview-text-final');
     if (previewFinal) {
-        // Limpiar botones previos si existen
+        // Limpiar botones previos si existen dentro o fuera
         const bubble = previewFinal.closest('.wa-preview-bubble');
         if (bubble) {
-            const existingBtns = bubble.parentNode.querySelectorAll('.wa-preview-btns-container');
-            existingBtns.forEach(b => b.remove());
+            const oldIntegrated = bubble.querySelector('.wa-preview-btns-container-integrated');
+            if (oldIntegrated) oldIntegrated.remove();
+            
+            const oldExternal = bubble.parentNode.querySelectorAll('.wa-preview-btns-container');
+            oldExternal.forEach(b => b.remove());
         }
 
         let html = '';
@@ -1822,11 +1825,11 @@ function showTemplateDetail(templateName, isLibrary, language) {
             const format = headerComp.format.toLowerCase();
             if (format === 'image') {
                 const imgUrl = headerComp.example?.header_handle?.[0] || 'https://via.placeholder.com/300x150?text=Imagen+de+Cabecera';
-                html += `<img src="${imgUrl}" style="width:calc(100% + 30px); margin: -12px -15px 12px -15px; border-radius:10px 10px 0 0; display:block; object-fit:cover; max-height:200px;">`;
+                html += `<img src="${imgUrl}" style="width:calc(100% + 30px); margin: -12px -15px 12px -15px; border-radius:0; display:block; object-fit:cover; max-height:200px; border-bottom: 1px solid rgba(0,0,0,0.05);">`;
             } else if (format === 'video') {
-                html += `<div style="width:calc(100% + 30px); margin: -12px -15px 12px -15px; aspect-ratio:16/9; background:#000; border-radius:10px 10px 0 0; display:flex; align-items:center; justify-content:center; color:white;"><i class="fas fa-play-circle fa-3x"></i></div>`;
+                html += `<div style="width:calc(100% + 30px); margin: -12px -15px 12px -15px; aspect-ratio:16/9; background:#000; border-radius:0; display:flex; align-items:center; justify-content:center; color:white; border-bottom: 1px solid rgba(0,0,0,0.05);"><i class="fas fa-play-circle fa-3x"></i></div>`;
             } else if (format === 'document') {
-                html += `<div style="width:calc(100% + 30px); margin: -12px -15px 12px -15px; padding:15px; background:rgba(0,0,0,0.05); border-radius:10px 10px 0 0; display:flex; align-items:center; gap:10px; border-bottom:1px solid rgba(0,0,0,0.05);"><i class="fas fa-file-pdf fa-2x" style="color:#ef4444;"></i> <span style="font-size:0.85rem; font-weight:600;">Documento PDF</span></div>`;
+                html += `<div style="width:calc(100% + 30px); margin: -12px -15px 12px -15px; padding:15px; background:rgba(0,0,0,0.05); border-radius:0; display:flex; align-items:center; gap:10px; border-bottom:1px solid rgba(0,0,0,0.05);"><i class="fas fa-file-pdf fa-2x" style="color:#ef4444;"></i> <span style="font-size:0.85rem; font-weight:600;">Documento PDF</span></div>`;
             }
         }
 
@@ -1838,28 +1841,24 @@ function showTemplateDetail(templateName, isLibrary, language) {
         
         previewFinal.innerHTML = html;
 
-        // 2. Botones Reales
+        // 2. Botones Integrados
         const buttonsComp = template.components?.find(c => c.type === 'BUTTONS');
-        if (buttonsComp && buttonsComp.buttons) {
-            if (bubble) {
-                const btnsContainer = document.createElement('div');
-                btnsContainer.className = 'wa-preview-btns-container';
-                btnsContainer.style = 'margin-top:2px; display:flex; flex-direction:column; gap:2px; width:100%; max-width:320px;';
+        if (buttonsComp && buttonsComp.buttons && bubble) {
+            const btnsContainer = document.createElement('div');
+            btnsContainer.className = 'wa-preview-btns-container-integrated';
+            
+            buttonsComp.buttons.forEach(b => {
+                const btn = document.createElement('div');
+                btn.className = 'wa-preview-btn-item';
                 
-                buttonsComp.buttons.forEach(b => {
-                    const btn = document.createElement('div');
-                    btn.className = 'wa-preview-btn';
-                    btn.style = 'background:white; padding:10px; border-radius:10px; text-align:center; color:#00a884; font-weight:600; font-size:0.9rem; box-shadow:0 1px 2px rgba(0,0,0,0.1); cursor:default; display:flex; align-items:center; justify-content:center; gap:8px;';
-                    
-                    let icon = '<i class="fas fa-reply"></i>';
-                    if (b.type === 'URL') icon = '<i class="fas fa-external-link-alt"></i>';
-                    if (b.type === 'PHONE_NUMBER') icon = '<i class="fas fa-phone"></i>';
-                    
-                    btn.innerHTML = `${icon} ${b.text}`;
-                    btnsContainer.appendChild(btn);
-                });
-                bubble.parentNode.insertBefore(btnsContainer, bubble.nextSibling);
-            }
+                let icon = '<i class="fas fa-reply"></i>';
+                if (b.type === 'URL') icon = '<i class="fas fa-external-link-alt"></i>';
+                if (b.type === 'PHONE_NUMBER') icon = '<i class="fas fa-phone"></i>';
+                
+                btn.innerHTML = `${icon} ${b.text}`;
+                btnsContainer.appendChild(btn);
+            });
+            bubble.appendChild(btnsContainer);
         }
     }
 
