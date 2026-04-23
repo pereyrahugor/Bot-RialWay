@@ -1526,42 +1526,27 @@ async function toggleBulkModal() {
 }
 
 function switchMetaTab(tab) {
-    const tabsMap = { 'my': 'tab-my-templates', 'library': 'tab-meta-library', 'new': 'tab-new-template' };
-    const viewsMap = { 'my': 'view-my-templates', 'library': 'view-meta-library', 'new': 'view-new-template', 'detail': 'view-template-detail' };
+    const viewsMap = { 'my': 'view-my-templates', 'detail': 'view-template-detail' };
     
     // Reset active states
-    Object.values(tabsMap).forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.classList.remove('active');
-    });
     Object.values(viewsMap).forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
     });
 
     // Set active
-    if (tabsMap[tab]) document.getElementById(tabsMap[tab]).classList.add('active');
-    if (viewsMap[tab]) {
-        const view = document.getElementById(viewsMap[tab]);
-        if (tab === 'my') view.style.display = 'grid';
-        else view.style.display = 'block';
+    if (tab === 'my') {
+        const tabEl = document.getElementById('tab-my-templates');
+        if (tabEl) tabEl.classList.add('active');
+        const view = document.getElementById('view-my-templates');
+        if (view) view.style.display = 'grid';
+        loadTemplates();
+    } else if (tab === 'detail') {
+        const tabEl = document.getElementById('tab-my-templates');
+        if (tabEl) tabEl.classList.remove('active'); // No tab active when in detail
+        const view = document.getElementById('view-template-detail');
+        if (view) view.style.display = 'block';
     }
-
-    if (tab === 'library') {
-        const iframe = document.getElementById('iframe-meta-library');
-        if (iframe && !iframe.src) {
-            iframe.src = 'https://business.facebook.com/latest/whatsapp_manager/template_library';
-        }
-    }
-    
-    if (tab === 'new') {
-        const iframe = document.getElementById('iframe-meta-new');
-        if (iframe && !iframe.src) {
-            iframe.src = 'https://business.facebook.com/latest/whatsapp_manager/message_templates';
-        }
-    }
-
-    if (tab === 'my') loadTemplates();
 }
 
 function useTemplateAsBase() {
