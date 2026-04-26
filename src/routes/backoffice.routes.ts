@@ -259,12 +259,17 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                 };
                 // Si es named, buscamos si el header tiene un nombre de parámetro definido
                 if (isNamed && headerComp) {
+                    console.log(`🔍 [BULK] Estructura HEADER para debug:`, JSON.stringify(headerComp, null, 2));
                     // El nombre suele estar en components[idx].example.header_handle[0].param_name
                     // o similar. Como fallback usaremos 'header' o el formato si no lo encontramos.
                     const namedParams = headerComp.example?.header_text_named_params || 
                                       headerComp.example?.header_handle_named_params;
                     if (namedParams && namedParams[0]?.param_name) {
                         headerParam.parameter_name = namedParams[0].param_name;
+                    } else if (row.header_media_url) {
+                        // Si es named pero no encontramos el nombre en el ejemplo, 
+                        // intentamos usar un nombre genérico o el que Meta suele usar
+                        headerParam.parameter_name = "header_media_url"; // Fallback común si el excel lo llama así
                     }
                 }
 
@@ -292,7 +297,7 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
 
             try {
                 console.log(`[BULK] Preparando envío para ${phone}. Componentes:`, JSON.stringify(components, null, 2));
-                const resApi = await provider.sendTemplate(phone, templateName, languageCode || 'es_AR', components, isNamed ? 'named' : 'positional');
+                const resApi = await provider.sendTemplate(phone, templateName, languageCode || 'es_AR', components);
                 
                 if (resApi?.messages) {
                     const msgId = resApi.messages[0].id;

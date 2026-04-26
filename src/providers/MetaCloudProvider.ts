@@ -280,7 +280,7 @@ class MetaCloudProvider extends ProviderClass {
     /**
      * Envía un mensaje basado en una plantilla oficial
      */
-    public async sendTemplate(number: string, templateName: string, languageCode: string = 'es', components: any[] = [], parameterFormat: string = 'positional'): Promise<any> {
+    public async sendTemplate(number: string, templateName: string, languageCode: string = 'es', components: any[] = []): Promise<any> {
         const { phone_number_id, access_token } = this.config;
         if (!phone_number_id || !access_token) {
             console.error('❌ [MetaCloudProvider] sendTemplate: Faltan IDs o token');
@@ -304,10 +304,6 @@ class MetaCloudProvider extends ProviderClass {
                 components: components
             }
         };
-
-        if (parameterFormat === 'named') {
-            body.template.parameter_format = 'named';
-        }
 
         try {
             const response = await axios.post(url, body, {
