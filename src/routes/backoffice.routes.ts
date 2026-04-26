@@ -168,8 +168,8 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
         const template = templates.find((t: any) => t.name === templateName);
         if (!template) throw new Error("Plantilla no encontrada al procesar envío masivo.");
 
-        // Debug: Log del formato detectado por Meta
-        console.log(`🔍 [BULK] Template detectado: ${template.name} | parameter_format: ${template.parameter_format}`);
+        // DEBUG TOTAL: Ver toda la estructura de la plantilla para encontrar los nombres de parámetros
+        console.log(`🔍 [BULK] DEBUG ESTRUCTURA COMPLETA:`, JSON.stringify(template, null, 2));
         
         // Detección más agresiva: si tiene parameter_format='named' O si algún componente tiene parámetros nombrados en sus ejemplos
         const isNamed = template.parameter_format === 'named' || 
