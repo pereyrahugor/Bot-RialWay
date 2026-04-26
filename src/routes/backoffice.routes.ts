@@ -249,13 +249,11 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                                               compDef.example?.header_handle_named_params ||
                                               compDef.parameters;
                             
-                            // Prioridad: 1. Nombre oficial, 2. "1" (fallback común en Meta), 3. "image"
-                            headerParam.parameter_name = (namedParams && namedParams[0]?.param_name) 
-                                                        ? namedParams[0].param_name 
-                                                        : "1"; 
+                            const officialName = namedParams && namedParams[0]?.param_name;
+                            headerParam.parameter_name = officialName || "1";
                         }
                         
-                        components.push({ type: 'header', parameters: [headerParam] });
+                        components.push({ type: 'HEADER', parameters: [headerParam] });
                     }
                 } else if (compDef.type === 'BODY') {
                     const bodyParams: any[] = [];
@@ -292,7 +290,7 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                     }
 
                     if (bodyParams.length > 0) {
-                        components.push({ type: 'body', parameters: bodyParams });
+                        components.push({ type: 'BODY', parameters: bodyParams });
                     }
                 }
             }
