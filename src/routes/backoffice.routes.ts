@@ -168,13 +168,23 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
         const template = templates.find((t: any) => t.name === templateName);
         if (!template) throw new Error("Plantilla no encontrada al procesar envío masivo.");
 
+        // Debug: Log del formato detectado por Meta
+        console.log(`🔍 [BULK] Template detectado: ${template.name} | parameter_format: ${template.parameter_format}`);
+        
+        // Detección más agresiva: si tiene parameter_format='named' O si algún componente tiene parámetros nombrados en sus ejemplos
+        const isNamed = template.parameter_format === 'named' || 
+                        template.components.some((c: any) => 
+                            c.example?.body_text_named_params || 
+                            c.example?.header_text_named_params ||
+                            c.example?.header_handle_named_params
+                        );
+
         // Detectar tipo de cabecera multimedia
         const headerComp = template.components.find((c: any) => c.type === 'HEADER');
         const mediaFormat = headerComp && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComp.format) ? headerComp.format.toLowerCase() : null;
 
-        const isNamed = template.parameter_format === 'named';
         const languageCode = template.language || 'es';
-        console.log(`📊 [BULK] Iniciando envío masivo: ${templateName} | Idioma: ${languageCode} | Formato: ${isNamed ? 'NAMED' : 'POSITIONAL'} | Filas: ${data.length}`);
+        console.log(`📊 [BULK] Iniciando envío masivo: ${templateName} | Idioma: ${languageCode} | Formato final: ${isNamed ? 'NAMED' : 'POSITIONAL'} | Filas: ${data.length}`);
 
         sendJson(res, 202, { success: true, message: 'Proceso masivo iniciado.', total: data.length });
 
