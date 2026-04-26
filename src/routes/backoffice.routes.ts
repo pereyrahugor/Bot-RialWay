@@ -257,26 +257,35 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                     type: mediaFormat,
                     [mediaFormat]: { link: row.header_media_url }
                 };
-                // Si es named, buscamos si el header tiene un nombre de parámetro definido
-                if (isNamed && headerComp) {
-                    console.log(`🔍 [BULK] Estructura HEADER para debug:`, JSON.stringify(headerComp, null, 2));
-                    // El nombre suele estar en components[idx].example.header_handle[0].param_name
-                    // o similar. Como fallback usaremos 'header' o el formato si no lo encontramos.
-                    const namedParams = headerComp.example?.header_text_named_params || 
-                                      headerComp.example?.header_handle_named_params;
+
+                let shouldAddHeader = false;
+
+                if (isNamed) {
+                    // En plantillas NAMED, buscamos si hay un nombre de parámetro para la cabecera
+                    const namedParams = headerComp?.example?.header_text_named_params || 
+                                      headerComp?.example?.header_handle_named_params;
+                    
                     if (namedParams && namedParams[0]?.param_name) {
                         headerParam.parameter_name = namedParams[0].param_name;
-                    } else if (row.header_media_url) {
-                        // Si es named pero no encontramos el nombre en el ejemplo, 
-                        // intentamos usar un nombre genérico o el que Meta suele usar
-                        headerParam.parameter_name = "header_media_url"; // Fallback común si el excel lo llama así
+                        shouldAddHeader = true;
+                    } else {
+                        // Si es NAMED pero no tiene parámetros en el ejemplo, la imagen es FIJA.
+                        // No debemos enviar el componente header o fallará la entrega.
+                        shouldAddHeader = false;
                     }
+                } else {
+                    // En plantillas POSITIONAL, si hay un header multimedia, casi siempre es variable ({{1}})
+                    shouldAddHeader = true;
                 }
 
-                components.push({
-                    type: 'header',
-                    parameters: [headerParam]
-                });
+                if (shouldAddHeader) {
+                    components.push({
+                        type: 'header',
+                        parameters: [headerParam]
+                    });
+                } else {
+                    console.log(`ℹ️ [BULK] Omitiendo parámetro de cabecera para ${phone}: La plantilla tiene imagen fija.`);
+                }
             }
 
             // 3. BUTTONS Dinámicos
