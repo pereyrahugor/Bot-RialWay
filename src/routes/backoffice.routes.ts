@@ -235,9 +235,13 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                     // Solo enviamos header si la definición lo tiene y tenemos URL o ejemplo
                     if (compDef.format === 'IMAGE' || compDef.format === 'VIDEO' || compDef.format === 'DOCUMENT') {
                         const lowFormat = compDef.format.toLowerCase();
+                        const mediaLink = row.header_media_url || defaultMediaUrl || compDef.example?.header_handle?.[0];
+                        
+                        if (!mediaLink) continue;
+
                         const headerParam: any = {
                             type: lowFormat,
-                            [lowFormat]: { link: row.header_media_url || defaultMediaUrl || compDef.example?.header_handle?.[0] }
+                            [lowFormat]: { link: mediaLink }
                         };
 
                         if (isNamed) {
@@ -245,9 +249,10 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                                               compDef.example?.header_handle_named_params ||
                                               compDef.parameters;
                             
+                            // Prioridad: 1. Nombre oficial, 2. "1" (fallback común en Meta), 3. "image"
                             headerParam.parameter_name = (namedParams && namedParams[0]?.param_name) 
                                                         ? namedParams[0].param_name 
-                                                        : "image"; // Guessing 'image' as the universal fallback
+                                                        : "1"; 
                         }
                         
                         components.push({ type: 'header', parameters: [headerParam] });
@@ -262,18 +267,28 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                         expectedCount = placeholders.length;
                     }
 
-                    let added = 0;
-                    for (const key of paramKeys) {
-                        if (key === 'header_media_url' || key.startsWith('button_') || key === phoneKey) continue;
-                        if (added >= expectedCount) break; // Límite estricto para POSITIONAL
-                        
-                        const val = String(row[key] ?? '');
-                        const param: any = { type: 'text', text: val || '-' };
-                        if (isNamed) {
-                            param.parameter_name = key;
+                    // Para NAMED, mapeamos según los nombres definidos en la plantilla
+                    if (isNamed) {
+                        const namedParams = compDef.example?.body_text_named_params || [];
+                        for (const np of namedParams) {
+                            const val = String(row[np.param_name] || row[np.param_name.toLowerCase()] || '-');
+                            bodyParams.push({
+                                type: 'text',
+                                parameter_name: np.param_name,
+                                text: val
+                            });
                         }
-                        bodyParams.push(param);
-                        added++;
+                    } else {
+                        // POSITIONAL: Mapeo clásico por orden
+                        let added = 0;
+                        for (const key of paramKeys) {
+                            if (key === 'header_media_url' || key.startsWith('button_') || key === phoneKey) continue;
+                            if (added >= expectedCount) break;
+                            
+                            const val = String(row[key] ?? '');
+                            bodyParams.push({ type: 'text', text: val || '-' });
+                            added++;
+                        }
                     }
 
                     if (bodyParams.length > 0) {
@@ -898,19 +913,30 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             const bodyComponent = template.components.find((c: any) => c.type === 'BODY');
             const text = bodyComponent?.text || '';
             const varNames: string[] = [];
-            const varRegex = /\{\{(\w+)\}\}/g;
-            let match;
-            while ((match = varRegex.exec(text)) !== null) {
-                if (!varNames.includes(match[1])) {
-                    varNames.push(match[1]); 
+            
+            // Si la plantilla es NAMED, usamos los nombres oficiales de Meta
+            const isNamed = template.parameter_format === 'named';
+            const bodyNamedParams = bodyComponent?.example?.body_text_named_params || [];
+            
+            if (isNamed && bodyNamedParams.length > 0) {
+                bodyNamedParams.forEach((p: any) => varNames.push(p.param_name));
+            } else {
+                // Positional: Extraer {{1}}, {{2}}...
+                const varRegex = /\{\{(\w+)\}\}/g;
+                let match;
+                while ((match = varRegex.exec(text)) !== null) {
+                    if (!varNames.includes(match[1])) {
+                        varNames.push(match[1]); 
+                    }
                 }
             }
 
-            // 2. Detectar HEADER Multimedia
+            // 2. Detectar HEADER Multimedia y sus ejemplos
             const headerComp = template.components.find((c: any) => c.type === 'HEADER');
             const hasMediaHeader = headerComp && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComp.format);
+            const headerExampleUrl = headerComp?.example?.header_handle?.[0] || '';
 
-            // 3. Detectar BUTTONS dinámicos (URL con {{1}})
+            // 3. Detectar BUTTONS dinámicos
             const buttonsComp = template.components.find((c: any) => c.type === 'BUTTONS');
             const dynamicButtonIndices: number[] = [];
             if (buttonsComp && buttonsComp.buttons) {
@@ -921,31 +947,45 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                 });
             }
 
-            // Obtener contactos existentes del proyecto
-            const chats = await HistoryHandler.listChats(2000, 0); 
-
             const XLSX = await import('xlsx');
             const wb = XLSX.utils.book_new();
             
-            // Cabeceras: phone + variables body + media + botones
+            // Cabeceras
             const headers = ['phone', ...varNames];
             if (hasMediaHeader) headers.push('header_media_url');
             dynamicButtonIndices.forEach(idx => headers.push(`button_${idx + 1}_url_suffix`));
 
             const rows = [headers];
             
+            // --- FILA DE EJEMPLO (Basada en Meta) ---
+            const exampleRow = ['5491100000000'];
+            
+            // Llenar variables del cuerpo con ejemplos de Meta
+            varNames.forEach(vName => {
+                const exMatch = bodyNamedParams.find((p: any) => p.param_name === vName);
+                exampleRow.push(exMatch?.example || `ejemplo_${vName}`);
+            });
+
+            // Llenar header con el link de ejemplo de Meta si existe
+            if (hasMediaHeader) {
+                exampleRow.push(headerExampleUrl || 'https://tu-imagen.com/foto.jpg');
+            }
+
+            // Llenar sufijos de botones
+            dynamicButtonIndices.forEach(() => exampleRow.push('promocion-2024'));
+
+            rows.push(exampleRow);
+
+            // --- CONTACTOS REALES ---
+            const chats = await HistoryHandler.listChats(2000, 0); 
             if (chats && chats.length > 0) {
                 chats.forEach((chat: any) => {
                     const cleanPhone = chat.id.split('@')[0];
+                    if (cleanPhone === '5491100000000') return; // Evitar duplicar el ejemplo si existiera
                     const row = [cleanPhone];
-                    // Columnas vacías para completar
                     for (let i = 1; i < headers.length; i++) row.push('');
                     rows.push(row);
                 });
-            } else {
-                const exampleRow = ['54911...'];
-                for (let i = 1; i < headers.length; i++) exampleRow.push(`valor_${headers[i]}`);
-                rows.push(exampleRow);
             }
 
             const ws = XLSX.utils.aoa_to_sheet(rows);
