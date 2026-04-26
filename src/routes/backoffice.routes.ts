@@ -215,12 +215,6 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                 row.header_media_url = defaultMediaUrl;
             }
 
-            // Validación básica de URL de imagen si existe
-            if (row.header_media_url && row.header_media_url.includes('docs.google.com/forms')) {
-                console.error(`❌ [BULK] Error: La URL de cabecera parece ser un formulario, no una imagen: ${row.header_media_url}`);
-                errors++;
-                continue;
-            }
             // Detección de teléfono más flexible (phone, tel, movil, cel, celular, etc.)
             const phoneKey = Object.keys(row).find(k => 
                 ['phone', 'tel', 'movil', 'cel', 'celular', 'telefono', 'whatsapp'].some(p => k.toLowerCase().includes(p))
@@ -229,54 +223,52 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
             const phone = phoneKey ? String(row[phoneKey] ?? '').replace(/\D/g, '') : '';
             
             if (!phone) {
-                console.warn(`⚠️ [BULK] Fila omitida: No se encontró columna de teléfono válida o está vacía. Columnas: [${Object.keys(row).join(', ')}]`);
+                console.warn(`⚠️ [BULK] Fila omitida: No se encontró teléfono. Columnas: [${Object.keys(row).join(', ')}] | Datos: ${JSON.stringify(row)}`);
                 continue;
             }
 
             const components: any[] = [];
             
-            // 1. BODY Params
-            const bodyParams: any[] = [];
-            for (const key of paramKeys) {
-                // Saltar columnas especiales
-                if (key === 'header_media_url' || key.startsWith('button_')) continue;
-                const val = String(row[key] ?? '');
-                const param: any = { type: 'text', text: val || '-' };
-                if (isNamed) {
-                    param.parameter_name = key;
-                }
-                bodyParams.push(param);
-            }
-            if (bodyParams.length > 0) {
-                components.push({ type: 'body', parameters: bodyParams });
-            }
+            // Reordenar componentes según la definición de la plantilla
+            for (const compDef of template.components) {
+                if (compDef.type === 'HEADER') {
+                    if (mediaFormat) {
+                        const headerParam: any = {
+                            type: mediaFormat,
+                            [mediaFormat]: { link: row.header_media_url || defaultMediaUrl || compDef.example?.header_handle?.[0] }
+                        };
 
-            // 2. HEADER Media
-            if (mediaFormat && row.header_media_url) {
-                const headerParam: any = {
-                    type: mediaFormat,
-                    [mediaFormat]: { link: row.header_media_url }
-                };
-
-                let shouldAddHeader = true; 
-
-                if (isNamed) {
-                    const namedParams = headerComp?.example?.header_text_named_params || 
-                                      headerComp?.example?.header_handle_named_params;
-                    
-                    if (namedParams && namedParams[0]?.param_name) {
-                        headerParam.parameter_name = namedParams[0].param_name;
-                    } else if (headerComp?.parameters && headerComp.parameters[0]?.param_name) {
-                        headerParam.parameter_name = headerComp.parameters[0].param_name;
-                    } else {
-                        headerParam.parameter_name = "header_media_url"; 
+                        if (isNamed) {
+                            const namedParams = compDef.example?.header_text_named_params || 
+                                              compDef.example?.header_handle_named_params ||
+                                              compDef.parameters;
+                            
+                            if (namedParams && namedParams[0]?.param_name) {
+                                headerParam.parameter_name = namedParams[0].param_name;
+                                components.push({ type: 'header', parameters: [headerParam] });
+                            } 
+                            // Si es NAMED pero no encontramos nombre, intentamos NO enviarlo 
+                            // a menos que sea estrictamente necesario.
+                        } else {
+                            // Positional: siempre se envía
+                            components.push({ type: 'header', parameters: [headerParam] });
+                        }
+                    }
+                } else if (compDef.type === 'BODY') {
+                    const bodyParams: any[] = [];
+                    for (const key of paramKeys) {
+                        if (key === 'header_media_url' || key.startsWith('button_')) continue;
+                        const val = String(row[key] ?? '');
+                        const param: any = { type: 'text', text: val || '-' };
+                        if (isNamed) {
+                            param.parameter_name = key;
+                        }
+                        bodyParams.push(param);
+                    }
+                    if (bodyParams.length > 0) {
+                        components.push({ type: 'body', parameters: bodyParams });
                     }
                 }
-
-                components.push({
-                    type: 'header',
-                    parameters: [headerParam]
-                });
             }
 
             // 3. BUTTONS Dinámicos
