@@ -183,18 +183,6 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
         let defaultMediaUrl = '';
 
         for (const row of data) {
-            if (!firstRowLogged) {
-                console.log('🔍 [BULK] Ejemplo de datos de la primera fila:', JSON.stringify(row));
-                firstRowLogged = true;
-                // Guardamos la primera URL encontrada como default
-                defaultMediaUrl = row.header_media_url || '';
-            }
-
-            // Si la fila actual no tiene URL pero tenemos una default, la usamos
-            if (!row.header_media_url && defaultMediaUrl) {
-                row.header_media_url = defaultMediaUrl;
-            }
-
             // AUTO-CORRECCIÓN: Convertir links de Google Drive a links directos
             if (row.header_media_url && row.header_media_url.includes('drive.google.com')) {
                 const driveIdMatch = row.header_media_url.match(/\/d\/([^\/]+)/) || row.header_media_url.match(/id=([^\&]+)/);
@@ -203,6 +191,18 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                     row.header_media_url = `https://drive.google.com/uc?export=download&id=${driveId}`;
                     console.log(`🔄 [BULK] URL de Google Drive convertida a link directo: ${row.header_media_url}`);
                 }
+            }
+
+            if (!firstRowLogged) {
+                console.log('🔍 [BULK] Ejemplo de datos de la primera fila:', JSON.stringify(row));
+                firstRowLogged = true;
+                // Guardamos la primera URL (ya corregida si era Drive) como default
+                defaultMediaUrl = row.header_media_url || '';
+            }
+
+            // Si la fila actual no tiene URL pero tenemos una default, la usamos
+            if (!row.header_media_url && defaultMediaUrl) {
+                row.header_media_url = defaultMediaUrl;
             }
 
             // Validación básica de URL de imagen si existe

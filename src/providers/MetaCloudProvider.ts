@@ -161,7 +161,7 @@ class MetaCloudProvider extends ProviderClass {
         }
 
         try {
-            const url = `https://graph.facebook.com/v22.0/${waba_id}/message_templates`;
+            const url = `https://graph.facebook.com/v22.0/${waba_id}/message_templates?fields=name,status,components,language,category,parameter_format`;
             const response = await axios.get(url, {
                 headers: { 'Authorization': `Bearer ${access_token}` }
             });
