@@ -172,8 +172,9 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
         const headerComp = template.components.find((c: any) => c.type === 'HEADER');
         const mediaFormat = headerComp && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComp.format) ? headerComp.format.toLowerCase() : null;
 
+        const isNamed = template.parameter_format === 'named';
         const languageCode = template.language || 'es';
-        console.log(`📊 [BULK] Iniciando envío masivo: ${templateName} | Idioma: ${languageCode} | Filas: ${data.length}`);
+        console.log(`📊 [BULK] Iniciando envío masivo: ${templateName} | Idioma: ${languageCode} | Formato: ${isNamed ? 'NAMED' : 'POSITIONAL'} | Filas: ${data.length}`);
 
         sendJson(res, 202, { success: true, message: 'Proceso masivo iniciado.', total: data.length });
 
@@ -230,7 +231,11 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                 // Saltar columnas especiales
                 if (key === 'header_media_url' || key.startsWith('button_')) continue;
                 const val = String(row[key] ?? '');
-                bodyParams.push({ type: 'text', text: val || '-' });
+                const param: any = { type: 'text', text: val || '-' };
+                if (isNamed) {
+                    param.parameter_name = key;
+                }
+                bodyParams.push(param);
             }
             if (bodyParams.length > 0) {
                 components.push({ type: 'body', parameters: bodyParams });
@@ -238,12 +243,24 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
 
             // 2. HEADER Media
             if (mediaFormat && row.header_media_url) {
+                const headerParam: any = {
+                    type: mediaFormat,
+                    [mediaFormat]: { link: row.header_media_url }
+                };
+                // Si es named, buscamos si el header tiene un nombre de parámetro definido
+                if (isNamed && headerComp) {
+                    // El nombre suele estar en components[idx].example.header_handle[0].param_name
+                    // o similar. Como fallback usaremos 'header' o el formato si no lo encontramos.
+                    const namedParams = headerComp.example?.header_text_named_params || 
+                                      headerComp.example?.header_handle_named_params;
+                    if (namedParams && namedParams[0]?.param_name) {
+                        headerParam.parameter_name = namedParams[0].param_name;
+                    }
+                }
+
                 components.push({
                     type: 'header',
-                    parameters: [{
-                        type: mediaFormat,
-                        [mediaFormat]: { link: row.header_media_url }
-                    }]
+                    parameters: [headerParam]
                 });
             }
 
@@ -265,7 +282,7 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
 
             try {
                 console.log(`[BULK] Preparando envío para ${phone}. Componentes:`, JSON.stringify(components, null, 2));
-                const resApi = await provider.sendTemplate(phone, templateName, languageCode || 'es_AR', components);
+                const resApi = await provider.sendTemplate(phone, templateName, languageCode || 'es_AR', components, isNamed ? 'named' : 'positional');
                 
                 if (resApi?.messages) {
                     const msgId = resApi.messages[0].id;
