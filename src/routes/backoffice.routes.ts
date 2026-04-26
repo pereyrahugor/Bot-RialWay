@@ -247,7 +247,7 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                             
                             headerParam.parameter_name = (namedParams && namedParams[0]?.param_name) 
                                                         ? namedParams[0].param_name 
-                                                        : "header_media_url";
+                                                        : "image"; // Guessing 'image' as the universal fallback
                         }
                         
                         components.push({ type: 'header', parameters: [headerParam] });
