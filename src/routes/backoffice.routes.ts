@@ -258,34 +258,25 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                     [mediaFormat]: { link: row.header_media_url }
                 };
 
-                let shouldAddHeader = false;
+                let shouldAddHeader = true; 
 
                 if (isNamed) {
-                    // En plantillas NAMED, buscamos si hay un nombre de parámetro para la cabecera
                     const namedParams = headerComp?.example?.header_text_named_params || 
                                       headerComp?.example?.header_handle_named_params;
                     
                     if (namedParams && namedParams[0]?.param_name) {
                         headerParam.parameter_name = namedParams[0].param_name;
-                        shouldAddHeader = true;
+                    } else if (headerComp?.parameters && headerComp.parameters[0]?.param_name) {
+                        headerParam.parameter_name = headerComp.parameters[0].param_name;
                     } else {
-                        // Si es NAMED pero no tiene parámetros en el ejemplo, la imagen es FIJA.
-                        // No debemos enviar el componente header o fallará la entrega.
-                        shouldAddHeader = false;
+                        headerParam.parameter_name = "header_media_url"; 
                     }
-                } else {
-                    // En plantillas POSITIONAL, si hay un header multimedia, casi siempre es variable ({{1}})
-                    shouldAddHeader = true;
                 }
 
-                if (shouldAddHeader) {
-                    components.push({
-                        type: 'header',
-                        parameters: [headerParam]
-                    });
-                } else {
-                    console.log(`ℹ️ [BULK] Omitiendo parámetro de cabecera para ${phone}: La plantilla tiene imagen fija.`);
-                }
+                components.push({
+                    type: 'header',
+                    parameters: [headerParam]
+                });
             }
 
             // 3. BUTTONS Dinámicos
