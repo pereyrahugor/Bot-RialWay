@@ -232,36 +232,50 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
             // Reordenar componentes según la definición de la plantilla
             for (const compDef of template.components) {
                 if (compDef.type === 'HEADER') {
-                    if (mediaFormat) {
+                    // Solo enviamos header si la definición lo tiene y tenemos URL o ejemplo
+                    if (compDef.format === 'IMAGE' || compDef.format === 'VIDEO' || compDef.format === 'DOCUMENT') {
+                        const lowFormat = compDef.format.toLowerCase();
                         const headerParam: any = {
-                            type: mediaFormat,
-                            [mediaFormat]: { link: row.header_media_url || defaultMediaUrl || compDef.example?.header_handle?.[0] }
+                            type: lowFormat,
+                            [lowFormat]: { link: row.header_media_url || defaultMediaUrl || compDef.example?.header_handle?.[0] }
                         };
 
                         if (isNamed) {
-                            // Intentamos buscar el nombre, pero si no lo hay, usamos un fallback
                             const namedParams = compDef.example?.header_text_named_params || 
                                               compDef.example?.header_handle_named_params ||
                                               compDef.parameters;
                             
                             headerParam.parameter_name = (namedParams && namedParams[0]?.param_name) 
                                                         ? namedParams[0].param_name 
-                                                        : "header_media_url"; // Fallback que Meta aceptó antes
+                                                        : "header_media_url";
                         }
                         
                         components.push({ type: 'header', parameters: [headerParam] });
                     }
                 } else if (compDef.type === 'BODY') {
                     const bodyParams: any[] = [];
+                    
+                    // Si es positional, contamos cuántos parámetros espera
+                    let expectedCount = 99; // Por defecto muchos para NAMED
+                    if (!isNamed) {
+                        const placeholders = (compDef.text || '').match(/{{(\d+)}}/g) || [];
+                        expectedCount = placeholders.length;
+                    }
+
+                    let added = 0;
                     for (const key of paramKeys) {
-                        if (key === 'header_media_url' || key.startsWith('button_')) continue;
+                        if (key === 'header_media_url' || key.startsWith('button_') || key === phoneKey) continue;
+                        if (added >= expectedCount) break; // Límite estricto para POSITIONAL
+                        
                         const val = String(row[key] ?? '');
                         const param: any = { type: 'text', text: val || '-' };
                         if (isNamed) {
                             param.parameter_name = key;
                         }
                         bodyParams.push(param);
+                        added++;
                     }
+
                     if (bodyParams.length > 0) {
                         components.push({ type: 'body', parameters: bodyParams });
                     }
