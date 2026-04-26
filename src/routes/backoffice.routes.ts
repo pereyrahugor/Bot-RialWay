@@ -239,20 +239,17 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                         };
 
                         if (isNamed) {
+                            // Intentamos buscar el nombre, pero si no lo hay, usamos un fallback
                             const namedParams = compDef.example?.header_text_named_params || 
                                               compDef.example?.header_handle_named_params ||
                                               compDef.parameters;
                             
-                            if (namedParams && namedParams[0]?.param_name) {
-                                headerParam.parameter_name = namedParams[0].param_name;
-                                components.push({ type: 'header', parameters: [headerParam] });
-                            } 
-                            // Si es NAMED pero no encontramos nombre, intentamos NO enviarlo 
-                            // a menos que sea estrictamente necesario.
-                        } else {
-                            // Positional: siempre se envía
-                            components.push({ type: 'header', parameters: [headerParam] });
+                            headerParam.parameter_name = (namedParams && namedParams[0]?.param_name) 
+                                                        ? namedParams[0].param_name 
+                                                        : "header_media_url"; // Fallback que Meta aceptó antes
                         }
+                        
+                        components.push({ type: 'header', parameters: [headerParam] });
                     }
                 } else if (compDef.type === 'BODY') {
                     const bodyParams: any[] = [];
