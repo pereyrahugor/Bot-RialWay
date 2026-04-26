@@ -488,6 +488,13 @@ class MetaCloudProvider extends ProviderClass {
     }
 
     /**
+     * Alias para sendMessage (texto plano) para compatibilidad con otros flujos
+     */
+    public async sendText(number: string, message: string): Promise<any> {
+        return this.sendMessage(number, message);
+    }
+
+    /**
      * Procesa el Webhook entrante de Meta
      */
     public handleWebhook = (req: any, res: any) => {
