@@ -318,7 +318,25 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                 if (resApi?.messages) {
                     const msgId = resApi.messages[0].id;
                     console.log(`✅ [BULK] Mensaje aceptado por Meta para ${phone}. ID: ${msgId}`);
-                    await HistoryHandler.saveMessage(phone, 'assistant', `[Plantilla Masiva: ${templateName}]`, 'text', null, null, msgId);
+                    
+                    // --- RENDERIZAR TEXTO PARA EL ASISTENTE ---
+                    let renderedText = "";
+                    const bodyComp = template.components.find((c: any) => c.type === 'BODY');
+                    if (bodyComp) {
+                        renderedText = bodyComp.text || "";
+                        // Reemplazar variables (soporta {{1}} y {{nombre}})
+                        const varRegex = /\{\{(\w+)\}\}/g;
+                        renderedText = renderedText.replace(varRegex, (match, p1) => {
+                            // Intentar obtener el valor de la fila (case-insensitive)
+                            const val = row[p1] || row[p1.toLowerCase()] || row[p1.toUpperCase()] || match;
+                            return String(val);
+                        });
+                    }
+
+                    // Guardar con un prefijo informativo para el asistente
+                    const historyContent = `[Campaña: ${templateName}]\n${renderedText}`;
+
+                    await HistoryHandler.saveMessage(phone, 'assistant', historyContent, 'text', null, null, msgId);
                     sent++;
                 } else {
                     errors++;
