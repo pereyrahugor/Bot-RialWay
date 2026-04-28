@@ -766,14 +766,15 @@ export class HistoryHandler {
     /**
      * Obtiene los mensajes de un chat específico
      */
-    static async getMessages(rawChatId: string, limit: number = 50, offset: number = 0) {
+    static async getMessages(rawChatId: string, limit: number = 50, offset: number = 0, projectId: string | null = null) {
         const chatId = this.normalizeId(rawChatId);
+        const targetProjectId = projectId || HistoryHandler.PROJECT_IDENTIFIER;
         try {
             const { data, error } = await supabase
                 .from('messages')
                 .select('*')
                 .eq('chat_id', chatId)
-                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER)
+                .eq('project_id', targetProjectId)
                 .order('created_at', { ascending: false }) // Primero los más nuevos para el LIMIT
                 .range(offset, offset + limit - 1);
             

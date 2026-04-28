@@ -102,12 +102,8 @@ export class AiManager {
         // --- COMANDO DE REINICIO ---
         if (ctx.body && ctx.body.trim().toUpperCase() === '#RESET#') {
             const chatId = ctx.from;
-            console.log(`[AiManager] ♻️ Reiniciando historial para ${chatId}`);
-            await HistoryHandler.saveThreadId(chatId, null as any); // null as any para evitar problemas de tipos si thread_id espera string
-            if (state && typeof state.update === 'function') {
-                await state.update({ thread_id: null });
-            }
-            return await flowDynamic("✅ Historial de conversación reiniciado. El asistente ya no recordará los mensajes anteriores.");
+            console.log(`[AiManager] ♻️ Reiniciando historial para ${chatId} (Local Only)`);
+            return await flowDynamic("✅ Historial de conversación reiniciado localmente. El asistente ya no recordará los mensajes anteriores en la próxima consulta.");
         }
         
         await typing(ctx, provider);
@@ -156,17 +152,7 @@ export class AiManager {
                 if (!isGlobalBotEnabled) {
                     console.log(`[AiManager] 🛑 Bot DESACTIVADO GLOBALMENTE para el proyecto ${dynamicProjectId}.`);
                 }
-                try {
-                    const threadId = await HistoryHandler.getThreadId(ctx.from);
-                    if (threadId && this.openaiMain) {
-                        await this.openaiMain.beta.threads.messages.create(threadId, {
-                            role: 'user',
-                            content: body || '[Media]'
-                        });
-                    }
-                } catch (e: any) {
-                    console.error("[AiManager] Error guardando threadId:", e.message);
-                }
+                // No necesitamos sincronizar con Threads de OpenAI en Chat Completions
                 return state;
             }
 
@@ -176,16 +162,8 @@ export class AiManager {
                     console.log('📡 [SYNC] Sincronizando datos de Google y Prompt de OpenAI...');
                     await updateMain();
                     
-                    // Sincronización del Prompt del asistente (Hot-update)
-                    if (this.openaiMain) {
-                        const assistant = await this.openaiMain.beta.assistants.retrieve(this.assistantId);
-                        if (assistant && assistant.instructions) {
-                            await HistoryHandler.saveSetting('ASSISTANT_PROMPT', assistant.instructions);
-                            console.log('✅ [SYNC] Prompt del asistente sincronizado en base de datos.');
-                        }
-                    } else {
-                        console.warn('⚠️ [SYNC] Saltando sincronización de prompt: OpenAI no configurado.');
-                    }
+                    // Sincronización del Prompt del asistente (Desde DB/Local)
+                    console.log('✅ [SYNC] Datos actualizados. El prompt se cargará desde la base de datos en la próxima consulta.');
 
                     await flowDynamic([{ body: "🔄 Datos actualizados desde Google y Assistant Prompt sincronizado (Hot-update)." }]);
                 } catch (err: any) {
@@ -207,14 +185,7 @@ export class AiManager {
 
             if (!response) return state;
 
-            try {
-                const currentThreadId = state && typeof state.get === 'function' ? state.get('thread_id') : null;
-                if (currentThreadId && ctx.from) {
-                    await HistoryHandler.saveThreadId(ctx.from, currentThreadId, dynamicProjectId);
-                }
-            } catch (e: any) {
-                console.error("[AiManager] Error guardando threadId:", e.message);
-            }
+            // No necesitamos guardar threadId en Chat Completions
 
             const destino = this.analizarDestinoRecepcionista(response);
             const resumen = this.extraerResumenRecepcionista(response);

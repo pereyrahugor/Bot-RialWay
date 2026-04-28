@@ -28,7 +28,7 @@ const openai = process.env.OPENAI_API_KEY ? new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 }) : null;
 
-import { waitForActiveRuns, cancelActiveRuns } from './openaiHelper';
+// Eliminadas funciones de Assistants API legacy
 
 
 // Mapa global para bloquear usuarios de WhatsApp durante operaciones API
@@ -190,8 +190,7 @@ export class AssistantResponseProcessor {
                 let threadId = ctx?.thread_id;
                 if (!threadId && state?.get) threadId = state.get('thread_id');
 
-                if (threadId) await waitForActiveRuns(threadId);
-                else await new Promise(resolve => setTimeout(resolve, 2000));
+                await new Promise(resolve => setTimeout(resolve, 1000));
 
                 let newResponse: any;
                 try {
