@@ -431,16 +431,18 @@ export class HistoryHandler {
             };
 
             // --- DEDUPLICACIÓN MULTI-ESTRATEGIA ---
-            // 1. Si viene external_id, intentamos upsert directamente para aprovechar el índice único
+            // 1. Búsqueda exacta por external_id
             if (external_id) {
                 msgData.external_id = external_id;
-                const { data: existingMsg, error: upsertError } = await supabase
+                const { data: exactMatch, error: exactError } = await supabase
                     .from('messages')
-                    .upsert(msgData, { onConflict: 'external_id' })
-                    .select();
+                    .select('*')
+                    .eq('external_id', external_id)
+                    .maybeSingle();
                 
-                if (!upsertError && existingMsg && existingMsg.length > 0) return existingMsg;
-                // Si falla el upsert (ej: la columna no existe o hay conflicto complejo), seguimos a la estrategia 2
+                if (!exactError && exactMatch) {
+                    return [exactMatch]; // Ya existe, retornamos sin emitir evento repetido
+                }
             }
 
             // 2. BUSQUEDA POR CONTENIDO + TIEMPO (Deduplicación Difusa)
@@ -474,7 +476,7 @@ export class HistoryHandler {
             }
 
             // 3. INSERCIÓN NORMAL (Si no se encontró duplicado)
-            const { error: insertError } = await supabase.from('messages').insert({
+            const { error: insertError, data: insertedMsg } = await supabase.from('messages').insert({
                 chat_id: chatId,
                 project_id: currentProjectId,
                 role,
@@ -482,9 +484,14 @@ export class HistoryHandler {
                 type,
                 external_id: external_id || null,
                 created_at: msgData.created_at
-            });
+            }).select();
 
             if (insertError) {
+                // Manejar race conditions de inserción concurrente
+                if (insertError.code === '23505') {
+                    console.log(`[HistoryHandler] ⏩ Mensaje con external_id ${external_id} insertado concurrentemente.`);
+                    return null;
+                }
                 console.error('[HistoryHandler] Error en inserción de mensaje fallback:', insertError);
             }
 
