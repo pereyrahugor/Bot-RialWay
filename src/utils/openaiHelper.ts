@@ -101,7 +101,7 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
                 model: process.env.OPENAI_MODEL || "gpt-4o",
                 messages: messages,
                 tools: tools.length > 0 ? tools : undefined,
-                tool_choice: "auto",
+                tool_choice: tools.length > 0 ? "auto" : undefined,
             });
 
             const responseMessage = completion.choices[0].message;
