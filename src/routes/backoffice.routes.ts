@@ -1,5 +1,6 @@
 import path from 'path';
 import fs from 'fs';
+import { execSync } from 'child_process';
 import url from 'url';
 import bodyParser from 'body-parser';
 import axios from 'axios';
@@ -225,11 +226,44 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                             // Construir URL pública (Railway o fallback host)
                             let baseUrl = process.env.PROJECT_URL || process.env.RAILWAY_PUBLIC_DOMAIN || `https://${req.headers.host}`;
                             if (!baseUrl.startsWith('http')) baseUrl = `https://${baseUrl}`;
-                            const finalUrl = `${baseUrl.replace(/\/$/, '')}/uploads/${filename}`;
+                            let finalUrl = `${baseUrl.replace(/\/$/, '')}/uploads/${filename}`;
+
+                            // --- LÓGICA DE COMPRESIÓN AUTOMÁTICA ---
+                            try {
+                                const stats = fs.statSync(dest);
+                                const sizeMB = stats.size / (1024 * 1024);
+                                
+                                if (sizeMB > 15.5 && ext === 'mp4') {
+                                    console.log(`⚠️ [BULK] Video muy pesado (${sizeMB.toFixed(2)}MB). Iniciando compresión...`);
+                                    const compressedFilename = `compressed-${filename}`;
+                                    const compressedDest = path.join(uploadsDir, compressedFilename);
+                                    
+                                    // 1. Obtener duración con ffprobe
+                                    const durationStr = execSync(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${dest}"`).toString().trim();
+                                    const duration = parseFloat(durationStr);
+                                    
+                                    if (!isNaN(duration) && duration > 0) {
+                                        // 2. Calcular bitrate para ~14.5MB (margen de seguridad)
+                                        const targetBitrate = Math.floor((14.5 * 1024 * 1024 * 8) / duration);
+                                        
+                                        // 3. Ejecutar ffmpeg
+                                        console.log(`🎬 [BULK] Comprimiendo a ${targetBitrate} bps (Duración: ${durationStr}s)`);
+                                        execSync(`ffmpeg -i "${dest}" -b:v ${targetBitrate} -vcodec libx264 -preset fast -acodec aac -movflags +faststart -y "${compressedDest}"`);
+                                        
+                                        // 4. Cambiar a la versión comprimida
+                                        finalUrl = `${baseUrl.replace(/\/$/, '')}/uploads/${compressedFilename}`;
+                                        console.log(`✅ [BULK] Video comprimido con éxito: ${finalUrl}`);
+                                    }
+                                }
+                            } catch (compressError: any) {
+                                console.error(`❌ [BULK] Error en compresión automática:`, compressError.message);
+                                // Si falla la compresión, seguimos con el original como fallback
+                            }
+                            // ---------------------------------------
                             
                             mediaCache.set(directUrl, finalUrl);
                             row.header_media_url = finalUrl;
-                            console.log(`✅ [BULK] Media descargada y servida localmente: ${finalUrl}`);
+                            console.log(`✅ [BULK] Media lista para envío: ${finalUrl}`);
                         } catch (e: any) {
                             console.error(`❌ [BULK] Error descargando de Drive:`, e.message);
                             // Fallback al link directo original de drive (uc)
