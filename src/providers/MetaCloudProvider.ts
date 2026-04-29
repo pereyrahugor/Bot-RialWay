@@ -470,10 +470,14 @@ class MetaCloudProvider extends ProviderClass {
             return;
         }
 
-        const url = `https://graph.facebook.com/v22.0/${phone_number_id}/messages`;
+        const url = `https://graph.facebook.com/v25.0/${phone_number_id}/messages`;
         const cleanNumber = number.replace(/\D/g, '');
         const toFormat = `+${cleanNumber}`;
-        console.log(`[MetaCloudProvider] Intentando enviar a: raw=${number}, to=${toFormat}`);
+        
+        // Detectar si el mensaje es una ruta de archivo local
+        const isMessagePath = typeof message === 'string' && (message.startsWith('/') || message.includes(':\\')) && fs.existsSync(message);
+        
+        console.log(`[MetaCloudProvider] Intentando enviar a: ${toFormat}. IsPath: ${isMessagePath}. Body: ${isMessagePath ? '[FILE]' : (message || '').substring(0, 30)}`);
 
         const body: any = {
             messaging_product: "whatsapp",
@@ -482,7 +486,7 @@ class MetaCloudProvider extends ProviderClass {
         };
 
         // Soporte para archivos (buscamos en todas las propiedades posibles)
-        const mediaSource = options.media || options.url || options.path || (typeof options === 'string' && options.includes('/') ? options : null);
+        const mediaSource = options.media || options.url || options.path || (isMessagePath ? message : null) || (typeof options === 'string' && options.includes('/') ? options : null);
 
         if (mediaSource) {
             console.log(`[MetaCloudProvider] 📂 Media detectado en sendMessage:`, typeof mediaSource === 'string' ? mediaSource : JSON.stringify(mediaSource));
@@ -490,6 +494,9 @@ class MetaCloudProvider extends ProviderClass {
             let mediaUrl = typeof mediaSource === 'string' ? mediaSource : (mediaSource.url || mediaSource.path || mediaSource.link);
             const mimeType = (typeof mediaSource === 'object') ? (mediaSource.mimetype || mediaSource.mimeType || '') : '';
             
+            // El caption no debe ser la ruta del archivo si el mensaje era una ruta
+            const finalCaption = isMessagePath ? (options.body || options.caption || '') : (message || '');
+
             // Detectar si es una ruta local o una URL
             let finalPath = mediaUrl;
             const isLocal = finalPath && !finalPath.startsWith('http');
@@ -509,19 +516,19 @@ class MetaCloudProvider extends ProviderClass {
                         
                         if (lowerPath.endsWith('.pdf') || mimeType.includes('pdf')) {
                             body.type = 'document';
-                            body.document = { ...mediaData, filename: path.basename(finalPath), caption: message || '' };
+                            body.document = { ...mediaData, filename: path.basename(finalPath), caption: finalCaption };
                         } else if (lowerPath.endsWith('.jpg') || lowerPath.endsWith('.png') || lowerPath.endsWith('.jpeg') || mimeType.includes('image')) {
                             body.type = 'image';
-                            body.image = { ...mediaData, caption: message || '' };
+                            body.image = { ...mediaData, caption: finalCaption };
                         } else if (lowerPath.endsWith('.mp4') || mimeType.includes('video')) {
                             body.type = 'video';
-                            body.video = { ...mediaData, caption: message || '' };
+                            body.video = { ...mediaData, caption: finalCaption };
                         } else if (lowerPath.endsWith('.mp3') || lowerPath.endsWith('.ogg') || lowerPath.endsWith('.opus') || mimeType.includes('audio')) {
                             body.type = (lowerPath.endsWith('.opus') || mimeType.includes('voice')) ? 'voice' : 'audio';
                             body.audio = { ...mediaData };
                         } else {
                             body.type = 'document';
-                            body.document = { ...mediaData, filename: path.basename(finalPath), caption: message || '' };
+                            body.document = { ...mediaData, filename: path.basename(finalPath), caption: finalCaption };
                         }
 
                         try {
@@ -552,13 +559,13 @@ class MetaCloudProvider extends ProviderClass {
 
             if (mimeType.includes('image') || lowerMediaUrl.endsWith('.jpg') || lowerMediaUrl.endsWith('.png') || lowerMediaUrl.endsWith('.jpeg')) {
                 body.type = 'image';
-                body.image = { ...mediaData, caption: message || '' };
+                body.image = { ...mediaData, caption: finalCaption };
             } else if (mimeType.includes('audio') || mimeType.includes('voice') || lowerMediaUrl.endsWith('.mp3') || lowerMediaUrl.endsWith('.ogg') || lowerMediaUrl.endsWith('.opus')) {
                 body.type = (mimeType.includes('voice') || lowerMediaUrl.endsWith('.opus')) ? 'voice' : 'audio';
                 body.audio = { ...mediaData };
             } else if (mimeType.includes('video') || lowerMediaUrl.endsWith('.mp4')) {
                 body.type = 'video';
-                body.video = { ...mediaData, caption: message || '' };
+                body.video = { ...mediaData, caption: finalCaption };
             } else {
                 // Por defecto tratamos como documento (PDF, etc)
                 body.type = 'document';
@@ -569,7 +576,7 @@ class MetaCloudProvider extends ProviderClass {
                 body.document = { 
                     ...mediaData, 
                     filename: filename || path.basename(mediaUrl || 'documento.pdf'), 
-                    caption: message || '' 
+                    caption: finalCaption 
                 };
             }
         } else {
