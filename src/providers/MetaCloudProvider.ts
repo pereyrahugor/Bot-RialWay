@@ -31,31 +31,35 @@ class MetaCloudProvider extends ProviderClass {
      */
     public async saveFile(ctx: any, options: { path?: string } = {}): Promise<string> {
         const { access_token } = this.config;
-        // El payload puede estar en ctx.payload o en ctx directamente dependiendo de quién llame
-        const msg = ctx.payload || ctx;
-        const mediaType = msg.type || ctx.type;
         
-        // Intentar obtener el objeto de media (image, audio, voice, video, document)
-        const mediaObj = msg[mediaType] || ctx.media || (msg.type ? msg[msg.type] : null);
+        // El payload puede estar en varios lugares según el origen del mensaje
+        const msg = ctx.payload || ctx;
+        const mediaType = ctx.type || msg.type;
+        
+        // Buscar el objeto de media (WhatsApp Meta tiene una estructura anidada)
+        const mediaObj = msg[mediaType] || ctx.media || msg.media || null;
 
         if (!mediaObj) {
             console.error('❌ [MetaCloudProvider] No se encontró objeto de media para descargar.');
             return "no-file";
         }
 
-        let mediaUrl = mediaObj.link || mediaObj.url || (ctx.media ? ctx.media.url : null);
+        // Extraer URL e ID con mayor prioridad al ID si es Meta
         const mediaId = mediaObj.id || (ctx.media ? ctx.media.id : null);
+        let mediaUrl = mediaObj.url || mediaObj.link || (ctx.media ? ctx.media.url : null);
 
         // Si no hay URL pero hay ID (estándar de Meta), obtenemos la URL temporal de la API
         if (!mediaUrl && mediaId && access_token) {
             try {
                 console.log(`📡 [MetaCloudProvider] Obteniendo URL de descarga para media ID: ${mediaId}`);
-                const res = await axios.get(`https://graph.facebook.com/v22.0/${mediaId}`, {
+                const apiVersion = process.env.META_API_VERSION || 'v21.0';
+                const res = await axios.get(`https://graph.facebook.com/${apiVersion}/${mediaId}`, {
                     headers: { 'Authorization': `Bearer ${access_token}` }
                 });
                 mediaUrl = res.data.url;
             } catch (e: any) {
-                console.error(`❌ [MetaCloudProvider] Error obteniendo URL de media Meta:`, e.response?.data || e.message);
+                const errorDetail = e.response?.data || e.message;
+                console.error(`❌ [MetaCloudProvider] Error obteniendo URL de media Meta (ID: ${mediaId}):`, errorDetail);
             }
         }
 
