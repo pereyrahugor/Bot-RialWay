@@ -211,7 +211,7 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                     } else {
                         try {
                             console.log(`📥 [BULK] Descargando media de Drive para servir localmente: ${directUrl}`);
-                            const response = await axios.get(directUrl, { responseType: 'arraybuffer', timeout: 15000 });
+                            const response = await axios.get(directUrl, { responseType: 'arraybuffer', timeout: 60000 });
                             const contentType = response.headers['content-type'] || '';
                             let ext = 'bin';
                             if (contentType.includes('video')) ext = 'mp4';
@@ -257,6 +257,9 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                                 }
                             } catch (compressError: any) {
                                 console.error(`❌ [BULK] Error en compresión automática:`, compressError.message);
+                                if (compressError.stderr) {
+                                    console.error(`🔍 [BULK] Detalle técnico (stderr):`, compressError.stderr.toString());
+                                }
                                 // Si falla la compresión, seguimos con el original como fallback
                             }
                             // ---------------------------------------
