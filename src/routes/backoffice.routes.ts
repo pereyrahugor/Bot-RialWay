@@ -223,7 +223,8 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                             fs.writeFileSync(dest, response.data);
 
                             // Construir URL pública (Railway o fallback host)
-                            const baseUrl = process.env.PROJECT_URL || process.env.RAILWAY_PUBLIC_DOMAIN || `https://${req.headers.host}`;
+                            let baseUrl = process.env.PROJECT_URL || process.env.RAILWAY_PUBLIC_DOMAIN || `https://${req.headers.host}`;
+                            if (!baseUrl.startsWith('http')) baseUrl = `https://${baseUrl}`;
                             const finalUrl = `${baseUrl.replace(/\/$/, '')}/uploads/${filename}`;
                             
                             mediaCache.set(directUrl, finalUrl);
@@ -280,11 +281,11 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
 
                         if (isNamed) {
                             const namedParams = compDef.example?.header_handle_named_params ||
-                                               compDef.example?.header_text_named_params || 
+                                               compDef.example?.header_text_named_params ||
                                                compDef.parameters;
                             
                             const officialName = namedParams && namedParams[0]?.param_name;
-                            headerParam.parameter_name = officialName || "1";
+                            headerParam.parameter_name = officialName || (isNamed ? "video" : "1");
                         }
                         
                         components.push({ type: 'HEADER', parameters: [headerParam] });
