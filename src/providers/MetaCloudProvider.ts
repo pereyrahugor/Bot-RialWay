@@ -82,9 +82,11 @@ class MetaCloudProvider extends ProviderClass {
         try {
             console.log(`📥 [MetaCloudProvider] Descargando desde: ${mediaUrl.split('?')[0]}...`);
             
-            // Si la URL es de Meta (fbcdn.net), adjuntamos el token
+            // Si la URL es de Meta (fbcdn.net o fbsbx.com), adjuntamos el token
             const headers: any = {};
-            if (mediaUrl.includes('fbcdn.net') && access_token) {
+            const isMetaUrl = mediaUrl.includes('fbcdn.net') || mediaUrl.includes('fbsbx.com');
+            
+            if (isMetaUrl && access_token) {
                 headers['Authorization'] = `Bearer ${access_token}`;
             }
 
@@ -671,9 +673,12 @@ class MetaCloudProvider extends ProviderClass {
                                 }
                             }
 
+                            // Forzar que el body no esté vacío para eventos de voz para que el core del bot los procese
+                            const bodyText = type === 'voice' ? '_event_voice_note_' : (messageBody || '');
+
                             const formatedMessage: any = {
-                                body: messageBody,
-                                from: isEcho ? recipientId : (wa_id || msg.from),
+                                from: wa_id || msg.from,
+                                body: bodyText,
                                 phoneNumber: isEcho ? recipientId : msg.from,
                                 userId: bsuid, // Añadimos el BSUID al contexto
                                 name: isEcho ? 'Operador (App WhatsApp)' : (contact?.profile?.name || 'User'),
