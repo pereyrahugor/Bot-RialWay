@@ -2,6 +2,7 @@ import { ProviderClass } from '@builderbot/bot';
 import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
+import FormData from 'form-data';
 
 /**
  * Proveedor para Meta Cloud API (WhatsApp Business API)
@@ -443,10 +444,10 @@ class MetaCloudProvider extends ProviderClass {
             return null;
         }
 
-        const url = `https://graph.facebook.com/v22.0/${phone_number_id}/media`;
+        const apiVersion = process.env.META_API_VERSION || 'v25.0';
+        const url = `https://graph.facebook.com/${apiVersion}/${phone_number_id}/media`;
         
         try {
-            const FormData = require('form-data');
             const form = new FormData();
             form.append('messaging_product', 'whatsapp');
             form.append('file', fs.createReadStream(filePath));
