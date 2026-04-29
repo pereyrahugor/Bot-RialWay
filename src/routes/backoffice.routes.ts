@@ -238,8 +238,24 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                                     const compressedFilename = `compressed-${filename}`;
                                     const compressedDest = path.join(uploadsDir, compressedFilename);
                                     
-                                    // 1. Obtener duración con ffprobe
-                                    const durationStr = execSync(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${dest}"`).toString().trim();
+                                    // 1. Obtener duración (intentamos con ffprobe, fallback a ffmpeg)
+                                    let durationStr = '';
+                                    try {
+                                        durationStr = execSync(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${dest}"`).toString().trim();
+                                    } catch (e) {
+                                        try {
+                                            const output = execSync(`ffmpeg -i "${dest}" 2>&1 | grep Duration`).toString();
+                                            const match = output.match(/Duration: (\d+):(\d+):(\d+\.\d+)/);
+                                            if (match) {
+                                                const hours = parseFloat(match[1]);
+                                                const mins = parseFloat(match[2]);
+                                                const secs = parseFloat(match[3]);
+                                                durationStr = (hours * 3600 + mins * 60 + secs).toString();
+                                            }
+                                        } catch (e2) {
+                                            console.warn('⚠️ [BULK] Ni ffprobe ni ffmpeg están disponibles para obtener duración.');
+                                        }
+                                    }
                                     const duration = parseFloat(durationStr);
                                     
                                     if (!isNaN(duration) && duration > 0) {
