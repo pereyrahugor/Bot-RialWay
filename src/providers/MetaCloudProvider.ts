@@ -496,8 +496,8 @@ class MetaCloudProvider extends ProviderClass {
 
             if (isLocal) {
                 // Asegurar ruta absoluta
-                if (finalPath && !require('path').isAbsolute(finalPath)) {
-                    finalPath = require('path').join(process.cwd(), finalPath);
+                if (finalPath && !path.isAbsolute(finalPath)) {
+                    finalPath = path.join(process.cwd(), finalPath);
                 }
 
                 if (finalPath && fs.existsSync(finalPath)) {
@@ -509,7 +509,7 @@ class MetaCloudProvider extends ProviderClass {
                         
                         if (lowerPath.endsWith('.pdf') || mimeType.includes('pdf')) {
                             body.type = 'document';
-                            body.document = { ...mediaData, filename: require('path').basename(finalPath), caption: message || '' };
+                            body.document = { ...mediaData, filename: path.basename(finalPath), caption: message || '' };
                         } else if (lowerPath.endsWith('.jpg') || lowerPath.endsWith('.png') || lowerPath.endsWith('.jpeg') || mimeType.includes('image')) {
                             body.type = 'image';
                             body.image = { ...mediaData, caption: message || '' };
@@ -521,7 +521,7 @@ class MetaCloudProvider extends ProviderClass {
                             body.audio = { ...mediaData };
                         } else {
                             body.type = 'document';
-                            body.document = { ...mediaData, filename: require('path').basename(finalPath), caption: message || '' };
+                            body.document = { ...mediaData, filename: path.basename(finalPath), caption: message || '' };
                         }
 
                         try {
@@ -568,7 +568,7 @@ class MetaCloudProvider extends ProviderClass {
 
                 body.document = { 
                     ...mediaData, 
-                    filename: filename || require('path').basename(mediaUrl || 'documento.pdf'), 
+                    filename: filename || path.basename(mediaUrl || 'documento.pdf'), 
                     caption: message || '' 
                 };
             }

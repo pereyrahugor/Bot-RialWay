@@ -18,6 +18,7 @@ import { JsonBlockFinder } from "../Api-Google/JsonBlockFinder";
 import { CalendarEvents } from "../Api-Google/calendarEvents";
 import { downloadFileFromDrive } from './googleDriveHandler';
 import fs from 'fs';
+import path from 'path';
 import moment from 'moment';
 import OpenAI from "openai";
 import { transcribeAudioFile } from './audioTranscriptior';
@@ -299,7 +300,7 @@ export class AssistantResponseProcessor {
             for (const pdfPath of pdfPaths) {
                 try {
                     console.log(`[AssistantResponseProcessor] Enviando PDF: ${pdfPath}`);
-                    const absolutePath = require('path').resolve(pdfPath);
+                    const absolutePath = path.resolve(pdfPath);
                     await flowDynamic([{ body: "📄 Documento adjunto:", media: absolutePath }]);
                     // Breve espera entre archivos para asegurar el orden
                     await new Promise(r => setTimeout(r, 1000));
