@@ -483,19 +483,69 @@ class MetaCloudProvider extends ProviderClass {
 
         // Soporte para archivos
         if (options.media) {
-            let mediaUrl = typeof options.media === 'string' ? options.media : options.media.url;
-            const mimeType = options.media.mimetype || (typeof options.media === 'object' ? options.media.mimeType : '') || '';
+            console.log(`[MetaCloudProvider] 📂 Procesando media adjunto:`, typeof options.media === 'string' ? options.media : JSON.stringify(options.media));
+            
+            let mediaUrl = typeof options.media === 'string' ? options.media : (options.media.url || options.media.path);
+            const mimeType = options.media.mimetype || (typeof options.media === 'object' ? (options.media.mimeType || options.media.mimetype) : '') || '';
             
             // Detectar si es una ruta local o una URL
-            let mediaId = null;
-            const isLocal = mediaUrl && !mediaUrl.startsWith('http') && fs.existsSync(mediaUrl);
+            let finalPath = mediaUrl;
+            const isLocal = finalPath && !finalPath.startsWith('http');
 
             if (isLocal) {
-                console.log(`📤 [MetaCloudProvider] Detectado archivo local, subiendo a Meta: ${mediaUrl}`);
-                mediaId = await this.uploadMedia(mediaUrl);
+                // Asegurar ruta absoluta
+                if (finalPath && !path.isAbsolute(finalPath)) {
+                    finalPath = path.join(process.cwd(), finalPath);
+                }
+
+                if (finalPath && fs.existsSync(finalPath)) {
+                    console.log(`📤 [MetaCloudProvider] Subiendo archivo local a Meta: ${finalPath}`);
+                    const mediaId = await this.uploadMedia(finalPath);
+                    if (mediaId) {
+                        const mediaData = { id: mediaId };
+                        const lowerPath = finalPath.toLowerCase();
+                        
+                        if (lowerPath.endsWith('.pdf') || mimeType.includes('pdf')) {
+                            body.type = 'document';
+                            body.document = { ...mediaData, filename: path.basename(finalPath), caption: message || '' };
+                        } else if (lowerPath.endsWith('.jpg') || lowerPath.endsWith('.png') || lowerPath.endsWith('.jpeg') || mimeType.includes('image')) {
+                            body.type = 'image';
+                            body.image = { ...mediaData, caption: message || '' };
+                        } else if (lowerPath.endsWith('.mp4') || mimeType.includes('video')) {
+                            body.type = 'video';
+                            body.video = { ...mediaData, caption: message || '' };
+                        } else if (lowerPath.endsWith('.mp3') || lowerPath.endsWith('.ogg') || lowerPath.endsWith('.opus') || mimeType.includes('audio')) {
+                            body.type = (lowerPath.endsWith('.opus') || mimeType.includes('voice')) ? 'voice' : 'audio';
+                            body.audio = { ...mediaData };
+                        } else {
+                            body.type = 'document';
+                            body.document = { ...mediaData, filename: path.basename(finalPath), caption: message || '' };
+                        }
+
+                        try {
+                            const res = await axios.post(url, body, {
+                                headers: {
+                                    'Authorization': `Bearer ${access_token}`,
+                                    'Content-Type': 'application/json'
+                                }
+                            });
+                            console.log(`✅ [MetaCloudProvider] Media enviado con éxito (ID: ${mediaId})`);
+                            return res.data;
+                        } catch (err: any) {
+                            console.error('❌ [MetaCloudProvider] Error enviando mensaje con mediaId:', err.response?.data || err.message);
+                        }
+                    } else {
+                        console.error(`❌ [MetaCloudProvider] No se pudo obtener mediaId para: ${finalPath}`);
+                    }
+                } else {
+                    console.error(`❌ [MetaCloudProvider] El archivo local NO existe: ${finalPath}`);
+                }
+                
+                // Si falló la subida local, no intentamos enviar como link (porque no es una URL)
+                return;
             }
 
-            const mediaData: any = mediaId ? { id: mediaId } : { link: mediaUrl };
+            const mediaData: any = { link: mediaUrl };
             const lowerMediaUrl = (mediaUrl || '').toLowerCase();
 
             if (mimeType.includes('image') || lowerMediaUrl.endsWith('.jpg') || lowerMediaUrl.endsWith('.png') || lowerMediaUrl.endsWith('.jpeg')) {
