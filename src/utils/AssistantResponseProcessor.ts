@@ -299,9 +299,18 @@ export class AssistantResponseProcessor {
             // Enviar PDFs recolectados
             for (const pdfPath of pdfPaths) {
                 try {
-                    console.log(`[AssistantResponseProcessor] Enviando PDF: ${pdfPath}`);
                     const absolutePath = path.resolve(pdfPath);
-                    await flowDynamic([{ body: "📄 Documento adjunto:", media: absolutePath }]);
+                    console.log(`[AssistantResponseProcessor] Enviando PDF DIRECTO: ${absolutePath}`);
+                    
+                    const fromNumber = ctx?.from || ctx?.key?.remoteJid || '';
+                    
+                    // Intentamos envío directo para asegurar que el mediaSource no llegue nulo
+                    if (provider && typeof provider.sendMessage === 'function' && fromNumber) {
+                        await provider.sendMessage(fromNumber, absolutePath, { body: "📄 Documento adjunto:" });
+                    } else {
+                        await flowDynamic([{ body: "📄 Documento adjunto:", media: absolutePath }]);
+                    }
+                    
                     // Breve espera entre archivos para asegurar el orden
                     await new Promise(r => setTimeout(r, 1000));
                 } catch (err) {

@@ -34,13 +34,16 @@ class MetaCloudProvider extends ProviderClass {
         
         // El payload puede estar en varios lugares según el origen del mensaje
         const msg = ctx.payload || ctx;
-        const mediaType = ctx.type || msg.type;
+        let mediaType = ctx.type || msg.type;
+
+        // Normalización: Para Meta, 'voice' se llama 'audio'
+        if (mediaType === 'voice') mediaType = 'audio';
         
         // Buscar el objeto de media (WhatsApp Meta tiene una estructura anidada)
         const mediaObj = msg[mediaType] || ctx.media || msg.media || null;
 
         if (!mediaObj) {
-            console.error('❌ [MetaCloudProvider] No se encontró objeto de media para descargar.');
+            console.error('❌ [MetaCloudProvider] No se encontró objeto de media para descargar. Tipo:', mediaType);
             return "no-file";
         }
 
@@ -52,7 +55,7 @@ class MetaCloudProvider extends ProviderClass {
         if (!mediaUrl && mediaId && access_token) {
             try {
                 console.log(`📡 [MetaCloudProvider] Obteniendo URL de descarga para media ID: ${mediaId}`);
-                const apiVersion = process.env.META_API_VERSION || 'v21.0';
+                const apiVersion = process.env.META_API_VERSION || 'v25.0';
                 const res = await axios.get(`https://graph.facebook.com/${apiVersion}/${mediaId}`, {
                     headers: { 'Authorization': `Bearer ${access_token}` }
                 });
@@ -82,12 +85,14 @@ class MetaCloudProvider extends ProviderClass {
         try {
             console.log(`📥 [MetaCloudProvider] Descargando desde: ${mediaUrl.split('?')[0]}...`);
             
-            // Si la URL es de Meta (fbcdn.net o fbsbx.com), adjuntamos el token
+            // Si la URL es de Meta, adjuntamos el token. Aumentamos flexibilidad de detección.
             const headers: any = {};
-            const isMetaUrl = mediaUrl.includes('fbcdn.net') || mediaUrl.includes('fbsbx.com');
+            const isMetaUrl = mediaUrl.includes('fbcdn') || mediaUrl.includes('fbsbx') || mediaUrl.includes('facebook.com');
             
             if (isMetaUrl && access_token) {
                 headers['Authorization'] = `Bearer ${access_token}`;
+            } else if (isMetaUrl && !access_token) {
+                console.warn('⚠️ [MetaCloudProvider] URL de Meta detectada pero no hay access_token disponible para la descarga.');
             }
 
             const response = await axios.get(mediaUrl, {
@@ -477,7 +482,7 @@ class MetaCloudProvider extends ProviderClass {
         // Detectar si el mensaje es una ruta de archivo local
         const isMessagePath = typeof message === 'string' && (message.startsWith('/') || message.includes(':\\')) && fs.existsSync(message);
         
-        console.log(`[MetaCloudProvider] Intentando enviar a: ${toFormat}. IsPath: ${isMessagePath}. Body: ${isMessagePath ? '[FILE]' : (message || '').substring(0, 30)}`);
+        console.log(`[MetaCloudProvider] ENVÍO: to=${toFormat} | IsPath=${isMessagePath} | Msg=${isMessagePath ? '[FILE]' : (message || '').substring(0, 20)} | OptionsKeys=${Object.keys(options || {})}`);
 
         const body: any = {
             messaging_product: "whatsapp",
