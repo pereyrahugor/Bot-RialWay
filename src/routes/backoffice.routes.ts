@@ -172,7 +172,7 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
         console.log(`🔍 [BULK] DEBUG ESTRUCTURA COMPLETA:`, JSON.stringify(template, null, 2));
         
         // Detección más agresiva: si tiene parameter_format='named' O si algún componente tiene parámetros nombrados en sus ejemplos
-        const isNamed = template.parameter_format === 'named' || 
+        const isNamed = (template.parameter_format || '').toLowerCase() === 'named' || 
                         template.components.some((c: any) => 
                             c.example?.body_text_named_params || 
                             c.example?.header_text_named_params ||
@@ -191,15 +191,50 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
         let sent = 0, errors = 0;
         let firstRowLogged = false;
         let defaultMediaUrl = '';
+        
+        // Caché local para no descargar 100 veces el mismo video de Drive
+        const mediaCache = new Map<string, string>();
+        const uploadsDir = path.join(process.cwd(), 'uploads');
+        if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
         for (const row of data) {
-            // AUTO-CORRECCIÓN: Convertir links de Google Drive a links directos
+            // AUTO-CORRECCIÓN: Convertir links de Google Drive a links locales servidos por nosotros
             if (row.header_media_url && row.header_media_url.includes('drive.google.com')) {
                 const driveIdMatch = row.header_media_url.match(/\/d\/([^\/]+)/) || row.header_media_url.match(/id=([^\&]+)/);
                 if (driveIdMatch && driveIdMatch[1]) {
                     const driveId = driveIdMatch[1];
-                    row.header_media_url = `https://drive.google.com/uc?export=download&id=${driveId}`;
-                    console.log(`🔄 [BULK] URL de Google Drive convertida a link directo: ${row.header_media_url}`);
+                    const directUrl = `https://drive.google.com/uc?export=download&id=${driveId}`;
+                    
+                    if (mediaCache.has(directUrl)) {
+                        row.header_media_url = mediaCache.get(directUrl);
+                    } else {
+                        try {
+                            console.log(`📥 [BULK] Descargando media de Drive para servir localmente: ${directUrl}`);
+                            const response = await axios.get(directUrl, { responseType: 'arraybuffer', timeout: 15000 });
+                            const contentType = response.headers['content-type'] || '';
+                            let ext = 'bin';
+                            if (contentType.includes('video')) ext = 'mp4';
+                            else if (contentType.includes('image')) ext = 'jpg';
+                            else if (contentType.includes('pdf')) ext = 'pdf';
+                            else ext = row.header_media_url.split('.').pop() || 'mp4';
+
+                            const filename = `bulk-${Date.now()}-${Math.floor(Math.random()*1000)}.${ext}`;
+                            const dest = path.join(uploadsDir, filename);
+                            fs.writeFileSync(dest, response.data);
+
+                            // Construir URL pública (Railway o fallback host)
+                            const baseUrl = process.env.PROJECT_URL || process.env.RAILWAY_PUBLIC_DOMAIN || `https://${req.headers.host}`;
+                            const finalUrl = `${baseUrl.replace(/\/$/, '')}/uploads/${filename}`;
+                            
+                            mediaCache.set(directUrl, finalUrl);
+                            row.header_media_url = finalUrl;
+                            console.log(`✅ [BULK] Media descargada y servida localmente: ${finalUrl}`);
+                        } catch (e: any) {
+                            console.error(`❌ [BULK] Error descargando de Drive:`, e.message);
+                            // Fallback al link directo original de drive (uc)
+                            row.header_media_url = directUrl;
+                        }
+                    }
                 }
             }
 
@@ -215,7 +250,7 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                 row.header_media_url = defaultMediaUrl;
             }
 
-            // Detección de teléfono más flexible (phone, tel, movil, cel, celular, etc.)
+            // Detección de teléfono más flexible
             const phoneKey = Object.keys(row).find(k => 
                 ['phone', 'tel', 'movil', 'cel', 'celular', 'telefono', 'whatsapp'].some(p => k.toLowerCase().includes(p))
             );
@@ -223,7 +258,7 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
             const phone = phoneKey ? String(row[phoneKey] ?? '').replace(/\D/g, '') : '';
             
             if (!phone) {
-                console.warn(`⚠️ [BULK] Fila omitida: No se encontró teléfono. Columnas: [${Object.keys(row).join(', ')}] | Datos: ${JSON.stringify(row)}`);
+                console.warn(`⚠️ [BULK] Fila omitida: No se encontró teléfono.`);
                 continue;
             }
 
@@ -232,7 +267,6 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
             // Reordenar componentes según la definición de la plantilla
             for (const compDef of template.components) {
                 if (compDef.type === 'HEADER') {
-                    // Solo enviamos header si la definición lo tiene y tenemos URL o ejemplo
                     if (compDef.format === 'IMAGE' || compDef.format === 'VIDEO' || compDef.format === 'DOCUMENT') {
                         const lowFormat = compDef.format.toLowerCase();
                         const mediaLink = row.header_media_url || defaultMediaUrl || compDef.example?.header_handle?.[0];
@@ -245,9 +279,9 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                         };
 
                         if (isNamed) {
-                            const namedParams = compDef.example?.header_text_named_params || 
-                                              compDef.example?.header_handle_named_params ||
-                                              compDef.parameters;
+                            const namedParams = compDef.example?.header_handle_named_params ||
+                                               compDef.example?.header_text_named_params || 
+                                               compDef.parameters;
                             
                             const officialName = namedParams && namedParams[0]?.param_name;
                             headerParam.parameter_name = officialName || "1";
