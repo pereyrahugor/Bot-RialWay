@@ -296,14 +296,15 @@ export class AssistantResponseProcessor {
             }
 
             // Enviar PDFs recolectados
-            for (const path of pdfPaths) {
+            for (const pdfPath of pdfPaths) {
                 try {
-                    // console.log(`[AssistantResponseProcessor] Enviando media: ${path}`);
-                    await flowDynamic([{ body: "📄 Documento adjunto:", media: path }]);
+                    console.log(`[AssistantResponseProcessor] Enviando PDF: ${pdfPath}`);
+                    const absolutePath = require('path').resolve(pdfPath);
+                    await flowDynamic([{ body: "📄 Documento adjunto:", media: absolutePath }]);
                     // Breve espera entre archivos para asegurar el orden
                     await new Promise(r => setTimeout(r, 1000));
                 } catch (err) {
-                    // console.error('[WhatsApp Debug] Error enviando PDF:', err);
+                    console.error('[WhatsApp Debug] Error enviando PDF:', err);
                 }
             }
         }

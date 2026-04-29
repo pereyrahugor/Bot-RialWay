@@ -481,12 +481,14 @@ class MetaCloudProvider extends ProviderClass {
             to: toFormat
         };
 
-        // Soporte para archivos
-        if (options.media) {
-            console.log(`[MetaCloudProvider] 📂 Procesando media adjunto:`, typeof options.media === 'string' ? options.media : JSON.stringify(options.media));
+        // Soporte para archivos (buscamos en todas las propiedades posibles)
+        const mediaSource = options.media || options.url || options.path || (typeof options === 'string' && options.includes('/') ? options : null);
+
+        if (mediaSource) {
+            console.log(`[MetaCloudProvider] 📂 Media detectado en sendMessage:`, typeof mediaSource === 'string' ? mediaSource : JSON.stringify(mediaSource));
             
-            let mediaUrl = typeof options.media === 'string' ? options.media : (options.media.url || options.media.path);
-            const mimeType = options.media.mimetype || (typeof options.media === 'object' ? (options.media.mimeType || options.media.mimetype) : '') || '';
+            let mediaUrl = typeof mediaSource === 'string' ? mediaSource : (mediaSource.url || mediaSource.path || mediaSource.link);
+            const mimeType = (typeof mediaSource === 'object') ? (mediaSource.mimetype || mediaSource.mimeType || '') : '';
             
             // Detectar si es una ruta local o una URL
             let finalPath = mediaUrl;
@@ -494,8 +496,8 @@ class MetaCloudProvider extends ProviderClass {
 
             if (isLocal) {
                 // Asegurar ruta absoluta
-                if (finalPath && !path.isAbsolute(finalPath)) {
-                    finalPath = path.join(process.cwd(), finalPath);
+                if (finalPath && !require('path').isAbsolute(finalPath)) {
+                    finalPath = require('path').join(process.cwd(), finalPath);
                 }
 
                 if (finalPath && fs.existsSync(finalPath)) {
@@ -507,7 +509,7 @@ class MetaCloudProvider extends ProviderClass {
                         
                         if (lowerPath.endsWith('.pdf') || mimeType.includes('pdf')) {
                             body.type = 'document';
-                            body.document = { ...mediaData, filename: path.basename(finalPath), caption: message || '' };
+                            body.document = { ...mediaData, filename: require('path').basename(finalPath), caption: message || '' };
                         } else if (lowerPath.endsWith('.jpg') || lowerPath.endsWith('.png') || lowerPath.endsWith('.jpeg') || mimeType.includes('image')) {
                             body.type = 'image';
                             body.image = { ...mediaData, caption: message || '' };
@@ -519,7 +521,7 @@ class MetaCloudProvider extends ProviderClass {
                             body.audio = { ...mediaData };
                         } else {
                             body.type = 'document';
-                            body.document = { ...mediaData, filename: path.basename(finalPath), caption: message || '' };
+                            body.document = { ...mediaData, filename: require('path').basename(finalPath), caption: message || '' };
                         }
 
                         try {
@@ -560,9 +562,13 @@ class MetaCloudProvider extends ProviderClass {
             } else {
                 // Por defecto tratamos como documento (PDF, etc)
                 body.type = 'document';
+                const filename = (typeof mediaSource === 'object') 
+                    ? (mediaSource.fileName || mediaSource.filename || mediaSource.name) 
+                    : null;
+
                 body.document = { 
                     ...mediaData, 
-                    filename: options.media.fileName || options.media.filename || path.basename(mediaUrl || 'documento.pdf'), 
+                    filename: filename || require('path').basename(mediaUrl || 'documento.pdf'), 
                     caption: message || '' 
                 };
             }
