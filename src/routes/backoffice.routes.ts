@@ -323,6 +323,15 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                 if (compDef.type === 'HEADER') {
                     if (compDef.format === 'IMAGE' || compDef.format === 'VIDEO' || compDef.format === 'DOCUMENT') {
                         const lowFormat = compDef.format.toLowerCase();
+                        // Si no hay link en el Excel Y el componente no parece tener variables (es estático), 
+                        // no enviamos el componente HEADER para que Meta use el archivo por defecto de la plantilla.
+                        const hasNamedParams = compDef.example?.header_handle_named_params || compDef.example?.header_text_named_params;
+                        
+                        if (!row.header_media_url && !hasNamedParams) {
+                            console.log(`ℹ️ [BULK] Usando media por defecto de Meta para esta fila.`);
+                            continue; 
+                        }
+
                         const mediaLink = row.header_media_url || defaultMediaUrl || compDef.example?.header_handle?.[0];
                         
                         if (!mediaLink) continue;
@@ -333,11 +342,7 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                         };
 
                         if (isNamed) {
-                            const namedParams = compDef.example?.header_handle_named_params ||
-                                               compDef.example?.header_text_named_params ||
-                                               compDef.parameters;
-                            
-                            const officialName = namedParams && namedParams[0]?.param_name;
+                            const officialName = hasNamedParams && hasNamedParams[0]?.param_name;
                             headerParam.parameter_name = officialName || (isNamed ? "video" : "1");
                         }
                         

@@ -109,12 +109,20 @@ class MetaCloudProvider extends ProviderClass {
     }
 
     private getExtByMimeOrType(type: string, mime: string): string {
-        if (mime) {
-            if (mime.includes('image')) return 'jpg';
-            if (mime.includes('audio')) return 'ogg';
-            if (mime.includes('video')) return 'mp4';
-            if (mime.includes('pdf')) return 'pdf';
-        }
+        const m = mime.toLowerCase();
+        if (m.includes('image/jpeg') || m.includes('image/jpg')) return 'jpg';
+        if (m.includes('image/png')) return 'png';
+        if (m.includes('image/webp')) return 'webp';
+        if (m.includes('audio/ogg') || m.includes('audio/opus')) return 'ogg';
+        if (m.includes('audio/mp3') || m.includes('audio/mpeg')) return 'mp3';
+        if (m.includes('audio/aac')) return 'aac';
+        if (m.includes('video/mp4')) return 'mp4';
+        if (m.includes('video/quicktime')) return 'mov';
+        if (m.includes('application/pdf')) return 'pdf';
+        if (m.includes('application/msword') || m.includes('wordprocessingml')) return 'doc';
+        if (m.includes('spreadsheetml') || m.includes('excel')) return 'xlsx';
+        
+        // Fallback por tipo general
         if (type === 'image') return 'jpg';
         if (type === 'audio' || type === 'voice') return 'ogg';
         if (type === 'video') return 'mp4';
@@ -415,6 +423,37 @@ class MetaCloudProvider extends ProviderClass {
     }
 
     /**
+     * Sube un archivo local a Meta para obtener un media_id
+     */
+    private async uploadMedia(filePath: string): Promise<string | null> {
+        const { phone_number_id, access_token } = this.config;
+        if (!fs.existsSync(filePath)) {
+            console.error(`❌ [MetaCloudProvider] uploadMedia: El archivo no existe en ${filePath}`);
+            return null;
+        }
+
+        const url = `https://graph.facebook.com/v22.0/${phone_number_id}/media`;
+        
+        try {
+            const FormData = require('form-data');
+            const form = new FormData();
+            form.append('messaging_product', 'whatsapp');
+            form.append('file', fs.createReadStream(filePath));
+
+            const response = await axios.post(url, form, {
+                headers: {
+                    ...form.getHeaders(),
+                    'Authorization': `Bearer ${access_token}`
+                }
+            });
+            return response.data.id;
+        } catch (error: any) {
+            console.error('❌ [MetaCloudProvider] Error subiendo media a Meta:', error?.response?.data || error.message);
+            return null;
+        }
+    }
+
+    /**
      * Envía mensajes a través de la API oficial de Meta
      */
     public async sendMessage(number: string, message: string, options: any = {}): Promise<any> {
@@ -438,21 +477,38 @@ class MetaCloudProvider extends ProviderClass {
 
         // Soporte para archivos
         if (options.media) {
-            const mediaUrl = typeof options.media === 'string' ? options.media : options.media.url;
-            const mimeType = options.media.mimetype || '';
+            let mediaUrl = typeof options.media === 'string' ? options.media : options.media.url;
+            const mimeType = options.media.mimetype || (typeof options.media === 'object' ? options.media.mimeType : '') || '';
+            
+            // Detectar si es una ruta local o una URL
+            let mediaId = null;
+            const isLocal = mediaUrl && !mediaUrl.startsWith('http') && fs.existsSync(mediaUrl);
 
-            if (mimeType.includes('image')) {
+            if (isLocal) {
+                console.log(`📤 [MetaCloudProvider] Detectado archivo local, subiendo a Meta: ${mediaUrl}`);
+                mediaId = await this.uploadMedia(mediaUrl);
+            }
+
+            const mediaData: any = mediaId ? { id: mediaId } : { link: mediaUrl };
+            const lowerMediaUrl = (mediaUrl || '').toLowerCase();
+
+            if (mimeType.includes('image') || lowerMediaUrl.endsWith('.jpg') || lowerMediaUrl.endsWith('.png') || lowerMediaUrl.endsWith('.jpeg')) {
                 body.type = 'image';
-                body.image = { link: mediaUrl, caption: message || '' };
-            } else if (mimeType.includes('pdf') || mimeType.includes('document')) {
-                body.type = 'document';
-                body.document = { link: mediaUrl, filename: options.media.fileName || 'archivo', caption: message || '' };
-            } else if (mimeType.includes('video')) {
+                body.image = { ...mediaData, caption: message || '' };
+            } else if (mimeType.includes('audio') || mimeType.includes('voice') || lowerMediaUrl.endsWith('.mp3') || lowerMediaUrl.endsWith('.ogg') || lowerMediaUrl.endsWith('.opus')) {
+                body.type = (mimeType.includes('voice') || lowerMediaUrl.endsWith('.opus')) ? 'voice' : 'audio';
+                body.audio = { ...mediaData };
+            } else if (mimeType.includes('video') || lowerMediaUrl.endsWith('.mp4')) {
                 body.type = 'video';
-                body.video = { link: mediaUrl, caption: message || '' };
+                body.video = { ...mediaData, caption: message || '' };
             } else {
+                // Por defecto tratamos como documento (PDF, etc)
                 body.type = 'document';
-                body.document = { link: mediaUrl, filename: 'archivo', caption: message || '' };
+                body.document = { 
+                    ...mediaData, 
+                    filename: options.media.fileName || options.media.filename || path.basename(mediaUrl || 'documento.pdf'), 
+                    caption: message || '' 
+                };
             }
         } else {
             body.type = 'text';
@@ -544,7 +600,7 @@ class MetaCloudProvider extends ProviderClass {
     // El código anterior duplicado de getTemplates y sendTemplate fue removido.
 
 
-    private processIncomingMessage = (body: any, isEchoWebhook: boolean = false) => {
+    private processIncomingMessage = async (body: any, isEchoWebhook: boolean = false) => {
         try {
             // Normalizar el ID del teléfono de la configuración (puede venir como numberId o phone_number_id)
             const phone_number_id = this.config.phone_number_id || this.config.numberId;
@@ -553,8 +609,8 @@ class MetaCloudProvider extends ProviderClass {
                 console.log('📡 [MetaCloudProvider] 🔄 Detectado evento de field: smb_message_echoes');
             }
 
-            body.entry?.forEach((entry: any) => {
-                entry.changes?.forEach((change: any) => {
+            for (const entry of (body.entry || [])) {
+                for (const change of (entry.changes || [])) {
                     const value = change.value;
                     const fieldName = change.field || 'messages';
                     const isThisChangeEcho = fieldName === 'smb_message_echoes' || isEchoWebhook;
@@ -566,7 +622,7 @@ class MetaCloudProvider extends ProviderClass {
                         // Filtro de número destino para asegurar que es para nosotros
                         if (phone_number_id && value.metadata?.phone_number_id && value.metadata?.phone_number_id !== String(phone_number_id)) {
                             console.log(`⚠️ [MetaCloudProvider] Ignorando mensaje (ID mismatch: ${value.metadata?.phone_number_id} != ${phone_number_id})`);
-                            return;
+                            continue;
                         }
 
                         if (isThisChangeEcho) {
@@ -578,7 +634,7 @@ class MetaCloudProvider extends ProviderClass {
                         // Extraer el BSUID (Business-Scoped User ID)
                         const bsuid = contact?.user_id || messages[0]?.from_user_id;
 
-                        messages.forEach((msg: any) => {
+                        for (const msg of messages) {
                             const mediaObj = msg.image || msg.video || msg.audio || msg.document || msg.voice || msg[msg.type];
                             let type = msg.type;
 
@@ -624,7 +680,28 @@ class MetaCloudProvider extends ProviderClass {
                             };
 
                             // Enriquecer con objeto media para que los flujos (saveFile) tengan lo necesario
+                            // Enriquecer con objeto media para que los flujos (saveFile) tengan lo necesario
                             if (mediaObj) {
+                                try {
+                                    // Auto-descarga de archivos para que el historial tenga la ruta local (como hace Baileys)
+                                    // Ponemos un timeout de 5 segundos para no bloquear el webhook si Meta va lento
+                                    const downloadPromise = this.saveFile(formatedMessage);
+                                    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000));
+                                    
+                                    const localPath: any = await Promise.race([downloadPromise, timeoutPromise]);
+
+                                    if (localPath && localPath !== "no-file") {
+                                        formatedMessage.localPath = localPath;
+                                        // Si el cuerpo era solo un evento, lo actualizamos con la ruta para que el HistoryHandler lo guarde
+                                        if (formatedMessage.body && formatedMessage.body.startsWith('_event_')) {
+                                            // Guardamos la ruta relativa para el CRM
+                                            formatedMessage.body = localPath; 
+                                        }
+                                    }
+                                } catch (err) {
+                                    console.warn(`⚠️ [MetaCloudProvider] Media detectado pero no se pudo descargar a tiempo para el historial.`);
+                                }
+
                                 formatedMessage.media = {
                                     url: mediaObj.link || mediaObj.url || null,
                                     mimetype: mediaObj.mime_type || mediaObj.mimetype || null,
@@ -637,10 +714,10 @@ class MetaCloudProvider extends ProviderClass {
                             } else {
                                 this.emit('message', formatedMessage);
                             }
-                        });
+                        }
                     }
-                });
-            });
+                }
+            }
         } catch (e) {
             console.error('❌ [MetaCloudProvider] Error procesando mensaje entrante:', e);
         }
@@ -684,9 +761,20 @@ class MetaCloudProvider extends ProviderClass {
                                 mimetype: type === 'image' ? 'image/jpeg' : (type === 'video' ? 'video/mp4' : 'application/octet-stream'),
                                 id: null
                             };
-                        }
 
-                        this.emit('message', formatedMessage);
+                            // Auto-descarga para Messenger/Instagram
+                            this.saveFile(formatedMessage).then(localPath => {
+                                if (localPath && localPath !== "no-file") {
+                                    formatedMessage.localPath = localPath;
+                                    if (formatedMessage.body && formatedMessage.body.startsWith('_event_')) {
+                                        formatedMessage.body = localPath; 
+                                    }
+                                }
+                                this.emit('message', formatedMessage);
+                            }).catch(() => this.emit('message', formatedMessage));
+                        } else {
+                            this.emit('message', formatedMessage);
+                        }
                     }
                 });
             });
