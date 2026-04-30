@@ -569,15 +569,16 @@ export class HistoryHandler {
         tax_status?: string,
         address?: string,
         offered_product?: string
-    }) {
+    }, forcedProjectId?: string) {
         const chatId = this.normalizeId(rawChatId);
+        const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
         if (details.name === '[-]') details.name = undefined;
         try {
             const { error } = await supabase
                 .from('chats')
                 .update(details)
                 .eq('id', chatId)
-                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
+                .eq('project_id', currentProjectId);
 
             if (error) throw error;
             return { success: true };
@@ -946,14 +947,15 @@ export class HistoryHandler {
     /**
      * Crea un nuevo ticket
      */
-    static async createTicket(rawChatId: string, titulo: string, descripcion: string, tipo: string = 'Soporte', prioridad: string = 'Media') {
+    static async createTicket(rawChatId: string, titulo: string, descripcion: string, tipo: string = 'Soporte', prioridad: string = 'Media', forcedProjectId?: string) {
         const chatId = this.normalizeId(rawChatId);
+        const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
         try {
             const { data, error } = await supabase
                 .from('tickets')
                 .insert({
                     chat_id: chatId,
-                    project_id: HistoryHandler.PROJECT_IDENTIFIER,
+                    project_id: currentProjectId,
                     titulo,
                     descripcion,
                     tipo,

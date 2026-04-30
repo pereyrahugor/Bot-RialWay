@@ -72,11 +72,15 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
             return endFlow();
         }
 
-            console.log("Ejecutando idleFlow...");
-
         try {
+            // Recuperar contexto dinámico del state
+            const dynamicProjectId = state.get('dynamicProjectId') || process.env.RAILWAY_PROJECT_ID;
+            const targetAssistantId = state.get('assignedAssistantId') || ASSISTANT_ID;
+
+            console.log(`[idleFlow] 🤖 Generando resumen con Asistente: ${targetAssistantId} | Proyecto: ${dynamicProjectId}`);
+
             // Obtener el resumen del asistente de OpenAI con reintentos y reporte de errores
-            const resumen = await safeToAsk(ASSISTANT_ID, "GET_RESUMEN", state, userId, errorReporter, 5, false, process.env.RAILWAY_PROJECT_ID, true) as string;
+            const resumen = await safeToAsk(targetAssistantId, "GET_RESUMEN", state, userId, errorReporter, 5, false, dynamicProjectId, true) as string;
 
             if (!resumen) {
                 console.warn("No se pudo obtener el resumen.");
@@ -104,8 +108,8 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                         email: cleanEmail || null,
                         source: cleanSource,
                         notes: resumen // Guardamos el resumen en las notas principales del Lead
-                    });
-                    console.log(`✅ CRM Actualizado para ${userId}: ${cleanNombre}`);
+                    }, dynamicProjectId);
+                    console.log(`✅ CRM Actualizado para ${userId}: ${cleanNombre} | Proyecto: ${dynamicProjectId}`);
                 }
 
                 // 2. Crear Ticket de "Nuevo Lead" automáticamente
@@ -114,7 +118,8 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                     `Nuevo Lead: ${cleanNombre || userId}`, 
                     resumen, 
                     'Nuevo Lead', 
-                    'Alta'
+                    'Alta',
+                    dynamicProjectId
                 );
                 console.log(`🚀 Ticket "Nuevo Lead" creado automáticamente para ${userId}`);
 

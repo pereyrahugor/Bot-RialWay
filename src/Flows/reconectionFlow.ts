@@ -73,6 +73,10 @@ export class ReconectionFlow {
 
     // Inicia el ciclo de reconexión
     async start() {
+        // Recuperar contexto dinámico del state
+        const dynamicProjectId = this.state?.get ? this.state.get('dynamicProjectId') : (this.state?.dynamicProjectId || process.env.RAILWAY_PROJECT_ID);
+        const targetAssistantId = this.state?.get ? this.state.get('assignedAssistantId') : (this.state?.assignedAssistantId || this.ASSISTANT_ID);
+
         // Intentar restaurar el estado previo si existe
         if (this.state && this.state.reconectionFlow) {
             this.restoreState(this.state.reconectionFlow);
@@ -147,12 +151,12 @@ export class ReconectionFlow {
                     // console.log(`[ReconectionFlow] Enviando mensaje de reconexión a:`, jid);
                     await this.provider.sendText(jid, cleanMsg);
                     // Persistir en el historial del backoffice (vía Supabase)
-                    await HistoryHandler.saveMessage(this.ctx.from, 'assistant', cleanMsg, 'text');
+                    await HistoryHandler.saveMessage(this.ctx.from, 'assistant', cleanMsg, 'text', null, null, null, 'whatsapp', dynamicProjectId);
 
                     // Enviar los PDFs descargados
                     for (const pdfPath of pdfPaths) {
                         try {
-                            // console.log(`[ReconectionFlow] Enviando archivo: ${pdfPath}`);
+                            // console.log(`[ReconectionFlow] Enviar archivo: ${pdfPath}`);
                             // Usamos sendFile si el provider lo soporta, o sendMessage con media (común en Baileys)
                             if (this.provider.sendFile) {
                                 await this.provider.sendFile(jid, pdfPath, "📄 Documento adjunto");
@@ -161,7 +165,7 @@ export class ReconectionFlow {
                             }
                             
                             // Persistir referencia al documento en el historial
-                            await HistoryHandler.saveMessage(this.ctx.from, 'assistant', "[Documento PDF]", 'document');
+                            await HistoryHandler.saveMessage(this.ctx.from, 'assistant', "[Documento PDF]", 'document', null, null, null, 'whatsapp', dynamicProjectId);
                             
                             // Limpieza del archivo temporal después de un breve delay para asegurar envío
                             setTimeout(() => {
@@ -193,7 +197,9 @@ export class ReconectionFlow {
             }
 
             // Si no respondió, intentar obtener el resumen nuevamente desde el asistente
-            const resumen = await safeToAsk(this.ASSISTANT_ID, "GET_RESUMEN", this.state, this.ctx.from, undefined, 5, false, process.env.RAILWAY_PROJECT_ID, true) as string;
+            console.log(`[ReconectionFlow] 🤖 Generando resumen con Asistente: ${targetAssistantId} | Proyecto: ${dynamicProjectId}`);
+
+            const resumen = await safeToAsk(targetAssistantId, "GET_RESUMEN", this.state, this.ctx.from, undefined, 5, false, dynamicProjectId, true) as string;
             const data: GenericResumenData = extraerDatosResumen(resumen);
             const tipo = data.tipo || "SI_RESUMEN";
             if (tipo === "SI_RESUMEN") {

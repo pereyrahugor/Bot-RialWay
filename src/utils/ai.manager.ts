@@ -97,8 +97,18 @@ export class AiManager {
         // Ruteo Multitenant Dinámico
         const botPhoneNumber = provider?.phoneNumber || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
         const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || process.env.RAILWAY_PROJECT_ID;
-        
         const assigned = await HistoryHandler.getAssignedAgent(ctx.from, dynamicProjectId);
+        const assignedAssistantId = this.ASSISTANT_MAP[assigned] || this.assistantId;
+
+        // Guardar contexto en el state para uso en flujos (como idleFlow o reconectionFlow)
+        if (state && state.update) {
+            await state.update({ 
+                dynamicProjectId,
+                assignedAssistantId,
+                botPhoneNumber
+            });
+        }
+
         console.log(`[AiManager] 📥 Procesando: ${ctx.from} | Proyecto: ${dynamicProjectId} | Agente: ${assigned}`);
         
         // --- COMANDO DE REINICIO ---
