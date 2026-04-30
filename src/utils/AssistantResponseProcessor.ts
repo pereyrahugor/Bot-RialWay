@@ -265,6 +265,8 @@ export class AssistantResponseProcessor {
                     console.error('[WhatsApp Debug] Error en flowDynamic:', err);
                 }
             }
+        }
+
         const hasSummary = /GET_RESUMEN/i.test(sanitizedTextResponse);
         
         if (hasSummary) {
@@ -325,6 +327,4 @@ export class AssistantResponseProcessor {
             }
         }
     }
-
-}
 }
