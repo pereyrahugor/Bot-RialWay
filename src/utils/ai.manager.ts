@@ -214,7 +214,8 @@ export class AiManager {
 
                 // 2. Transición inmediata: Consultar al nuevo agente con el resumen
                 const nextAssistantId = await this.getAssignedAssistantId(ctx.from, dynamicProjectId);
-                const nextResponseRaw = (await this.getAssistantResponse(nextAssistantId, resumen, state, undefined, ctx.from, ctx.thread_id, dynamicProjectId)) as string;
+                const resumenContextual = `RESUMEN DE LA CONVERSACIÓN PREVIA (PARA TU CONTEXTO):\n\n${resumen}`;
+                const nextResponseRaw = (await this.getAssistantResponse(nextAssistantId, resumenContextual, state, undefined, ctx.from, ctx.thread_id, dynamicProjectId)) as string;
                 
                 if (nextResponseRaw) {
                     await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(

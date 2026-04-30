@@ -265,14 +265,20 @@ export class AssistantResponseProcessor {
                     console.error('[WhatsApp Debug] Error en flowDynamic:', err);
                 }
             }
-        } else if (cleanTextResponse.length > 0 || pdfPaths.length > 0) {
+        const hasSummary = /GET_RESUMEN/i.test(sanitizedTextResponse);
+        
+        if (hasSummary) {
+            console.log(`[AssistantProcessor] 📋 Resumen detectado en la respuesta. (Longitud limpia: ${cleanTextResponse.length})`);
+        }
+
+        if (cleanTextResponse.length > 0 || pdfPaths.length > 0 || hasSummary) {
             // GUARDAR RESPUESTA DEL ASISTENTE EN EL HISTORIAL
             if (ctx && ctx.from) {
                 const platform = ctx.platform || 'whatsapp';
                 await HistoryHandler.saveMessage(
                     ctx.from, 
                     'assistant', 
-                    cleanTextResponse, 
+                    cleanTextResponse.length > 0 ? cleanTextResponse : sanitizedTextResponse, 
                     'text', 
                     null, 
                     ctx.userId, 
@@ -319,5 +325,6 @@ export class AssistantResponseProcessor {
             }
         }
     }
-}
 
+}
+}

@@ -706,9 +706,14 @@ export class HistoryHandler {
     static async listChats(limit: number = 20, offset: number = 0, search?: string, tagId?: string, assignedTo?: string | null, platform?: string) {
         try {
             // Campos mínimos para la lista (se excluyen notas, address, email, etc. para rendimiento)
+            let selectString = 'id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, chat_tags(tag_id, tags(*))';
+            if (tagId) {
+                selectString = 'id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, chat_tags!inner(tag_id, tags(*))';
+            }
+
             let query = supabase
                 .from('chats')
-                .select('id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, chat_tags(tag_id, tags(*))');
+                .select(selectString);
             
             // Filtrar estrictamente por el ID único de este bot en Railway
             query = query.eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
@@ -738,7 +743,7 @@ export class HistoryHandler {
             
             if (error) throw error;
             
-            return (data || []).map(chat => ({
+            return (data || []).map((chat: any) => ({
                 ...chat,
                 tags: chat.chat_tags ? chat.chat_tags.map((ct: any) => ct.tags).filter((t: any) => t !== null) : []
             }));
@@ -1417,6 +1422,27 @@ export class HistoryHandler {
             return null;
         } catch (err) {
             console.error('[HistoryHandler] Error en getProjectIdByRecipient:', err);
+            return null;
+        }
+    }
+
+    /**
+     * Obtiene el project_id asociado a un chat_id específico
+     */
+    static async getProjectIdByChatId(chatId: string): Promise<string | null> {
+        if (!chatId || !supabase) return null;
+        try {
+            const normalizedChatId = this.normalizeId(chatId);
+            const { data, error } = await supabase
+                .from('chats')
+                .select('project_id')
+                .eq('id', normalizedChatId)
+                .maybeSingle();
+            
+            if (error) throw error;
+            return data?.project_id || null;
+        } catch (err) {
+            console.error(`[HistoryHandler] Error en getProjectIdByChatId para ${chatId}:`, err);
             return null;
         }
     }

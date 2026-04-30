@@ -91,9 +91,17 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
 
         // 2.5 Refuerzo para Resúmenes: Si es un resumen, inyectar una instrucción clara ANTES del comando
         if (isSummaryRequest) {
+            console.log(`[openaiHelper] 📋 Solicitud de Resumen detectada. Historial disponible: ${formattedHistory.length} mensajes.`);
             messages.push({ 
                 role: "system", 
-                content: "INSTRUCCIÓN CRÍTICA: Se ha solicitado un resumen de la conversación. Utiliza el historial de mensajes previo para generar el resumen siguiendo ESTRICTAMENTE la estructura definida en tu prompt del sistema. No respondas que no tienes información; toda la información necesaria está en el historial arriba. Responde SOLO con el resumen estructurado." 
+                content: `INSTRUCCIÓN CRÍTICA DE RESUMEN:
+                - Se te ha pasado un historial de ${formattedHistory.length} mensajes arriba.
+                - Tu tarea ÚNICA es generar un resumen estructurado basado en esos mensajes.
+                - Si el historial es corto, resume lo que hay (ej: 'Interacción inicial, solo saludos').
+                - NUNCA respondas con frases de error como 'No tengo suficiente información' o similares.
+                - Sigue la ESTRUCTURA definida en tu prompt (ej: 'Tipo: ...', 'Nombre: ...').
+                - Si el prompt pide JSON, responde JSON. Si pide texto plano, responde texto plano.
+                - Responde únicamente con la información solicitada en el bloque GET_RESUMEN.` 
             });
         }
 
