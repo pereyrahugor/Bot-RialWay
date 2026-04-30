@@ -1420,6 +1420,99 @@ export class HistoryHandler {
             return null;
         }
     }
+
+    /**
+     * Sincronización masiva de etiquetas (tags)
+     */
+    static async syncTags(tags: any[], forcedProjectId?: string) {
+        if (!supabase) return { success: false, error: 'Supabase not initialized' };
+        const targetProjectId = forcedProjectId || HistoryHandler.PROJECT_IDENTIFIER;
+        
+        try {
+            if (tags.length === 0) return { success: true, data: [] };
+            
+            const tagsToUpsert = tags.map(t => ({
+                project_id: targetProjectId,
+                name: t.name,
+                color: t.color || '#6366f1',
+                created_at: new Date().toISOString()
+            }));
+
+            // Usamos onConflict 'project_id,name' para no duplicar etiquetas con el mismo nombre en el mismo proyecto
+            const { data, error } = await supabase
+                .from('tags')
+                .upsert(tagsToUpsert, { onConflict: 'project_id,name' })
+                .select();
+
+            if (error) throw error;
+            return { success: true, data };
+        } catch (err: any) {
+            console.error('[HistoryHandler] Error en syncTags:', err);
+            return { success: false, error: err.message };
+        }
+    }
+
+    /**
+     * Sincronización masiva de contactos (chats)
+     */
+    static async syncChats(chats: any[], forcedProjectId?: string) {
+        if (!supabase) return { success: false, error: 'Supabase not initialized' };
+        const targetProjectId = forcedProjectId || HistoryHandler.PROJECT_IDENTIFIER;
+
+        try {
+            if (chats.length === 0) return { success: true, data: [] };
+
+            const chatsToUpsert = chats.map(c => ({
+                id: c.id,
+                project_id: targetProjectId,
+                name: c.name || null,
+                type: c.type || 'whatsapp',
+                last_message_at: c.last_message_at || new Date().toISOString(),
+                metadata: c.metadata || {},
+                is_lead: c.is_lead || false
+            }));
+
+            const { data, error } = await supabase
+                .from('chats')
+                .upsert(chatsToUpsert, { onConflict: 'id,project_id' })
+                .select();
+
+            if (error) throw error;
+            return { success: true, data };
+        } catch (err: any) {
+            console.error('[HistoryHandler] Error en syncChats:', err);
+            return { success: false, error: err.message };
+        }
+    }
+
+    /**
+     * Sincronización masiva de asociaciones chat-etiqueta
+     */
+    static async syncChatTags(associations: any[], forcedProjectId?: string) {
+        if (!supabase) return { success: false, error: 'Supabase not initialized' };
+        const targetProjectId = forcedProjectId || HistoryHandler.PROJECT_IDENTIFIER;
+
+        try {
+            if (associations.length === 0) return { success: true, data: [] };
+
+            const associationsToUpsert = associations.map(a => ({
+                chat_id: a.chat_id,
+                tag_id: a.tag_id,
+                project_id: targetProjectId
+            }));
+
+            const { data, error } = await supabase
+                .from('chat_tags')
+                .upsert(associationsToUpsert, { onConflict: 'chat_id,tag_id,project_id' })
+                .select();
+
+            if (error) throw error;
+            return { success: true, data };
+        } catch (err: any) {
+            console.error('[HistoryHandler] Error en syncChatTags:', err);
+            return { success: false, error: err.message };
+        }
+    }
 }
 
 // Inicializar base de datos al cargar el modulo (Quitado para evitar race condition, se llama en app.ts main)

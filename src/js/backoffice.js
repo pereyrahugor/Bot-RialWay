@@ -2086,6 +2086,59 @@ window.reopenActiveTicket = reopenActiveTicket;
 window.deleteActiveTicket = deleteActiveTicket;
 window.toggleIntervention = toggleIntervention;
 
+// --- Sincronización Manual de Contactos (Baileys) ---
+async function startContactSync() {
+    const modal = document.getElementById('sync-modal');
+    const loading = document.getElementById('sync-loading');
+    const result = document.getElementById('sync-result');
+    const summaryText = document.getElementById('sync-summary');
+    
+    if (!modal) return;
+    
+    // Reset modal
+    modal.style.display = 'flex';
+    loading.style.display = 'block';
+    result.style.display = 'none';
+    
+    try {
+        const res = await fetch(`/api/backoffice/whatsapp/sync-contacts?token=${token}`, {
+            method: 'POST'
+        });
+        
+        const data = await res.json();
+        
+        if (data.success) {
+            const { contacts, labels, associations } = data.summary;
+            summaryText.innerHTML = `
+                Sincronizados <b>${contacts}</b> contactos y <b>${labels}</b> etiquetas.<br/>
+                Se crearon <b>${associations}</b> vinculaciones.
+            `;
+            
+            // Refrescar datos locales
+            await fetchChats(true);
+            await fetchBotTags();
+            
+            loading.style.display = 'none';
+            result.style.display = 'block';
+        } else {
+            throw new Error(data.error || 'Error desconocido');
+        }
+    } catch (e) {
+        console.error('[Sync] Error:', e);
+        loading.style.display = 'none';
+        modal.style.display = 'none';
+        showToast('❌ Error: ' + e.message, 'error');
+    }
+}
+
+function closeSyncModal() {
+    const modal = document.getElementById('sync-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+window.startContactSync = startContactSync;
+window.closeSyncModal = closeSyncModal;
+
 console.log('✅ [BACKOFFICE] Cargado Correctamente.');
 
 // --- Inicialización automática ---

@@ -596,7 +596,106 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             res.status(404).end();
         } catch (e) {
             console.error('[ProfilePic] Error excepcional:', e);
-            res.status(500).end();
+        }
+    });
+
+    // --- WHATSAPP SYNC (BAILEYS) ---
+
+    app.post('/api/backoffice/whatsapp/sync-contacts', backofficeAuth, async (req: any, res: any) => {
+        try {
+            const provider = deps.groupProvider || deps.adapterProvider;
+            const vendor = provider?.vendor || provider?.globalVendorArgs?.sock;
+
+            if (!vendor || !vendor.ws?.isOpen) {
+                return res.status(503).json({ 
+                    success: false, 
+                    error: 'El motor de WhatsApp (Baileys) no está conectado o no es compatible. Por favor vincule el QR primero.' 
+                });
+            }
+
+            console.log('📡 [SYNC] Iniciando sincronización manual de contactos y etiquetas desde Baileys...');
+            
+            // 1. Obtener Etiquetas (Labels)
+            let labels: any[] = [];
+            try {
+                if (typeof vendor.labelsQuery === 'function') {
+                    labels = await vendor.labelsQuery() || [];
+                } else if (typeof (vendor as any).getLabels === 'function') {
+                    labels = await (vendor as any).getLabels() || [];
+                }
+            } catch (e) {
+                console.warn('⚠️ [SYNC] No se pudieron obtener las etiquetas vía API, intentando fallback...');
+            }
+
+            // 2. Obtener Contactos en memoria
+            const rawContacts = vendor.contacts || {};
+            const contactList = Object.values(rawContacts);
+            
+            console.log(`📡 [SYNC] Encontrados ${contactList.length} contactos y ${labels.length} etiquetas en memoria.`);
+
+            // 3. Sincronizar Etiquetas en DB
+            const tagMap = new Map<string, string>(); // name -> uuid_db
+            let syncTagsSummary = 0;
+
+            if (labels.length > 0) {
+                const tagsToSync = labels.map(l => ({
+                    name: l.name,
+                    color: l.color !== undefined ? `#${Number(l.color).toString(16).padStart(6, '0')}` : '#6366f1'
+                }));
+
+                const syncRes = await HistoryHandler.syncTags(tagsToSync);
+                if (syncRes.success && syncRes.data) {
+                    syncRes.data.forEach((t: any) => tagMap.set(t.name, t.id));
+                    syncTagsSummary = syncRes.data.length;
+                }
+            }
+
+            // 4. Sincronizar Contactos en DB (Chats)
+            const chatsToSync = contactList
+                .filter((c: any) => c.id && c.id.endsWith('@s.whatsapp.net'))
+                .map((c: any) => ({
+                    id: c.id,
+                    name: c.notify || c.name || c.id.split('@')[0],
+                    type: 'whatsapp',
+                    is_lead: false
+                }));
+
+            console.log(`📡 [SYNC] Upserting ${chatsToSync.length} contactos...`);
+            const syncChatsRes = await HistoryHandler.syncChats(chatsToSync);
+
+            // 5. Vincular Etiquetas a Contactos
+            const associations: any[] = [];
+            for (const contact of contactList as any[]) {
+                if (contact.labels && Array.isArray(contact.labels) && contact.labels.length > 0) {
+                    for (const labelId of contact.labels) {
+                        const labelObj = labels.find(l => l.id === labelId || l.labelId === labelId);
+                        if (labelObj && tagMap.has(labelObj.name)) {
+                            associations.push({
+                                chat_id: contact.id,
+                                tag_id: tagMap.get(labelObj.name)
+                            });
+                        }
+                    }
+                }
+            }
+
+            if (associations.length > 0) {
+                console.log(`📡 [SYNC] Vinculando ${associations.length} etiquetas a contactos...`);
+                await HistoryHandler.syncChatTags(associations);
+            }
+
+            res.json({
+                success: true,
+                summary: {
+                    contacts: chatsToSync.length,
+                    labels: syncTagsSummary,
+                    associations: associations.length
+                }
+            });
+
+        } catch (error: any) {
+            console.error('❌ [SYNC] Error en ruta de sincronización:', error);
+            res.status(500).json({ success: false, error: error.message });
         }
     });
 

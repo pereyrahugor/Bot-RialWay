@@ -115,6 +115,11 @@
     <div id="sidebar">
         <div class="sidebar-header">
             <h2 class="sidebar-title">Chats</h2>
+            <div class="sidebar-header-actions">
+                <button class="btn-icon-wa" title="Sincronizar Contactos y Etiquetas (Baileys)" onclick="startContactSync()" id="btn-sync-baileys">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+            </div>
         </div>
 
         <div class="platform-tabs" id="platform-tabs">
@@ -136,6 +141,11 @@
             <div class="search-wrapper">
                 <i class="fas fa-search search-icon"></i>
                 <input type="text" id="search-input" class="search-input" placeholder="Busca un chat o inicia uno nuevo" oninput="handleSearch()">
+            </div>
+            <div class="filter-wrapper" style="margin-top: 10px;">
+                <select id="filter-tag" class="crm-input" style="margin-bottom: 0; padding: 6px 10px; font-size: 0.8rem; height: 32px; border-radius: 8px;" onchange="fetchChats(true)">
+                    <option value="">Todas las etiquetas</option>
+                </select>
             </div>
         </div>
 
@@ -502,6 +512,51 @@
           });
       };
     </script>
+    <!-- MODAL DE IMPORTACIÓN (BAILEYS) -->
+    <div id="sync-modal" class="modal-overlay">
+        <div class="modal-content animate-pop" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3 style="margin:0; font-size:1.1rem;"><i class="fas fa-sync-alt"></i> Sincronizando</h3>
+            </div>
+            <div class="modal-body" style="text-align: center; padding: 40px 20px;">
+                <div id="sync-loading">
+                    <div class="spinner" style="margin: 0 auto 20px auto; width: 40px; height: 40px; border: 4px solid rgba(0,0,0,0.1); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                    <p style="font-weight: 600; margin-bottom: 5px;">Importando datos desde WhatsApp...</p>
+                    <p style="font-size: 0.85rem; color: var(--text-muted);">Esto puede demorar unos minutos dependiendo de la cantidad de contactos y etiquetas.</p>
+                </div>
+                <div id="sync-result" style="display: none;">
+                    <div style="font-size: 3rem; color: #25d366; margin-bottom: 15px;">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <h4 style="margin-bottom: 10px;">¡Sincronización Completada!</h4>
+                    <p id="sync-summary" style="font-size: 0.9rem; margin-bottom: 20px;"></p>
+                    <button class="btn-primary" style="width: 100%;" onclick="closeSyncModal()">Entendido</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .platform-instagram { color: #E1306C; }
+        .platform-messenger { color: #0084FF; }
+        .platform-icon-overlay {
+            position: absolute;
+            bottom: -2px;
+            right: -2px;
+            background: white;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+        [data-theme="dark"] .platform-icon-overlay { background: #202c33; }
+    </style>
+
     <script src="/js/crm-common.js"></script>
     <script src="/js/backoffice.js?v=2"></script>
 </body>
