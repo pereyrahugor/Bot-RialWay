@@ -15,12 +15,12 @@ const ID_GRUPO_RESUMEN = process.env.ID_GRUPO_RESUMEN ?? '';
 const ID_GRUPO_RESUMEN_2 = process.env.ID_GRUPO_RESUMEN_2 ?? '';
 const msjCierre: string = process.env.msjCierre as string;
 
-// Función para formatear el resumen (JSON o texto) de forma amigable para WhatsApp
-function formatSummaryForWhatsApp(resumen: string, data: GenericResumenData): string {
+// Función para formatear el resumen (JSON o texto) de forma amigable para WhatsApp y CRM
+function formatSummary(resumen: string, data: GenericResumenData, userId?: string): string {
     // Si el resumen es JSON puro, lo convertimos a un formato de lista legible
     let cleanText = resumen;
     try {
-        const parsed = JSON.parse(resumen);
+        const parsed = typeof resumen === 'string' ? JSON.parse(resumen) : resumen;
         if (typeof parsed === 'object') {
             cleanText = Object.entries(parsed)
                 .filter(([k]) => k.toLowerCase() !== 'tipo' && k.toLowerCase() !== 'type')
@@ -32,7 +32,8 @@ function formatSummaryForWhatsApp(resumen: string, data: GenericResumenData): st
         cleanText = resumen.replace(/Tipo:\s*\w+/i, '').replace(/###\s*BLOQUE:\s*GET_RESUMEN/i, '').trim();
     }
 
-    const linkWS = data.linkWS || `https://wa.me/${data.from || ''}`;
+    const phone = (data.from || userId || '').replace(/[^0-9]/g, '');
+    const linkWS = data.linkWS || `https://wa.me/${phone}`;
     return `📝 *RESUMEN DE CONVERSACIÓN*\n\n${cleanText}\n\n🔗 *Chat del usuario:* ${linkWS}`;
 }
 
@@ -94,13 +95,8 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
         }
 
         try {
-            // Recuperar contexto dinámico del state o de la DB como fallback
-            let dynamicProjectId = state.get('dynamicProjectId');
-            if (!dynamicProjectId) {
-                console.log(`[idleFlow] 🔍 dynamicProjectId no encontrado en state para ${userId}. Buscando en DB...`);
-                dynamicProjectId = await HistoryHandler.getProjectIdByChatId(userId);
-            }
-            dynamicProjectId = dynamicProjectId || process.env.RAILWAY_PROJECT_ID;
+            // Recuperar contexto dinámico del state o de la DB (RAILWAY_PROJECT_ID)
+            let dynamicProjectId = state.get('dynamicProjectId') || process.env.RAILWAY_PROJECT_ID;
 
             const targetAssistantId = state.get('assignedAssistantId') || ASSISTANT_ID;
 
@@ -131,35 +127,49 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                 // 1. Actualizar detalles del contacto en el CRM
                 if (cleanNombre || cleanEmail || resumen) {
                     console.log(`[idleFlow] 📝 Actualizando contacto ${userId} en CRM. Project: ${dynamicProjectId}`);
-                    const updateResult = await HistoryHandler.updateContactDetails(userId, {
-                        name: cleanNombre || null,
-                        email: cleanEmail || null,
-                        source: cleanSource,
-                        notes: resumen // Guardamos el resumen en las notas principales del Lead
-                    }, dynamicProjectId);
+                    
+                    // Intentar obtener notas previas para no sobreescribir (evitar data loss)
+                    const chatData = await HistoryHandler.getChat(userId, dynamicProjectId);
+                    const previousNotes = chatData?.notes ? `${chatData.notes}\n\n---\n\n` : '';
+                    
+                    // Formateamos el resumen para que sea legible en las notas del CRM
+                    const newSummary = formatSummary(resumen, data, userId);
+                    const summaryForNotes = previousNotes + newSummary;
+                    
+                    const updateData: any = {
+                        notes: summaryForNotes,
+                        is_lead: true // Marcamos explícitamente como Lead para que aparezca en el CRM
+                    };
+
+                    // Solo actualizamos si tenemos datos nuevos, para no borrar lo existente
+                    if (cleanNombre) updateData.name = cleanNombre;
+                    if (cleanEmail) updateData.email = cleanEmail;
+                    if (cleanSource) updateData.source = cleanSource;
+
+                    const updateResult = await HistoryHandler.updateContactDetails(userId, updateData, dynamicProjectId);
                     
                     if (!updateResult.success) {
                         console.error(`❌ Error actualizando contacto en CRM:`, updateResult.error);
                     } else {
                         console.log(`✅ CRM Actualizado para ${userId} | Proyecto: ${dynamicProjectId}`);
                     }
-                }
 
-                // 2. Crear Ticket de "Nuevo Lead" automáticamente
-                console.log(`[idleFlow] 🎟️ Creando ticket para ${userId}.`);
-                const ticketResult = await HistoryHandler.createTicket(
-                    userId, 
-                    `Nuevo Lead: ${cleanNombre || userId}`, 
-                    resumen, 
-                    'Nuevo Lead', 
-                    'Alta',
-                    dynamicProjectId
-                );
+                    // 2. Crear Ticket de "Nuevo Lead" automáticamente
+                    console.log(`[idleFlow] 🎟️ Creando ticket para ${userId}.`);
+                    const ticketResult = await HistoryHandler.createTicket(
+                        userId, 
+                        `Nuevo Lead: ${cleanNombre || chatData?.name || userId}`, 
+                        newSummary, // Usar solo el resumen nuevo en el ticket
+                        'Nuevo Lead', 
+                        'Alta',
+                        dynamicProjectId
+                    );
 
-                if (!ticketResult.success) {
-                    console.error(`❌ Error creando ticket:`, ticketResult.error);
-                } else {
-                    console.log(`🚀 Ticket "Nuevo Lead" creado automáticamente para ${userId}`);
+                    if (!ticketResult.success) {
+                        console.error(`❌ Error creando ticket:`, ticketResult.error);
+                    } else {
+                        console.log(`🚀 Ticket "Nuevo Lead" creado automáticamente para ${userId}`);
+                    }
                 }
 
             } catch (leadError) {
@@ -226,7 +236,7 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                 console.log('SI_REPORTAR_SEGUIR: Se envía resumen al grupo y se realiza seguimiento.');
                 data.linkWS = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
 
-                const resumenConLink = formatSummaryForWhatsApp(resumen, data);
+                const resumenConLink = formatSummary(resumen, data, userId);
 
                 try {
                     const groupProvider = getGroupProvider();
@@ -273,7 +283,7 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                 console.log('SI_RESUMEN_G2: Solo se envía resumen al grupo y sheets.');
                 data.linkWS = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
 
-                const resumenConLink = formatSummaryForWhatsApp(resumen, data);
+                const resumenConLink = formatSummary(resumen, data, userId);
                 try {
                     const groupProvider = getGroupProvider();
                     const providerToSend = groupProvider || provider;
@@ -296,7 +306,7 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                 console.log('SI_RESUMEN: Solo se envía resumen al grupo y sheets.');
                 data.linkWS = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
 
-                const resumenConLink = formatSummaryForWhatsApp(resumen, data);
+                const resumenConLink = formatSummary(resumen, data, userId);
                 try {
                     const groupProvider = getGroupProvider();
                     const providerToSend = groupProvider || provider;
@@ -319,7 +329,7 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                 console.log('Tipo desconocido, procesando como SI_RESUMEN por defecto.');
                 data.linkWS = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
 
-                const resumenConLink = formatSummaryForWhatsApp(resumen, data);
+                const resumenConLink = formatSummary(resumen, data, userId);
                 try {
                     const groupProvider = getGroupProvider();
                     const providerToSend = groupProvider || provider;

@@ -305,9 +305,30 @@ export class HistoryHandler {
     }
 
     /**
-     * Obtiene o crea un registro de chat
-     * 
-     * @param rawChatId - ID tradicional (wa_id o número de teléfono)
+     * Obtiene los detalles completos de un chat, incluyendo etiquetas
+     */
+    static async getChat(rawChatId: string, forcedProjectId?: string): Promise<any | null> {
+        const chatId = this.normalizeId(rawChatId);
+        const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+        try {
+            const { data, error } = await supabase
+                .from('chats')
+                .select('*, chat_tags(tag_id, tags(*))')
+                .eq('id', chatId)
+                .eq('project_id', currentProjectId)
+                .maybeSingle();
+
+            if (error) throw error;
+            if (data) {
+                data.tags = data.chat_tags ? data.chat_tags.map((ct: any) => ct.tags).filter((t: any) => t !== null) : [];
+            }
+            return data;
+        } catch (err) {
+            console.error('[HistoryHandler] Error en getChat:', err);
+            return null;
+        }
+    }
+
     /**
      * Obtiene o crea un chat en un proyecto específico
      * @param rawChatId - ID del chat (ej: número de teléfono)
@@ -753,28 +774,6 @@ export class HistoryHandler {
         }
     }
 
-    /**
-     * Obtiene los detalles completos de un chat
-     */
-    static async getChat(chatId: string) {
-        try {
-            const { data, error } = await supabase
-                .from('chats')
-                .select('*, chat_tags(tag_id, tags(*))')
-                .eq('id', chatId)
-                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER)
-                .single();
-
-            if (error) throw error;
-            if (data) {
-                data.tags = data.chat_tags ? data.chat_tags.map((ct: any) => ct.tags).filter((t: any) => t !== null) : [];
-            }
-            return data;
-        } catch (err) {
-            console.error('[HistoryHandler] Error en getChat:', err);
-            return null;
-        }
-    }
 
     /**
      * Obtiene los mensajes de un chat específico
