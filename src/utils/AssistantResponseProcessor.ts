@@ -231,13 +231,34 @@ export class AssistantResponseProcessor {
             const fileId = pdfMatch[1];
             try {
                 const filePath = await downloadFileFromDrive(fileId);
-                pdfPaths.push(filePath);
+                if (filePath && fs.existsSync(filePath)) {
+                    pdfPaths.push(filePath);
+                }
             } catch (err: any) {
                 // console.error(`[PDF Processor] Error con ID ${fileId}:`, err.message);
             }
         }
 
-        const cleanTextResponse = limpiarBloquesJSON(sanitizedTextResponse).trim();
+        // 5) Detectar rutas de archivos directas en el texto (ej: /app/temp/...)
+        // Esto sucede cuando una herramienta devuelve la ruta y el asistente la repite
+        const filePathRegex = /([\/A-Za-z0-9._\-\s:\\]+\.pdf)/gi;
+        let fileMatch;
+        while ((fileMatch = filePathRegex.exec(sanitizedTextResponse)) !== null) {
+            const p = fileMatch[1].trim();
+            // Solo agregar si existe en disco y no está ya en la lista
+            if (fs.existsSync(p) && !pdfPaths.includes(p)) {
+                pdfPaths.push(p);
+            }
+        }
+
+        let cleanTextResponse = limpiarBloquesJSON(sanitizedTextResponse).trim();
+
+        // 6) Limpiar las rutas de archivos del texto final para evitar enviar texto técnico al usuario
+        for (const p of pdfPaths) {
+            // Escapar caracteres especiales para el regex
+            const escapedPath = p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            cleanTextResponse = cleanTextResponse.replace(new RegExp(escapedPath, 'g'), '').trim();
+        }
         // Lógica especial para reserva: espera y reintento
         if (cleanTextResponse.includes('Voy a proceder a realizar la reserva.')) {
             // Espera 30 segundos y responde ok al asistente
@@ -308,21 +329,24 @@ export class AssistantResponseProcessor {
             for (const pdfPath of pdfPaths) {
                 try {
                     const absolutePath = path.resolve(pdfPath);
-                    console.log(`[AssistantResponseProcessor] Enviando PDF DIRECTO: ${absolutePath}`);
-                    
                     const fromNumber = ctx?.from || ctx?.key?.remoteJid || '';
                     
-                    // Intentamos envío directo para asegurar que el mediaSource no llegue nulo
-                    if (provider && typeof provider.sendMessage === 'function' && fromNumber) {
+                    // Detectamos si el proveedor es Meta para usar su método nativo de subida
+                    const isMeta = provider?.constructor?.name === 'MetaCloudProvider' || provider?.constructor?.name === 'MetaProvider';
+
+                    if (isMeta && fromNumber && typeof provider.sendMessage === 'function') {
+                        console.log(`[AssistantResponseProcessor] Enviando PDF vía Meta (Directo): ${absolutePath}`);
                         await provider.sendMessage(fromNumber, absolutePath, { body: "📄 Documento adjunto:" });
                     } else {
+                        // Para Baileys y otros, flowDynamic es el método estándar y más fiable para enviar archivos locales
+                        console.log(`[AssistantResponseProcessor] Enviando PDF vía FlowDynamic: ${absolutePath}`);
                         await flowDynamic([{ body: "📄 Documento adjunto:", media: absolutePath }]);
                     }
                     
-                    // Breve espera entre archivos para asegurar el orden
+                    // Breve espera entre archivos para asegurar el orden y evitar saturación
                     await new Promise(r => setTimeout(r, 1000));
                 } catch (err) {
-                    console.error('[WhatsApp Debug] Error enviando PDF:', err);
+                    console.error('[AssistantResponseProcessor] Error enviando PDF:', err);
                 }
             }
         }
