@@ -603,35 +603,60 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     app.post('/api/backoffice/whatsapp/sync-contacts', backofficeAuth, async (req: any, res: any) => {
         try {
+            // Priorizamos el groupProvider ya que es el que suele ser Baileys en modo dual
             const provider = deps.groupProvider || deps.adapterProvider;
-            const vendor = provider?.vendor || provider?.globalVendorArgs?.sock;
+            
+            // Intentamos obtener el socket (vendor) de todas las formas posibles conocidas
+            const vendor = provider?.vendor || 
+                           provider?.globalVendorArgs?.sock || 
+                           (provider as any)?.sock || 
+                           (provider as any)?.vendor?.sock;
 
-            if (!vendor || !vendor.ws?.isOpen) {
+            console.log(`📡 [SYNC] Intento de sincronización.`);
+            console.log(`   - Provider: ${provider?.constructor?.name || 'Unknown'}`);
+            console.log(`   - Vendor encontrado: ${!!vendor}`);
+            if (vendor) {
+                console.log(`   - WS Status: ${vendor.ws?.isOpen ? 'OPEN' : 'CLOSED/OTHER'}`);
+                console.log(`   - User ID: ${vendor.user?.id || 'No user'}`);
+                console.log(`   - Auth ID: ${vendor.authState?.creds?.me?.id || 'No auth'}`);
+            }
+
+            // Un motor es válido si tiene el vendor y alguna señal de sesión activa
+            const isConnected = vendor && (
+                vendor.ws?.isOpen || 
+                !!vendor.user?.id || 
+                !!vendor.authState?.creds?.me?.id
+            );
+
+            if (!isConnected) {
                 return res.status(503).json({ 
                     success: false, 
-                    error: 'El motor de WhatsApp (Baileys) no está conectado o no es compatible. Por favor vincule el QR primero.' 
+                    error: 'El motor de WhatsApp (Baileys) no parece estar conectado. Verifique que la sesión esté activa en el panel de control.' 
                 });
             }
 
-            console.log('📡 [SYNC] Iniciando sincronización manual de contactos y etiquetas desde Baileys...');
+            console.log('📡 [SYNC] Iniciando extracción de datos desde el socket...');
             
             // 1. Obtener Etiquetas (Labels)
             let labels: any[] = [];
             try {
+                // Intentar varios nombres de métodos comunes en diferentes versiones de Baileys/BuilderBot
                 if (typeof vendor.labelsQuery === 'function') {
                     labels = await vendor.labelsQuery() || [];
                 } else if (typeof (vendor as any).getLabels === 'function') {
                     labels = await (vendor as any).getLabels() || [];
+                } else if (vendor.store?.labels) {
+                    labels = Array.from(vendor.store.labels.values()) || [];
                 }
             } catch (e) {
-                console.warn('⚠️ [SYNC] No se pudieron obtener las etiquetas vía API, intentando fallback...');
+                console.warn('⚠️ [SYNC] Error obteniendo etiquetas:', e);
             }
-
-            // 2. Obtener Contactos en memoria
-            const rawContacts = vendor.contacts || {};
+            
+            // 2. Obtener Contactos (de la memoria o del store si existe)
+            const rawContacts = vendor.contacts || (vendor as any).store?.contacts || {};
             const contactList = Object.values(rawContacts);
             
-            console.log(`📡 [SYNC] Encontrados ${contactList.length} contactos y ${labels.length} etiquetas en memoria.`);
+            console.log(`📡 [SYNC] Datos extraídos: ${contactList.length} contactos, ${labels.length} etiquetas.`);
 
             // 3. Sincronizar Etiquetas en DB
             const tagMap = new Map<string, string>(); // name -> uuid_db
