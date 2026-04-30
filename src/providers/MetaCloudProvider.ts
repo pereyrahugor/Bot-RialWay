@@ -868,7 +868,7 @@ class MetaCloudProvider extends ProviderClass {
         const { access_token } = this.config;
         if (!access_token) return null;
 
-        const url = `https://graph.facebook.com/v22.0/me/messages?access_token=${access_token}`;
+        const url = `https://graph.facebook.com/v25.0/me/messages?access_token=${access_token}`;
         const body = {
             recipient: { id: recipientId },
             message: { text: message }

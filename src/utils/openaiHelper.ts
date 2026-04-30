@@ -57,27 +57,54 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
         const { HistoryHandler } = await import("./historyHandler");
         
         // 1. Cargar Historial (Contexto)
-        const history = await HistoryHandler.getMessages(userId, 15, 0, projectId); // Traemos un poco más de contexto
+        // Si el mensaje es una petición de resumen, traemos mucho más contexto (50 mensajes)
+        const isSummaryRequest = /GET_RESUMEN/i.test(message);
+        const historyLimit = isSummaryRequest ? 50 : 15;
+        const history = await HistoryHandler.getMessages(userId, historyLimit, 0, projectId);
+        console.log(`[openaiHelper] 📜 Historial recuperado para ${userId}: ${history.length} mensajes (Limit: ${historyLimit}) | Project: ${projectId}`);
         
         // 2. Preparar el prompt del sistema
-        const dbPrompt = await HistoryHandler.getSetting('ASSISTANT_PROMPT', projectId);
-        const systemPrompt = dbPrompt || process.env.ASSISTANT_PROMPT || "Eres un asistente servicial.";
+        // Intentar obtener un prompt específico para este asistente, si no, usar el genérico
+        let systemPrompt = await HistoryHandler.getSetting(`ASSISTANT_PROMPT_${assistantId}`, projectId);
+        if (!systemPrompt) {
+            const dbPrompt = await HistoryHandler.getSetting('ASSISTANT_PROMPT', projectId);
+            systemPrompt = dbPrompt || process.env.ASSISTANT_PROMPT || "Eres un asistente servicial.";
+        }
         
+        // Filtrar mensajes válidos y formatear para OpenAI
+        const formattedHistory = history
+            .filter(m => m.role === 'user' || m.role === 'assistant')
+            .filter(m => m.content && m.content.trim() !== "")
+            .map(m => ({
+                role: m.role as "user" | "assistant",
+                content: m.content
+            }));
+
+        // 2.2 Evitar duplicar el mensaje actual si ya se guardó en el historial (común en este sistema)
+        const lastMsg = formattedHistory.length > 0 ? formattedHistory[formattedHistory.length - 1] : null;
+        const isAlreadyInHistory = lastMsg && lastMsg.role === 'user' && lastMsg.content.trim() === message.trim();
+
         const messages: any[] = [
             { role: "system", content: systemPrompt },
-            ...history
-                .filter(m => m.role === 'user' || m.role === 'assistant')
-                .filter(m => m.content && m.content.trim() !== "")
-                .map(m => ({
-                    role: m.role as "user" | "assistant",
-                    content: m.content
-                })),
-            { role: "user", content: message }
+            ...formattedHistory
         ];
+
+        // 2.5 Refuerzo para Resúmenes: Si es un resumen, inyectar una instrucción clara ANTES del comando
+        if (isSummaryRequest) {
+            messages.push({ 
+                role: "system", 
+                content: "INSTRUCCIÓN CRÍTICA: Se ha solicitado un resumen de la conversación. Utiliza el historial de mensajes previo para generar el resumen siguiendo ESTRICTAMENTE la estructura definida en tu prompt del sistema. No respondas que no tienes información; toda la información necesaria está en el historial arriba. Responde SOLO con el resumen estructurado." 
+            });
+        }
+
+        // Agregar el mensaje actual del usuario solo si NO está ya en el historial
+        if (!isAlreadyInHistory) {
+            messages.push({ role: "user", content: message });
+        }
 
         // Inyectar fecha y hora actual en el system prompt o como mensaje adicional
         const currentDatetimeArg = getArgentinaDatetimeString();
-        messages[0].content += `\n\nFecha/Hora Actual (Argentina): ${currentDatetimeArg}\nID de Usuario: ${userId}`;
+        messages[0].content += `\n\nFecha/Hora Actual (Argentina): ${currentDatetimeArg}\nID de Usuario: ${userId}\nProject ID: ${projectId}`;
 
         // 3. Preparar Herramientas (Tools)
         let tools: any[] = [];

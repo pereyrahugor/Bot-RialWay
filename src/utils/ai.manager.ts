@@ -35,7 +35,7 @@ export class AiManager {
         return this.ASSISTANT_MAP[assigned] || this.assistantId;
     }
 
-    public getAssistantResponse = async (assistantId: string, message: string, state: any, fallbackMessage: string | undefined, userId: string, thread_id: string | null = null) => {
+    public getAssistantResponse = async (assistantId: string, message: string, state: any, fallbackMessage: string | undefined, userId: string, thread_id: string | null = null, projectId: string | null = null) => {
         if (this.userTimeouts.has(userId)) {
             clearTimeout(this.userTimeouts.get(userId)!);
             this.userTimeouts.delete(userId);
@@ -48,7 +48,9 @@ export class AiManager {
             this.userTimeouts.set(userId, timeoutId);
 
             const isWhatsApp = userId && userId.includes('@s.whatsapp.net');
-            safeToAsk(assistantId, message, state, userId, this.errorReporter, 5, isWhatsApp, process.env.RAILWAY_PROJECT_ID, false)
+            const targetProjectId = projectId || process.env.RAILWAY_PROJECT_ID;
+
+            safeToAsk(assistantId, message, state, userId, this.errorReporter, 5, isWhatsApp, targetProjectId, false)
                 .then(result => {
                     if (this.userTimeouts.has(userId)) {
                         clearTimeout(this.userTimeouts.get(userId)!);
@@ -181,7 +183,7 @@ export class AiManager {
             // --- LÓGICA MULTI-AGENTE ---
             const currentAssistantId = this.ASSISTANT_MAP[assigned] || this.assistantId;
 
-            const response = (await this.getAssistantResponse(currentAssistantId, ctx.body, state, undefined, ctx.from, ctx.thread_id)) as string;
+            const response = (await this.getAssistantResponse(currentAssistantId, ctx.body, state, undefined, ctx.from, ctx.thread_id, dynamicProjectId)) as string;
 
             if (!response) return state;
 
@@ -202,7 +204,7 @@ export class AiManager {
 
                 // 2. Transición inmediata: Consultar al nuevo agente con el resumen
                 const nextAssistantId = await this.getAssignedAssistantId(ctx.from, dynamicProjectId);
-                const nextResponseRaw = (await this.getAssistantResponse(nextAssistantId, resumen, state, undefined, ctx.from, ctx.thread_id)) as string;
+                const nextResponseRaw = (await this.getAssistantResponse(nextAssistantId, resumen, state, undefined, ctx.from, ctx.thread_id, dynamicProjectId)) as string;
                 
                 if (nextResponseRaw) {
                     await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
