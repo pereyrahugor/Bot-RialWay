@@ -621,6 +621,13 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                 console.log(`   - Auth ID: ${vendor.authState?.creds?.me?.id || 'No auth'}`);
             }
 
+            // DEBUG: Ver qué tiene el vendor realmente
+            if (vendor) {
+                const keys = Object.keys(vendor).filter(k => !k.startsWith('_'));
+                console.log(`   - Propiedades del Vendor: ${keys.slice(0, 15).join(', ')}...`);
+                console.log(`   - Store detectado: ${!!(vendor as any).store}`);
+            }
+
             // Un motor es válido si tiene el vendor y alguna señal de sesión activa
             const isConnected = vendor && (
                 vendor.ws?.isOpen || 
@@ -640,21 +647,40 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             // 1. Obtener Etiquetas (Labels)
             let labels: any[] = [];
             try {
-                // Intentar varios nombres de métodos comunes en diferentes versiones de Baileys/BuilderBot
+                // Intentar varios nombres de métodos comunes
                 if (typeof vendor.labelsQuery === 'function') {
+                    console.log('📡 [SYNC] Usando labelsQuery()...');
                     labels = await vendor.labelsQuery() || [];
                 } else if (typeof (vendor as any).getLabels === 'function') {
+                    console.log('📡 [SYNC] Usando getLabels()...');
                     labels = await (vendor as any).getLabels() || [];
-                } else if (vendor.store?.labels) {
-                    labels = Array.from(vendor.store.labels.values()) || [];
+                } else if (typeof (vendor as any).queryLabels === 'function') {
+                    console.log('📡 [SYNC] Usando queryLabels()...');
+                    labels = await (vendor as any).queryLabels() || [];
                 }
             } catch (e) {
                 console.warn('⚠️ [SYNC] Error obteniendo etiquetas:', e);
             }
-            
+
             // 2. Obtener Contactos (de la memoria o del store si existe)
-            const rawContacts = vendor.contacts || (vendor as any).store?.contacts || {};
+            // Buscamos tanto en el vendor como en el provider (nuestra nueva implementación de store)
+            const store = (vendor as any).store || (provider as any).store;
+            if (store) {
+                console.log(`   - Store Info: ${Object.keys(store.contacts || {}).length} contactos, ${store.labels?.size || 0} etiquetas.`);
+            }
+
+            const rawContacts = vendor.contacts || 
+                               store?.contacts || 
+                               (vendor as any).chats || 
+                               {};
+            
             const contactList = Object.values(rawContacts);
+            
+            // Fallback para etiquetas si no se obtuvieron por query
+            if (labels.length === 0 && store?.labels) {
+                console.log('📡 [SYNC] Extrayendo etiquetas desde el Store...');
+                labels = Array.from(store.labels.values()) || [];
+            }
             
             console.log(`📡 [SYNC] Datos extraídos: ${contactList.length} contactos, ${labels.length} etiquetas.`);
 

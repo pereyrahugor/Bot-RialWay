@@ -86,6 +86,11 @@ export class SupabaseBaileysProvider extends BaileysProvider {
         this.saveCreds = saveCreds;
         this.initialized = true;
 
+        // --- STORE INICIALIZACIÓN ---
+        const { makeInMemoryStore } = await import('whaileys');
+        const store = makeInMemoryStore({ logger: logger as any });
+        (this as any).store = store;
+
         this.vendor = makeWASocket({
             auth: {
                 creds: state.creds,
@@ -99,6 +104,9 @@ export class SupabaseBaileysProvider extends BaileysProvider {
             linkPreviewImageThumbnailWidth: 192,
             ...this.globalVendorArgs
         }) as any;
+
+        // Vincular el store al socket
+        store.bind(this.vendor.ev as any);
 
         this.vendor.ev.on('creds.update', async () => {
             await this.saveCreds();
