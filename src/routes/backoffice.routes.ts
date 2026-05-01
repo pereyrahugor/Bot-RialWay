@@ -678,15 +678,26 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             let contactList: any[] = [];
 
             if (store) {
-                const storeContacts = store.contacts || {};
+                console.log(`   - Store Keys: ${Object.keys(store).join(', ')}`);
+                const storeContacts = store.contacts;
                 const storeChats = store.chats;
                 
-                const contactsCount = typeof storeContacts === 'object' ? Object.keys(storeContacts).length : 0;
-                console.log(`   - Store Data: ${contactsCount} contactos en store.contacts`);
+                // Detectar si contacts es un Map, un Object o un KeyedDB
+                if (storeContacts) {
+                    if (storeContacts instanceof Map) {
+                        console.log(`   - Store Data: ${storeContacts.size} contactos en store.contacts (Map)`);
+                        contactList = Array.from(storeContacts.values());
+                    } else if (typeof storeContacts.all === 'function') {
+                        const allC = storeContacts.all();
+                        console.log(`   - Store Data: ${allC.length} contactos en store.contacts (KeyedDB)`);
+                        contactList = allC;
+                    } else {
+                        const keys = Object.keys(storeContacts);
+                        console.log(`   - Store Data: ${keys.length} contactos en store.contacts (Object)`);
+                        contactList = Object.values(storeContacts);
+                    }
+                }
                 
-                // Extraer contactos prioritarios (aquellos con nombre/info de contacto)
-                contactList = Object.values(storeContacts);
-
                 // Si hay pocos contactos, intentar complementar con la lista de chats
                 if (storeChats) {
                     const allChats = typeof storeChats.all === 'function' ? storeChats.all() : 
@@ -705,8 +716,15 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
                 // Extraer etiquetas del store si no se obtuvieron por query
                 if (labels.length === 0 && store.labels) {
-                    console.log(`   - Store Labels: ${store.labels.size || 0} encontradas.`);
-                    labels = Array.from(store.labels.values()) || [];
+                    const storeLabels = store.labels;
+                    if (storeLabels instanceof Map) {
+                        labels = Array.from(storeLabels.values());
+                    } else if (typeof storeLabels.values === 'function') {
+                        labels = Array.from(storeLabels.values());
+                    } else {
+                        labels = Object.values(storeLabels);
+                    }
+                    console.log(`   - Store Labels: ${labels.length} encontradas en el store.`);
                 }
             }
 
