@@ -664,15 +664,25 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             }
 
             // 2. Obtener Datos del Store
-            const store = (vendor as any).store || (provider as any).store;
+            // Buscamos el store en vendor, provider, o el provider interno (wrapper de builderbot)
+            const store = (vendor as any).store || 
+                          (provider as any).store || 
+                          (provider as any).provider?.store || 
+                          (provider as any).globalVendorArgs?.store;
+
+            console.log(`📡 [SYNC] Diagnóstico de Store:`);
+            console.log(`   - En vendor: ${!!(vendor as any).store}`);
+            console.log(`   - En provider: ${!!(provider as any).store}`);
+            console.log(`   - En provider.provider: ${!!(provider as any).provider?.store}`);
+            
             let contactList: any[] = [];
 
             if (store) {
                 const storeContacts = store.contacts || {};
                 const storeChats = store.chats;
                 
-                const contactsCount = Object.keys(storeContacts).length;
-                console.log(`   - Store Info: ${contactsCount} contactos en store.contacts`);
+                const contactsCount = typeof storeContacts === 'object' ? Object.keys(storeContacts).length : 0;
+                console.log(`   - Store Data: ${contactsCount} contactos en store.contacts`);
                 
                 // Extraer contactos prioritarios (aquellos con nombre/info de contacto)
                 contactList = Object.values(storeContacts);
@@ -682,7 +692,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                     const allChats = typeof storeChats.all === 'function' ? storeChats.all() : 
                                     (typeof storeChats.toJSON === 'function' ? storeChats.toJSON() : []);
                     
-                    console.log(`   - Store Info: ${allChats.length} chats en store.chats`);
+                    console.log(`   - Store Data: ${allChats.length} chats en store.chats`);
                     
                     // Fusionar: Agregar chats que no estén en contactList
                     const existingIds = new Set(contactList.map(c => c.id));
@@ -700,14 +710,19 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                 }
             }
 
-            // Fallback total al vendor si todo lo anterior falló
+            // Fallback total al vendor si todo lo anterior falló (intentamos obtener del socket directamente)
             if (contactList.length === 0) {
-                console.log('📡 [SYNC] Store vacío o no encontrado, intentando fallback a vendor.contacts...');
-                const vendorContacts = vendor.contacts || (vendor as any).chats || {};
-                contactList = Object.values(vendorContacts);
+                console.log('📡 [SYNC] ContactList vacía, intentando fallback a vendor.contacts o vendor.chats...');
+                const vendorContacts = vendor.contacts || (vendor as any).contacts || (vendor as any).chats || {};
+                
+                if (vendorContacts && typeof (vendorContacts as any).all === 'function') {
+                    contactList = (vendorContacts as any).all();
+                } else {
+                    contactList = Object.values(vendorContacts);
+                }
             }
             
-            console.log(`📡 [SYNC] Datos extraídos finalmente: ${contactList.length} registros, ${labels.length} etiquetas.`);
+            console.log(`📡 [SYNC] Resultado extracción: ${contactList.length} registros, ${labels.length} etiquetas.`);
 
             // 3. Sincronizar Etiquetas en DB
             const tagMap = new Map<string, string>(); // name -> uuid_db
