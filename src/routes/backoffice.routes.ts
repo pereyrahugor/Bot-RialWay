@@ -644,45 +644,65 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
             console.log('📡 [SYNC] Iniciando extracción de datos desde el socket...');
             
-            // 1. Obtener Etiquetas (Labels)
+            // 1. Obtener Etiquetas (Labels) por Query (solo Business)
             let labels: any[] = [];
             try {
-                // Intentar varios nombres de métodos comunes
                 if (typeof vendor.labelsQuery === 'function') {
                     console.log('📡 [SYNC] Usando labelsQuery()...');
                     labels = await vendor.labelsQuery() || [];
                 } else if (typeof (vendor as any).getLabels === 'function') {
                     console.log('📡 [SYNC] Usando getLabels()...');
                     labels = await (vendor as any).getLabels() || [];
-                } else if (typeof (vendor as any).queryLabels === 'function') {
-                    console.log('📡 [SYNC] Usando queryLabels()...');
-                    labels = await (vendor as any).queryLabels() || [];
                 }
             } catch (e) {
-                console.warn('⚠️ [SYNC] Error obteniendo etiquetas:', e);
+                console.warn('⚠️ [SYNC] Error obteniendo etiquetas vía Query:', e);
             }
 
-            // 2. Obtener Contactos (de la memoria o del store si existe)
-            // Buscamos tanto en el vendor como en el provider (nuestra nueva implementación de store)
+            // 2. Obtener Datos del Store
             const store = (vendor as any).store || (provider as any).store;
+            let contactList: any[] = [];
+
             if (store) {
-                console.log(`   - Store Info: ${Object.keys(store.contacts || {}).length} contactos, ${store.labels?.size || 0} etiquetas.`);
+                const storeContacts = store.contacts || {};
+                const storeChats = store.chats;
+                
+                const contactsCount = Object.keys(storeContacts).length;
+                console.log(`   - Store Info: ${contactsCount} contactos en store.contacts`);
+                
+                // Extraer contactos prioritarios (aquellos con nombre/info de contacto)
+                contactList = Object.values(storeContacts);
+
+                // Si hay pocos contactos, intentar complementar con la lista de chats
+                if (storeChats) {
+                    const allChats = typeof storeChats.all === 'function' ? storeChats.all() : 
+                                    (typeof storeChats.toJSON === 'function' ? storeChats.toJSON() : []);
+                    
+                    console.log(`   - Store Info: ${allChats.length} chats en store.chats`);
+                    
+                    // Fusionar: Agregar chats que no estén en contactList
+                    const existingIds = new Set(contactList.map(c => c.id));
+                    for (const chat of allChats) {
+                        if (chat.id && !existingIds.has(chat.id)) {
+                            contactList.push(chat);
+                        }
+                    }
+                }
+
+                // Extraer etiquetas del store si no se obtuvieron por query
+                if (labels.length === 0 && store.labels) {
+                    console.log(`   - Store Labels: ${store.labels.size || 0} encontradas.`);
+                    labels = Array.from(store.labels.values()) || [];
+                }
             }
 
-            const rawContacts = vendor.contacts || 
-                               store?.contacts || 
-                               (vendor as any).chats || 
-                               {};
-            
-            const contactList = Object.values(rawContacts);
-            
-            // Fallback para etiquetas si no se obtuvieron por query
-            if (labels.length === 0 && store?.labels) {
-                console.log('📡 [SYNC] Extrayendo etiquetas desde el Store...');
-                labels = Array.from(store.labels.values()) || [];
+            // Fallback total al vendor si todo lo anterior falló
+            if (contactList.length === 0) {
+                console.log('📡 [SYNC] Store vacío o no encontrado, intentando fallback a vendor.contacts...');
+                const vendorContacts = vendor.contacts || (vendor as any).chats || {};
+                contactList = Object.values(vendorContacts);
             }
             
-            console.log(`📡 [SYNC] Datos extraídos: ${contactList.length} contactos, ${labels.length} etiquetas.`);
+            console.log(`📡 [SYNC] Datos extraídos finalmente: ${contactList.length} registros, ${labels.length} etiquetas.`);
 
             // 3. Sincronizar Etiquetas en DB
             const tagMap = new Map<string, string>(); // name -> uuid_db

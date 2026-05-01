@@ -99,13 +99,14 @@ export class SupabaseBaileysProvider extends BaileysProvider {
             logger: logger as any,
             printQRInTerminal: false,
             generateHighQualityLinkPreview: true,
-            syncFullHistory: false,
+            syncFullHistory: true,
             markOnlineOnConnect: false,
             linkPreviewImageThumbnailWidth: 192,
             ...this.globalVendorArgs
         }) as any;
 
         // Vincular el store al socket
+        console.log(`[SupabaseBaileysProvider] 📦 Vinculando InMemoryStore al socket de ${botName}...`);
         store.bind(this.vendor.ev as any);
 
         this.vendor.ev.on('creds.update', async () => {
