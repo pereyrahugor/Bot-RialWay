@@ -87,9 +87,34 @@ export class SupabaseBaileysProvider extends BaileysProvider {
         this.initialized = true;
 
         // --- STORE INICIALIZACIÓN ---
-        const { makeInMemoryStore } = await import('whaileys');
-        const store = makeInMemoryStore({ logger: logger as any });
-        (this as any).store = store;
+        const sessionsDir = path.join(process.cwd(), 'sessions');
+        if (!fs.existsSync(sessionsDir)) fs.mkdirSync(sessionsDir, { recursive: true });
+        
+        const storeFile = path.join(sessionsDir, `${botName}_store.json`);
+        
+        if (!(this as any).store) {
+            console.log(`[SupabaseBaileysProvider] 📦 Inicializando Store para ${botName}`);
+            const { makeInMemoryStore } = await import('whaileys');
+            const store = makeInMemoryStore({ logger: logger as any });
+            
+            if (fs.existsSync(storeFile)) {
+                try {
+                    console.log(`[SupabaseBaileysProvider] 📥 Cargando Store desde disco...`);
+                    store.readFromFile(storeFile);
+                } catch (e) {
+                    console.warn(`[SupabaseBaileysProvider] ⚠️ No se pudo cargar el store previo:`, e);
+                }
+            }
+            (this as any).store = store;
+
+            // Auto-guardado periódico
+            setInterval(() => {
+                try {
+                    store.writeToFile(storeFile);
+                } catch (e) { /* ignore */ }
+            }, 60000); // Cada 1 minuto
+        }
+        const store = (this as any).store;
 
         this.vendor = makeWASocket({
             auth: {
@@ -105,9 +130,21 @@ export class SupabaseBaileysProvider extends BaileysProvider {
             ...this.globalVendorArgs
         }) as any;
 
+        // Asignar el store al vendor para fácil acceso desde rutas
+        (this.vendor as any).store = store;
+
         // Vincular el store al socket
         console.log(`[SupabaseBaileysProvider] 📦 Vinculando InMemoryStore al socket de ${botName}...`);
         store.bind(this.vendor.ev as any);
+
+        // Logging de eventos de historial para depuración
+        this.vendor.ev.on('messaging-history.set', ({ chats, contacts, messages, isLatest }: any) => {
+            console.log(`[SupabaseBaileysProvider] 📥 [${botName}] History Sync: ${chats?.length || 0} chats, ${contacts?.length || 0} contactos, ${messages?.length || 0} mensajes. (isLatest: ${isLatest})`);
+        });
+
+        this.vendor.ev.on('contacts.upsert', (contacts: any) => {
+            console.log(`[SupabaseBaileysProvider] 📥 [${botName}] Contacts Upsert: ${contacts?.length || 0} nuevos contactos.`);
+        });
 
         this.vendor.ev.on('creds.update', async () => {
             await this.saveCreds();

@@ -636,10 +636,15 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             );
 
             if (!isConnected) {
+                console.warn('⚠️ [SYNC] Intento de sincronización con motor desconectado.');
                 return res.status(503).json({ 
                     success: false, 
-                    error: 'El motor de WhatsApp (Baileys) no parece estar conectado. Verifique que la sesión esté activa en el panel de control.' 
+                    error: 'El motor de WhatsApp (Baileys) no está conectado o la sesión ha expirado. Por favor, vuelva a vincular el dispositivo desde el panel de control.' 
                 });
+            }
+
+            if (vendor.ws?.isOpen === false) {
+                console.warn('⚠️ [SYNC] El motor tiene sesión pero el WebSocket está cerrado. Los datos podrían estar desactualizados.');
             }
 
             console.log('📡 [SYNC] Iniciando extracción de datos desde el socket...');
@@ -723,15 +728,25 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
             // 4. Sincronizar Contactos en DB (Chats)
             const chatsToSync = contactList
-                .filter((c: any) => c.id && c.id.endsWith('@s.whatsapp.net'))
-                .map((c: any) => ({
-                    id: c.id,
-                    name: c.notify || c.name || c.id.split('@')[0],
-                    type: 'whatsapp',
-                    is_lead: false
-                }));
+                .filter((c: any) => c.id && (c.id.endsWith('@s.whatsapp.net') || c.id.endsWith('@g.us')))
+                .map((c: any) => {
+                    const id = c.id;
+                    const isGroup = id.endsWith('@g.us');
+                    // Intentar obtener el mejor nombre posible
+                    const name = c.notify || c.name || c.subject || c.verifiedName || id.split('@')[0];
+                    
+                    return {
+                        id,
+                        name,
+                        type: isGroup ? 'group' : 'whatsapp',
+                        is_lead: false,
+                        last_message_at: c.conversationTimestamp 
+                            ? new Date(c.conversationTimestamp * 1000).toISOString() 
+                            : new Date().toISOString()
+                    };
+                });
 
-            console.log(`📡 [SYNC] Upserting ${chatsToSync.length} contactos...`);
+            console.log(`📡 [SYNC] Procesados ${chatsToSync.length} candidatos para upsert.`);
             const syncChatsRes = await HistoryHandler.syncChats(chatsToSync);
 
             // 5. Vincular Etiquetas a Contactos
