@@ -217,14 +217,20 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                 } else {
                     try {
                         console.log(`📥 [BULK] Descargando media para servir localmente: ${directUrl.substring(0, 50)}...`);
-                        const response = await axios.get(directUrl, { responseType: 'arraybuffer', timeout: 60000 });
+                        const response = await axios.get(directUrl, { 
+                            responseType: 'arraybuffer', 
+                            timeout: 60000,
+                            headers: {
+                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,video/mp4,*/*;q=0.8'
+                            }
+                        });
                         const contentType = response.headers['content-type'] || '';
                         let ext = 'bin';
                         if (contentType.includes('video')) ext = 'mp4';
                         else if (contentType.includes('image')) ext = 'jpg';
                         else if (contentType.includes('pdf')) ext = 'pdf';
                         else {
-                            // Extract extension from original url if possible
                             const urlWithoutQuery = row.header_media_url.split('?')[0];
                             ext = urlWithoutQuery.split('.').pop() || 'mp4';
                         }
@@ -233,8 +239,16 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                         const dest = path.join(uploadsDir, filename);
                         fs.writeFileSync(dest, response.data);
 
-                        // Construir URL pública (Railway o fallback host)
-                        let baseUrl = process.env.PROJECT_URL || process.env.RAILWAY_PUBLIC_DOMAIN || `https://${req.headers.host}`;
+                        // Construir URL pública priorizando el host de la petición actual (ej: ngrok)
+                        let baseUrl = process.env.PROJECT_URL;
+                        if (!baseUrl) {
+                            const host = req.headers.host || '';
+                            if (!host.includes('localhost')) {
+                                baseUrl = `https://${host}`;
+                            } else {
+                                baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : `http://${host}`;
+                            }
+                        }
                         if (!baseUrl.startsWith('http')) baseUrl = `https://${baseUrl}`;
                         let finalUrl = `${baseUrl.replace(/\/$/, '')}/uploads/${filename}`;
 
