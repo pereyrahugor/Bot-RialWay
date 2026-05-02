@@ -1314,8 +1314,32 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             rows.push(exampleRow);
 
             // --- CONTACTOS REALES ---
-            const chats = await HistoryHandler.listChats(2000, 0); 
+            const { startDate, endDate, tagIds } = req.query;
+            let chats = await HistoryHandler.listChats(5000, 0); 
             if (chats && chats.length > 0) {
+                // Filtrar por fecha
+                if (startDate || endDate) {
+                    chats = chats.filter((c: any) => {
+                        if (!c.last_message_at) return false;
+                        const msgDate = new Date(c.last_message_at);
+                        if (startDate && msgDate < new Date(`${startDate}T00:00:00.000Z`)) return false;
+                        if (endDate && msgDate > new Date(`${endDate}T23:59:59.999Z`)) return false;
+                        return true;
+                    });
+                }
+
+                // Filtrar por etiquetas
+                if (tagIds) {
+                    const tagIdArray = tagIds.split(',').filter(Boolean);
+                    if (tagIdArray.length > 0) {
+                        chats = chats.filter((c: any) => {
+                            if (!c.tags || c.tags.length === 0) return false;
+                            // Chequear si el chat tiene al menos una de las etiquetas
+                            return c.tags.some((t: any) => tagIdArray.includes(t.id));
+                        });
+                    }
+                }
+
                 chats.forEach((chat: any) => {
                     const cleanPhone = chat.id.split('@')[0];
                     if (cleanPhone === '5491100000000') return; // Evitar duplicar el ejemplo si existiera

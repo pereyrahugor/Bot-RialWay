@@ -402,12 +402,34 @@
                                 </button>
                             </div>
 
-                            <!-- Panel de Acciones Masivas (Se muestra al seleccionar plantilla) -->
+                                <!-- Panel de Acciones Masivas (Se muestra al seleccionar plantilla) -->
                             <div id="bulk-actions-section" class="bulk-template-actions" style="display: none; border-top: 1px solid var(--border); padding-top: 20px;">
                                 <h4 style="margin-bottom: 15px; color: var(--text-main);"><i class="fas fa-play"></i> Ejecutar Envío Masivo</h4>
                                 <p style="font-size:0.85rem; color:var(--text-muted);">Configura el archivo Excel para iniciar el envío masivo.</p>
                                 
                                 <div style="margin-top:20px;">
+                                    <div style="background: rgba(0,0,0,0.03); padding: 12px; border-radius: 12px; margin-bottom: 12px; border: 1px solid var(--border);">
+                                        <label style="font-size:0.75rem; font-weight:700; margin-bottom: 8px; display:block;"><i class="fas fa-filter"></i> Filtros de Descarga</label>
+                                        
+                                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                                            <div>
+                                                <label style="font-size:0.65rem; color:var(--text-muted);">Último mensaje desde:</label>
+                                                <input type="date" id="bulk-filter-start" class="crm-input" style="margin-bottom:0; font-size:0.8rem; padding: 6px;">
+                                            </div>
+                                            <div>
+                                                <label style="font-size:0.65rem; color:var(--text-muted);">Hasta:</label>
+                                                <input type="date" id="bulk-filter-end" class="crm-input" style="margin-bottom:0; font-size:0.8rem; padding: 6px;">
+                                            </div>
+                                        </div>
+                                        
+                                        <div>
+                                            <label style="font-size:0.65rem; color:var(--text-muted);">Etiquetas (Ctrl/Cmd + Clic para varias, dejar vacío para todas)</label>
+                                            <select id="bulk-filter-tags" class="crm-input" multiple style="margin-bottom:0; font-size:0.8rem; min-height: 80px; padding: 6px;">
+                                                <!-- Opciones llenadas por JS -->
+                                            </select>
+                                        </div>
+                                    </div>
+
                                     <button class="btn-primary" onclick="downloadBulkExcel()" style="width:100%; background: #10b981; margin-bottom:12px;">
                                         <i class="fas fa-file-excel"></i> 1. Descargar Formato Excel
                                     </button>

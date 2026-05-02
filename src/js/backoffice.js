@@ -216,7 +216,24 @@ async function fetchBotTags() {
         botTags = await res.json();
         renderTagManager();
         renderFilterDropdown();
+        renderBulkFilterDropdown();
     } catch (e) { console.error(e); }
+}
+
+function renderBulkFilterDropdown() {
+    const select = document.getElementById('bulk-filter-tags');
+    if (!select) return;
+    
+    const selectedVals = Array.from(select.selectedOptions).map(o => o.value);
+    
+    select.innerHTML = 
+        botTags.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+        
+    Array.from(select.options).forEach(opt => {
+        if (selectedVals.includes(opt.value)) {
+            opt.selected = true;
+        }
+    });
 }
 
 let searchTimeout = null;
@@ -2072,7 +2089,22 @@ window.showTemplateDetail = showTemplateDetail;
 window.startBulkSend = startBulkSend;
 window.downloadBulkExcel = () => {
     if (currentSelectedTemplate) {
-        window.open(`/api/backoffice/whatsapp/template-excel/${currentSelectedTemplate.name}?token=${token}`, '_blank');
+        let url = `/api/backoffice/whatsapp/template-excel/${currentSelectedTemplate.name}?token=${token}`;
+        
+        const start = document.getElementById('bulk-filter-start')?.value;
+        const end = document.getElementById('bulk-filter-end')?.value;
+        const select = document.getElementById('bulk-filter-tags');
+        
+        let tags = '';
+        if (select && select.selectedOptions) {
+            tags = Array.from(select.selectedOptions).map(o => o.value).join(',');
+        }
+
+        if (start) url += `&startDate=${start}`;
+        if (end) url += `&endDate=${end}`;
+        if (tags) url += `&tagIds=${tags}`;
+        
+        window.open(url, '_blank');
     }
 };
 window.launchMetaOnboarding = launchMetaOnboarding;
