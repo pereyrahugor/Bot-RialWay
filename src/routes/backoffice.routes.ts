@@ -765,11 +765,17 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                 .map((c: any) => {
                     const id = c.id;
                     const isGroup = id.endsWith('@g.us');
+                    
+                    // Normalizar el ID igual que lo hace HistoryHandler.getOrCreateChat
+                    let cleanId = id.replace(/@s\.whatsapp\.net$/, '');
+                    cleanId = cleanId.replace(/@c\.us$/, '');
+                    
                     // Intentar obtener el mejor nombre posible
-                    const name = c.notify || c.name || c.subject || c.verifiedName || id.split('@')[0];
+                    let name = c.notify || c.name || c.subject || c.verifiedName || cleanId;
+                    if (name === '[-]') name = null;
                     
                     return {
-                        id,
+                        id: cleanId,
                         name,
                         type: isGroup ? 'group' : 'whatsapp',
                         is_lead: false,
@@ -785,12 +791,16 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             // 5. Vincular Etiquetas a Contactos
             const associations: any[] = [];
             for (const contact of contactList as any[]) {
-                if (contact.labels && Array.isArray(contact.labels) && contact.labels.length > 0) {
+                if (contact.id && contact.labels && Array.isArray(contact.labels) && contact.labels.length > 0) {
+                    // Normalizar ID para la asociación
+                    let cleanId = contact.id.replace(/@s\.whatsapp\.net$/, '');
+                    cleanId = cleanId.replace(/@c\.us$/, '');
+
                     for (const labelId of contact.labels) {
                         const labelObj = labels.find(l => l.id === labelId || l.labelId === labelId);
                         if (labelObj && tagMap.has(labelObj.name)) {
                             associations.push({
-                                chat_id: contact.id,
+                                chat_id: cleanId,
                                 tag_id: tagMap.get(labelObj.name)
                             });
                         }
