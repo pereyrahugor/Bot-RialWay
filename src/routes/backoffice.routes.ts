@@ -199,95 +199,104 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
         if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
         for (const row of data) {
-            // AUTO-CORRECCIÓN: Convertir links de Google Drive a links locales servidos por nosotros
-            if (row.header_media_url && row.header_media_url.includes('drive.google.com')) {
-                const driveIdMatch = row.header_media_url.match(/\/d\/([^\/]+)/) || row.header_media_url.match(/id=([^\&]+)/);
-                if (driveIdMatch && driveIdMatch[1]) {
-                    const driveId = driveIdMatch[1];
-                    const directUrl = `https://drive.google.com/uc?export=download&id=${driveId}`;
-                    
-                    if (mediaCache.has(directUrl)) {
-                        row.header_media_url = mediaCache.get(directUrl);
-                    } else {
-                        try {
-                            console.log(`📥 [BULK] Descargando media de Drive para servir localmente: ${directUrl}`);
-                            const response = await axios.get(directUrl, { responseType: 'arraybuffer', timeout: 60000 });
-                            const contentType = response.headers['content-type'] || '';
-                            let ext = 'bin';
-                            if (contentType.includes('video')) ext = 'mp4';
-                            else if (contentType.includes('image')) ext = 'jpg';
-                            else if (contentType.includes('pdf')) ext = 'pdf';
-                            else ext = row.header_media_url.split('.').pop() || 'mp4';
+            // AUTO-CORRECCIÓN: Convertir links externos a links locales servidos por nosotros
+            if (row.header_media_url && (row.header_media_url.includes('drive.google.com') || row.header_media_url.includes('scontent.whatsapp.net') || row.header_media_url.includes('fbcdn.net'))) {
+                
+                let directUrl = row.header_media_url;
+                let isDrive = row.header_media_url.includes('drive.google.com');
 
-                            const filename = `bulk-${Date.now()}-${Math.floor(Math.random()*1000)}.${ext}`;
-                            const dest = path.join(uploadsDir, filename);
-                            fs.writeFileSync(dest, response.data);
-
-                            // Construir URL pública (Railway o fallback host)
-                            let baseUrl = process.env.PROJECT_URL || process.env.RAILWAY_PUBLIC_DOMAIN || `https://${req.headers.host}`;
-                            if (!baseUrl.startsWith('http')) baseUrl = `https://${baseUrl}`;
-                            let finalUrl = `${baseUrl.replace(/\/$/, '')}/uploads/${filename}`;
-
-                            // --- LÓGICA DE COMPRESIÓN AUTOMÁTICA ---
-                            try {
-                                const stats = fs.statSync(dest);
-                                const sizeMB = stats.size / (1024 * 1024);
-                                
-                                if (sizeMB > 15.5 && ext === 'mp4') {
-                                    console.log(`⚠️ [BULK] Video muy pesado (${sizeMB.toFixed(2)}MB). Iniciando compresión...`);
-                                    const compressedFilename = `compressed-${filename}`;
-                                    const compressedDest = path.join(uploadsDir, compressedFilename);
-                                    
-                                    // 1. Obtener duración (intentamos con ffprobe, fallback a ffmpeg)
-                                    let durationStr = '';
-                                    try {
-                                        durationStr = execSync(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${dest}"`).toString().trim();
-                                    } catch (e) {
-                                        try {
-                                            const output = execSync(`ffmpeg -i "${dest}" 2>&1 | grep Duration`).toString();
-                                            const match = output.match(/Duration: (\d+):(\d+):(\d+\.\d+)/);
-                                            if (match) {
-                                                const hours = parseFloat(match[1]);
-                                                const mins = parseFloat(match[2]);
-                                                const secs = parseFloat(match[3]);
-                                                durationStr = (hours * 3600 + mins * 60 + secs).toString();
-                                            }
-                                        } catch (e2) {
-                                            console.warn('⚠️ [BULK] Ni ffprobe ni ffmpeg están disponibles para obtener duración.');
-                                        }
-                                    }
-                                    const duration = parseFloat(durationStr);
-                                    
-                                    if (!isNaN(duration) && duration > 0) {
-                                        // 2. Calcular bitrate para ~14.5MB (margen de seguridad)
-                                        const targetBitrate = Math.floor((14.5 * 1024 * 1024 * 8) / duration);
-                                        
-                                        // 3. Ejecutar ffmpeg
-                                        console.log(`🎬 [BULK] Comprimiendo a ${targetBitrate} bps (Duración: ${durationStr}s)`);
-                                        execSync(`ffmpeg -i "${dest}" -b:v ${targetBitrate} -vcodec libx264 -preset fast -acodec aac -movflags +faststart -y "${compressedDest}"`);
-                                        
-                                        // 4. Cambiar a la versión comprimida
-                                        finalUrl = `${baseUrl.replace(/\/$/, '')}/uploads/${compressedFilename}`;
-                                        console.log(`✅ [BULK] Video comprimido con éxito: ${finalUrl}`);
-                                    }
-                                }
-                            } catch (compressError: any) {
-                                console.error(`❌ [BULK] Error en compresión automática:`, compressError.message);
-                                if (compressError.stderr) {
-                                    console.error(`🔍 [BULK] Detalle técnico (stderr):`, compressError.stderr.toString());
-                                }
-                                // Si falla la compresión, seguimos con el original como fallback
-                            }
-                            // ---------------------------------------
-                            
-                            mediaCache.set(directUrl, finalUrl);
-                            row.header_media_url = finalUrl;
-                            console.log(`✅ [BULK] Media lista para envío: ${finalUrl}`);
-                        } catch (e: any) {
-                            console.error(`❌ [BULK] Error descargando de Drive:`, e.message);
-                            // Fallback al link directo original de drive (uc)
-                            row.header_media_url = directUrl;
+                if (isDrive) {
+                    const driveIdMatch = row.header_media_url.match(/\/d\/([^\/]+)/) || row.header_media_url.match(/id=([^\&]+)/);
+                    if (driveIdMatch && driveIdMatch[1]) {
+                        directUrl = `https://drive.google.com/uc?export=download&id=${driveIdMatch[1]}`;
+                    }
+                }
+                
+                if (mediaCache.has(directUrl)) {
+                    row.header_media_url = mediaCache.get(directUrl);
+                } else {
+                    try {
+                        console.log(`📥 [BULK] Descargando media para servir localmente: ${directUrl.substring(0, 50)}...`);
+                        const response = await axios.get(directUrl, { responseType: 'arraybuffer', timeout: 60000 });
+                        const contentType = response.headers['content-type'] || '';
+                        let ext = 'bin';
+                        if (contentType.includes('video')) ext = 'mp4';
+                        else if (contentType.includes('image')) ext = 'jpg';
+                        else if (contentType.includes('pdf')) ext = 'pdf';
+                        else {
+                            // Extract extension from original url if possible
+                            const urlWithoutQuery = row.header_media_url.split('?')[0];
+                            ext = urlWithoutQuery.split('.').pop() || 'mp4';
                         }
+
+                        const filename = `bulk-${Date.now()}-${Math.floor(Math.random()*1000)}.${ext}`;
+                        const dest = path.join(uploadsDir, filename);
+                        fs.writeFileSync(dest, response.data);
+
+                        // Construir URL pública (Railway o fallback host)
+                        let baseUrl = process.env.PROJECT_URL || process.env.RAILWAY_PUBLIC_DOMAIN || `https://${req.headers.host}`;
+                        if (!baseUrl.startsWith('http')) baseUrl = `https://${baseUrl}`;
+                        let finalUrl = `${baseUrl.replace(/\/$/, '')}/uploads/${filename}`;
+
+                        // --- LÓGICA DE COMPRESIÓN AUTOMÁTICA ---
+                        try {
+                            const stats = fs.statSync(dest);
+                            const sizeMB = stats.size / (1024 * 1024);
+                            
+                            if (sizeMB > 15.5 && ext === 'mp4') {
+                                console.log(`⚠️ [BULK] Video muy pesado (${sizeMB.toFixed(2)}MB). Iniciando compresión...`);
+                                const compressedFilename = `compressed-${filename}`;
+                                const compressedDest = path.join(uploadsDir, compressedFilename);
+                                
+                                // 1. Obtener duración (intentamos con ffprobe, fallback a ffmpeg)
+                                let durationStr = '';
+                                try {
+                                    durationStr = execSync(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${dest}"`).toString().trim();
+                                } catch (e) {
+                                    try {
+                                        const output = execSync(`ffmpeg -i "${dest}" 2>&1 | grep Duration`).toString();
+                                        const match = output.match(/Duration: (\d+):(\d+):(\d+\.\d+)/);
+                                        if (match) {
+                                            const hours = parseFloat(match[1]);
+                                            const mins = parseFloat(match[2]);
+                                            const secs = parseFloat(match[3]);
+                                            durationStr = (hours * 3600 + mins * 60 + secs).toString();
+                                        }
+                                    } catch (e2) {
+                                        console.warn('⚠️ [BULK] Ni ffprobe ni ffmpeg están disponibles para obtener duración.');
+                                    }
+                                }
+                                const duration = parseFloat(durationStr);
+                                
+                                if (!isNaN(duration) && duration > 0) {
+                                    // 2. Calcular bitrate para ~14.5MB (margen de seguridad)
+                                    const targetBitrate = Math.floor((14.5 * 1024 * 1024 * 8) / duration);
+                                    
+                                    // 3. Ejecutar ffmpeg
+                                    console.log(`🎬 [BULK] Comprimiendo a ${targetBitrate} bps (Duración: ${durationStr}s)`);
+                                    execSync(`ffmpeg -i "${dest}" -b:v ${targetBitrate} -vcodec libx264 -preset fast -acodec aac -movflags +faststart -y "${compressedDest}"`);
+                                    
+                                    // 4. Cambiar a la versión comprimida
+                                    finalUrl = `${baseUrl.replace(/\/$/, '')}/uploads/${compressedFilename}`;
+                                    console.log(`✅ [BULK] Video comprimido con éxito: ${finalUrl}`);
+                                }
+                            }
+                        } catch (compressError: any) {
+                            console.error(`❌ [BULK] Error en compresión automática:`, compressError.message);
+                            if (compressError.stderr) {
+                                console.error(`🔍 [BULK] Detalle técnico (stderr):`, compressError.stderr.toString());
+                            }
+                            // Si falla la compresión, seguimos con el original como fallback
+                        }
+                        // ---------------------------------------
+                        
+                        mediaCache.set(directUrl, finalUrl);
+                        row.header_media_url = finalUrl;
+                        console.log(`✅ [BULK] Media lista para envío: ${finalUrl}`);
+                    } catch (e: any) {
+                        console.error(`❌ [BULK] Error descargando media de URL externa:`, e.message);
+                        // Fallback al link directo original si falla
+                        row.header_media_url = directUrl;
                     }
                 }
             }
