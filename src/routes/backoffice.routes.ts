@@ -323,21 +323,16 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                 if (compDef.type === 'HEADER') {
                     if (compDef.format === 'IMAGE' || compDef.format === 'VIDEO' || compDef.format === 'DOCUMENT') {
                         const lowFormat = compDef.format.toLowerCase();
-                        // Si no hay link en el Excel, O si el link es el de ejemplo de Meta (scontent.whatsapp.net), 
-                        // Y el componente no parece tener variables (es estático), 
-                        // no enviamos el componente HEADER para que Meta use el archivo por defecto de la plantilla.
                         const hasNamedParams = compDef.example?.header_handle_named_params || compDef.example?.header_text_named_params;
                         
-                        const isMetaDefaultLink = row.header_media_url && row.header_media_url.includes('scontent.whatsapp.net');
-
-                        if ((!row.header_media_url || isMetaDefaultLink) && !hasNamedParams) {
-                            console.log(`ℹ️ [BULK] Usando media por defecto de Meta para esta fila.`);
-                            continue; 
-                        }
-
-                        const mediaLink = row.header_media_url || defaultMediaUrl || compDef.example?.header_handle?.[0];
+                        // Meta requiere SIEMPRE enviar el componente HEADER si la plantilla lo define.
+                        // Si el usuario deja la celda vacía o con el link scontent original, lo usamos.
+                        let mediaLink = row.header_media_url || defaultMediaUrl || compDef.example?.header_handle?.[0];
                         
-                        if (!mediaLink) continue;
+                        if (!mediaLink) {
+                            console.warn(`⚠️ [BULK] No hay mediaLink para HEADER en la plantilla ${templateName}. Esto causará error en Meta.`);
+                            continue; // Si realmente no hay nada que enviar, saltamos pero fallará.
+                        }
 
                         const headerParam: any = {
                             type: lowFormat,
