@@ -1172,23 +1172,32 @@ export class HistoryHandler {
             if (error) throw error;
 
             // --- PASO ADICIONAL: Sincronizar con la routing_table para habilitar webhooks globales ---
-            // Solo si tenemos un dominio público configurado
             const publicDomain = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PROJECT_URL;
-            if (publicDomain && phoneId) {
+            if (publicDomain) {
                 let projectUrl = publicDomain.startsWith('http') ? publicDomain : `https://${publicDomain}`;
-                // Asegurar que termina sin barra lateral para consistencia
                 if (projectUrl.endsWith('/')) projectUrl = projectUrl.slice(0, -1);
-                console.log(`📡 [HistoryHandler] Sincronizando routing_table para ${phoneId} -> ${projectUrl}`);
                 
-                await supabase
-                    .from('routing_table')
-                    .upsert({
-                        phone_number_id: phoneId,
-                        waba_id: wabaId,
-                        project_id: targetProjectId,
-                        project_url: projectUrl,
-                        updated_at: new Date().toISOString()
-                    }, { onConflict: 'phone_number_id' });
+                // Sincronizamos todos los IDs disponibles como identificadores remotos en la tabla maestra
+                const assetsToSync = [
+                    { id: phoneId, name: 'WhatsApp' },
+                    { id: facebookPageId, name: 'Messenger' },
+                    { id: instagramBusinessId, name: 'Instagram' }
+                ];
+
+                for (const asset of assetsToSync) {
+                    if (asset.id && asset.id !== 'PENDING') {
+                        console.log(`📡 [HistoryHandler] Sincronizando routing_table para ${asset.name}: ${asset.id} -> ${projectUrl}`);
+                        await supabase
+                            .from('routing_table')
+                            .upsert({
+                                phone_number_id: asset.id, // ID universal para el enrutador
+                                waba_id: asset.name === 'WhatsApp' ? wabaId : null,
+                                project_id: targetProjectId,
+                                project_url: projectUrl,
+                                updated_at: new Date().toISOString()
+                            }, { onConflict: 'phone_number_id' });
+                    }
+                }
             }
 
             // --- PASO ADICIONAL 2: Asegurar suscripción a la WABA vía API de Meta ---
