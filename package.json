@@ -73,7 +73,7 @@
   "author": "DuskCodes_Arg",
   "license": "ISC",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "overrides": {
     "sharp": "0.32.6"
