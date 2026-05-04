@@ -865,10 +865,14 @@ class MetaCloudProvider extends ProviderClass {
      * Alternativa de envio para Messenger/Instagram
      */
     public async sendMessenger(recipientId: string, message: string, platform: 'instagram' | 'messenger' = 'messenger'): Promise<any> {
-        const { access_token } = this.config;
+        const { access_token, facebookPageId, instagramBusinessId } = this.config;
         if (!access_token) return null;
 
-        const url = `https://graph.facebook.com/v25.0/me/messages?access_token=${access_token}`;
+        // Si tenemos el ID específico de la página o instagram, lo usamos. De lo contrario 'me' (si el token es de página)
+        const assetId = (platform === 'instagram' ? instagramBusinessId : facebookPageId) || 'me';
+        const version = process.env.META_API_VERSION || 'v25.0';
+        const url = `https://graph.facebook.com/${version}/${assetId}/messages?access_token=${access_token}`;
+        
         const body = {
             recipient: { id: recipientId },
             message: { text: message }

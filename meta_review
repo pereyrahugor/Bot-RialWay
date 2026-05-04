@@ -1,0 +1,199 @@
+App review request for Neurolinks Bot Manager (app ID 1493670789148486)
+ Downloaded on May 2, 2026, 4:15 PM PDT
+Permission usage
+[pages_show_list] Tell us how you're using this permission or feature
+# Guía de Permisos y Justificaciones para Meta App Review Este documento contiene los textos necesarios (en español e inglés) ## 1. Permisos Solicitados | Permiso |
+Propósito | | :--- | :--- | | `business_management` | Gestionar la integración con Business Manager y WABA. | | `whatsapp_business_messaging` | Enviar y recibir
+mensajes de clientes vía WhatsApp. | | `pages_messaging` | Gestionar mensajes de clientes vía Messenger. | | `instagram_manage_messages` | Gestionar mensajes de
+clientes vía Instagram. | | `pages_show_list` | Descubrir páginas de Facebook para vincular a la plataforma. | | `whatsapp_business_management` | Gestionar plantillas y
+perfiles de WhatsApp Business. | --- ## 2. Justificación Técnica (Texto para enviar a Meta) ### Permiso: `business_management` (Crítico) **Español:** > Nuestra
+plataforma ofrece una solución integral de CRM y gestión de clientes para pequeñas y medianas empresas. Requerimos el permiso `business_management` para
+automatizar el proceso de "Onboarding" de cuentas de WhatsApp Business (WABA). Este permiso permite que nuestros usuarios vinculen sus cuentas de Business
+Manager con nuestra aplicación de forma transparente, permitiéndonos leer la salud de la cuenta (status de verificación y límites de mensajería) y gestionar sus activos
+de mensajería directamente desde nuestro panel de control. Sin este permiso, la experiencia de configuración sería altamente técnica y propensa a errores para el
+usuario final. **English:** > Our platform provide a comprehensive CRM and customer management solution for small and medium-sized businesses. We require the
+`business_management` permission to automate the onboarding process for WhatsApp Business Accounts (WABA). This permission allows our users to link their
+Business Manager accounts with our application seamlessly, enabling us to retrieve account health status (verification status and messaging tiers) and manage their
+messaging assets directly from our unified dashboard. Without this permission, the setup experience would be highly technical and error-prone for the end user. --- ###
+Permisos de Mensajería (`whatsapp_business_messaging`, `pages_messaging`, `instagram_manage_messages`) **Español:** > La función principal de nuestra
+aplicación es centralizar la comunicación de múltiples canales. Estos permisos son esenciales para que nuestra IA asistente y los agentes humanos puedan recibir
+mensajes entrantes de clientes y responder a sus consultas de soporte y ventas en tiempo real, manteniendo un historial unificado en nuestra base de datos para
+seguimiento post-venta. **English:** > The core functionality of our application is to centralize communication across multiple channels. These permissions are essential
+for our AI assistant and human agents to receive incoming customer messages and respond to their support and sales inquiries in real-time, maintaining a unified history
+in our database for post-sales tracking. --- ## 3. Guía para el Video de Demostración (Screencast) Para que Meta apruebe estos permisos, el video debe mostrar: 1.
+**Dashboard de Conexión:** Muestre la pantalla donde se ven los estados de la WABA (Verificado/No Verificado) y el Messaging Limit. 2. **Onboarding:** Inicie la
+sesión con Facebook Login (si está implementado) o muestre cómo se vincula el ID de la WABA. 3. **Chat en Tiempo Real (Omnicanalidad):** Envíe un mensaje desde
+un teléfono de prueba a la WABA, una cuenta de Instagram o un perfil de Messenger. Muestre cómo todos llegan al **mismo panel de control**, permitiendo una
+gestión centralizada. 4. **Filtros de Plataforma:** Muestre el uso de las pestañas de plataforma (`WhatsApp`, `Instagram`, `Messenger`) para filtrar conversaciones por
+canal, demostrando la capacidad de la aplicación para organizar grandes volúmenes de mensajes multicentro. 5. **Respuesta de la IA:** Muestre a la IA respondiendo
+automáticamente en cualquiera de estas plataformas basándose en la configuración del asistente. ---
+[pages_show_list] Provide a detailed step-by-step video walkthrough of how your app will use this permission or feature so we can confirm it is used
+correctly and does not violate our policies.
+video
+[pages_show_list] El permiso pages_show_list permite a tu app acceder a la lista de páginas que administra una persona. También permite mostrar a una
+persona la lista de páginas que administra y verificar que una persona administra una página. También puedes usar este permiso para solicitar estadísticas
+de análisis con el fin de mejorar tu app y para fines de marketing o publicidad, a través del uso de información agrupada y no identificada o anónima
+(siempre que esos datos no se puedan volver a identificar).
+ If approved, I agree that any data I receive through pages_show_list will be used in accordance with the allowed usage. 
+[pages_messaging] Tell us how you're using this permission or feature
+# Guía de Permisos y Justificaciones para Meta App Review Este documento contiene los textos necesarios (en español e inglés) ## 1. Permisos Solicitados | Permiso |
+Propósito | | :--- | :--- | | `business_management` | Gestionar la integración con Business Manager y WABA. | | `whatsapp_business_messaging` | Enviar y recibir
+mensajes de clientes vía WhatsApp. | | `pages_messaging` | Gestionar mensajes de clientes vía Messenger. | | `instagram_manage_messages` | Gestionar mensajes de
+clientes vía Instagram. | | `pages_show_list` | Descubrir páginas de Facebook para vincular a la plataforma. | | `whatsapp_business_management` | Gestionar plantillas y
+perfiles de WhatsApp Business. | --- ## 2. Justificación Técnica (Texto para enviar a Meta) ### Permiso: `business_management` (Crítico) **Español:** > Nuestra
+plataforma ofrece una solución integral de CRM y gestión de clientes para pequeñas y medianas empresas. Requerimos el permiso `business_management` para
+automatizar el proceso de "Onboarding" de cuentas de WhatsApp Business (WABA). Este permiso permite que nuestros usuarios vinculen sus cuentas de Business
+Manager con nuestra aplicación de forma transparente, permitiéndonos leer la salud de la cuenta (status de verificación y límites de mensajería) y gestionar sus activos
+de mensajería directamente desde nuestro panel de control. Sin este permiso, la experiencia de configuración sería altamente técnica y propensa a errores para el
+usuario final. **English:** > Our platform provide a comprehensive CRM and customer management solution for small and medium-sized businesses. We require the
+`business_management` permission to automate the onboarding process for WhatsApp Business Accounts (WABA). This permission allows our users to link their
+Business Manager accounts with our application seamlessly, enabling us to retrieve account health status (verification status and messaging tiers) and manage their
+messaging assets directly from our unified dashboard. Without this permission, the setup experience would be highly technical and error-prone for the end user. --- ###
+Permisos de Mensajería (`whatsapp_business_messaging`, `pages_messaging`, `instagram_manage_messages`) **Español:** > La función principal de nuestra
+aplicación es centralizar la comunicación de múltiples canales. Estos permisos son esenciales para que nuestra IA asistente y los agentes humanos puedan recibir
+mensajes entrantes de clientes y responder a sus consultas de soporte y ventas en tiempo real, manteniendo un historial unificado en nuestra base de datos para
+seguimiento post-venta. **English:** > The core functionality of our application is to centralize communication across multiple channels. These permissions are essential
+for our AI assistant and human agents to receive incoming customer messages and respond to their support and sales inquiries in real-time, maintaining a unified history
+in our database for post-sales tracking. --- ## 3. Guía para el Video de Demostración (Screencast) Para que Meta apruebe estos permisos, el video debe mostrar: 1.
+**Dashboard de Conexión:** Muestre la pantalla donde se ven los estados de la WABA (Verificado/No Verificado) y el Messaging Limit. 2. **Onboarding:** Inicie la
+sesión con Facebook Login (si está implementado) o muestre cómo se vincula el ID de la WABA. 3. **Chat en Tiempo Real (Omnicanalidad):** Envíe un mensaje desde
+un teléfono de prueba a la WABA, una cuenta de Instagram o un perfil de Messenger. Muestre cómo todos llegan al **mismo panel de control**, permitiendo una
+gestión centralizada. 4. **Filtros de Plataforma:** Muestre el uso de las pestañas de plataforma (`WhatsApp`, `Instagram`, `Messenger`) para filtrar conversaciones por
+canal, demostrando la capacidad de la aplicación para organizar grandes volúmenes de mensajes multicentro. 5. **Respuesta de la IA:** Muestre a la IA respondiendo
+automáticamente en cualquiera de estas plataformas basándose en la configuración del asistente. ---
+[pages_messaging] Provide a detailed step-by-step video walkthrough of how your app will use this permission or feature so we can confirm it is used
+correctly and does not violate our policies.
+video
+[pages_messaging] El permiso pages_messaging habilita a la app para administrar y acceder a conversaciones de la página en Messenger. El uso de este
+permiso se habilita con el objetivo de crear experiencias interactivas iniciadas por el usuario, enviar mensajes de servicio de atención al cliente o confirmar
+reservas, compras y pedidos. También puedes usar este permiso para solicitar estadísticas de análisis con el fin de mejorar tu app y para fines de marketing
+o publicidad, a través del uso de información agrupada y no identificada o anónima (siempre que esos datos no se puedan volver a identificar).
+ If approved, I agree that any data I receive through pages_messaging will be used in accordance with the allowed usage. 
+[business_management] Tell us how you're using this permission or feature
+## 5. Guía para el Desarrollador: Configuración del Rol de Evaluador (Tester) Para que Meta pueda realizar las pruebas de mensajería, debes seguir estos pasos en tu
+[App Dashboard de Meta](https://developers.facebook.com/apps/): 1. Ve a la sección **"App Roles"** (Roles de la app) > **"Roles"** en el menú lateral izquierdo. 2. Haz
+clic en **"Add Testers"** (Agregar evaluadores). 3. Ingresa el nombre o el ID de la **cuenta real de Facebook** que vas a proporcionar a Meta para la revisión. 4. La
+persona (o el revisor) debe aceptar la invitación en el portal de [Meta for Developers](https://developers.facebook.com/requests/). 5. **Importante:** Asegúrate de que
+esta cuenta real de Facebook sea seguidora de tu página de Instagram/Facebook vinculada para que pueda iniciar conversaciones de prueba. --- ## 6. Pasos para
+Reproducir la Funcionalidad (Instrucciones para Meta) 1. Inicie sesión en la URL proporcionada con las credenciales arriba mencionadas. 2. Usted accederá al
+**Backoffice de Gestión de Mensajes**. 3. En el panel izquierdo, verá la lista de chats activos de diferentes plataformas (WhatsApp, Instagram, Messenger). 4. **Prueba
+de Mensajería:** Por favor, envíe un mensaje desde una cuenta de prueba real de Facebook/IG (con rol de Tester) hacia la página vinculada a la app. 5. Observe cómo
+el mensaje llega instantáneamente al panel derecho de nuestra aplicación. 6. **Prueba de IA:** La plataforma responderá de forma automática (si el toggle "Bot ON"
+está activo en la esquina superior derecha del chat) o permitirá al agente humano responder manualmente. 7. **Filtros:** Verifique que puede filtrar los mensajes por
+plataforma usando las pestañas superiores en la barra lateral. 
+[business_management] Provide a detailed step-by-step video walkthrough of how your app will use this permission or feature so we can confirm it is used
+correctly and does not violate our policies.
+video
+[business_management] El permiso business_management permite que tu app lea y escriba con la API del administrador comercial. El uso permitido de
+este permiso es administrar activos comerciales, como cuentas publicitarias, y para reclamar este tipo de cuentas. También puedes usar este permiso para
+solicitar estadísticas de análisis con el fin de mejorar tu app y para fines de marketing o publicidad, a través del uso de información agrupada y no
+identificada o anónima (siempre que esos datos no se puedan volver a identificar).
+ If approved, I agree that any data I receive through business_management will be used in accordance with the allowed usage. 
+[instagram_manage_messages] Tell us how you're using this permission or feature
+Este documento contiene los textos necesarios (en español e inglés) ## 1. Permisos Solicitados | Permiso | Propósito | | :--- | :--- | | `business_management` | Gestionar
+la integración con Business Manager y WABA. | | `whatsapp_business_messaging` | Enviar y recibir mensajes de clientes vía WhatsApp. | | `pages_messaging` |
+Gestionar mensajes de clientes vía Messenger. | | `instagram_manage_messages` | Gestionar mensajes de clientes vía Instagram. | | `pages_show_list` | Descubrir
+páginas de Facebook para vincular a la plataforma. | | `whatsapp_business_management` | Gestionar plantillas y perfiles de WhatsApp Business. | --- ## 2. Justificación
+Técnica (Texto para enviar a Meta) ### Permiso: `business_management` (Crítico) **Español:** > Nuestra plataforma ofrece una solución integral de CRM y gestión de
+clientes para pequeñas y medianas empresas. Requerimos el permiso `business_management` para automatizar el proceso de "Onboarding" de cuentas de WhatsApp
+Business (WABA). Este permiso permite que nuestros usuarios vinculen sus cuentas de Business Manager con nuestra aplicación de forma transparente,
+permitiéndonos leer la salud de la cuenta (status de verificación y límites de mensajería) y gestionar sus activos de mensajería directamente desde nuestro panel de
+control. Sin este permiso, la experiencia de configuración sería altamente técnica y propensa a errores para el usuario final. **English:** > Our platform provide a
+comprehensive CRM and customer management solution for small and medium-sized businesses. We require the `business_management` permission to automate the
+onboarding process for WhatsApp Business Accounts (WABA). This permission allows our users to link their Business Manager accounts with our application
+seamlessly, enabling us to retrieve account health status (verification status and messaging tiers) and manage their messaging assets directly from our unified
+dashboard. Without this permission, the setup experience would be highly technical and error-prone for the end user. --- ### Permisos de Mensajería
+(`whatsapp_business_messaging`, `pages_messaging`, `instagram_manage_messages`) **Español:** > La función principal de nuestra aplicación es centralizar la
+comunicación de múltiples canales. Estos permisos son esenciales para que nuestra IA asistente y los agentes humanos puedan recibir mensajes entrantes de clientes
+y responder a sus consultas de soporte y ventas en tiempo real, manteniendo un historial unificado en nuestra base de datos para seguimiento post-venta. **English:**
+> The core functionality of our application is to centralize communication across multiple channels. These permissions are essential for our AI assistant and human
+agents to receive incoming customer messages and respond to their support and sales inquiries in real-time, maintaining a unified history in our database for post-sales
+tracking. --- ## 3. Guía para el Video de Demostración (Screencast) Para que Meta apruebe estos permisos, el video debe mostrar: 1. **Dashboard de Conexión:**
+Muestre la pantalla donde se ven los estados de la WABA (Verificado/No Verificado) y el Messaging Limit. 2. **Onboarding:** Inicie la sesión con Facebook Login (si
+está implementado) o muestre cómo se vincula el ID de la WABA. 3. **Chat en Tiempo Real (Omnicanalidad):** Envíe un mensaje desde un teléfono de prueba a la
+WABA, una cuenta de Instagram o un perfil de Messenger. Muestre cómo todos llegan al **mismo panel de control**, permitiendo una gestión centralizada. 4. **Filtros
+de Plataforma:** Muestre el uso de las pestañas de plataforma (`WhatsApp`, `Instagram`, `Messenger`) para filtrar conversaciones por canal, demostrando la capacidad
+de la aplicación para organizar grandes volúmenes de mensajes multicentro. 5. **Respuesta de la IA:** Muestre a la IA respondiendo automáticamente en cualquiera de
+estas plataformas basándose en la configuración del asistente. ## 5. Guía para el Desarrollador: Configuración del Rol de Evaluador (Tester) Para que Meta pueda
+realizar las pruebas de mensajería, debes seguir estos pasos en tu [App Dashboard de Meta](https://developers.facebook.com/apps/): 1. Ve a la sección **"App
+Roles"** (Roles de la app) > **"Roles"** en el menú lateral izquierdo. 2. Haz clic en **"Add Testers"** (Agregar evaluadores). 3. Ingresa el nombre o el ID de la **cuenta
+real de Facebook** que vas a proporcionar a Meta para la revisión. 4. La persona (o el revisor) debe aceptar la invitación en el portal de [Meta for
+Developers](https://developers.facebook.com/requests/). 5. **Importante:** Asegúrate de que esta cuenta real de Facebook sea seguidora de tu página de
+Instagram/Facebook vinculada para que pueda iniciar conversaciones de prueba. --- ## 6. Pasos para Reproducir la Funcionalidad (Instrucciones para Meta) 1. Inicie
+sesión en la URL proporcionada con las credenciales arriba mencionadas. 2. Usted accederá al **Backoffice de Gestión de Mensajes**. 3. En el panel izquierdo, verá la
+lista de chats activos de diferentes plataformas (WhatsApp, Instagram, Messenger). 4. **Prueba de Mensajería:** Por favor, envíe un mensaje desde una cuenta de
+prueba real de Facebook/IG (con rol de Tester) hacia la página vinculada a la app. 5. Observe cómo el mensaje llega instantáneamente al panel derecho de nuestra
+aplicación. 6. **Prueba de IA:** La plataforma responderá de forma automática (si el toggle "Bot ON" está activo en la esquina superior derecha del chat) o permitirá al
+agente humano responder manualmente. 7. **Filtros:** Verifique que puede filtrar los mensajes por plataforma usando las pestañas superiores en la barra lateral. 
+[instagram_manage_messages] Provide a detailed step-by-step video walkthrough of how your app will use this permission or feature so we can confirm it
+is used correctly and does not violate our policies.
+video
+[instagram_manage_messages] El permiso instagram_manage_messages permite que los usuarios comerciales lean y respondan mensajes de Instagram
+Direct. El uso autorizado de este permiso es que los negocios recuperen conversaciones y mensajes de su bandeja de entrada de Instagram Direct,
+administren los mensajes que intercambian con sus clientes o utilicen herramientas de administración de relaciones con los clientes (CRM) externas para
+administrar su bandeja de entrada de Instagram Direct. También puedes usar este permiso para solicitar estadísticas de análisis con el fin de mejorar tu app
+y para fines de marketing o publicidad, a través del uso de información agrupada y no identificada o anónima (siempre que esos datos no se puedan volver
+a identificar).
+ If approved, I agree that any data I receive through instagram_manage_messages will be used in accordance with the allowed usage. 
+[instagram_basic] Tell us how you're using this permission or feature
+## 5. Guía para el Desarrollador: Configuración del Rol de Evaluador (Tester) Para que Meta pueda realizar las pruebas de mensajería, debes seguir estos pasos en tu
+[App Dashboard de Meta](https://developers.facebook.com/apps/): 1. Ve a la sección **"App Roles"** (Roles de la app) > **"Roles"** en el menú lateral izquierdo. 2. Haz
+clic en **"Add Testers"** (Agregar evaluadores). 3. Ingresa el nombre o el ID de la **cuenta real de Facebook** que vas a proporcionar a Meta para la revisión. 4. La
+persona (o el revisor) debe aceptar la invitación en el portal de [Meta for Developers](https://developers.facebook.com/requests/). 5. **Importante:** Asegúrate de que
+esta cuenta real de Facebook sea seguidora de tu página de Instagram/Facebook vinculada para que pueda iniciar conversaciones de prueba. --- ## 6. Pasos para
+Reproducir la Funcionalidad (Instrucciones para Meta) 1. Inicie sesión en la URL proporcionada con las credenciales arriba mencionadas. 2. Usted accederá al
+**Backoffice de Gestión de Mensajes**. 3. En el panel izquierdo, verá la lista de chats activos de diferentes plataformas (WhatsApp, Instagram, Messenger). 4. **Prueba
+de Mensajería:** Por favor, envíe un mensaje desde una cuenta de prueba real de Facebook/IG (con rol de Tester) hacia la página vinculada a la app. 5. Observe cómo
+el mensaje llega instantáneamente al panel derecho de nuestra aplicación. 6. **Prueba de IA:** La plataforma responderá de forma automática (si el toggle "Bot ON"
+está activo en la esquina superior derecha del chat) o permitirá al agente humano responder manualmente. 7. **Filtros:** Verifique que puede filtrar los mensajes por
+plataforma usando las pestañas superiores en la barra lateral. 
+[instagram_basic] Provide a detailed step-by-step video walkthrough of how your app will use this permission or feature so we can confirm it is used
+correctly and does not violate our policies.
+video
+[instagram_basic] El permiso instagram_basic permite que tu app lea la información y el contenido multimedia del perfil de una cuenta de Instagram. El uso
+permitido de esta función es obtener metadatos básicos del perfil de una cuenta de empresa de Instagram, por ejemplo, un nombre de usuario o un
+identificador. También puedes usar este permiso para solicitar estadísticas de análisis con el fin de mejorar tu app y para fines de marketing o publicidad, a
+través del uso de información agrupada y no identificada o anónima (siempre que esos datos no se puedan volver a identificar).
+ If approved, I agree that any data I receive through instagram_basic will be used in accordance with the allowed usage. 
+Data handling
+processor-0. Do you have data processors or service providers, including your own companies, that will have access to the Platform Data that you obtain
+from Meta? Data processors or service providers are separate entities that, on your behalf, process the Platform Data made accessible to you in order to
+provide you with a service. Please provide the names of any processors that will have access to the Platform Data made accessible to you through the
+requested permissions and features. “Platform Data” is any data that you receive from Meta (e.g., Meta user ID, email address, profile picture, Meta API user
+access token, and app secret).
+No
+responsible-1. Who is the person or entity that will be responsible for all Platform Data Meta shares with you? Please provide the name of the legal entity that
+will control the data (i.e., determine the purposes and means of processing the data) made available to you by Meta through the requested permissions
+and/or features. This could be a natural or legal person, a public authority, an agency or other entity. In some regions this is called a data controller.
+Pereyra Hugo - Socio y Desarrollador
+responsible-2. Select the country where this person or entity is located.
+Argentina
+requests-3. Have you provided the personal data or personal information of users to public authorities in response to national security requests in the past
+12 months? This does not include requests related to search warrants or court orders associated with criminal investigations. Personal data or personal
+information is any data you receive from Meta that relates to an identified or identifiable person.
+No
+requests-4. Which of the following policies or processes do you have in place regarding requests from public authorities for the personal data or personal
+information of users? Check all that apply.
+None of the above.
+Web reviewer instructions
+ Provide instructions for accessing the app so we may complete our review. Explain how to navigate to the app, and provide instructions for testing. 
+## 5. Guía para el Desarrollador: Configuración del Rol de Evaluador (Tester) Para que Meta pueda realizar las pruebas de mensajería, debes seguir estos pasos en tu
+[App Dashboard de Meta](https://developers.facebook.com/apps/): 1. Ve a la sección **"App Roles"** (Roles de la app) > **"Roles"** en el menú lateral izquierdo. 2. Haz
+clic en **"Add Testers"** (Agregar evaluadores). 3. Ingresa el nombre o el ID de la **cuenta real de Facebook** que vas a proporcionar a Meta para la revisión. 4. La
+persona (o el revisor) debe aceptar la invitación en el portal de [Meta for Developers](https://developers.facebook.com/requests/). 5. **Importante:** Asegúrate de que
+esta cuenta real de Facebook sea seguidora de tu página de Instagram/Facebook vinculada para que pueda iniciar conversaciones de prueba. --- ## 6. Pasos para
+Reproducir la Funcionalidad (Instrucciones para Meta) 1. Inicie sesión en la URL proporcionada con las credenciales arriba mencionadas. 2. Usted accederá al
+**Backoffice de Gestión de Mensajes**. 3. En el panel izquierdo, verá la lista de chats activos de diferentes plataformas (WhatsApp, Instagram, Messenger). 4. **Prueba
+de Mensajería:** Por favor, envíe un mensaje desde una cuenta de prueba real de Facebook/IG (con rol de Tester) hacia la página vinculada a la app. 5. Observe cómo
+el mensaje llega instantáneamente al panel derecho de nuestra aplicación. 6. **Prueba de IA:** La plataforma responderá de forma automática (si el toggle "Bot ON"
+está activo en la esquina superior derecha del chat) o permitirá al agente humano responder manualmente. 7. **Filtros:** Verifique que puede filtrar los mensajes por
+plataforma usando las pestañas superiores en la barra lateral. URL: https://bot-rialway-monoagente-production-91b8.up.railway.app/backoffice Pass: neuroadmin25
+ (optional) If payment or membership is required to access the full functionality of this app, provide access codes or test credentials so we can access and
+review all features on this app. Codes should be active for one year after submission. 
+ (optional) If payment is required to download this app, provide 8–10 gift codes so we can download it from app stores without payment.Codes should be
+active for one year after submission.Include any codes or test credentials required to access in-app subscriptions, purchases, or features. 
+ (optional) If access to this app or any of its features is limited to users within a specific geographic location or restricted by geo-blocking or geo-fencing,
+explain the restrictions and provide a list of locations.For example, specify the countries where the app can be accessed. 
+ Include supporting documentation. (Optional) For example, you can upload a screen recording or images that show how to access the app, log in, and how
+the app uses Meta APIs. You can upload multiple files, maximum 2 GB each. We accept .xls, .xlsx, .csv, .doc, .docx, .pdf, .txt, .jpeg, .jpg, .png, .ppt, .pptx,
+.mov, .mp4, .zip and .zipx. 

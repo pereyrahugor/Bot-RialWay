@@ -1133,7 +1133,15 @@ export class HistoryHandler {
     /**
      * Guarda o actualiza los datos de onboarding de Meta
      */
-    static async saveMetaOnboardingData(wabaId: string, phoneId: string, token: string, extra: any = {}, projectId: string | null = null) {
+    static async saveMetaOnboardingData(
+        wabaId: string, 
+        phoneId: string, 
+        token: string, 
+        extra: any = {}, 
+        projectId: string | null = null, 
+        facebookPageId: string | null = null, 
+        instagramBusinessId: string | null = null
+    ) {
         try {
             const targetProjectId = projectId || PROJECT_ID;
 
@@ -1153,6 +1161,8 @@ export class HistoryHandler {
                     access_token: token,
                     onboarding_data: extra,
                     owner_id: superUserId,
+                    facebook_page_id: facebookPageId,
+                    instagram_business_id: instagramBusinessId,
                     status: 'active',
                     updated_at: new Date().toISOString()
                 }, { onConflict: 'project_id' })
@@ -1256,7 +1266,9 @@ export class HistoryHandler {
                     ...data,
                     whatsappToken: data.access_token,
                     whatsappNumberId: data.phone_number_id,
-                    whatsappBusinessId: data.waba_id
+                    whatsappBusinessId: data.waba_id,
+                    facebookPageId: data.facebook_page_id,
+                    instagramBusinessId: data.instagram_business_id
                 };
             }
             return null;

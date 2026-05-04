@@ -62,39 +62,55 @@ export const processSendMessage = async (
             }
         }).catch(() => {});
 
-        // 4. ENVIAR A WHATSAPP
+        // 4. ENVIAR
         try {
             const isGroup = chatId.includes('@g.us');
             const providerToSend = (isGroup && deps.groupProvider) ? deps.groupProvider : adapterProvider;
             
-            console.log(`[BACKOFFICE] Enviando via ${providerToSend.constructor.name} a ${chatId}`);
+            // Determinar plataforma para el ruteo correcto
+            const chat = await HistoryHandler.getChat(chatId);
+            const platform = chat?.type || 'whatsapp';
 
-            const jid = chatId.includes('@') ? chatId : `${chatId}@s.whatsapp.net`;
+            console.log(`[BACKOFFICE] Enviando via ${providerToSend.constructor.name} a ${chatId} (${platform})`);
+
             let providerResponse: any = null;
 
-            if (file) {
-                const absolutePath = path.resolve(file.path);
-                if (finalType === 'image') {
-                    if (typeof providerToSend.sendImage === 'function') {
-                        providerResponse = await providerToSend.sendImage(jid, absolutePath, message || '');
-                    } else {
-                        providerResponse = await providerToSend.sendMessage(jid, message || '', { media: absolutePath });
-                    }
-                } else if (finalType === 'video') {
-                    if (typeof (providerToSend as any).sendVideo === 'function') {
-                        providerResponse = await (providerToSend as any).sendVideo(jid, absolutePath, message || '');
-                    } else {
-                        providerResponse = await providerToSend.sendMessage(jid, message || '', { media: absolutePath });
-                    }
+            if (platform === 'messenger' || platform === 'instagram') {
+                if (typeof providerToSend.sendMessenger === 'function') {
+                    // Para Meta Messenger/Instagram usamos el método específico
+                    providerResponse = await providerToSend.sendMessenger(chatId, message || '', platform);
                 } else {
-                    if (typeof (providerToSend as any).sendFile === 'function') {
-                        providerResponse = await (providerToSend as any).sendFile(jid, absolutePath, message || file.originalname);
-                    } else {
-                        providerResponse = await providerToSend.sendMessage(jid, message || '', { media: absolutePath, fileName: file.originalname });
-                    }
+                    console.error(`[BACKOFFICE] El proveedor ${providerToSend.constructor.name} no soporta envío a ${platform}`);
+                    throw new Error(`Proveedor no compatible con ${platform}`);
                 }
             } else {
-                providerResponse = await providerToSend.sendMessage(jid, message, {});
+                // Lógica tradicional de WhatsApp
+                const jid = chatId.includes('@') ? chatId : `${chatId}@s.whatsapp.net`;
+
+                if (file) {
+                    const absolutePath = path.resolve(file.path);
+                    if (finalType === 'image') {
+                        if (typeof providerToSend.sendImage === 'function') {
+                            providerResponse = await providerToSend.sendImage(jid, absolutePath, message || '');
+                        } else {
+                            providerResponse = await providerToSend.sendMessage(jid, message || '', { media: absolutePath });
+                        }
+                    } else if (finalType === 'video') {
+                        if (typeof (providerToSend as any).sendVideo === 'function') {
+                            providerResponse = await (providerToSend as any).sendVideo(jid, absolutePath, message || '');
+                        } else {
+                            providerResponse = await providerToSend.sendMessage(jid, message || '', { media: absolutePath });
+                        }
+                    } else {
+                        if (typeof (providerToSend as any).sendFile === 'function') {
+                            providerResponse = await (providerToSend as any).sendFile(jid, absolutePath, message || file.originalname);
+                        } else {
+                            providerResponse = await providerToSend.sendMessage(jid, message || '', { media: absolutePath, fileName: file.originalname });
+                        }
+                    }
+                } else {
+                    providerResponse = await providerToSend.sendMessage(jid, message, {});
+                }
             }
 
             // 5. GUARDAR EN HISTORIAL (Ahora con ID para evitar duplicados con el ECHO)
@@ -105,13 +121,13 @@ export const processSendMessage = async (
             const { trackSentMessage } = await import('../providers/provider.manager');
             trackSentMessage(externalId);
 
-            await HistoryHandler.saveMessage(chatId, 'assistant', finalContent, finalType, null, null, externalId);
+            await HistoryHandler.saveMessage(chatId, 'assistant', finalContent, finalType, null, null, externalId, platform as any);
             await HistoryHandler.updateLastHumanMessage(chatId);
             await HistoryHandler.toggleBot(chatId, false);
 
             res.json({ success: true, fileUrl: file ? fileUrl : undefined });
         } catch (waError) {
-            console.error('[BACKOFFICE] Error enviando a Whatsapp:', waError);
+            console.error('[BACKOFFICE] Error enviando mensaje:', waError);
             
             // Si falló el envío, igual guardamos pero sin ID externo para que al menos quede el log local
             await HistoryHandler.saveMessage(chatId, 'assistant', finalContent, finalType);
@@ -1587,7 +1603,15 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                     console.warn('⚠️ [CALLBACK] No se pudo suscribir a smb_message_echoes:', smbErr?.response?.data || smbErr.message);
                 }
 
-                await HistoryHandler.saveMetaOnboardingData(finalWabaId, finalPhoneId, accessToken, { verified_name: finalVerifiedName }, projectId);
+                await HistoryHandler.saveMetaOnboardingData(
+                    finalWabaId, 
+                    finalPhoneId, 
+                    accessToken, 
+                    { verified_name: finalVerifiedName }, 
+                    projectId,
+                    pageDiscovery?.pageId,
+                    pageDiscovery?.instagramId
+                );
             }
 
             console.log(`✅ [CALLBACK] Onboarding finalizado con éxito para Proyecto: ${projectId}`);
