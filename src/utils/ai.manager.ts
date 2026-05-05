@@ -82,12 +82,20 @@ export class AiManager {
     public analizarDestinoRecepcionista(respuesta: string): string | null {
         if (!respuesta || typeof respuesta !== 'string') return null;
         const lower = respuesta.toLowerCase();
-        // Regex robusto para detectar derivación exactas según prompt
-        if (/(?:derivar|derivando)(?:\s+a)?\s+asistente\s*1\b/i.test(lower)) return 'asistente1';
-        if (/(?:derivar|derivando)(?:\s+a)?\s+asistente\s*2\b/i.test(lower)) return 'asistente2';
-        if (/(?:derivar|derivando)(?:\s+a)?\s+asistente\s*3\b/i.test(lower)) return 'asistente3';
-        if (/(?:derivar|derivando)(?:\s+a)?\s+asistente\s*4\b/i.test(lower)) return 'asistente4';
-        if (/(?:derivar|derivando)(?:\s+a)?\s+asistente\s*5\b/i.test(lower)) return 'asistente5';
+        
+        // Regex robusto: (derivar|derivando) [a] asistente [1-5]
+        const matchAsistente = lower.match(/(?:derivar|derivando)(?:\s+a)?\s+asistente\s*([1-5])\b/i);
+        if (matchAsistente) {
+            const num = matchAsistente[1];
+            console.log(`[AiManager] 🎯 Comando de derivación detectado: asistente${num}`);
+            return `asistente${num}`;
+        }
+
+        if (/(?:derivar|derivando)(?:\s+a)?\s+asesor\s*humano\b/i.test(lower)) {
+            console.log(`[AiManager] 🎯 Comando de derivación detectado: asesor humano`);
+            return 'asistente_humano'; // O el identificador que uses para humano
+        }
+
         return null;
     }
 
@@ -210,9 +218,21 @@ export class AiManager {
             const destino = this.analizarDestinoRecepcionista(response);
             const resumen = this.extraerResumenRecepcionista(response);
             
+            if (destino) {
+                const targetAssistantId = currentAssistantMap[destino];
+                if (!targetAssistantId) {
+                    console.warn(`⚠️ [MultiAgent] Handover fallido: No hay Assistant ID configurado para '${destino}' en el proyecto ${dynamicProjectId}.`);
+                } else if (destino === assigned) {
+                    console.log(`[MultiAgent] El destino '${destino}' es el mismo que el actual. Ignorando handover.`);
+                } else {
+                    console.log(`🚀 [MultiAgent] Handover: ${assigned} -> ${destino} (User: ${ctx.from})`);
+                    await HistoryHandler.setAssignedAgent(ctx.from, destino, dynamicProjectId);
+                    // Actualizar el estado con el nuevo agente para el procesamiento
+                    assignedAssistantId = targetAssistantId;
+                }
+            }
+
             if (destino && currentAssistantMap[destino] && destino !== assigned) {
-                console.log(`🚀 [MultiAgent] Handover: ${assigned} -> ${destino} (User: ${ctx.from})`);
-                await HistoryHandler.setAssignedAgent(ctx.from, destino, dynamicProjectId);
 
                 // 1. Procesar respuesta del agente saliente (limpieza interna en Processor)
                 await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(

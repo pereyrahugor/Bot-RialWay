@@ -62,7 +62,8 @@ function limpiarBloquesJSON(texto: string): string {
 
     // 2e. Filtrar bloques técnicos de derivación y resumen (procedentes de AiManager)
     limpio = limpio.replace(/GET_RESUMEN[\s\S]+/gi, "");
-    limpio = limpio.replace(/^[ \t]*derivar(?:ndo)? a (asistente\s*[1-5]|asesor humano)\.?\s*$/gim, "");
+    // Regex más flexible: busca "derivar a asistente X" o "derivar a asesor humano" en cualquier parte, opcionalmente con punto final.
+    limpio = limpio.replace(/(?:derivar|derivando)(?:\s+a)?\s+(?:asistente\s*[1-5]|asesor humano)\.?/gim, "");
     limpio = limpio.replace(/\[Enviando.*$/gim, "");
 
 
