@@ -50,9 +50,10 @@ export class SupabaseBaileysProvider extends BaileysProvider {
         }
 
         const { useSupabaseAuthState } = await import('../utils/supabaseAdapter');
+        const { vault } = await import('../utils/vault');
         
-        const supabaseUrl = process.env.SUPABASE_URL;
-        const supabaseKey = process.env.SUPABASE_KEY;
+        const supabaseUrl = process.env.SUPABASE_URL || vault.supabaseUrl;
+        const supabaseKey = process.env.SUPABASE_KEY || vault.supabaseKey;
         const projectId = process.env.RAILWAY_PROJECT_ID || 'local-dev';
         const botName = this.globalVendorArgs.name || 'default';
 

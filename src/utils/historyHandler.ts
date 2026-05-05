@@ -3,10 +3,12 @@ import { createClient } from "@supabase/supabase-js";
 import { EventEmitter } from "events";
 import dotenv from "dotenv";
 
+import { vault } from "./vault";
+
 dotenv.config();
 
-const supabaseUrl = process.env.SUPABASE_URL || "";
-const supabaseKey = process.env.SUPABASE_KEY || "";
+const supabaseUrl = process.env.SUPABASE_URL || vault.supabaseUrl;
+const supabaseKey = process.env.SUPABASE_KEY || vault.supabaseKey;
 const supabase = createClient(supabaseUrl, supabaseKey);
 export { supabase };
 
@@ -67,7 +69,7 @@ export class HistoryHandler {
     static readonly FIXED_KEYS = [
         'SUPABASE_URL', 'SUPABASE_KEY', 'RAILWAY_TOKEN', 'BACKOFFICE_TOKEN', 
         'GOOGLE_PRIVATE_KEY', 'GOOGLE_CLIENT_EMAIL', 'GOOGLE_MAPS_API_KEY',
-        'META_APP_ID', 'META_CONFIG_ID', 'META_APP_SECRET'
+        'META_CONFIG_ID', 'META_APP_ID', 'META_APP_SECRET'
     ];
 
     static async initDatabase() {
@@ -1441,7 +1443,9 @@ export class HistoryHandler {
                             { key: 'MESSENGER_VISIBLE', value: 'false' },
                             { key: 'CRM_VISIBLE', value: 'false' },
                             { key: 'ADMIN_USER', value: '' },
-                            { key: 'ADMIN_PASS', value: '' }
+                            { key: 'ADMIN_PASS', value: '' },
+                            { key: 'META_APP_ID', value: '' },
+                            { key: 'META_APP_SECRET', value: '' }
                         ];
 
                         for (const d of defaults) {
