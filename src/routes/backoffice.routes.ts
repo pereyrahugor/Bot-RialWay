@@ -553,7 +553,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     app.get('/api/backoffice/chats', backofficeAuth, async (req: any, res: any) => {
         const limit = parseInt(req.query.limit as string) || 20;
         const offset = parseInt(req.query.offset as string) || 0;
-        const search = req.query.search as string;
+                        const search = req.query.search as string;
         const tag = req.query.tag as string;
         const platform = req.query.platform as string;
         
@@ -562,6 +562,120 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         
         const chats = await depsHistoryHandler.listChats(limit, offset, search, tag, assignedTo, platform);
         res.json(chats);
+    });
+
+    // --- NUEVO: IMPORTACIÓN DE CONTACTOS ---
+    app.get('/api/backoffice/chats/import-template', backofficeAuth, (req, res) => {
+        try {
+            const data = [
+                { phone: '5491122334455', name: 'Juan Perez', tags: 'Cliente, Interesado' },
+                { phone: '5491166778899', name: 'Maria Lopez', tags: 'Soporte' }
+            ];
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Plantilla");
+            const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+            
+            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            res.setHeader('Content-Disposition', 'attachment; filename=plantilla_contactos.xlsx');
+            res.end(buf);
+        } catch (error: any) {
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
+    app.post('/api/backoffice/chats/import', backofficeAuth, (req, res) => {
+        deps.upload.single('file')(req, res, async (err: any) => {
+            if (err) return res.status(400).json({ success: false, error: err.message });
+            if (!req.file) return res.status(400).json({ success: false, error: 'No se subió ningún archivo' });
+
+            try {
+                const workbook = XLSX.readFile(req.file.path);
+                const sheetName = workbook.SheetNames[0];
+                const data = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]) as any[];
+
+                if (!data || data.length === 0) {
+                    return res.status(400).json({ success: false, error: 'El archivo está vacío' });
+                }
+
+                const chatsToSync = [];
+                const tagsToProcess = new Map<string, string[]>(); // phone -> [tagNames]
+                const allUniqueTags = new Set<string>();
+
+                for (const row of data) {
+                    const phone = String(row.phone || row.Phone || '').replace(/\D/g, '');
+                    if (!phone) continue;
+
+                    const name = row.name || row.Name || '';
+                    const tagsStr = row.tags || row.Tags || '';
+
+                    chatsToSync.push({
+                        id: phone,
+                        name: name || null,
+                        type: 'whatsapp',
+                        bot_enabled: true,
+                        assigned_agent: 'asistente1'
+                    });
+
+                    if (tagsStr) {
+                        const tagList = tagsStr.split(',').map((t: string) => t.trim()).filter((t: string) => t.length > 0);
+                        if (tagList.length > 0) {
+                            tagsToProcess.set(phone, tagList);
+                            tagList.forEach((t: string) => allUniqueTags.add(t));
+                        }
+                    }
+                }
+
+                // 1. Upsert de Chats
+                await depsHistoryHandler.syncChats(chatsToSync);
+
+                // 2. Procesar Etiquetas
+                if (allUniqueTags.size > 0) {
+                    // Obtener etiquetas existentes
+                    const existingTags = await depsHistoryHandler.getTags();
+                    const tagMap = new Map<string, string>(); // name -> id
+                    existingTags.forEach((t: any) => tagMap.set(t.name.toLowerCase(), t.id));
+
+                    // Crear etiquetas faltantes
+                    for (const tagName of allUniqueTags) {
+                        if (!tagMap.has(tagName.toLowerCase())) {
+                            const newTag = await depsHistoryHandler.createTag(tagName, '#6366f1');
+                            if (newTag.success && newTag.tag) {
+                                tagMap.set(tagName.toLowerCase(), newTag.tag.id);
+                            }
+                        }
+                    }
+
+                    // Vincular etiquetas a chats
+                    const associations = [];
+                    for (const [phone, tagNames] of tagsToProcess.entries()) {
+                        for (const name of tagNames) {
+                            const tagId = tagMap.get(name.toLowerCase());
+                            if (tagId) {
+                                associations.push({ chat_id: phone, tag_id: tagId });
+                            }
+                        }
+                    }
+
+                    if (associations.length > 0) {
+                        await depsHistoryHandler.syncChatTags(associations);
+                    }
+                }
+
+                // Limpiar archivo temporal
+                fs.unlinkSync(req.file.path);
+
+                res.json({ 
+                    success: true, 
+                    imported: chatsToSync.length,
+                    tags_processed: allUniqueTags.size
+                });
+
+            } catch (error: any) {
+                console.error('❌ Error importando contactos:', error);
+                res.status(500).json({ success: false, error: error.message });
+            }
+        });
     });
 
     app.get('/api/backoffice/messages/:chatId', backofficeAuth, async (req: any, res: any) => {

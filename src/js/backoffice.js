@@ -2168,6 +2168,86 @@ function closeSyncModal() {
     if (modal) modal.style.display = 'none';
 }
 
+// --- Importación Externa de Contactos (Excel) ---
+function toggleImportModal() {
+    const modal = document.getElementById('import-modal');
+    if (!modal) return;
+    modal.style.display = modal.style.display === 'flex' ? 'none' : 'flex';
+    
+    // Reset state if closing
+    if (modal.style.display === 'none') {
+        document.getElementById('import-progress').style.display = 'none';
+        document.getElementById('import-file-input').value = '';
+        document.getElementById('import-status-text').innerText = 'Procesando...';
+        document.getElementById('import-progress-bar').style.width = '0%';
+    }
+}
+
+function downloadImportTemplate() {
+    window.open(`/api/backoffice/chats/import-template?token=${token}`, '_blank');
+}
+
+async function startImportExcel() {
+    const fileInput = document.getElementById('import-file-input');
+    const btn = document.getElementById('btn-execute-import');
+    const progressDiv = document.getElementById('import-progress');
+    const progressBar = document.getElementById('import-progress-bar');
+    const statusText = document.getElementById('import-status-text');
+
+    if (!fileInput.files || fileInput.files.length === 0) {
+        alert('Por favor selecciona un archivo Excel.');
+        return;
+    }
+
+    const file = fileInput.files[0];
+    const formData = new FormData();
+    formData.append('file', file);
+
+    btn.disabled = true;
+    progressDiv.style.display = 'block';
+    progressBar.style.width = '10%';
+    statusText.innerText = 'Subiendo archivo...';
+
+    try {
+        const res = await fetch(`/api/backoffice/chats/import?token=${token}`, {
+            method: 'POST',
+            body: formData
+        });
+
+        progressBar.style.width = '50%';
+        statusText.innerText = 'Procesando datos en el servidor...';
+
+        const data = await res.json();
+        
+        if (data.success) {
+            progressBar.style.width = '100%';
+            statusText.innerText = `¡Éxito! Se importaron ${data.imported} contactos.`;
+            statusText.style.color = '#10b981';
+            
+            // Refrescar chats
+            setTimeout(async () => {
+                await fetchChats(true);
+                await fetchBotTags();
+                alert(`Importación finalizada: ${data.imported} contactos procesados.`);
+                toggleImportModal();
+            }, 1500);
+        } else {
+            throw new Error(data.error || 'Error en el proceso de importación');
+        }
+    } catch (e) {
+        console.error('[Import] Error:', e);
+        statusText.innerText = '❌ Error: ' + e.message;
+        statusText.style.color = '#f87171';
+        alert('Error al importar: ' + e.message);
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+window.toggleImportModal = toggleImportModal;
+window.downloadImportTemplate = downloadImportTemplate;
+window.startImportExcel = startImportExcel;
+
 window.startContactSync = startContactSync;
 window.closeSyncModal = closeSyncModal;
 

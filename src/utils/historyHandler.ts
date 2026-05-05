@@ -1585,7 +1585,9 @@ export class HistoryHandler {
                 type: c.type || 'whatsapp',
                 last_message_at: c.last_message_at || new Date().toISOString(),
                 metadata: c.metadata || {},
-                is_lead: c.is_lead || false
+                is_lead: c.is_lead || false,
+                bot_enabled: c.bot_enabled !== undefined ? c.bot_enabled : true,
+                assigned_agent: c.assigned_agent || 'asistente1'
             }));
 
             const { data, error } = await supabase
