@@ -4,7 +4,8 @@ import { execSync } from 'child_process';
 import url from 'url';
 import bodyParser from 'body-parser';
 import axios from 'axios';
-import * as XLSX from 'xlsx';
+import * as XLSX_BASE from 'xlsx';
+const XLSX: any = (XLSX_BASE as any).default || XLSX_BASE;
 import { backofficeAuth, systemConfigAuth } from "../middleware/auth";
 import { supabase, HistoryHandler as HistoryHandlerClass } from "../utils/historyHandler";
 

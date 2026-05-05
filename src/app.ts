@@ -208,7 +208,8 @@ const main = async () => {
     const app = adapterProvider.server;
     if (app) {
         // 5. Polka/Express Server setup & Early Middlewares
-        console.log("🛠️ [POLKA MIDDLEWARES - INITIAL]:", app.middlewares?.length || 0);
+        app.use(compatibilityLayer);
+        app.use(rootRedirect);
 
         // --- MASTER-INTERCEPTOR DE STREAMS (EL PRIMERO SIEMPRE) ---
         app.use((req: any, res: any, next: any) => {
@@ -279,9 +280,6 @@ const main = async () => {
             res.end(JSON.stringify({ success: false, error: err.message || "Internal Server Error" }));
         };
 
-        // APLICAR COMPATIBILIDAD DESPUÉS DEL INTERCEPTOR
-        app.use(compatibilityLayer);
-        app.use(rootRedirect);
         
         const openaiMainDynamic = await getOpenAI();
 
