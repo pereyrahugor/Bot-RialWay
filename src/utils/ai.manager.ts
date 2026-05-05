@@ -113,7 +113,7 @@ export class AiManager {
         const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || HistoryHandler.PROJECT_IDENTIFIER;
         const assigned = await HistoryHandler.getAssignedAgent(ctx.from, dynamicProjectId);
         const assistantMap = await this.getAssistantMap(dynamicProjectId);
-        const assignedAssistantId = assistantMap[assigned] || this.assistantId;
+        let assignedAssistantId = assistantMap[assigned] || this.assistantId;
 
         // Guardar contexto en el state para uso en flujos (como idleFlow o reconectionFlow)
         if (state && state.update) {
