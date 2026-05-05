@@ -6,6 +6,7 @@ import bodyParser from 'body-parser';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
 import { backofficeAuth, systemConfigAuth } from "../middleware/auth";
+import { supabase, HistoryHandler as HistoryHandlerClass } from "../utils/historyHandler";
 
 // Caché para fotos de perfil (chatId -> {url, timestamp})
 const profilePicCache = new Map<string, { url: string, expires: number }>();
@@ -31,7 +32,7 @@ export const processSendMessage = async (
     file: any,
     deps: BackofficeDependencies
 ) => {
-    const { adapterProvider, HistoryHandler, openaiMain } = deps;
+    const { adapterProvider, HistoryHandler: depsHistoryHandler, openaiMain } = deps;
     // 1. Determinar tipo y contenido
     let finalType: 'text' | 'image' | 'video' | 'document' = 'text';
     if (file) {
@@ -53,7 +54,7 @@ export const processSendMessage = async (
         // El guardado se movió después del envío para capturar el ID real y evitar duplicados
 
         // 3. Inyectar en thread OpenAI (silencioso)
-        HistoryHandler.getThreadId(chatId).then((threadId: string) => {
+        HistoryHandlerClass.getThreadId(chatId).then((threadId: string) => {
             if (threadId && (message || file)) {
                 openaiMain.beta.threads.messages.create(threadId, {
                     role: 'assistant',
@@ -105,16 +106,16 @@ export const processSendMessage = async (
             const { trackSentMessage } = await import('../providers/provider.manager');
             trackSentMessage(externalId);
 
-            await HistoryHandler.saveMessage(chatId, 'assistant', finalContent, finalType, null, null, externalId);
-            await HistoryHandler.updateLastHumanMessage(chatId);
-            await HistoryHandler.toggleBot(chatId, false);
+            await HistoryHandlerClass.saveMessage(chatId, 'assistant', finalContent, finalType, null, null, externalId);
+            await HistoryHandlerClass.updateLastHumanMessage(chatId);
+            await HistoryHandlerClass.toggleBot(chatId, false);
 
             res.json({ success: true, fileUrl: file ? fileUrl : undefined });
         } catch (waError) {
             console.error('[BACKOFFICE] Error enviando a Whatsapp:', waError);
             
             // Si falló el envío, igual guardamos pero sin ID externo para que al menos quede el log local
-            await HistoryHandler.saveMessage(chatId, 'assistant', finalContent, finalType);
+            await HistoryHandlerClass.saveMessage(chatId, 'assistant', finalContent, finalType);
 
             res.json({ 
                 success: true, 
@@ -450,7 +451,7 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                     // Guardar con un prefijo informativo para el asistente
                     const historyContent = `[Campaña: ${templateName}]\n${renderedText}`;
 
-                    await HistoryHandler.saveMessage(phone, 'assistant', historyContent, 'text', null, null, msgId);
+                    await HistoryHandlerClass.saveMessage(phone, 'assistant', historyContent, 'text', null, null, msgId);
                     sent++;
                 } else {
                     errors++;
@@ -478,7 +479,7 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
  * Registra las rutas del backoffice en la instancia de Polka.
  */
 export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies) => {
-    const { adapterProvider, HistoryHandler, openaiMain, upload } = deps;
+    const { adapterProvider, HistoryHandler: depsHistoryHandler, openaiMain, upload } = deps;
 
     // --- AUTH ---
 
@@ -486,8 +487,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         const { user, pass, token } = req.body;
         
         // 1. Soporte para login dinámico (Prioridad: DB > Env)
-        const dbAdminUser = await HistoryHandler.getSetting('ADMIN_USER');
-        const dbAdminPass = await HistoryHandler.getSetting('ADMIN_PASS');
+        const dbAdminUser = await HistoryHandlerClass.getSetting('ADMIN_USER');
+        const dbAdminPass = await HistoryHandlerClass.getSetting('ADMIN_PASS');
         
         const adminUser = dbAdminUser || process.env.ADMIN_USER || 'admin';
         const adminPass = dbAdminPass || process.env.ADMIN_PASS;
@@ -505,7 +506,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
 
         // 3. Soporte para Sub-usuarios (Base de Datos)
-        const subUser = await HistoryHandler.verifyUser(user, pass);
+        const subUser = await HistoryHandlerClass.verifyUser(user, pass);
         if (subUser) {
             return res.json({
                 success: true,
@@ -525,7 +526,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         if (!req.auth.isAdmin) {
             return res.status(403).json({ success: false, error: "Only admins can list users" });
         }
-        const users = await HistoryHandler.listUsers();
+        const users = await HistoryHandlerClass.listUsers();
         res.json(users);
     });
 
@@ -534,7 +535,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             return res.status(403).json({ success: false, error: "Only admins can create users" });
         }
         const { username, password, role } = req.body;
-        const result = await HistoryHandler.createUser(username, password, role);
+        const result = await HistoryHandlerClass.createUser(username, password, role);
         res.json(result);
     });
 
@@ -543,7 +544,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             return res.status(403).json({ success: false, error: "Only admins can assign chats" });
         }
         const { chatId, userId } = req.body;
-        const result = await HistoryHandler.assignChatToUser(chatId, userId);
+        const result = await HistoryHandlerClass.assignChatToUser(chatId, userId);
         res.json(result);
     });
 
@@ -559,14 +560,14 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         // Si es subusuario, aplicamos filtro de asignación (ve lo suyo + lo libre)
         const assignedTo = req.auth.isSubUser ? req.auth.userId : null;
         
-        const chats = await HistoryHandler.listChats(limit, offset, search, tag, assignedTo, platform);
+        const chats = await HistoryHandlerClass.listChats(limit, offset, search, tag, assignedTo, platform);
         res.json(chats);
     });
 
     app.get('/api/backoffice/messages/:chatId', backofficeAuth, async (req: any, res: any) => {
         const limit = parseInt(req.query.limit as string) || 50;
         const offset = parseInt(req.query.offset as string) || 0;
-        const messages = await HistoryHandler.getMessages(req.params.chatId, limit, offset);
+        const messages = await HistoryHandlerClass.getMessages(req.params.chatId, limit, offset);
         res.json(messages);
     });
 
@@ -773,7 +774,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                     color: l.color !== undefined ? `#${Number(l.color).toString(16).padStart(6, '0')}` : '#6366f1'
                 }));
 
-                const syncRes = await HistoryHandler.syncTags(tagsToSync);
+                const syncRes = await HistoryHandlerClass.syncTags(tagsToSync);
                 if (syncRes.success && syncRes.data) {
                     syncRes.data.forEach((t: any) => tagMap.set(t.name, t.id));
                     syncTagsSummary = syncRes.data.length;
@@ -787,7 +788,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                     const id = c.id;
                     const isGroup = id.endsWith('@g.us');
                     
-                    // Normalizar el ID igual que lo hace HistoryHandler.getOrCreateChat
+                    // Normalizar el ID igual que lo hace HistoryHandlerClass.getOrCreateChat
                     let cleanId = id.replace(/@s\.whatsapp\.net$/, '');
                     cleanId = cleanId.replace(/@c\.us$/, '');
                     
@@ -807,7 +808,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                 });
 
             console.log(`📡 [SYNC] Procesados ${chatsToSync.length} candidatos para upsert.`);
-            const syncChatsRes = await HistoryHandler.syncChats(chatsToSync);
+            const syncChatsRes = await HistoryHandlerClass.syncChats(chatsToSync);
 
             // 5. Vincular Etiquetas a Contactos
             const associations: any[] = [];
@@ -831,7 +832,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
             if (associations.length > 0) {
                 console.log(`📡 [SYNC] Vinculando ${associations.length} etiquetas a contactos...`);
-                await HistoryHandler.syncChatTags(associations);
+                await HistoryHandlerClass.syncChatTags(associations);
             }
 
             res.json({
@@ -874,7 +875,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         if (!chatId) return res.status(400).json({ success: false, error: 'chatId is required' });
         
         try {
-            await HistoryHandler.toggleBot(chatId, enabled);
+            await HistoryHandlerClass.toggleBot(chatId, enabled);
             if ((adapterProvider as any).server?.io) {
                 (adapterProvider as any).server.io.emit('bot_toggled', { chatId, enabled });
             }
@@ -887,7 +888,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     // --- TAGS ---
 
     app.get('/api/backoffice/tags', backofficeAuth, async (req, res) => {
-        const tags = await HistoryHandler.getTags();
+        const tags = await HistoryHandlerClass.getTags();
         res.json(tags);
     });
 
@@ -895,7 +896,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         try {
             const { id } = req.params;
             const { name, email, notes, source, cuit_dni, tax_status, address, offered_product } = req.body;
-            const result = await HistoryHandler.updateContactDetails(id, { 
+            const result = await HistoryHandlerClass.updateContactDetails(id, { 
                 name, email, notes, source, 
                 cuit_dni, tax_status, address, offered_product,
                 is_lead: true 
@@ -910,7 +911,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         try {
             const { chatId, details } = req.body;
             if (!chatId) return res.status(400).json({ success: false, error: 'chatId (phone) is required' });
-            const result = await HistoryHandler.createNewLeadManual(chatId, details);
+            const result = await HistoryHandlerClass.createNewLeadManual(chatId, details);
             res.json(result);
         } catch (err: any) {
             res.status(500).json({ success: false, error: err.message });
@@ -919,29 +920,29 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     app.post('/api/backoffice/tags', backofficeAuth, bodyParser.json(), async (req, res) => {
         const { name, color } = req.body;
-        const result = await HistoryHandler.createTag(name, color);
+        const result = await HistoryHandlerClass.createTag(name, color);
         res.json(result);
     });
 
     app.put('/api/backoffice/tags/:id', backofficeAuth, bodyParser.json(), async (req, res) => {
         const { name, color } = req.body;
-        const result = await HistoryHandler.updateTag(req.params.id, name, color);
+        const result = await HistoryHandlerClass.updateTag(req.params.id, name, color);
         res.json(result);
     });
 
     app.delete('/api/backoffice/tags/:id', backofficeAuth, async (req, res) => {
-        const result = await HistoryHandler.deleteTag(req.params.id);
+        const result = await HistoryHandlerClass.deleteTag(req.params.id);
         res.json(result);
     });
 
     app.post('/api/backoffice/chats/:chatId/tags', backofficeAuth, bodyParser.json(), async (req, res) => {
         const { tagId } = req.body;
-        const result = await HistoryHandler.addTagToChat(req.params.chatId, tagId);
+        const result = await HistoryHandlerClass.addTagToChat(req.params.chatId, tagId);
         res.json(result);
     });
 
     app.delete('/api/backoffice/chats/:chatId/tags/:tagId', backofficeAuth, async (req, res) => {
-        const result = await HistoryHandler.removeTagFromChat(req.params.chatId, req.params.tagId);
+        const result = await HistoryHandlerClass.removeTagFromChat(req.params.chatId, req.params.tagId);
         res.json(result);
     });
 
@@ -949,7 +950,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     app.get('/api/backoffice/tickets/pending-count', backofficeAuth, async (req, res) => {
         const tipo = req.query.tipo as string;
-        const count = await HistoryHandler.getPendingTicketsCount(tipo);
+        const count = await HistoryHandlerClass.getPendingTicketsCount(tipo);
         res.json({ count });
     });
 
@@ -959,28 +960,28 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         const chatId = req.query.chatId as string;
         const limit = parseInt(req.query.limit as string) || 50;
         const offset = parseInt(req.query.offset as string) || 0;
-        const result = await HistoryHandler.listTickets(limit, offset, estado, tipo, chatId);
+        const result = await HistoryHandlerClass.listTickets(limit, offset, estado, tipo, chatId);
         res.json(result);
     });
 
     app.post('/api/backoffice/tickets', backofficeAuth, bodyParser.json(), async (req, res) => {
         const { chatId, titulo, descripcion, tipo, prioridad } = req.body;
         if (!chatId || !titulo) return res.status(400).json({ success: false, error: 'chatId and titulo are required' });
-        const result = await HistoryHandler.createTicket(chatId, titulo, descripcion, tipo, prioridad);
+        const result = await HistoryHandlerClass.createTicket(chatId, titulo, descripcion, tipo, prioridad);
         res.json(result);
     });
 
     app.put('/api/backoffice/tickets/:id', backofficeAuth, bodyParser.json(), async (req, res) => {
         const { id } = req.params;
         const { estado } = req.body;
-        const result = await HistoryHandler.updateTicketStatus(id, estado);
+        const result = await HistoryHandlerClass.updateTicketStatus(id, estado);
         res.json(result);
     });
 
     app.get('/api/backoffice/leads', backofficeAuth, async (req, res) => {
         const limit = parseInt(req.query.limit as string) || 50;
         const offset = parseInt(req.query.offset as string) || 0;
-        const result = await HistoryHandler.listEditedLeads(limit, offset);
+        const result = await HistoryHandlerClass.listEditedLeads(limit, offset);
         res.json(result);
     });
 
@@ -1013,11 +1014,11 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         const projectId = (req.query.projectId as string) || process.env.RAILWAY_PROJECT_ID || "default";
         
         // Intentar obtener config de la DB
-        let config = await HistoryHandler.getMetaOnboardingData(projectId);
+        let config = await HistoryHandlerClass.getMetaOnboardingData(projectId);
         
         // Si no hay config específica, intentar la global (projectId=default)
         if (!config && projectId !== 'default') {
-            config = await HistoryHandler.getMetaOnboardingData('default');
+            config = await HistoryHandlerClass.getMetaOnboardingData('default');
         }
         
         res.json({
@@ -1052,7 +1053,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                 extra = { ...discovery.data, ...extra };
             }
 
-            const result = await HistoryHandler.saveMetaOnboardingData(
+            const result = await HistoryHandlerClass.saveMetaOnboardingData(
                 finalWabaId, 
                 finalPhoneId, 
                 manualToken,
@@ -1071,7 +1072,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     
     /** Asegura que el proveedor tenga la config más reciente de la DB */
     const syncMetaProvider = async (projectId: string | null = null) => {
-        const config = await HistoryHandler.getMetaOnboardingData(projectId || process.env.RAILWAY_PROJECT_ID);
+        const config = await HistoryHandlerClass.getMetaOnboardingData(projectId || process.env.RAILWAY_PROJECT_ID);
         if (config && adapterProvider && adapterProvider.updateConfig) {
             // El objeto config puede venir de la DB (whatsappToken) o de una sincronización previa (access_token)
             const token = config.whatsappToken || config.access_token;
@@ -1169,7 +1170,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     app.post('/api/backoffice/whatsapp/register-step-1', bodyParser.json(), async (req, res) => {
         const { phoneNumber, verifiedName, projectId, manualWabaId, manualToken } = req.body;
         try {
-            const config = await HistoryHandler.getMetaOnboardingData(projectId, true); // Fallback al main_token habilitado
+            const config = await HistoryHandlerClass.getMetaOnboardingData(projectId, true); // Fallback al main_token habilitado
             
             // Si el usuario provee un token manual (Super User), lo priorizamos
             const token = manualToken || config?.access_token;
@@ -1189,7 +1190,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
             // 3. Guardar las credenciales manuales para que persistan
             if (manualWabaId || manualToken) {
-                await HistoryHandler.saveMetaOnboardingData(
+                await HistoryHandlerClass.saveMetaOnboardingData(
                     wabaId, 
                     null, 
                     token, 
@@ -1221,7 +1222,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     app.post('/api/backoffice/whatsapp/register-step-2', bodyParser.json(), async (req, res) => {
         const { phoneId, code, projectId } = req.body;
         try {
-            const config = await HistoryHandler.getMetaOnboardingData(projectId);
+            const config = await HistoryHandlerClass.getMetaOnboardingData(projectId);
             const token = config.access_token;
 
             const { verifyPhoneNumberOtp } = await import("../utils/metaDiscovery");
@@ -1230,7 +1231,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             await verifyPhoneNumberOtp(token, phoneId, code);
 
             // 2. Guardar definitivamente en nuestra DB
-            await HistoryHandler.saveMetaOnboardingData(config.waba_id, phoneId, token, { activatedVia: 'auto-registration' }, projectId);
+            await HistoryHandlerClass.saveMetaOnboardingData(config.waba_id, phoneId, token, { activatedVia: 'auto-registration' }, projectId);
 
             res.json({ success: true });
         } catch (error: any) {
@@ -1336,7 +1337,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
             // --- CONTACTOS REALES ---
             const { startDate, endDate, tagIds } = req.query;
-            let chats = await HistoryHandler.listChats(5000, 0); 
+            let chats = await HistoryHandlerClass.listChats(5000, 0); 
             if (chats && chats.length > 0) {
                 // Filtrar por fecha
                 if (startDate || endDate) {
@@ -1420,7 +1421,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
             // 1. Descubrimiento de WhatsApp (WABA)
             const { discoverMetaIds } = await import("../utils/metaDiscovery");
-            const mainToken = await HistoryHandler.getMainToken();
+            const mainToken = await HistoryHandlerClass.getMainToken();
             const discovery = await discoverMetaIds(accessToken, mainToken);
             
             if (discovery.found && discovery.data) {
@@ -1434,17 +1435,17 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             const pageDiscovery = await discoverAndLinkMetaPages(accessToken);
             if (pageDiscovery) {
                 console.log(`✅ [CALLBACK] Guardando configuración de Página: ${pageDiscovery.pageName} para Proyecto: ${projectId}`);
-                await HistoryHandler.saveSetting('FACEBOOK_PAGE_ID', pageDiscovery.pageId, projectId);
-                await HistoryHandler.saveSetting('FACEBOOK_PAGE_TOKEN', pageDiscovery.pageAccessToken, projectId);
+                await HistoryHandlerClass.saveSetting('FACEBOOK_PAGE_ID', pageDiscovery.pageId, projectId);
+                await HistoryHandlerClass.saveSetting('FACEBOOK_PAGE_TOKEN', pageDiscovery.pageAccessToken, projectId);
                 
                 // Si encontramos Instagram vinculado, guardarlo también
                 if (pageDiscovery.instagramId) {
-                    await HistoryHandler.saveSetting('INSTAGRAM_BUSINESS_ID', pageDiscovery.instagramId, projectId);
+                    await HistoryHandlerClass.saveSetting('INSTAGRAM_BUSINESS_ID', pageDiscovery.instagramId, projectId);
                 }
 
                 // Activar visibilidad por defecto si encontramos una página
-                await HistoryHandler.saveSetting('INSTAGRAM_VISIBLE', 'on', projectId);
-                await HistoryHandler.saveSetting('MESSENGER_VISIBLE', 'on', projectId);
+                await HistoryHandlerClass.saveSetting('INSTAGRAM_VISIBLE', 'on', projectId);
+                await HistoryHandlerClass.saveSetting('MESSENGER_VISIBLE', 'on', projectId);
             }
 
             // 3. Verificación de resultados y depuración de scopes si falló todo
@@ -1553,7 +1554,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                 `;
 
                 // Guardar solo el token para futuras referencias
-                await HistoryHandler.saveMetaOnboardingData(null as any, null as any, accessToken, { diagnostics: discovery.diagnostics }, projectId);
+                await HistoryHandlerClass.saveMetaOnboardingData(null as any, null as any, accessToken, { diagnostics: discovery.diagnostics }, projectId);
                 return res.send(htmlError);
             }
 
@@ -1587,7 +1588,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                     console.warn('⚠️ [CALLBACK] No se pudo suscribir a smb_message_echoes:', smbErr?.response?.data || smbErr.message);
                 }
 
-                await HistoryHandler.saveMetaOnboardingData(finalWabaId, finalPhoneId, accessToken, { verified_name: finalVerifiedName }, projectId);
+                await HistoryHandlerClass.saveMetaOnboardingData(finalWabaId, finalPhoneId, accessToken, { verified_name: finalVerifiedName }, projectId);
             }
 
             console.log(`✅ [CALLBACK] Onboarding finalizado con éxito para Proyecto: ${projectId}`);
@@ -1631,7 +1632,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                 app_secret: process.env.META_APP_SECRET
             });
             const data = response.data;
-            const result = await HistoryHandler.saveMetaOnboardingData(
+            const result = await HistoryHandlerClass.saveMetaOnboardingData(
                 data.phoneNumberId || data.phone_number_id || "PENDING", 
                 data.wabaId || data.waba_id || "PENDING",
                 data.accessToken || data.access_token,
@@ -1674,7 +1675,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         const key = req.query.key as string;
         if (!key) return res.status(400).json({ success: false, error: 'key is required' });
         try {
-            const value = await HistoryHandler.getSetting(key);
+            const value = await HistoryHandlerClass.getSetting(key);
             res.json({ success: true, value });
         } catch (error: any) {
             res.status(500).json({ success: false, error: error.message });
@@ -1685,7 +1686,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         const { key, value } = req.body;
         if (!key) return res.status(400).json({ success: false, error: 'key is required' });
         try {
-            await HistoryHandler.saveSetting(key, value);
+            await HistoryHandlerClass.saveSetting(key, value);
             res.json({ success: true });
         } catch (error: any) {
             res.status(500).json({ success: false, error: error.message });
@@ -1711,10 +1712,10 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             }
 
             // 2. Obtener todas las configuraciones de la base de datos
-            const { data: dbSettings, error } = await HistoryHandler.getSupabase()
+            const { data: dbSettings, error } = await supabase
                 .from('settings')
                 .select('key, value')
-                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
+                .eq('project_id', HistoryHandlerClass.PROJECT_IDENTIFIER);
 
             if (error) throw error;
 
@@ -1746,7 +1747,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             const keys = Object.keys(settings);
             console.log(`📡 [HOT-UPDATE] Guardando ${keys.length} variables en la base de datos...`);
 
-            const promises = keys.map(key => HistoryHandler.saveSetting(key, settings[key]));
+            const promises = keys.map(key => HistoryHandlerClass.saveSetting(key, settings[key]));
             await Promise.all(promises);
 
             res.json({ success: true, message: `${keys.length} variables guardadas correctamente (Hot-update)` });
@@ -1761,7 +1762,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             const keys = ['WHATSAPP_VISIBLE', 'INSTAGRAM_VISIBLE', 'MESSENGER_VISIBLE', 'CRM_VISIBLE'];
             const results: any = {};
             for (const key of keys) {
-                results[key] = await HistoryHandler.getSetting(key);
+                results[key] = await HistoryHandlerClass.getSetting(key);
             }
             res.json(results);
         } catch (error: any) {
@@ -1776,7 +1777,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             const settingKey = index === '1' ? 'ASSISTANT_PROMPT' : `ASSISTANT_PROMPT_${index}`;
             const envKey = index === '1' ? 'ASSISTANT_ID' : `ASSISTANT_${index}`;
             
-            const prompt = await HistoryHandler.getSetting(settingKey);
+            const prompt = await HistoryHandlerClass.getSetting(settingKey);
             res.json({ 
                 success: true, 
                 prompt: prompt || '',
@@ -1799,7 +1800,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             const assistantId = process.env[envKey];
 
             console.log(`📡 [HOT-UPDATE] Actualizando prompt para Asistente ${idx} en base de datos...`);
-            await HistoryHandler.saveSetting(settingKey, prompt);
+            await HistoryHandlerClass.saveSetting(settingKey, prompt);
 
             // Sincronizar hacia OpenAI (Empujar cambio al dashboard de OpenAI)
             const { getOpenAI } = await import("../utils/openaiHelper");
