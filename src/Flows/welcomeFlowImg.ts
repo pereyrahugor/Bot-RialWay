@@ -26,7 +26,7 @@ import { reset } from "../utils/timeOut";
 import { userQueues, userLocks, handleQueue } from "../utils/queueManager";
 
 const openai = process.env.OPENAI_API_KEY_IMG ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY_IMG }) : null;
-const setTime = Number(process.env.timeOutCierre) * 60 * 1000;
+// El timeout se calcula dinámicamente dentro de la acción
 
 const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
   async (ctx, { flowDynamic, provider, gotoFlow, state }) => {
@@ -63,6 +63,7 @@ const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
         return;
     }
 
+    const setTime = (Number(process.env.timeOutCierre) || 45) * 60 * 1000;
     reset(ctx, gotoFlow, setTime);
 
     // Asegurar que userQueues tenga un array inicializado para este usuario

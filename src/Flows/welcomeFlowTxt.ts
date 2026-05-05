@@ -3,8 +3,7 @@ import { BaileysProvider } from "@builderbot/provider-baileys";
 import { MemoryDB } from "@builderbot/bot";
 import { reset } from "~/utils/timeOut";
 import { userQueues, userLocks, handleQueue } from "~/utils/queueManager";
-// Si se define timeOutCierre en minutos en .env, se multiplica por 60*1000 para obtener milisegundos
-const setTime = Number(process.env.timeOutCierre) * 60 * 1000;
+// El timeout se calcula dinámicamente dentro de la acción para soportar configuraciones en caliente
 
 export const welcomeFlowTxt = addKeyword<BaileysProvider, MemoryDB>(EVENTS.WELCOME)
     .addAction(async (ctx, { gotoFlow, flowDynamic, state, provider }) => {
@@ -30,6 +29,7 @@ export const welcomeFlowTxt = addKeyword<BaileysProvider, MemoryDB>(EVENTS.WELCO
 
         console.log(`📩 Mensaje recibido de :${userId}`);
 
+        const setTime = (Number(process.env.timeOutCierre) || 45) * 60 * 1000;
         reset(ctx, gotoFlow, setTime);
 
         // Asegurar que userQueues tenga un array inicializado para este usuario

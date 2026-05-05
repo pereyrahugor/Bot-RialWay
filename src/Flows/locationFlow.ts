@@ -16,7 +16,7 @@ import { welcomeFlowTxt} from "./welcomeFlowTxt";
 import { reset } from "../utils/timeOut";
 import { idleFlow } from "./idleFlow";
 
-const setTime = Number(process.env.timeOutCierre) * 60 * 1000;
+// El timeout se calcula dinámicamente dentro de la acción
 
 export async function getAddressFromCoordinates(lat: number, lng: number) {
     const apiKey = process.env.GOOGLE_MAPS_API_KEY;
@@ -44,6 +44,7 @@ export async function getAddressFromCoordinates(lat: number, lng: number) {
 
 export const locationFlow = addKeyword(EVENTS.LOCATION).addAction(
     async (ctx, { flowDynamic, provider, gotoFlow, state }) => {
+        const setTime = (Number(process.env.timeOutCierre) || 45) * 60 * 1000;
         reset(ctx, gotoFlow, setTime);
         console.log("📍 Ubicación recibida:", ctx.message);
     const latitude = ctx.message.location?.degreesLatitude || ctx.message.locationMessage?.degreesLatitude;

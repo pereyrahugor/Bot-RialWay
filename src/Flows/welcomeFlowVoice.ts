@@ -7,8 +7,7 @@ import { transcribeAudioFile } from "~/utils/audioTranscriptior";
 import path from "path";
 import fs from "fs";
 
-// Si se define timeOutCierre en minutos en .env, se multiplica por 60*1000 para obtener milisegundos
-const setTime = Number(process.env.timeOutCierre) * 60 * 1000;
+// El timeout se calcula dinámicamente dentro de la acción
 
 export const welcomeFlowVoice = addKeyword<any, any>(EVENTS.VOICE_NOTE)
     .addAction(async (ctx, { gotoFlow, flowDynamic, state, provider }) => {
@@ -34,6 +33,7 @@ export const welcomeFlowVoice = addKeyword<any, any>(EVENTS.VOICE_NOTE)
 
         console.log(`🎙️ Mensaje de voz recibido de ${userId}`);
 
+        const setTime = (Number(process.env.timeOutCierre) || 45) * 60 * 1000;
         reset(ctx, gotoFlow, setTime);
 
         // Asegurar que userQueues tenga un array inicializado para este usuario

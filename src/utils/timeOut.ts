@@ -11,10 +11,23 @@ const timers = {};
 // Function to start the inactivity timer for a user
 // Función para iniciar el temporizador de inactividad de un usuario
 const start = (ctx: BotContext, gotoFlow: (a: TFlow) => Promise<void>, ms: number) => {
+    // Si ms no es un número válido o es <= 0, usamos un valor por defecto seguro (45 min)
+    // Esto evita que el flujo de inactividad se dispare inmediatamente tras cada mensaje.
+    let finalMs = ms;
+    if (isNaN(ms) || ms <= 0) {
+        console.warn(`⚠️ [TimeOut] Valor de timeout inválido (${ms}). Usando 45 minutos por defecto.`);
+        finalMs = 45 * 60 * 1000;
+    }
+    
+    // Evitar timeouts extremadamente cortos que parezcan errores (menos de 10 segundos)
+    if (finalMs < 10000) {
+        console.warn(`⚠️ [TimeOut] Valor de timeout demasiado corto (${finalMs}ms). Ajustando a 10 segundos.`);
+        finalMs = 10000;
+    }
+
     timers[ctx.from] = setTimeout(() => {
-        // console.log(`Tiempo de espera finalizado del usuario: ${ctx.from}`);
         return gotoFlow(idleFlow);
-    }, ms);
+    }, finalMs);
 };
 
 // Function to reset the inactivity timer for a user

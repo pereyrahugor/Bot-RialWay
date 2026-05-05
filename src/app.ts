@@ -45,6 +45,7 @@ import { welcomeFlowDoc } from "./Flows/welcomeFlowDoc";
 import { locationFlow } from "./Flows/locationFlow";
 import { idleFlow } from "./Flows/idleFlow";
 import { welcomeFlowButton } from "./Flows/welcomeFlowButton";
+import { reset } from "./utils/timeOut";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -302,6 +303,8 @@ const main = async () => {
 
     registerProcessCallback(async (item: any) => {
         const { ctx, flowDynamic, state, provider, gotoFlow } = item;
+        const setTime = (Number(process.env.timeOutCierre) || 15) * 60 * 1000;
+        reset(ctx, gotoFlow, setTime);
         await aiManagerInstance.processUserMessage(ctx, { flowDynamic, state, provider, gotoFlow });
     });
 
@@ -352,7 +355,8 @@ const main = async () => {
     }
         
     // 10. Workers Initialization
-    startHumanInactivityWorker(15);
+    // Se ajusta a 45 minutos (anteriormente 15) según requerimiento del usuario
+    startHumanInactivityWorker(45);
 
     // 11. Start Server and Sockets
     try {
