@@ -20,7 +20,7 @@ import { HistoryHandler } from "./utils/historyHandler";
 import { registerProcessCallback, handleQueue, userQueues, userLocks } from "./utils/queueManager";
 
 // --- Managers & Routes ---
-import { registerBackofficeRoutes, processSendMessage, processBulkTemplate, BackofficeDependencies } from "./routes/backoffice.routes";
+import { registerBackofficeRoutes, processSendMessage, processBulkTemplate, processImportExcel, BackofficeDependencies } from "./routes/backoffice.routes";
 import { registerRailwayRoutes } from "./routes/railway.routes";
 import { registerWebchatRoutes } from "./routes/webchat.routes";
 import { registerStaticRoutes } from "./routes/static.routes";
@@ -215,8 +215,9 @@ const main = async () => {
             const normalizedPath = (req.url || '').split('?')[0].replace(/\/+/g, '/');
             const isBulk = normalizedPath.includes('/api/backoffice/whatsapp/send-bulk-template');
             const isSend = normalizedPath.includes('/api/backoffice/send-message');
+            const isImport = normalizedPath.includes('/api/backoffice/chats/import');
 
-            if ((isSend || isBulk) && req.method === 'POST') {
+            if ((isSend || isBulk || isImport) && req.method === 'POST') {
                 req.setTimeout(0);
                 console.log(`🛡️ [MASTER-INTERCEPTOR-PRIORITY] Bypass activo para: ${normalizedPath}`);
                 
@@ -247,9 +248,10 @@ const main = async () => {
                             if (isSend) {
                                 const { chatId, message } = req.body;
                                 return processSendMessage(req, res, chatId, message, (req as any).file, deps);
+                            } else if (isImport) {
+                                console.log("🚀 [MASTER-INTERCEPTOR] Ejecutando lógica de importación...");
+                                return processImportExcel(req, res, deps);
                             } else {
-                                // CAPTURA TOTAL: Procesamos el masivo aquí mismo y NO llamamos a next()
-                                // Esto evita que otros middlewares (como el plugin de openai) intenten re-parsear el stream
                                 console.log("🚀 [MASTER-INTERCEPTOR] Ejecutando lógica de envío masivo (bypass total)...");
                                 return processBulkTemplate(req, res, deps);
                             }
@@ -259,6 +261,8 @@ const main = async () => {
                             if (isSend) {
                                 const { chatId, message } = req.body;
                                 return processSendMessage(req, res, chatId || '', message || '', null, deps);
+                            } else if (isImport) {
+                                return next();
                             } else {
                                 return processBulkTemplate(req, res, deps);
                             }
