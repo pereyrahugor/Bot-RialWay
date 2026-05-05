@@ -1400,42 +1400,67 @@ export class HistoryHandler {
                     name: process.env.RAILWAY_SERVICE_NAME || 'Bot-RialWay'
                 });
 
-                // Leer .env defaul
-                const fs = await import('fs');
-                const path = await import('path');
-                const defaultPath = path.join(process.cwd(), '.env defaul');
-                
-                if (fs.existsSync(defaultPath)) {
-                    const content = fs.readFileSync(defaultPath, 'utf-8');
-                    const lines = content.split('\n');
-                    const settingsToInsert: any[] = [];
+                // 1. Intentar clonar desde el proyecto 'default' en la DB
+                console.log(`[Bootstrap] 🔄 Intentando clonar configuración desde proyecto 'default'...`);
+                const { data: defaultSettings } = await supabase
+                    .from('settings')
+                    .select('key, value')
+                    .eq('project_id', 'default');
+
+                const settingsToInsert: any[] = [];
+
+                if (defaultSettings && defaultSettings.length > 0) {
+                    console.log(`[Bootstrap] ✅ Encontradas ${defaultSettings.length} variables en 'default'. Clonando...`);
+                    for (const s of defaultSettings) {
+                        settingsToInsert.push({
+                            project_id: currentProjectId,
+                            key: s.key,
+                            value: s.value,
+                            updated_at: new Date().toISOString()
+                        });
+                    }
+                } else {
+                    // 2. Fallback al archivo .env defaul
+                    console.log(`[Bootstrap] ℹ️ Proyecto 'default' vacío. Usando '.env defaul' como origen...`);
+                    const fs = await import('fs');
+                    const path = await import('path');
+                    const defaultPath = path.join(process.cwd(), '.env defaul');
                     
-                    for (const line of lines) {
-                        const cleanLine = line.trim();
-                        if (!cleanLine || cleanLine.startsWith('#')) continue;
+                    if (fs.existsSync(defaultPath)) {
+                        const content = fs.readFileSync(defaultPath, 'utf-8');
+                        const lines = content.split('\n');
                         
-                        const match = cleanLine.match(/^([^=]+)=(.*)$/);
-                        if (match) {
-                            let key = match[1].trim();
-                            let value = match[2].trim();
+                        for (const line of lines) {
+                            const cleanLine = line.trim();
+                            if (!cleanLine || cleanLine.startsWith('#')) continue;
                             
-                            // Limpiar comillas
-                            if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-                                value = value.slice(1, -1);
+                            const match = cleanLine.match(/^([^=]+)=(.*)$/);
+                            if (match) {
+                                let key = match[1].trim();
+                                let value = match[2].trim();
+                                if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+                                    value = value.slice(1, -1);
+                                }
+                                settingsToInsert.push({
+                                    project_id: currentProjectId,
+                                    key,
+                                    value,
+                                    updated_at: new Date().toISOString()
+                                });
+
+                                // APROVECHAR: También guardar estas en 'default' para futuros bots
+                                await supabase.from('settings').upsert({
+                                    project_id: 'default',
+                                    key,
+                                    value,
+                                    updated_at: new Date().toISOString()
+                                }, { onConflict: 'project_id,key' });
                             }
-                            
-                            // Reemplazar saltos de línea literales \\n por \n reales si es necesario (o dejar para el handler)
-                            
-                            settingsToInsert.push({
-                                project_id: currentProjectId,
-                                key,
-                                value,
-                                updated_at: new Date().toISOString()
-                            });
                         }
                     }
+                }
 
-                    if (settingsToInsert.length > 0) {
+                if (settingsToInsert.length > 0) {
                         // Asegurar valores por defecto para visibilidad si no están en el archivo
                         const defaults = [
                             { key: 'WHATSAPP_VISIBLE', value: 'true' },
