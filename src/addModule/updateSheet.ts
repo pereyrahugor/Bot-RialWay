@@ -6,7 +6,13 @@ import OpenAI from "openai";
 import * as glob from "glob";
 import { createClient } from "@supabase/supabase-js";
 
+import { vault } from "../utils/vault";
+
 dotenv.config();
+
+const supabaseUrl = process.env.SUPABASE_URL || vault.supabaseUrl;
+const supabaseKey = process.env.SUPABASE_KEY || vault.supabaseKey;
+const supabase = (supabaseUrl && supabaseKey) ? createClient(supabaseUrl, supabaseKey) : null;
 
 // Permitir múltiples IDs separados por coma y espacios
 const SHEET_IDS = (process.env.SHEET_ID_UPDATE || "")
@@ -15,10 +21,6 @@ const SHEET_IDS = (process.env.SHEET_ID_UPDATE || "")
     .filter(Boolean);
 const VECTOR_STORE_ID = process.env.VECTOR_STORE_ID || "";
 let currentFileId: string | null = null;
-
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_KEY;
-const supabase = (supabaseUrl && supabaseKey) ? createClient(supabaseUrl, supabaseKey) : null;
 
 import { createGoogleAuth } from "../utils/googleAuth";
 

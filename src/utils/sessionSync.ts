@@ -3,12 +3,14 @@ import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
 
+import { vault } from './vault';
+
 // Configuración
 const SESSION_DIR = 'bot_sessions';
 const SYNC_INTERVAL_MS = 60 * 60 * 1000; // 1 Hora
 
-const supabaseUrl = process.env.SUPABASE_URL!;
-const supabaseKey = process.env.SUPABASE_KEY!;
+const supabaseUrl = process.env.SUPABASE_URL || vault.supabaseUrl;
+const supabaseKey = process.env.SUPABASE_KEY || vault.supabaseKey;
 const projectId = process.env.RAILWAY_PROJECT_ID || 'local-dev';
 // Prioridad: ASSISTANT_NAME (del env), luego BOT_NAME, luego default
 const botName = process.env.ASSISTANT_NAME || process.env.BOT_NAME || 'Unknown Bot';
