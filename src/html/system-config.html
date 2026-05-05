@@ -29,22 +29,6 @@
             color: #1e293b;
             border-color: #e2e8f0;
         }
-        .prompt-container {
-            transition: all 0.3s ease;
-        }
-        .prompt-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            cursor: pointer;
-            padding: 10px 0;
-        }
-        .prompt-header:hover { opacity: 0.8; }
-        .collapse-icon { transition: transform 0.3s ease; }
-        .prompt-content.collapsed { display: none; }
-        .prompt-header.collapsed .collapse-icon { transform: rotate(-90deg); }
-
-        /* Panel Lateral de Prompt (Estilo Tickets) */
         .prompt-panel {
             position: fixed;
             top: 0;
@@ -60,9 +44,7 @@
             box-shadow: -15px 0 50px rgba(0,0,0,0.2);
             border-left: 1px solid var(--border-color);
         }
-        .prompt-panel.active {
-            right: 0;
-        }
+        .prompt-panel.active { right: 0; }
         .panel-overlay {
             position: fixed;
             top: 0;
@@ -76,10 +58,7 @@
             opacity: 0;
             transition: opacity 0.3s ease;
         }
-        .panel-overlay.active {
-            display: block;
-            opacity: 1;
-        }
+        .panel-overlay.active { display: block; opacity: 1; }
         .prompt-panel-header {
             padding: 24px;
             display: flex;
@@ -95,11 +74,7 @@
             display: flex;
             flex-direction: column;
         }
-        .prompt-panel .CodeMirror {
-            flex: 1;
-            height: calc(100vh - 250px) !important;
-            font-size: 15px;
-        }
+        .prompt-panel .CodeMirror { flex: 1; height: calc(100vh - 250px) !important; font-size: 15px; }
         .trigger-card {
             background: rgba(99, 102, 241, 0.05);
             border: 1px dashed #6366f1;
@@ -111,56 +86,22 @@
             justify-content: space-between;
             align-items: center;
         }
-        .trigger-card:hover {
-            background: rgba(99, 102, 241, 0.1);
-            transform: translateY(-2px);
-        }
-
-        /* Login Overlay Estilo CRM */
+        .trigger-card:hover { background: rgba(99, 102, 241, 0.1); transform: translateY(-2px); }
+        
         #config-auth-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: var(--bg-main);
-            z-index: 9999;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            backdrop-filter: blur(10px);
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg-main); z-index: 9999; display: flex;
+            align-items: center; justify-content: center; backdrop-filter: blur(10px);
         }
         .auth-card {
-            background: var(--bg-header);
-            padding: 40px;
-            border-radius: 24px;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.1);
-            border: 1px solid var(--border-color);
-            text-align: center;
-            width: 100%;
-            max-width: 400px;
-            animation: fadeIn 0.5s ease;
-        }
-        .auth-card i {
-            font-size: 3rem;
-            color: #6366f1;
-            margin-bottom: 20px;
+            background: var(--bg-header); padding: 40px; border-radius: 24px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.1); border: 1px solid var(--border-color);
+            text-align: center; width: 100%; max-width: 400px;
         }
         .auth-input {
-            width: 100%;
-            padding: 15px;
-            border-radius: 12px;
-            border: 1px solid var(--border-color);
-            background: var(--bg-main);
-            color: var(--text-main);
-            margin: 20px 0;
-            text-align: center;
-            font-size: 1.1rem;
-            outline: none;
-        }
-        .auth-input:focus {
-            border-color: #6366f1;
-            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+            width: 100%; padding: 15px; border-radius: 12px; border: 1px solid var(--border-color);
+            background: var(--bg-main); color: var(--text-main); margin: 20px 0;
+            text-align: center; font-size: 1.1rem; outline: none;
         }
     </style>
 </head>
@@ -168,368 +109,261 @@
     <!-- Auth Overlay -->
     <div id="config-auth-overlay">
         <div class="auth-card">
-            <i class="fas fa-user-shield"></i>
+            <i class="fas fa-user-shield" style="font-size:3rem; color:#6366f1; margin-bottom:20px;"></i>
             <h2 style="margin:0;">Acceso Restringido</h2>
             <p style="opacity: 0.7; margin-top: 10px;">Ingresa la clave de administrador para configurar el sistema.</p>
             <input type="password" id="admin-pass" class="auth-input" placeholder="••••••••" onkeydown="if(event.key === 'Enter') checkAdminAccess()">
-            <button class="btn" onclick="checkAdminAccess()" style="width:100%;">
-                <i class="fas fa-unlock" style="margin-right:8px;"></i> Acceder al Sistema
-            </button>
+            <button class="btn" onclick="checkAdminAccess()" style="width:100%;">Acceder al Sistema</button>
         </div>
     </div>
 
-    <!-- Main Content Container (Hidden by default) -->
     <div id="main-config-content" style="display: none; width: 100%; height: 100vh; flex-direction: row; opacity: 0; transition: opacity 0.5s ease;">
         <!-- Navbar -->
         <div id="navbar">
-            <div class="nav-item {{SHOW_BACKOFFICE_STYLE}}" title="Conversaciones" onclick="window.location.href='/backoffice'"><i class="fas fa-comment-dots"></i></div>
+            <div class="nav-item" title="Conversaciones" onclick="window.location.href='/backoffice'"><i class="fas fa-comment-dots"></i></div>
             <div class="nav-item" title="Dashboard" onclick="window.location.href='/dashboard'"><i class="fas fa-chart-line"></i></div>
-            <div class="nav-item" title="Conexión" onclick="window.location.href='/conexion'"><i class="fas fa-qrcode"></i></div>
-            <div class="nav-item" title="Webchat" onclick="window.location.href='/webchat'"><i class="fas fa-desktop"></i></div>
-            <div class="nav-item {{SHOW_CRM_STYLE}}" title="CRM" onclick="window.location.href='/crm'"><i class="fas fa-user-friends"></i></div>
-            <div class="nav-item badge-container {{SHOW_BACKOFFICE_STYLE}}" title="Contactos" onclick="toggleLeadsPanel(event)">
-                <i class="fas fa-address-book"></i>
-            </div>
-            <div class="nav-item badge-container {{SHOW_BACKOFFICE_STYLE}}" title="Tickets Pendientes" onclick="toggleTicketsPanel(event)">
-                <i class="fas fa-ticket-alt"></i>
-                <span class="badge" id="tickets-badge" style="display:none;">0</span>
-            </div>
             <div class="nav-item active" title="Configuración" onclick="window.location.href='/system-config'"><i class="fas fa-cog"></i></div>
-            
             <div style="flex:1"></div>
-
-            <div class="nav-item" title="Coexistencia Meta" id="nav-meta-btn" onclick="toggleMetaPanel(event)" style="color: #0668E1; font-size: 1.4rem;">
-                <i class="fas fa-infinity"></i>
-            </div>
-            <div class="nav-item" id="theme-toggle" title="Cambiar Tema" style="margin-bottom: 10px;"><i class="fas fa-moon"></i></div>
-            <div class="nav-item" onclick="logout()" title="Cerrar Sesión" style="color:#f87171;"><i class="fas fa-sign-out-alt"></i></div>
+            <div class="nav-item" id="theme-toggle"><i class="fas fa-moon"></i></div>
+            <div class="nav-item" onclick="logout()" style="color:#f87171;"><i class="fas fa-sign-out-alt"></i></div>
         </div>
 
-    <div class="crm-main-container">
-        <h1 class="animate-fade">⚙️ Configuración del Sistema</h1>
-        <p>Modifica los parámetros de configuración del bot. Estos cambios se aplicarán en Railway.</p>
-        
-        <form id="variables-form">
-            <!-- Grupo 1: OpenAI -->
-            <div class="section-header">
-                <h2>🤖 Configuración OpenAI</h2>
-            </div>
-            <div class="variables-grid">
-                <div class="variable-group">
-                    <h3>ASSISTANT_NAME</h3>
-                    <p class="description">Nombre público que usará el asistente.</p>
-                    <input type="text" name="ASSISTANT_NAME" id="ASSISTANT_NAME">
-                </div>
-                <div class="variable-group">
-                    <h3>ASSISTANT_ID</h3>
-                    <p class="description">ID del asistente 1 (Principal).</p>
-                    <input type="text" name="ASSISTANT_ID" id="ASSISTANT_ID">
-                </div>
-                <div class="variable-group">
-                    <h3>ASSISTANT_2</h3>
-                    <p class="description">ID del asistente 2.</p>
-                    <input type="text" name="ASSISTANT_2" id="ASSISTANT_2">
-                </div>
-                <div class="variable-group">
-                    <h3>ASSISTANT_3</h3>
-                    <p class="description">ID del asistente 3.</p>
-                    <input type="text" name="ASSISTANT_3" id="ASSISTANT_3">
-                </div>
-                <div class="variable-group">
-                    <h3>ASSISTANT_4</h3>
-                    <p class="description">ID del asistente 4.</p>
-                    <input type="text" name="ASSISTANT_4" id="ASSISTANT_4">
-                </div>
-                <div class="variable-group">
-                    <h3>ASSISTANT_5</h3>
-                    <p class="description">ID del asistente 5.</p>
-                    <input type="text" name="ASSISTANT_5" id="ASSISTANT_5">
-                </div>
-                <div class="variable-group">
-                    <h3>ASSISTANT_ID_IMG</h3>
-                    <p class="description">ID del asistente para procesamiento de imágenes.</p>
-                    <input type="text" name="ASSISTANT_ID_IMG" id="ASSISTANT_ID_IMG">
-                </div>
-                <div class="variable-group">
-                    <h3>OPENAI_API_KEY</h3>
-                    <p class="description">Clave de API de OpenAI principal.</p>
-                    <div class="input-wrapper">
-                        <input type="password" name="OPENAI_API_KEY" id="OPENAI_API_KEY">
-                        <button type="button" class="toggle-password" title="Mostrar/Ocultar">👁️</button>
+        <div class="crm-main-container">
+            <h1 class="animate-fade">⚙️ Configuración del Sistema</h1>
+            <p>Gestiona los parámetros operativos y de IA de tu bot en tiempo real.</p>
+            
+            <form id="variables-form">
+                <!-- SECCIÓN 1: ASISTENTES -->
+                <div class="section-header"><h2>🤖 Asistentes OpenAI (1-5)</h2></div>
+                <div class="variables-grid">
+                    <div class="variable-group">
+                        <h3>ASSISTANT_NAME</h3>
+                        <p class="description">Nombre público del bot.</p>
+                        <input type="text" name="ASSISTANT_NAME" id="ASSISTANT_NAME">
                     </div>
-                </div>
-                <div class="variable-group">
-                    <h3>OPENAI_API_KEY_IMG</h3>
-                    <p class="description">Clave de API de OpenAI para imágenes.</p>
-                    <div class="input-wrapper">
-                        <input type="password" name="OPENAI_API_KEY_IMG" id="OPENAI_API_KEY_IMG">
-                        <button type="button" class="toggle-password" title="Mostrar/Ocultar">👁️</button>
-                    </div>
-                </div>
-                <div class="variable-group">
-                    <h3>ID_GRUPO_RESUMEN</h3>
-                    <p class="description">ID del grupo principal para reportes de ventas.</p>
-                    <input type="text" name="ID_GRUPO_RESUMEN" id="ID_GRUPO_RESUMEN">
-                </div>
-                <div class="variable-group" style="grid-column: span 2;">
-                    <div class="trigger-card" onclick="togglePromptPanel()">
-                        <div>
-                            <h3 style="margin:0; color: #6366f1;"><i class="fas fa-terminal" style="margin-right:10px;"></i> ASSISTANT_PROMPT</h3>
-                            <p class="description" style="margin:5px 0 0 0;">Configuración de la lógica maestra e instrucciones del sistema.</p>
+                    <div class="variable-group">
+                        <h3>OPENAI_API_KEY</h3>
+                        <p class="description">API Key principal de OpenAI.</p>
+                        <div class="input-wrapper">
+                            <input type="password" name="OPENAI_API_KEY" id="OPENAI_API_KEY">
+                            <button type="button" class="toggle-password">👁️</button>
                         </div>
-                        <button type="button" class="btn" style="width:auto; padding: 10px 20px; background: #6366f1; font-size: 13px;">
-                            <i class="fas fa-expand-alt" style="margin-right:8px;"></i> Editar Instrucciones
-                        </button>
+                    </div>
+                    <div class="variable-group">
+                        <h3>ASSISTANT_ID (Principal)</h3>
+                        <input type="text" name="ASSISTANT_ID" id="ASSISTANT_ID">
+                    </div>
+                    <div class="variable-group">
+                        <h3>ASSISTANT_2</h3>
+                        <input type="text" name="ASSISTANT_2" id="ASSISTANT_2">
+                    </div>
+                    <div class="variable-group">
+                        <h3>ASSISTANT_3</h3>
+                        <input type="text" name="ASSISTANT_3" id="ASSISTANT_3">
+                    </div>
+                    <div class="variable-group">
+                        <h3>ASSISTANT_4</h3>
+                        <input type="text" name="ASSISTANT_4" id="ASSISTANT_4">
+                    </div>
+                    <div class="variable-group">
+                        <h3>ASSISTANT_5</h3>
+                        <input type="text" name="ASSISTANT_5" id="ASSISTANT_5">
+                    </div>
+                    <div class="variable-group" style="grid-column: span 2;">
+                        <div class="trigger-card" onclick="togglePromptPanel()">
+                            <div>
+                                <h3 style="margin:0; color: #6366f1;"><i class="fas fa-magic"></i> Lógica Maestra (Prompts)</h3>
+                                <p class="description">Configura las instrucciones para cada uno de tus 5 asistentes.</p>
+                            </div>
+                            <button type="button" class="btn" style="width:auto;">Editar Prompts</button>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Grupo Admin: Acceso -->
-            <div class="section-header">
-                <h2>👤 Usuario Admin (Acceso CRM/Backoffice)</h2>
-            </div>
-            <div class="variables-grid">
-                <div class="variable-group">
-                    <h3>ADMIN_USER</h3>
-                    <p class="description">Usuario de acceso al panel principal.</p>
-                    <input type="text" name="ADMIN_USER" id="ADMIN_USER" placeholder="Ej: admin">
-                </div>
-                <div class="variable-group">
-                    <h3>ADMIN_PASS</h3>
-                    <p class="description">Contraseña de acceso al panel principal.</p>
-                    <div class="input-wrapper">
-                        <input type="password" name="ADMIN_PASS" id="ADMIN_PASS" placeholder="••••••••">
-                        <button type="button" class="toggle-password" title="Mostrar/Ocultar">👁️</button>
+                <!-- SECCIÓN 2: IA AVANZADA -->
+                <div class="section-header"><h2>✨ IA Avanzada & Multimedia</h2></div>
+                <div class="variables-grid">
+                    <div class="variable-group">
+                        <h3>ASSISTANT_ID_IMG</h3>
+                        <p class="description">ID del asistente de Vision.</p>
+                        <input type="text" name="ASSISTANT_ID_IMG" id="ASSISTANT_ID_IMG">
+                    </div>
+                    <div class="variable-group">
+                        <h3>OPENAI_API_KEY_IMG</h3>
+                        <p class="description">API Key específica para Vision.</p>
+                        <div class="input-wrapper">
+                            <input type="password" name="OPENAI_API_KEY_IMG" id="OPENAI_API_KEY_IMG">
+                            <button type="button" class="toggle-password">👁️</button>
+                        </div>
+                    </div>
+                    <div class="variable-group">
+                        <h3>VECTOR_STORE_ID</h3>
+                        <input type="text" name="VECTOR_STORE_ID" id="VECTOR_STORE_ID">
+                    </div>
+                    <div class="variable-group">
+                        <h3>EXTRA_SYSTEM_PROMPT</h3>
+                        <p class="description">Reglas globales adicionales.</p>
+                        <textarea name="EXTRA_SYSTEM_PROMPT" id="EXTRA_SYSTEM_PROMPT"></textarea>
+                    </div>
+                    <div class="variable-group">
+                        <h3>DB_TABLES</h3>
+                        <p class="description">Definición de tablas SQL para la IA.</p>
+                        <textarea name="DB_TABLES" id="DB_TABLES"></textarea>
+                    </div>
+                    <div class="variable-group">
+                        <h3>OPENAI_TOOLS_DEFINITION</h3>
+                        <textarea name="OPENAI_TOOLS_DEFINITION" id="OPENAI_TOOLS_DEFINITION"></textarea>
                     </div>
                 </div>
-            </div>
-            
-            <div style="margin-top: -10px; margin-bottom: 30px; display: none;">
-                <span id="admin-sync-status" class="status-badge" style="font-size: 12px; margin-left: 10px;"></span>
-            </div>
 
-            <!-- Grupo 2: Mensajes y Cierre -->
-            <div class="section-header">
-                <h2>💬 Mensajes y Tiempos de Cierre</h2>
-            </div>
-            <div class="variables-grid">
-                <div class="variable-group">
-                    <h3>MSJCIERRE</h3>
-                    <p class="description">Mensaje de despedida por inactividad.</p>
-                    <textarea name="msjCierre" id="msjCierre"></textarea>
-                </div>
-                <div class="variable-group">
-                    <h3>TIMEOUTCIERRE</h3>
-                    <p class="description">Tiempo (min) para cerrar por inactividad.</p>
-                    <input type="number" name="timeOutCierre" id="timeOutCierre">
-                </div>
-                <div class="variable-group">
-                    <h3>MSJSEGUIMIENTO1</h3>
-                    <p class="description">Primer mensaje de seguimiento.</p>
-                    <textarea name="msjSeguimiento1" id="msjSeguimiento1"></textarea>
-                </div>
-                <div class="variable-group">
-                    <h3>MSJSEGUIMIENTO2</h3>
-                    <p class="description">Segundo mensaje de seguimiento.</p>
-                    <textarea name="msjSeguimiento2" id="msjSeguimiento2"></textarea>
-                </div>
-                <div class="variable-group">
-                    <h3>TIMEOUTSEGUIMIENTO2</h3>
-                    <p class="description">Tiempo (min) para el segundo seguimiento.</p>
-                    <input type="number" name="timeOutSeguimiento2" id="timeOutSeguimiento2">
-                </div>
-                <div class="variable-group">
-                    <h3>MSJSEGUIMIENTO3</h3>
-                    <p class="description">Tercer mensaje de seguimiento.</p>
-                    <textarea name="msjSeguimiento3" id="msjSeguimiento3"></textarea>
-                </div>
-                <div class="variable-group">
-                    <h3>TIMEOUTSEGUIMIENTO3</h3>
-                    <p class="description">Tiempo (min) para el tercer seguimiento.</p>
-                    <input type="number" name="timeOutSeguimiento3" id="timeOutSeguimiento3">
-                </div>
-            </div>
-
-            <!-- Grupo 3: Google -->
-            <div class="section-header">
-                <h2>🌐 Servicios de Google</h2>
-            </div>
-            <div class="variables-grid">
-                <div class="variable-group">
-                    <h3>GOOGLE_CLIENT_EMAIL</h3>
-                    <p class="description">Email de la cuenta de servicio.</p>
-                    <input type="text" name="GOOGLE_CLIENT_EMAIL" id="GOOGLE_CLIENT_EMAIL">
-                </div>
-                <div class="variable-group">
-                    <h3>GOOGLE_PRIVATE_KEY</h3>
-                    <p class="description">Clave privada (formato JSON string).</p>
-                    <div class="input-wrapper">
-                        <textarea name="GOOGLE_PRIVATE_KEY" id="GOOGLE_PRIVATE_KEY" class="hidden-content"></textarea>
-                        <button type="button" class="toggle-password" title="Mostrar/Ocultar">👁️</button>
+                <!-- SECCIÓN 3: MENSAJERÍA Y CIERRE -->
+                <div class="section-header"><h2>💬 Seguimiento & Inactividad</h2></div>
+                <div class="variables-grid">
+                    <div class="variable-group">
+                        <h3>msjCierre</h3>
+                        <textarea name="msjCierre" id="msjCierre"></textarea>
+                    </div>
+                    <div class="variable-group">
+                        <h3>timeOutCierre (min)</h3>
+                        <input type="number" name="timeOutCierre" id="timeOutCierre">
+                    </div>
+                    <div class="variable-group">
+                        <h3>msjSeguimiento 1</h3>
+                        <textarea name="msjSeguimiento1" id="msjSeguimiento1"></textarea>
+                    </div>
+                    <div class="variable-group">
+                        <h3>msjSeguimiento 2</h3>
+                        <textarea name="msjSeguimiento2" id="msjSeguimiento2"></textarea>
+                    </div>
+                    <div class="variable-group">
+                        <h3>timeOutSeguimiento 2</h3>
+                        <input type="number" name="timeOutSeguimiento2" id="timeOutSeguimiento2">
+                    </div>
+                    <div class="variable-group">
+                        <h3>msjSeguimiento 3</h3>
+                        <textarea name="msjSeguimiento3" id="msjSeguimiento3"></textarea>
+                    </div>
+                    <div class="variable-group">
+                        <h3>timeOutSeguimiento 3</h3>
+                        <input type="number" name="timeOutSeguimiento3" id="timeOutSeguimiento3">
                     </div>
                 </div>
-                <div class="variable-group">
-                    <h3>GOOGLE_MAPS_API_KEY</h3>
-                    <p class="description">API Key para Google Maps.</p>
-                    <div class="input-wrapper">
-                        <input type="password" name="GOOGLE_MAPS_API_KEY" id="GOOGLE_MAPS_API_KEY">
-                        <button type="button" class="toggle-password" title="Mostrar/Ocultar">👁️</button>
+
+                <!-- SECCIÓN 4: INTEGRACIONES -->
+                <div class="section-header"><h2>📊 Google & Grupos</h2></div>
+                <div class="variables-grid">
+                    <div class="variable-group">
+                        <h3>ID_GRUPO_RESUMEN (1)</h3>
+                        <input type="text" name="ID_GRUPO_RESUMEN" id="ID_GRUPO_RESUMEN">
+                    </div>
+                    <div class="variable-group">
+                        <h3>ID_GRUPO_RESUMEN (2)</h3>
+                        <input type="text" name="ID_GRUPO_RESUMEN_2" id="ID_GRUPO_RESUMEN_2">
+                    </div>
+                    <div class="variable-group">
+                        <h3>SHEET_ID_RESUMEN</h3>
+                        <input type="text" name="SHEET_ID_RESUMEN" id="SHEET_ID_RESUMEN">
+                    </div>
+                    <div class="variable-group">
+                        <h3>SHEET_ID_UPDATE</h3>
+                        <input type="text" name="SHEET_ID_UPDATE" id="SHEET_ID_UPDATE">
+                    </div>
+                    <div class="variable-group">
+                        <h3>DOCX_ID_UPDATE</h3>
+                        <input type="text" name="DOCX_ID_UPDATE" id="DOCX_ID_UPDATE">
+                    </div>
+                    <div class="variable-group">
+                        <h3>GOOGLE_CALENDAR_ID</h3>
+                        <input type="text" name="GOOGLE_CALENDAR_ID" id="GOOGLE_CALENDAR_ID">
                     </div>
                 </div>
-                <div class="variable-group">
-                    <h3>GOOGLE_CALENDAR_ID</h3>
-                    <p class="description">ID del calendario de Google.</p>
-                    <input type="text" name="GOOGLE_CALENDAR_ID" id="GOOGLE_CALENDAR_ID">
-                </div>
-                <div class="variable-group">
-                    <h3>SHEET_ID_UPDATE</h3>
-                    <p class="description">ID de la hoja de cálculo para actualizaciones.</p>
-                    <input type="text" name="SHEET_ID_UPDATE" id="SHEET_ID_UPDATE">
-                </div>
-                <div class="variable-group">
-                    <h3>SHEET_ID_RESUMEN</h3>
-                    <p class="description">ID de la hoja de cálculo para resúmenes.</p>
-                    <input type="text" name="SHEET_ID_RESUMEN" id="SHEET_ID_RESUMEN">
-                </div>
-                <div class="variable-group">
-                    <h3>DOCX_ID_UPDATE</h3>
-                    <p class="description">ID del documento para actualizaciones.</p>
-                    <input type="text" name="DOCX_ID_UPDATE" id="DOCX_ID_UPDATE">
-                </div>
-                <div class="variable-group">
-                    <h3>VECTOR_STORE_ID</h3>
-                    <p class="description">ID del Vector Store de OpenAI.</p>
-                    <input type="text" name="VECTOR_STORE_ID" id="VECTOR_STORE_ID">
-                </div>
-            </div>
 
-            <!-- Grupo 4: Supabase -->
-            <div class="section-header">
-                <h2>⚡ Supabase</h2>
-            </div>
-            <div class="variables-grid">
-                <div class="variable-group">
-                    <h3>SUPABASE_URL</h3>
-                    <p class="description">URL del proyecto Supabase.</p>
-                    <div class="input-wrapper">
-                        <input type="password" name="SUPABASE_URL" id="SUPABASE_URL">
-                        <button type="button" class="toggle-password" title="Mostrar/Ocultar">👁️</button>
+                <!-- SECCIÓN 5: ACCESO Y VISIBILIDAD -->
+                <div class="section-header"><h2>🧭 Acceso & Navegación</h2></div>
+                <div class="variables-grid">
+                    <div class="variable-group">
+                        <h3>ADMIN_USER</h3>
+                        <input type="text" name="ADMIN_USER" id="ADMIN_USER">
+                    </div>
+                    <div class="variable-group">
+                        <h3>ADMIN_PASS</h3>
+                        <input type="password" name="ADMIN_PASS" id="ADMIN_PASS">
+                    </div>
+                    <div class="variable-group">
+                        <h3>WHATSAPP_VISIBLE</h3>
+                        <select name="WHATSAPP_VISIBLE" id="WHATSAPP_VISIBLE">
+                            <option value="true">ON</option>
+                            <option value="false">OFF</option>
+                        </select>
+                    </div>
+                    <div class="variable-group">
+                        <h3>INSTAGRAM_VISIBLE</h3>
+                        <select name="INSTAGRAM_VISIBLE" id="INSTAGRAM_VISIBLE">
+                            <option value="true">ON</option>
+                            <option value="false">OFF</option>
+                        </select>
+                    </div>
+                    <div class="variable-group">
+                        <h3>MESSENGER_VISIBLE</h3>
+                        <select name="MESSENGER_VISIBLE" id="MESSENGER_VISIBLE">
+                            <option value="true">ON</option>
+                            <option value="false">OFF</option>
+                        </select>
+                    </div>
+                    <div class="variable-group">
+                        <h3>CRM_VISIBLE</h3>
+                        <select name="CRM_VISIBLE" id="CRM_VISIBLE">
+                            <option value="true">ON</option>
+                            <option value="false">OFF</option>
+                        </select>
                     </div>
                 </div>
-                <div class="variable-group">
-                    <h3>SUPABASE_KEY</h3>
-                    <p class="description">Service Role Key de Supabase.</p>
-                    <div class="input-wrapper">
-                        <input type="password" name="SUPABASE_KEY" id="SUPABASE_KEY">
-                        <button type="button" class="toggle-password" title="Mostrar/Ocultar">👁️</button>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Grupo 5: Navegación (Removido del form principal) -->
 
-            <!-- Railway Config (Ocultas) -->
-            <div class="variable-group" hidden>
-                <div class="input-wrapper">
-                    <input type="password" name="RAILWAY_TOKEN" id="RAILWAY_TOKEN">
-                </div>
-                <input type="text" name="RAILWAY_PROJECT_ID" id="RAILWAY_PROJECT_ID">
-                <input type="text" name="RAILWAY_ENVIRONMENT_ID" id="RAILWAY_ENVIRONMENT_ID">
-                <input type="text" name="RAILWAY_SERVICE_ID" id="RAILWAY_SERVICE_ID">
-            </div>
+                <!-- Hidden Prompts (to be saved in bulk) -->
+                <textarea name="ASSISTANT_PROMPT" id="ASSISTANT_PROMPT_VAL" hidden></textarea>
+                <textarea name="ASSISTANT_PROMPT_2" id="ASSISTANT_PROMPT_2_VAL" hidden></textarea>
+                <textarea name="ASSISTANT_PROMPT_3" id="ASSISTANT_PROMPT_3_VAL" hidden></textarea>
+                <textarea name="ASSISTANT_PROMPT_4" id="ASSISTANT_PROMPT_4_VAL" hidden></textarea>
+                <textarea name="ASSISTANT_PROMPT_5" id="ASSISTANT_PROMPT_5_VAL" hidden></textarea>
 
-
-            <!-- Grupo 5: Navegación (Hot-update - Sin atributo 'name' para evitar reinicio) -->
-            <div class="section-header">
-                <h2>🧭 Visibilidad de Navegación <span style="font-size: 0.7rem; background: #6366f1; color: white; padding: 2px 8px; border-radius: 10px; margin-left:10px; vertical-align: middle;">Hot-update</span></h2>
-            </div>
-            <div class="variables-grid" style="margin-bottom: 30px;">
-                <div class="variable-group">
-                    <h3>WHATSAPP_VISIBLE</h3>
-                    <p class="description">Mostrar o ocultar el acceso a WhatsApp.</p>
-                    <select id="WHATSAPP_VISIBLE_HOT" name="WHATSAPP_VISIBLE">
-                        <option value="true">ON - Visible</option>
-                        <option value="false">OFF - Oculto</option>
-                    </select>
-                </div>
-                <div class="variable-group">
-                    <h3>INSTAGRAM_VISIBLE</h3>
-                    <p class="description">Mostrar o ocultar el acceso a Instagram.</p>
-                    <select id="INSTAGRAM_VISIBLE_HOT" name="INSTAGRAM_VISIBLE">
-                        <option value="true">ON - Visible</option>
-                        <option value="false">OFF - Oculto</option>
-                    </select>
-                </div>
-                <div class="variable-group">
-                    <h3>MESSENGER_VISIBLE</h3>
-                    <p class="description">Mostrar o ocultar el acceso a Messenger.</p>
-                    <select id="MESSENGER_VISIBLE_HOT" name="MESSENGER_VISIBLE">
-                        <option value="true">ON - Visible</option>
-                        <option value="false">OFF - Oculto</option>
-                    </select>
-                </div>
-                <div class="variable-group">
-                    <h3>CRM_VISIBLE</h3>
-                    <p class="description">Mostrar o ocultar el acceso al CRM en el Nav.</p>
-                    <select id="CRM_VISIBLE_HOT" name="CRM_VISIBLE">
-                        <option value="true">ON - Visible</option>
-                        <option value="false">OFF - Oculto</option>
-                    </select>
-                </div>
-                <div style="grid-column: 1 / -1; display: none; justify-content: flex-end; align-items: center; gap: 15px; margin-top: 10px;">
-                    <div id="nav-sync-status" style="font-weight: 600; font-size: 14px;"></div>
-                </div>
-            </div>
-
-            <div class="actions">
-                <button type="button" id="cancel-btn" class="btn btn-secondary">Cancelar</button>
-                <button type="submit" id="update-btn" class="btn" style="background: #10b981; border:none;">
-                    <i class="fas fa-save" style="margin-right:8px;"></i> Guardar (Sin reiniciar)
-                </button>
-            </div>
-        </form>
-    </div>
-    <div id="panel-overlay" class="panel-overlay" onclick="togglePromptPanel()"></div>
-    <div id="prompt-panel" class="prompt-panel">
-        <div class="prompt-panel-header">
-            <div style="flex: 1;">
-                <h3 style="margin:0; font-size: 1.4rem;"><i class="fas fa-magic" style="color: #6366f1; margin-right:12px;"></i> Editor de Lógica Maestra</h3>
-                <p style="margin:5px 0 0 0; font-size: 0.85rem; opacity: 0.7;">Define el comportamiento y reglas del bot con precisión quirúrgica.</p>
-            </div>
-            <div style="margin-right: 20px;">
-                <select id="assistant-select" class="auth-input" style="margin:0; padding: 10px; width: 200px; font-size: 0.9rem;">
-                    <option value="1">Asistente 1 (Principal)</option>
-                    <option value="2">Asistente 2</option>
-                    <option value="3">Asistente 3</option>
-                    <option value="4">Asistente 4</option>
-                    <option value="5">Asistente 5</option>
-                </select>
-            </div>
-            <button class="btn-icon" onclick="togglePromptPanel()" style="font-size: 1.5rem;"><i class="fas fa-times"></i></button>
-        </div>
-        
-        <div class="prompt-panel-content">
-            <textarea id="ASSISTANT_PROMPT" name="ASSISTANT_PROMPT"></textarea>
-            
-            <div style="margin-top:24px; display:flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.03); padding: 15px; border-radius: 16px;">
-                <div style="display:flex; gap:12px;">
-                    <button type="button" id="sync-prompt-btn" class="btn btn-secondary" style="width: auto; font-size: 14px;">
-                        <i class="fas fa-sync"></i> Sincronizar desde OpenAI
-                    </button>
-                    <button type="button" id="save-prompt-hot-btn" class="btn" style="width: auto; font-size: 14px; background: #10b981; border:none; padding: 0 25px;">
+                <div class="actions" style="margin-top:40px; display:flex; justify-content:flex-end; gap:15px;">
+                    <button type="button" id="cancel-btn" class="btn btn-secondary">Cancelar</button>
+                    <button type="submit" id="update-btn" class="btn" style="background:#10b981; border:none; width:auto; padding: 0 40px;">
                         <i class="fas fa-save" style="margin-right:8px;"></i> Guardar (Sin reiniciar)
                     </button>
                 </div>
-                <div id="sync-status" style="font-weight: 600; font-size: 14px;"></div>
+            </form>
+        </div>
+
+        <div id="panel-overlay" class="panel-overlay" onclick="togglePromptPanel()"></div>
+        <div id="prompt-panel" class="prompt-panel">
+            <div class="prompt-panel-header">
+                <div style="flex: 1;">
+                    <h3 style="margin:0; font-size: 1.4rem;"><i class="fas fa-magic" style="color:#6366f1; margin-right:12px;"></i> Editor de Lógica Maestra</h3>
+                </div>
+                <div style="margin-right:20px;">
+                    <select id="assistant-select" class="auth-input" style="margin:0; padding:10px; width:200px; font-size:0.9rem;">
+                        <option value="1">Asistente 1 (Principal)</option>
+                        <option value="2">Asistente 2</option>
+                        <option value="3">Asistente 3</option>
+                        <option value="4">Asistente 4</option>
+                        <option value="5">Asistente 5</option>
+                    </select>
+                </div>
+                <button type="button" class="btn-icon" onclick="togglePromptPanel()"><i class="fas fa-times"></i></button>
             </div>
-            
-            <p style="margin-top:15px; font-size: 0.8rem; opacity: 0.5; text-align: center;">
-                <i class="fas fa-info-circle"></i> Al publicar, los cambios se envían a la base de datos y a OpenAI automáticamente.
-            </p>
+            <div class="prompt-panel-content">
+                <textarea id="prompt-editor-textarea"></textarea>
+                <div style="margin-top:24px; display:flex; justify-content: space-between; align-items:center; background:rgba(0,0,0,0.03); padding:15px; border-radius:16px;">
+                    <div style="display:flex; gap:12px;">
+                        <button type="button" id="sync-prompt-btn" class="btn btn-secondary" style="width:auto; font-size:14px;"><i class="fas fa-sync"></i> Sincronizar</button>
+                        <button type="button" id="save-prompt-hot-btn" class="btn" style="width:auto; font-size:14px; background:#10b981; border:none; padding:0 25px;"><i class="fas fa-save"></i> Guardar</button>
+                    </div>
+                    <div id="sync-status" style="font-weight:600; font-size:14px;"></div>
+                </div>
+            </div>
         </div>
     </div>
-
-    </div><!-- End main-config-content -->
 
     <script src="/js/crm-common.js"></script>
     <script src="/js/system-config.js"></script>

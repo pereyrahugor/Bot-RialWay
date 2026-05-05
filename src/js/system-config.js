@@ -22,7 +22,7 @@ window.checkAdminAccess = () => {
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('Unified System Config loaded');
+    console.log('Unified System Config with 5 Assistant Prompts loaded');
 
     if (localStorage.getItem('config_authenticated') === 'true') {
         const overlay = document.getElementById('config-auth-overlay');
@@ -35,7 +35,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     
     // Inicialización de CodeMirror
-    const promptTextarea = document.getElementById('ASSISTANT_PROMPT');
+    const promptTextarea = document.getElementById('prompt-editor-textarea');
     let editor = null;
     
     if (promptTextarea) {
@@ -49,7 +49,74 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.cmEditor = editor;
     }
 
-    // Lógica del Panel Lateral (Editor de Prompt)
+    const variablesForm = document.getElementById('variables-form');
+    const updateBtn = document.getElementById('update-btn');
+    const assistantSelect = document.getElementById('assistant-select');
+    let initialVariables = {};
+
+    // Cargar variables actuales
+    async function loadVariables() {
+        const token = localStorage.getItem('system_config_token');
+        try {
+            const response = await fetch(`/api/backoffice/config?token=${token}`);
+            if (response.status === 401) return logout();
+            const data = await response.json();
+            
+            if (data.success && data.variables) {
+                initialVariables = data.variables;
+                Object.keys(initialVariables).forEach(key => {
+                    // Mapeo especial para prompts
+                    let elementId = key;
+                    if (key === 'ASSISTANT_PROMPT') elementId = 'ASSISTANT_PROMPT_VAL';
+                    else if (key.startsWith('ASSISTANT_PROMPT_')) elementId = key + '_VAL';
+
+                    const input = document.getElementById(elementId) || document.getElementsByName(key)[0];
+                    if (input) {
+                        if (input.tagName === 'SELECT') {
+                            input.value = String(initialVariables[key]);
+                        } else {
+                            input.value = initialVariables[key];
+                        }
+                    }
+                });
+
+                // Cargar el prompt inicial en el editor
+                loadEditorFromHidden();
+            }
+        } catch (err) {
+            console.error('Error fetching variables:', err);
+        }
+    }
+
+    function loadEditorFromHidden() {
+        const index = assistantSelect.value;
+        const hiddenId = index === '1' ? 'ASSISTANT_PROMPT_VAL' : `ASSISTANT_PROMPT_${index}_VAL`;
+        const hiddenInput = document.getElementById(hiddenId);
+        if (hiddenInput && editor) {
+            editor.setValue(hiddenInput.value || '');
+        }
+    }
+
+    // Al cambiar el asistente en el select del panel
+    assistantSelect.addEventListener('change', () => {
+        loadEditorFromHidden();
+    });
+
+    // Cada vez que el editor cambie, actualizamos el input oculto correspondiente
+    if (editor) {
+        editor.on('change', () => {
+            const index = assistantSelect.value;
+            const hiddenId = index === '1' ? 'ASSISTANT_PROMPT_VAL' : `ASSISTANT_PROMPT_${index}_VAL`;
+            const hiddenInput = document.getElementById(hiddenId);
+            if (hiddenInput) {
+                hiddenInput.value = editor.getValue();
+            }
+        });
+    }
+
+    await loadVariables();
+
+    // Lógica del Panel Lateral
     window.togglePromptPanel = () => {
         const panel = document.getElementById('prompt-panel');
         const overlay = document.getElementById('panel-overlay');
@@ -64,73 +131,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
-    const cancelBtn = document.getElementById('cancel-btn');
-    const variablesForm = document.getElementById('variables-form');
-    const updateBtn = document.getElementById('update-btn');
-    
-    let initialVariables = {};
-
-    // Cargar variables actuales (Mezcladas DB + Railway)
-    async function loadVariables() {
-        const token = localStorage.getItem('system_config_token');
-        try {
-            // Usamos el nuevo endpoint que mezcla DB y Railway
-            const response = await fetch(`/api/backoffice/config?token=${token}`);
-            if (response.status === 401) return logout();
-            const data = await response.json();
-            
-            if (data.success && data.variables) {
-                initialVariables = data.variables;
-                Object.keys(initialVariables).forEach(key => {
-                    const input = document.getElementById(key) || document.getElementsByName(key)[0];
-                    if (input) {
-                        if (input.tagName === 'SELECT') {
-                            input.value = String(initialVariables[key]);
-                        } else {
-                            input.value = initialVariables[key];
-                        }
-                    }
-                });
-
-                if (initialVariables['ASSISTANT_PROMPT'] && editor) {
-                    editor.setValue(initialVariables['ASSISTANT_PROMPT']);
-                }
-            } else {
-                console.warn('No se pudieron cargar variables mezcladas, reintentando con railway/env...');
-                const resAlt = await fetch(`/api/variables?token=${token}`);
-                const dataAlt = await resAlt.json();
-                if (dataAlt.success) {
-                    initialVariables = dataAlt.variables;
-                    // ... mismo proceso ...
-                }
-            }
-        } catch (err) {
-            console.error('Error fetching variables:', err);
-        }
-    }
-
-    await loadVariables();
-
     // Lógica para mostrar/ocultar contraseñas
     document.querySelectorAll('.toggle-password').forEach(button => {
         button.addEventListener('click', () => {
             const wrapper = button.closest('.input-wrapper');
             const input = wrapper.querySelector('input, textarea');
-            if (input.tagName.toLowerCase() === 'input') {
-                const type = input.getAttribute('type') === 'password' ? 'text' : 'password';
-                input.setAttribute('type', type);
-            } else {
-                input.classList.toggle('hidden-content');
-            }
+            const type = input.getAttribute('type') === 'password' ? 'text' : 'password';
+            input.setAttribute('type', type);
             button.textContent = button.textContent === '👁️' ? '🙈' : '👁️';
         });
     });
 
-    cancelBtn.addEventListener('click', () => {
+    document.getElementById('cancel-btn').addEventListener('click', () => {
         window.location.href = '/dashboard';
     });
 
-    // Manejo del formulario UNIFICADO
+    // Manejo del formulario UNIFICADO (Bulk Save)
     variablesForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         
@@ -139,10 +155,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         let hasChanges = false;
         
         formData.forEach((value, key) => {
-            if (key === 'ASSISTANT_PROMPT' && editor) {
-                value = editor.getValue();
-            }
-
             // Solo guardamos si es diferente al inicial
             if (String(value) !== String(initialVariables[key] || '')) {
                 settingsToSave[key] = value;
@@ -170,12 +182,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             const data = await response.json();
 
             if (data.success) {
-                alert('✅ Configuración guardada correctamente (Hot-update aplicado).');
-                // Actualizar initialVariables
+                alert('✅ Configuración guardada correctamente.');
                 Object.assign(initialVariables, settingsToSave);
-                // Si se cambió el prompt, sincronizar con OpenAI
-                if (settingsToSave['ASSISTANT_PROMPT']) {
-                     await syncWithOpenAI(settingsToSave['ASSISTANT_PROMPT']);
+                
+                // Sincronizar prompts cambiados con OpenAI si corresponde
+                for (let i = 1; i <= 5; i++) {
+                    const key = i === 1 ? 'ASSISTANT_PROMPT' : `ASSISTANT_PROMPT_${i}`;
+                    if (settingsToSave[key]) {
+                        await syncPromptWithOpenAI(settingsToSave[key], String(i));
+                    }
                 }
             } else {
                 alert('❌ Error: ' + (data.error || 'Error desconocido'));
@@ -189,9 +204,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    async function syncWithOpenAI(prompt) {
-        const assistantSelect = document.getElementById('assistant-select');
-        const index = assistantSelect ? assistantSelect.value : '1';
+    async function syncPromptWithOpenAI(prompt, index) {
         try {
             const token = localStorage.getItem('system_config_token');
             await fetch(`/api/backoffice/update-prompt?token=${token}`, {
@@ -200,14 +213,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 body: JSON.stringify({ prompt, index })
             });
         } catch (e) {
-            console.error('Error syncing prompt with OpenAI:', e);
+            console.error(`Error syncing prompt ${index} with OpenAI:`, e);
         }
     }
 
-    // --- Sincronizar Prompt desde OpenAI ---
+    // --- Sincronizar Prompt desde OpenAI (Botón Individual) ---
     const syncBtn = document.getElementById('sync-prompt-btn');
     const syncStatus = document.getElementById('sync-status');
-    const assistantSelect = document.getElementById('assistant-select');
 
     syncBtn.addEventListener('click', async () => {
         const index = assistantSelect.value;
@@ -216,13 +228,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         const assistantId = assistantIdInput ? assistantIdInput.value : '';
 
         if (!assistantId) {
-            alert(`Debes ingresar un ID para el Asistente ${index} en la configuración para sincronizar.`);
+            alert(`Debes ingresar un ID para el Asistente ${index} para sincronizar.`);
             return;
         }
 
         syncBtn.disabled = true;
-        syncStatus.textContent = '⏳ Obteniendo instrucciones...';
-        syncStatus.style.color = 'inherit';
+        syncStatus.textContent = '⏳ Sincronizando...';
 
         try {
             const token = localStorage.getItem('system_config_token');
@@ -235,7 +246,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const data = await response.json();
             if (data.success) {
                 if (editor) editor.setValue(data.instructions);
-                syncStatus.textContent = '✅ Sincronizado desde OpenAI.';
+                syncStatus.textContent = '✅ Sincronizado.';
                 syncStatus.style.color = '#10b981';
             } else {
                 alert('Error: ' + data.error);
@@ -247,27 +258,29 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // Guardar Prompt individualmente (desde el panel lateral)
+    // Guardar Prompt individualmente
     const hotSaveBtn = document.getElementById('save-prompt-hot-btn');
     hotSaveBtn.addEventListener('click', async () => {
-        const prompt = editor ? editor.getValue() : promptTextarea.value;
+        const prompt = editor.getValue();
         const index = assistantSelect.value;
         hotSaveBtn.disabled = true;
-        syncStatus.textContent = `⏳ Guardando Asistente ${index}...`;
+        syncStatus.textContent = `⏳ Guardando...`;
 
         try {
             const token = localStorage.getItem('system_config_token');
-            const response = await fetch(`/api/backoffice/update-prompt?token=${token}`, {
+            const settingKey = index === '1' ? 'ASSISTANT_PROMPT' : `ASSISTANT_PROMPT_${index}`;
+            
+            const response = await fetch(`/api/backoffice/save-settings-bulk?token=${token}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt, index })
+                body: JSON.stringify({ settings: { [settingKey]: prompt } })
             });
 
             const data = await response.json();
             if (data.success) {
-                syncStatus.textContent = `✅ Guardado correctamente.`;
+                await syncPromptWithOpenAI(prompt, index);
+                syncStatus.textContent = `✅ Guardado.`;
                 syncStatus.style.color = '#10b981';
-                const settingKey = index === '1' ? 'ASSISTANT_PROMPT' : `ASSISTANT_PROMPT_${index}`;
                 initialVariables[settingKey] = prompt;
             } else {
                 alert('Error: ' + data.error);
@@ -278,31 +291,4 @@ document.addEventListener('DOMContentLoaded', async () => {
             hotSaveBtn.disabled = false;
         }
     });
-
-    // Cargar Prompt al cambiar de asistente en el editor
-    async function loadAssistantPrompt() {
-        try {
-            const index = assistantSelect.value || '1';
-            const token = localStorage.getItem('system_config_token');
-            const response = await fetch(`/api/backoffice/get-prompt?index=${index}&token=${token}`);
-            const data = await response.json();
-            if (data.success && data.prompt) {
-                if (editor) editor.setValue(data.prompt);
-                const settingKey = index === '1' ? 'ASSISTANT_PROMPT' : `ASSISTANT_PROMPT_${index}`;
-                initialVariables[settingKey] = data.prompt;
-            } else if (editor) {
-                editor.setValue('');
-            }
-        } catch (err) {
-            console.error('Error loading stored prompt:', err);
-        }
-    }
-    
-    assistantSelect.addEventListener('change', async () => {
-        syncStatus.textContent = '⏳ Cargando...';
-        await loadAssistantPrompt();
-        syncStatus.textContent = '';
-    });
-    
-    await loadAssistantPrompt();
 });

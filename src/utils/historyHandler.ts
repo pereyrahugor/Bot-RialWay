@@ -49,10 +49,34 @@ export class HistoryHandler {
     static readonly PROJECT_ID = process.env.RAILWAY_PROJECT_ID || "default_project";
     static initialized = false;
 
+    static getSupabase() {
+        return supabase;
+    }
+
+    // Listas de variables para control de UI y persistencia
+    static readonly EDITABLE_KEYS = [
+        'ASSISTANT_NAME', 'ASSISTANT_ID', 'ASSISTANT_2', 'ASSISTANT_3', 'ASSISTANT_4', 'ASSISTANT_5',
+        'ASSISTANT_PROMPT', 'ASSISTANT_PROMPT_2', 'ASSISTANT_PROMPT_3', 'ASSISTANT_PROMPT_4', 'ASSISTANT_PROMPT_5',
+        'OPENAI_API_KEY', 'ASSISTANT_ID_IMG', 'OPENAI_API_KEY_IMG', 'VECTOR_STORE_ID', 'EXTRA_SYSTEM_PROMPT',
+        'DB_TABLES', 'OPENAI_TOOLS_DEFINITION', 'msjCierre', 'msjSeguimiento1', 'msjSeguimiento2', 'msjSeguimiento3',
+        'timeOutCierre', 'timeOutSeguimiento2', 'timeOutSeguimiento3', 'ID_GRUPO_RESUMEN', 'ID_GRUPO_RESUMEN_2',
+        'SHEET_ID_RESUMEN', 'SHEET_ID_UPDATE', 'DOCX_ID_UPDATE', 'GOOGLE_CALENDAR_ID',
+        'ADMIN_USER', 'ADMIN_PASS', 'WHATSAPP_VISIBLE', 'INSTAGRAM_VISIBLE', 'MESSENGER_VISIBLE', 'CRM_VISIBLE'
+    ];
+
+    static readonly FIXED_KEYS = [
+        'SUPABASE_URL', 'SUPABASE_KEY', 'RAILWAY_TOKEN', 'BACKOFFICE_TOKEN', 
+        'GOOGLE_PRIVATE_KEY', 'GOOGLE_CLIENT_EMAIL', 'GOOGLE_MAPS_API_KEY',
+        'META_APP_ID', 'META_CONFIG_ID', 'META_APP_SECRET'
+    ];
+
     static async initDatabase() {
         if (this.initialized) return;
         console.log(`[HistoryHandler] Initializing DB for Project: ${this.PROJECT_IDENTIFIER}`);
         if (!supabase) return;
+
+        // 0. Bootstrap de configuración
+        await this.bootstrapConfig();
 
         console.log('🔍 [HistoryHandler] Verificando tablas de historial...');
 
@@ -1337,7 +1361,121 @@ export class HistoryHandler {
         if (dbValue !== null && dbValue !== undefined && dbValue !== '') {
             return dbValue;
         }
-        return process.env[key] || null;
+
+        // Si no está en DB, lo tomamos de Railway (env)
+        const envValue = process.env[key] || null;
+        
+        // Si lo encontramos en Railway pero no estaba en DB, lo persistimos para el futuro
+        // (Esto cumple la regla: "en caso de que el repositorio ya exista pero le falte algunas variables...")
+        if (envValue && !projectId) {
+            console.log(`📡 [HistoryHandler] Auto-persistiendo variable faltante en DB: ${key}`);
+            await this.saveSetting(key, envValue);
+        }
+
+        return envValue;
+    }
+
+    /**
+     * Lógica de inicialización de configuración (Bootstrap)
+     */
+    private static async bootstrapConfig() {
+        try {
+            const currentProjectId = this.PROJECT_IDENTIFIER;
+            
+            // 1. Verificar si el proyecto existe
+            const { data: project } = await supabase
+                .from('projects')
+                .select('id')
+                .eq('id', currentProjectId)
+                .maybeSingle();
+
+            if (!project) {
+                console.log(`🆕 [Bootstrap] Proyecto ${currentProjectId} no encontrado. Creando e inicializando desde defaults...`);
+                
+                // Crear el proyecto
+                await supabase.from('projects').insert({ 
+                    id: currentProjectId, 
+                    name: process.env.RAILWAY_SERVICE_NAME || 'Bot-RialWay'
+                });
+
+                // Leer .env defaul
+                const fs = await import('fs');
+                const path = await import('path');
+                const defaultPath = path.join(process.cwd(), '.env defaul');
+                
+                if (fs.existsSync(defaultPath)) {
+                    const content = fs.readFileSync(defaultPath, 'utf-8');
+                    const lines = content.split('\n');
+                    const settingsToInsert: any[] = [];
+                    
+                    for (const line of lines) {
+                        const cleanLine = line.trim();
+                        if (!cleanLine || cleanLine.startsWith('#')) continue;
+                        
+                        const match = cleanLine.match(/^([^=]+)=(.*)$/);
+                        if (match) {
+                            let key = match[1].trim();
+                            let value = match[2].trim();
+                            
+                            // Limpiar comillas
+                            if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+                                value = value.slice(1, -1);
+                            }
+                            
+                            // Reemplazar saltos de línea literales \\n por \n reales si es necesario (o dejar para el handler)
+                            
+                            settingsToInsert.push({
+                                project_id: currentProjectId,
+                                key,
+                                value,
+                                updated_at: new Date().toISOString()
+                            });
+                        }
+                    }
+
+                    if (settingsToInsert.length > 0) {
+                        // Asegurar valores por defecto para visibilidad si no están en el archivo
+                        const defaults = [
+                            { key: 'WHATSAPP_VISIBLE', value: 'true' },
+                            { key: 'INSTAGRAM_VISIBLE', value: 'false' },
+                            { key: 'MESSENGER_VISIBLE', value: 'false' },
+                            { key: 'CRM_VISIBLE', value: 'false' },
+                            { key: 'ADMIN_USER', value: '' },
+                            { key: 'ADMIN_PASS', value: '' }
+                        ];
+
+                        for (const d of defaults) {
+                            if (!settingsToInsert.find(s => s.key === d.key)) {
+                                settingsToInsert.push({
+                                    project_id: currentProjectId,
+                                    key: d.key,
+                                    value: d.value,
+                                    updated_at: new Date().toISOString()
+                                });
+                            }
+                        }
+
+                        console.log(`📥 [Bootstrap] Insertando ${settingsToInsert.length} variables por defecto...`);
+                        await supabase.from('settings').upsert(settingsToInsert, { onConflict: 'project_id,key' });
+                    }
+                }
+            } else {
+                // El proyecto ya existe, getConfig se encargará de rellenar variables faltantes desde Railway sobre la marcha
+                console.log(`✅ [Bootstrap] Proyecto ${currentProjectId} ya registrado.`);
+            }
+
+            // Aseguramos que el proyecto "default" también tenga estas variables si se requiere
+            // (según el prompt: "creemos un prjecto con id defaul para guardas estas")
+            if (currentProjectId !== 'default') {
+                 const { data: defaultProj } = await supabase.from('projects').select('id').eq('id', 'default').maybeSingle();
+                 if (!defaultProj) {
+                     await supabase.from('projects').insert({ id: 'default', name: 'Default Templates' });
+                 }
+            }
+
+        } catch (err) {
+            console.error('❌ [Bootstrap] Error:', err);
+        }
     }
 
     // --- User Management ---
