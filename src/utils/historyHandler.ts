@@ -1487,11 +1487,10 @@ export class HistoryHandler {
                         console.log(`📥 [Bootstrap] Insertando ${settingsToInsert.length} variables por defecto...`);
                         await supabase.from('settings').upsert(settingsToInsert, { onConflict: 'project_id,key' });
                     }
+                } else {
+                    // El proyecto ya existe, getConfig se encargará de rellenar variables faltantes desde Railway sobre la marcha
+                    console.log(`✅ [Bootstrap] Proyecto ${currentProjectId} ya registrado.`);
                 }
-            } else {
-                // El proyecto ya existe, getConfig se encargará de rellenar variables faltantes desde Railway sobre la marcha
-                console.log(`✅ [Bootstrap] Proyecto ${currentProjectId} ya registrado.`);
-            }
 
             // Aseguramos que el proyecto "default" también tenga estas variables si se requiere
             // (según el prompt: "creemos un prjecto con id defaul para guardas estas")
