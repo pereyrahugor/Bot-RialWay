@@ -1320,12 +1320,24 @@ export class HistoryHandler {
             .select('value')
             .eq('project_id', targetProjectId)
             .eq('key', key)
-            .single();
+            .maybeSingle();
 
         if (error && error.code !== 'PGRST116') {
             console.error(`❌ [HistoryHandler] Error obteniendo setting ${key}:`, error);
         }
         return data ? data.value : null;
+    }
+
+    /**
+     * Helper de configuración dinámica (Hot-update).
+     * Busca primero en la base de datos (settings) y si no existe, recurre a process.env.
+     */
+    static async getConfig(key: string, projectId: string | null = null): Promise<string | null> {
+        const dbValue = await this.getSetting(key, projectId);
+        if (dbValue !== null && dbValue !== undefined && dbValue !== '') {
+            return dbValue;
+        }
+        return process.env[key] || null;
     }
 
     // --- User Management ---

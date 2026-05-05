@@ -1,9 +1,43 @@
 import OpenAI from "openai";
-// Borramos importación estática circular: import { HistoryHandler } from "./historyHandler";
 import { getArgentinaDatetimeString } from "./ArgentinaTime";
 import { executeDbQuery } from "./dbHandler";
 
-export const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
+// Instancias perezosas para Hot-update
+let _openai: OpenAI | null = null;
+let _openaiVision: OpenAI | null = null;
+let _lastKey: string | null = null;
+let _lastVisionKey: string | null = null;
+
+/**
+ * Obtiene la instancia de OpenAI principal de forma dinámica.
+ */
+export async function getOpenAI(): Promise<OpenAI | null> {
+    const { HistoryHandler } = await import("./historyHandler");
+    const key = await HistoryHandler.getConfig('OPENAI_API_KEY');
+    
+    if (!key) return null;
+    if (key !== _lastKey) {
+        console.log(`📡 [OpenAI] Inicializando nueva instancia con Hot-update Key: ${key.slice(0, 8)}...`);
+        _openai = new OpenAI({ apiKey: key });
+        _lastKey = key;
+    }
+    return _openai;
+}
+
+/**
+ * Obtiene la instancia de OpenAI para visión/imágenes de forma dinámica.
+ */
+export async function getOpenAIVision(): Promise<OpenAI | null> {
+    const { HistoryHandler } = await import("./historyHandler");
+    const key = await HistoryHandler.getConfig('OPENAI_API_KEY_IMG');
+    
+    if (!key) return await getOpenAI(); // Fallback al principal
+    if (key !== _lastVisionKey) {
+        _openaiVision = new OpenAI({ apiKey: key });
+        _lastVisionKey = key;
+    }
+    return _openaiVision;
+}
 
 /**
  * Limpia y parsea un string JSON que puede venir envuelto en comillas literales (común en variables de entorno).
@@ -23,10 +57,12 @@ function safeParseJson(jsonStr: string | undefined): any {
  * Esto evita tener que configurar manualmente el Dashboard.
  */
 export async function syncAssistantTools(assistantId: string): Promise<boolean> {
+    const openai = await getOpenAI();
     if (!openai || !assistantId) return false;
 
     try {
-        const toolsJson = process.env.OPENAI_TOOLS_DEFINITION;
+        const { HistoryHandler } = await import("./historyHandler");
+        const toolsJson = await HistoryHandler.getConfig('OPENAI_TOOLS_DEFINITION');
         if (!toolsJson) {
             console.log("[openaiHelper] No se detectó OPENAI_TOOLS_DEFINITION. Omitiendo sincronización de tools.");
             return false;
@@ -48,6 +84,7 @@ export async function syncAssistantTools(assistantId: string): Promise<boolean> 
 }
 
 export const askWithFunctions = async (assistantId: string, message: string, state: any, userId: string = 'unknown', forceDb: boolean = false, projectId: string | null = null, directMode: boolean = true): Promise<string> => {
+    const openai = await getOpenAI();
     if (!openai) {
         console.warn("⚠️ OPENAI_API_KEY no detectada. El asistente de IA está desactivado.");
         return "Lo siento, el asistente de IA no está configurado actualmente.";
@@ -68,7 +105,7 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
         let systemPrompt = await HistoryHandler.getSetting(`ASSISTANT_PROMPT_${assistantId}`, projectId);
         if (!systemPrompt) {
             const dbPrompt = await HistoryHandler.getSetting('ASSISTANT_PROMPT', projectId);
-            systemPrompt = dbPrompt || process.env.ASSISTANT_PROMPT || "Eres un asistente servicial.";
+            systemPrompt = dbPrompt || await HistoryHandler.getConfig('ASSISTANT_PROMPT') || "Eres un asistente servicial.";
         }
         
         // Filtrar mensajes válidos y formatear para OpenAI
@@ -116,7 +153,7 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
 
         // 3. Preparar Herramientas (Tools)
         let tools: any[] = [];
-        const toolsJson = process.env.OPENAI_TOOLS_DEFINITION;
+        const toolsJson = await HistoryHandler.getConfig('OPENAI_TOOLS_DEFINITION');
         if (toolsJson) {
             try {
                 tools = safeParseJson(toolsJson);
@@ -132,8 +169,9 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
 
         while (continueLoop && attempts < 10) {
             attempts++;
+            const openaiModel = await HistoryHandler.getConfig('OPENAI_MODEL') || "gpt-4o";
             const completion = await openai.chat.completions.create({
-                model: process.env.OPENAI_MODEL || "gpt-4o",
+                model: openaiModel,
                 messages: messages,
                 tools: tools.length > 0 ? tools : undefined,
                 tool_choice: tools.length > 0 ? "auto" : undefined,
@@ -155,7 +193,8 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
                     let toolResult = "";
                     if (funcName === "query_database") {
                         const { tabla, dato } = args as any;
-                        const allowedTables = (process.env.DB_TABLES || "").split(',').map(t => t.trim());
+                        const dbTablesStr = await HistoryHandler.getConfig('DB_TABLES') || "";
+                        const allowedTables = dbTablesStr.split(',').map(t => t.trim());
 
                         if (!allowedTables.includes(tabla)) {
                             toolResult = JSON.stringify({ error: `Acceso denegado a la tabla ${tabla}.`, success: false });

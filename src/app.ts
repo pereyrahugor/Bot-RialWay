@@ -29,7 +29,9 @@ import { registerProviderEvents, hasActiveSession } from "./providers/provider.m
 import { startHumanInactivityWorker } from "./workers/humanInactivity.worker";
 import { AiManager } from "./utils/ai.manager";
 import { registerDashboardRoutes } from "./routes/dashboard.routes";
-import { syncAssistantTools } from "./utils/openaiHelper";
+import { syncAssistantTools, getOpenAI, getOpenAIVision } from "./utils/openaiHelper";
+import { discoverMetaIds } from "./utils/metaDiscovery";
+import { RailwayApi } from "./Api-RailWay/Railway";
 import { smartBodyParser, compatibilityLayer, rootRedirect } from "./middleware/global";
 import { backofficeAuth } from "./middleware/auth";
 import bodyParser from 'body-parser';
@@ -52,10 +54,9 @@ export let groupProvider: any;
 export let errorReporter: any;
 export let aiManagerInstance: AiManager;
 const webChatManager = new WebChatManager();
-const openaiMain = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
-const openaiVision = process.env.OPENAI_API_KEY_IMG ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY_IMG }) : null;
-const ASSISTANT_ID = process.env.ASSISTANT_ID || "";
-const PORT = process.env.PORT || 8080;
+
+// Las instancias de OpenAI se resuelven dinámicamente vía openaiHelper
+// const PORT = process.env.PORT || 8080;
 
 // Multer config
 const upload = multer({ 
@@ -90,15 +91,17 @@ function registerSafeErrorHandlers() {
 const main = async () => {
     // 1. Storage cleanup and session restoration
     await HistoryHandler.initDatabase();
+    const PORT = process.env.PORT || 8080;
     
     // Sincronizar herramientas con OpenAI Assistant
+    const ASSISTANT_ID = await HistoryHandler.getConfig('ASSISTANT_ID');
     if (ASSISTANT_ID) {
         await syncAssistantTools(ASSISTANT_ID);
     }
     
     // Usar un nombre de sesión consistente para evitar desajustes entre SessionSync y el Provider
     // Sanitizar para evitar caracteres inválidos en rutas (como *)
-    const rawSessionName = process.env.BOT_NAME || process.env.ASSISTANT_NAME || 'bot';
+    const rawSessionName = await HistoryHandler.getConfig('BOT_NAME') || await HistoryHandler.getConfig('ASSISTANT_NAME') || 'bot';
     const SESSION_NAME = rawSessionName.replace(/[^a-zA-Z0-9_-]/g, '_');
     
     // await restoreSessionFromDb(SESSION_NAME);
@@ -120,7 +123,6 @@ const main = async () => {
     if (metaToken && (!metaPhoneId || metaPhoneId === 'PENDING' || !metaWabaId || metaWabaId === 'PENDING')) {
         console.log('📡 [App] Detectada configuración de Meta parcial. Iniciando recuperación automática de IDs...');
         try {
-            const { discoverMetaIds } = await import("./utils/metaDiscovery");
             const discovery = await discoverMetaIds(metaToken);
             if (discovery && discovery.data?.phoneNumberId && discovery.data?.wabaId) {
                 console.log(`✅ [App] Recuperación exitosa: PhoneID=${discovery.data.phoneNumberId}, WABAID=${discovery.data.wabaId}`);
@@ -197,7 +199,8 @@ const main = async () => {
     }
 
     // 4. Initialize Data and Error Reporter
-    errorReporter = new ErrorReporter(adapterProvider, process.env.ID_GRUPO_RESUMEN || "");
+    const groupResumenId = await HistoryHandler.getConfig('ID_GRUPO_RESUMEN') || "";
+    errorReporter = new ErrorReporter(adapterProvider, groupResumenId);
     await updateMain();
 
     const app = adapterProvider.server;
@@ -217,7 +220,8 @@ const main = async () => {
                 
                 return backofficeAuth(req, res, async () => {
                     const contentType = req.headers['content-type'] || '';
-                    const deps: BackofficeDependencies = { adapterProvider, groupProvider, HistoryHandler, openaiMain, upload };
+                    const openaiMainDynamic = await getOpenAI();
+                    const deps: BackofficeDependencies = { adapterProvider, groupProvider, HistoryHandler, openaiMain: openaiMainDynamic, upload };
 
                     // Sincronizar Meta Provider antes de procesar si es necesario
                     const metaOnboarding = await HistoryHandler.getMetaOnboardingData();
@@ -273,33 +277,32 @@ const main = async () => {
         app.use(compatibilityLayer);
         app.use(rootRedirect);
         
+        const openaiMainDynamic = await getOpenAI();
+
         registerBackofficeRoutes(app, {
             adapterProvider,
             groupProvider,
             HistoryHandler,
-            openaiMain,
+            openaiMain: openaiMainDynamic,
             upload
         });
         registerDashboardRoutes(app);
     }
 
     // 6. Initialize AI Manager and flows
-    const aiManager = new AiManager(openaiMain, ASSISTANT_ID, errorReporter, {
-        welcomeFlowTxt, welcomeFlowVoice, welcomeFlowButton
-    });
-    aiManagerInstance = aiManager;
+    const flows = { welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowVideo, welcomeFlowDoc, locationFlow, idleFlow, welcomeFlowButton };
+    const openaiMain = await getOpenAI();
+    const assistantIdValue = await HistoryHandler.getConfig('ASSISTANT_ID') || "";
+
+    aiManagerInstance = new AiManager(openaiMain, assistantIdValue, errorReporter, flows);
 
     registerProcessCallback(async (item: any) => {
         const { ctx, flowDynamic, state, provider, gotoFlow } = item;
-        await aiManager.processUserMessage(ctx, { flowDynamic, state, provider, gotoFlow });
+        await aiManagerInstance.processUserMessage(ctx, { flowDynamic, state, provider, gotoFlow });
     });
 
-    // 7. Initialize Bot Instance
-    const adapterFlow = createFlow([
-        welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, 
-        welcomeFlowVideo, welcomeFlowDoc, locationFlow, 
-        idleFlow, welcomeFlowButton
-    ]);
+    // 7. Create flow and bot instance
+    const adapterFlow = createFlow([welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowVideo, welcomeFlowDoc, locationFlow, idleFlow, welcomeFlowButton]);
     const adapterDB = new MemoryDB();
 
     const { httpServer } = await createBot({
@@ -318,8 +321,9 @@ const main = async () => {
         app.use(smartBodyParser);
 
         // 9. Register Other Routes
-        registerRailwayRoutes(app, { RailwayApi: (await import("./Api-RailWay/Railway")).RailwayApi });
-        registerWebchatRoutes(app, { webChatManager, openaiVision, aiManager });
+        registerRailwayRoutes(app, { RailwayApi });
+        const openaiVision = await getOpenAIVision();
+        registerWebchatRoutes(app, { webChatManager, openaiVision, aiManager: aiManagerInstance });
         registerStaticRoutes(app, { __dirname });
 
         // API Health & Info
@@ -352,7 +356,7 @@ const main = async () => {
         setTimeout(() => {
             if (app?.server) {
                 console.log("✅ [Socket.IO] app.server detected, initializing...");
-                initSocketIO(app.server, { processUserMessage: aiManager.processUserMessage });
+                initSocketIO(app.server, { processUserMessage: aiManagerInstance.processUserMessage });
             }
         }, 1000);
     } catch (err) {

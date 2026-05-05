@@ -9,30 +9,36 @@ import { updateMain } from "../addModule/updateMain";
 
 export class AiManager {
     private userTimeouts = new Map<string, NodeJS.Timeout>();
-    private readonly TIMEOUT_MS = 60000;
-
-    // IDs genéricos de asistentes desde variables de entorno
-    public readonly ASSISTANT_MAP: Record<string, string | undefined> = {
-        asistente1: process.env.ASSISTANT_1 || process.env.ASSISTANT_ID, 
-        asistente2: process.env.ASSISTANT_2,
-        asistente3: process.env.ASSISTANT_3,
-        asistente4: process.env.ASSISTANT_4,
-        asistente5: process.env.ASSISTANT_5,
-    };
+    private readonly DEFAULT_TIMEOUT_MS = 60000;
 
     constructor(
-        private openaiMain: any,
-        private assistantId: string, // Mantenemos por compatibilidad, pero usaremos ASSISTANT_MAP
+        private openaiMain: any, // Objeto OpenAI (ahora dinámico vía openaiHelper)
+        private assistantId: string, // Mantenemos por compatibilidad
         private errorReporter: any,
-        private flows: any // Objeto con welcomeFlowTxt, welcomeFlowVoice, etc.
+        private flows: any
     ) {}
+
+    /**
+     * Resuelve el ASSISTANT_MAP de forma dinámica para Hot-update.
+     */
+    private async getAssistantMap(projectId: string | null = null): Promise<Record<string, string | undefined>> {
+        const assistant1 = await HistoryHandler.getConfig('ASSISTANT_1', projectId) || await HistoryHandler.getConfig('ASSISTANT_ID', projectId);
+        return {
+            asistente1: assistant1 || this.assistantId,
+            asistente2: await HistoryHandler.getConfig('ASSISTANT_2', projectId) || undefined,
+            asistente3: await HistoryHandler.getConfig('ASSISTANT_3', projectId) || undefined,
+            asistente4: await HistoryHandler.getConfig('ASSISTANT_4', projectId) || undefined,
+            asistente5: await HistoryHandler.getConfig('ASSISTANT_5', projectId) || undefined,
+        };
+    }
 
     /**
      * Retorna el Assistant ID asignado al usuario
      */
     public async getAssignedAssistantId(userId: string, forcedProjectId?: string): Promise<string> {
         const assigned = await HistoryHandler.getAssignedAgent(userId, forcedProjectId) || 'asistente1';
-        return this.ASSISTANT_MAP[assigned] || this.assistantId;
+        const map = await this.getAssistantMap(forcedProjectId || null);
+        return map[assigned] || this.assistantId;
     }
 
     public getAssistantResponse = async (assistantId: string, message: string, state: any, fallbackMessage: string | undefined, userId: string, thread_id: string | null = null, projectId: string | null = null) => {
@@ -44,11 +50,11 @@ export class AiManager {
         return new Promise((resolve, reject) => {
             const timeoutId = setTimeout(() => {
                 console.warn("⏱ Timeout de 60s alcanzado en la comunicación con OpenAI.");
-            }, this.TIMEOUT_MS);
+            }, this.DEFAULT_TIMEOUT_MS);
             this.userTimeouts.set(userId, timeoutId);
 
             const isWhatsApp = userId && userId.includes('@s.whatsapp.net');
-            const targetProjectId = projectId || process.env.RAILWAY_PROJECT_ID;
+            const targetProjectId = projectId || HistoryHandler.PROJECT_IDENTIFIER;
 
             safeToAsk(assistantId, message, state, userId, this.errorReporter, 5, isWhatsApp, targetProjectId, false)
                 .then(result => {
@@ -96,9 +102,10 @@ export class AiManager {
     public processUserMessage = async (ctx: any, { flowDynamic, state, provider, gotoFlow }: any) => {
         // Ruteo Multitenant Dinámico
         const botPhoneNumber = provider?.phoneNumber || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
-        const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || process.env.RAILWAY_PROJECT_ID;
+        const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || HistoryHandler.PROJECT_IDENTIFIER;
         const assigned = await HistoryHandler.getAssignedAgent(ctx.from, dynamicProjectId);
-        const assignedAssistantId = this.ASSISTANT_MAP[assigned] || this.assistantId;
+        const assistantMap = await this.getAssistantMap(dynamicProjectId);
+        const assignedAssistantId = assistantMap[assigned] || this.assistantId;
 
         // Guardar contexto en el state para uso en flujos (como idleFlow o reconectionFlow)
         if (state && state.update) {
@@ -142,7 +149,7 @@ export class AiManager {
             }
 
             // Filtro de Eco (Mejorado para BSUID)
-            const botNumber = (process.env.YCLOUD_WABA_NUMBER || '').replace(/\D/g, '');
+            const botNumber = (await HistoryHandler.getConfig('YCLOUD_WABA_NUMBER') || '').replace(/\D/g, '');
             const senderNumber = (ctx.from || '').replace(/\D/g, '');
             // Si el botNumber coincide con el sender o con el userId, lo ignoramos
             if (ctx.key?.fromMe || (botNumber && (senderNumber === botNumber || ctx.userId === botNumber))) {
@@ -191,7 +198,8 @@ export class AiManager {
             }
 
             // --- LÓGICA MULTI-AGENTE ---
-            const currentAssistantId = this.ASSISTANT_MAP[assigned] || this.assistantId;
+            const currentAssistantMap = await this.getAssistantMap(dynamicProjectId);
+            const currentAssistantId = currentAssistantMap[assigned] || this.assistantId;
 
             const response = (await this.getAssistantResponse(currentAssistantId, ctx.body, state, undefined, ctx.from, ctx.thread_id, dynamicProjectId)) as string;
 
@@ -202,7 +210,7 @@ export class AiManager {
             const destino = this.analizarDestinoRecepcionista(response);
             const resumen = this.extraerResumenRecepcionista(response);
             
-            if (destino && this.ASSISTANT_MAP[destino] && destino !== assigned) {
+            if (destino && currentAssistantMap[destino] && destino !== assigned) {
                 console.log(`🚀 [MultiAgent] Handover: ${assigned} -> ${destino} (User: ${ctx.from})`);
                 await HistoryHandler.setAssignedAgent(ctx.from, destino, dynamicProjectId);
 
@@ -231,7 +239,8 @@ export class AiManager {
                 );
             }
 
-            const setTime = Number(process.env.timeOutCierre || 5) * 60 * 1000;
+            const timeoutCierreValue = await HistoryHandler.getConfig('timeOutCierre') || 5;
+            const setTime = Number(timeoutCierreValue) * 60 * 1000;
             reset(ctx, gotoFlow, setTime);
             return state;
 

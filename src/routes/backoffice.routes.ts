@@ -1692,6 +1692,70 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
+    // --- CONFIGURACION DINAMICA (HOT-UPDATE) ---
+
+    /**
+     * Obtiene todas las variables de configuración mezclando el entorno (.env) 
+     * con la base de datos (settings), priorizando la base de datos.
+     */
+    app.get('/api/backoffice/config', systemConfigAuth, async (req, res) => {
+        try {
+            // 1. Obtener variables de Railway si es posible (como base)
+            let railwayVars = {};
+            try {
+                const RailwayApi = (await import("../Api-RailWay/Railway")).RailwayApi;
+                railwayVars = await RailwayApi.getVariables() || {};
+            } catch (e) {
+                console.warn("[Config] No se pudieron cargar variables de Railway, usando process.env");
+                railwayVars = process.env;
+            }
+
+            // 2. Obtener todas las configuraciones de la base de datos
+            const { data: dbSettings, error } = await HistoryHandler.getSupabase()
+                .from('settings')
+                .select('key, value')
+                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
+
+            if (error) throw error;
+
+            // 3. Mezclar: Prioridad DB > Railway/Env
+            const mergedConfig: any = { ...railwayVars };
+            dbSettings?.forEach((s: any) => {
+                if (s.value !== null && s.value !== undefined) {
+                    mergedConfig[s.key] = s.value;
+                }
+            });
+
+            res.json({ success: true, variables: mergedConfig });
+        } catch (error: any) {
+            console.error('Error al obtener configuración:', error.message);
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
+    /**
+     * Guarda múltiples configuraciones en la base de datos sin reiniciar el bot.
+     */
+    app.post('/api/backoffice/save-settings-bulk', systemConfigAuth, bodyParser.json(), async (req, res) => {
+        const { settings } = req.body;
+        if (!settings || typeof settings !== 'object') {
+            return res.status(400).json({ success: false, error: 'settings object is required' });
+        }
+
+        try {
+            const keys = Object.keys(settings);
+            console.log(`📡 [HOT-UPDATE] Guardando ${keys.length} variables en la base de datos...`);
+
+            const promises = keys.map(key => HistoryHandler.saveSetting(key, settings[key]));
+            await Promise.all(promises);
+
+            res.json({ success: true, message: `${keys.length} variables guardadas correctamente (Hot-update)` });
+        } catch (error: any) {
+            console.error('Error al guardar settings bulk:', error.message);
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
     app.get('/api/backoffice/settings', backofficeAuth, async (req, res) => {
         try {
             const keys = ['WHATSAPP_VISIBLE', 'INSTAGRAM_VISIBLE', 'MESSENGER_VISIBLE', 'CRM_VISIBLE'];
@@ -1738,9 +1802,12 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             await HistoryHandler.saveSetting(settingKey, prompt);
 
             // Sincronizar hacia OpenAI (Empujar cambio al dashboard de OpenAI)
-            if (assistantId && openaiMain) {
+            const { getOpenAI } = await import("../utils/openaiHelper");
+            const dynamicOpenai = await getOpenAI();
+
+            if (assistantId && dynamicOpenai) {
                 console.log(`📡 [SYNC] Empujando nuevo prompt hacia OpenAI Assistant: ${assistantId}`);
-                await openaiMain.beta.assistants.update(assistantId, {
+                await dynamicOpenai.beta.assistants.update(assistantId, {
                     instructions: prompt
                 });
                 

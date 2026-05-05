@@ -6,16 +6,12 @@ window.checkAdminAccess = () => {
     const overlay = document.getElementById('config-auth-overlay');
     const content = document.getElementById('main-config-content');
     
-    // LA CLAVE HARDCODEADA
     if (passInput.value === 'neuroadmin25') {
         overlay.style.display = 'none';
         content.style.display = 'flex';
         setTimeout(() => content.style.opacity = '1', 10);
-        // Guardar en local storage para persistencia persistente (entre reinicios de navegador)
         localStorage.setItem('config_authenticated', 'true');
         localStorage.setItem('system_config_token', 'neuroadmin25');
-        
-        // Disparar refresh si el editor ya existe
         if (window.cmEditor) window.cmEditor.refresh();
     } else {
         passInput.style.borderColor = '#ef4444';
@@ -26,9 +22,8 @@ window.checkAdminAccess = () => {
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('Variables panel loaded');
+    console.log('Unified System Config loaded');
 
-    // Verificar si ya está autenticado en este dispositivo
     if (localStorage.getItem('config_authenticated') === 'true') {
         const overlay = document.getElementById('config-auth-overlay');
         const content = document.getElementById('main-config-content');
@@ -51,23 +46,21 @@ document.addEventListener('DOMContentLoaded', async () => {
             lineWrapping: true,
             scrollbarStyle: "native"
         });
-        window.cmEditor = editor; // Hacerlo accesible globalmente para refrescarlo
+        window.cmEditor = editor;
     }
 
-    // Lógica del Panel Lateral (Hot-update)
+    // Lógica del Panel Lateral (Editor de Prompt)
     window.togglePromptPanel = () => {
         const panel = document.getElementById('prompt-panel');
         const overlay = document.getElementById('panel-overlay');
         const isActive = panel.classList.toggle('active');
         overlay.classList.toggle('active');
 
-        // IMPORTANTE: Refrescar CodeMirror cuando el panel se abre
-        // de lo contrario, puede no renderizar correctamente si estaba oculto.
         if (isActive && editor) {
             setTimeout(() => {
                 editor.refresh();
                 editor.focus();
-            }, 300); // Dar tiempo a la animación de entrada
+            }, 300);
         }
     };
 
@@ -77,34 +70,42 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     let initialVariables = {};
 
-    // Cargar variables actuales
+    // Cargar variables actuales (Mezcladas DB + Railway)
     async function loadVariables() {
         const token = localStorage.getItem('system_config_token');
         try {
-            const response = await fetch(`/api/variables?token=${token}`);
+            // Usamos el nuevo endpoint que mezcla DB y Railway
+            const response = await fetch(`/api/backoffice/config?token=${token}`);
             if (response.status === 401) return logout();
             const data = await response.json();
             
             if (data.success && data.variables) {
                 initialVariables = data.variables;
-                // Poblar el formulario
                 Object.keys(initialVariables).forEach(key => {
                     const input = document.getElementById(key) || document.getElementsByName(key)[0];
                     if (input) {
-                        input.value = initialVariables[key];
+                        if (input.tagName === 'SELECT') {
+                            input.value = String(initialVariables[key]);
+                        } else {
+                            input.value = initialVariables[key];
+                        }
                     }
                 });
 
-                // Actualizar editor si existe valor en variables de entorno inicialmente
                 if (initialVariables['ASSISTANT_PROMPT'] && editor) {
                     editor.setValue(initialVariables['ASSISTANT_PROMPT']);
                 }
             } else {
-                alert('Error al cargar variables: ' + (data.error || 'Error desconocido'));
+                console.warn('No se pudieron cargar variables mezcladas, reintentando con railway/env...');
+                const resAlt = await fetch(`/api/variables?token=${token}`);
+                const dataAlt = await resAlt.json();
+                if (dataAlt.success) {
+                    initialVariables = dataAlt.variables;
+                    // ... mismo proceso ...
+                }
             }
         } catch (err) {
             console.error('Error fetching variables:', err);
-            alert('Error de conexión al obtener variables.');
         }
     }
 
@@ -115,98 +116,95 @@ document.addEventListener('DOMContentLoaded', async () => {
         button.addEventListener('click', () => {
             const wrapper = button.closest('.input-wrapper');
             const input = wrapper.querySelector('input, textarea');
-            
             if (input.tagName.toLowerCase() === 'input') {
                 const type = input.getAttribute('type') === 'password' ? 'text' : 'password';
                 input.setAttribute('type', type);
             } else {
-                // Para textarea (GOOGLE_PRIVATE_KEY)
                 input.classList.toggle('hidden-content');
             }
-            
-            // Cambiar el icono (opcional)
             button.textContent = button.textContent === '👁️' ? '🙈' : '👁️';
         });
     });
 
-    // Botón Cancelar: vuelve al dashboard
     cancelBtn.addEventListener('click', () => {
         window.location.href = '/dashboard';
     });
 
-    // Manejo del formulario
+    // Manejo del formulario UNIFICADO
     variablesForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         
         const formData = new FormData(variablesForm);
-        const changedVariables = {};
-        const changedKeys = [];
+        const settingsToSave = {};
+        let hasChanges = false;
         
         formData.forEach((value, key) => {
-            // Caso especial para CodeMirror
             if (key === 'ASSISTANT_PROMPT' && editor) {
                 value = editor.getValue();
             }
 
-            // Solo agregar si el valor es diferente al inicial
-            if (value !== initialVariables[key]) {
-                changedVariables[key] = value;
-                changedKeys.push(key);
+            // Solo guardamos si es diferente al inicial
+            if (String(value) !== String(initialVariables[key] || '')) {
+                settingsToSave[key] = value;
+                hasChanges = true;
             }
         });
 
-        if (changedKeys.length === 0) {
-            alert('No se detectaron cambios en las variables.');
-            return;
-        }
-
-        const confirmMsg = `Se han modificado las siguientes variables:\n\n${changedKeys.join('\n')}\n\nEl bot se reiniciará automáticamente para aplicar los cambios. ¿Deseas continuar?`;
-        
-        if (!confirm(confirmMsg)) {
+        if (!hasChanges) {
+            alert('No se detectaron cambios para guardar.');
             return;
         }
 
         updateBtn.disabled = true;
-        updateBtn.textContent = 'Actualizando...';
+        updateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
         
-        // Incluimos explícitamente el prompt si existe CodeMirror
-        if (editor) {
-             changedVariables['ASSISTANT_PROMPT'] = editor.getValue();
-        }
-
         try {
             const token = localStorage.getItem('system_config_token');
-            const response = await fetch(`/api/update-variables?token=${token}`, {
+            const response = await fetch(`/api/backoffice/save-settings-bulk?token=${token}`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ variables: changedVariables })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ settings: settingsToSave })
             });
 
             if (response.status === 401) return logout();
             const data = await response.json();
 
             if (data.success) {
-                alert('✅ Variables actualizadas correctamente. El bot se está reiniciando...');
-                // Redirigir al dashboard después de un momento
-                setTimeout(() => {
-                    window.location.href = '/dashboard';
-                }, 3000);
+                alert('✅ Configuración guardada correctamente (Hot-update aplicado).');
+                // Actualizar initialVariables
+                Object.assign(initialVariables, settingsToSave);
+                // Si se cambió el prompt, sincronizar con OpenAI
+                if (settingsToSave['ASSISTANT_PROMPT']) {
+                     await syncWithOpenAI(settingsToSave['ASSISTANT_PROMPT']);
+                }
             } else {
                 alert('❌ Error: ' + (data.error || 'Error desconocido'));
-                updateBtn.disabled = false;
-                updateBtn.textContent = 'Actualizar y Reiniciar';
             }
         } catch (err) {
-            console.error('Error updating variables:', err);
-            alert('Error de conexión al actualizar variables.');
+            console.error('Error saving settings:', err);
+            alert('Error de conexión al guardar.');
+        } finally {
             updateBtn.disabled = false;
-            updateBtn.textContent = 'Actualizar y Reiniciar';
+            updateBtn.innerHTML = '<i class="fas fa-save" style="margin-right:8px;"></i> Guardar (Sin reiniciar)';
         }
     });
 
-    // --- Sincronizar Prompt ---
+    async function syncWithOpenAI(prompt) {
+        const assistantSelect = document.getElementById('assistant-select');
+        const index = assistantSelect ? assistantSelect.value : '1';
+        try {
+            const token = localStorage.getItem('system_config_token');
+            await fetch(`/api/backoffice/update-prompt?token=${token}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt, index })
+            });
+        } catch (e) {
+            console.error('Error syncing prompt with OpenAI:', e);
+        }
+    }
+
+    // --- Sincronizar Prompt desde OpenAI ---
     const syncBtn = document.getElementById('sync-prompt-btn');
     const syncStatus = document.getElementById('sync-status');
     const assistantSelect = document.getElementById('assistant-select');
@@ -218,7 +216,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const assistantId = assistantIdInput ? assistantIdInput.value : '';
 
         if (!assistantId) {
-            alert(`Debes ingresar un ID para el Asistente ${index} en la configuración principal para sincronizar.`);
+            alert(`Debes ingresar un ID para el Asistente ${index} en la configuración para sincronizar.`);
             return;
         }
 
@@ -230,71 +228,58 @@ document.addEventListener('DOMContentLoaded', async () => {
             const token = localStorage.getItem('system_config_token');
             const response = await fetch(`/api/backoffice/sync-assistant-prompt?token=${token}`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ assistantId })
             });
 
             const data = await response.json();
             if (data.success) {
                 if (editor) editor.setValue(data.instructions);
-                syncStatus.textContent = '✅ Sincronizado correctamente.';
+                syncStatus.textContent = '✅ Sincronizado desde OpenAI.';
                 syncStatus.style.color = '#10b981';
             } else {
-                syncStatus.textContent = '❌ Error sincronizando.';
-                syncStatus.style.color = '#ef4444';
                 alert('Error: ' + data.error);
             }
         } catch (err) {
             console.error('Error syncing prompt:', err);
-            syncStatus.textContent = '❌ Error de conexión.';
-            syncStatus.style.color = '#ef4444';
         } finally {
             syncBtn.disabled = false;
         }
     });
 
-    // --- Guardar Prompt sin reiniciar (Hot-update) ---
+    // Guardar Prompt individualmente (desde el panel lateral)
     const hotSaveBtn = document.getElementById('save-prompt-hot-btn');
     hotSaveBtn.addEventListener('click', async () => {
         const prompt = editor ? editor.getValue() : promptTextarea.value;
         const index = assistantSelect.value;
         hotSaveBtn.disabled = true;
         syncStatus.textContent = `⏳ Guardando Asistente ${index}...`;
-        syncStatus.style.color = 'inherit';
 
         try {
             const token = localStorage.getItem('system_config_token');
             const response = await fetch(`/api/backoffice/update-prompt?token=${token}`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ prompt, index })
             });
 
             const data = await response.json();
             if (data.success) {
-                syncStatus.textContent = `✅ Asistente ${index} guardado correctamente (Hot-update).`;
+                syncStatus.textContent = `✅ Guardado correctamente.`;
                 syncStatus.style.color = '#10b981';
-                // Actualizar initialVariables para evitar que el form principal crea que hay cambios
                 const settingKey = index === '1' ? 'ASSISTANT_PROMPT' : `ASSISTANT_PROMPT_${index}`;
                 initialVariables[settingKey] = prompt;
             } else {
-                syncStatus.textContent = '❌ Error al guardar.';
-                syncStatus.style.color = '#ef4444';
                 alert('Error: ' + data.error);
             }
         } catch (err) {
-            console.error('Error saving hot prompt:', err);
-            syncStatus.textContent = '❌ Error de conexión.';
+            console.error('Error saving prompt:', err);
         } finally {
             hotSaveBtn.disabled = false;
         }
     });
 
-    // --- Cargar Prompt actual desde DB ---
+    // Cargar Prompt al cambiar de asistente en el editor
     async function loadAssistantPrompt() {
         try {
             const index = assistantSelect.value || '1';
@@ -305,178 +290,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (editor) editor.setValue(data.prompt);
                 const settingKey = index === '1' ? 'ASSISTANT_PROMPT' : `ASSISTANT_PROMPT_${index}`;
                 initialVariables[settingKey] = data.prompt;
-            } else {
-                if (editor) editor.setValue('');
+            } else if (editor) {
+                editor.setValue('');
             }
         } catch (err) {
             console.error('Error loading stored prompt:', err);
         }
     }
     
-    // Cambiar de asistente en el editor
     assistantSelect.addEventListener('change', async () => {
         syncStatus.textContent = '⏳ Cargando...';
         await loadAssistantPrompt();
         syncStatus.textContent = '';
     });
     
-    // Llamar a la carga del prompt
     await loadAssistantPrompt();
-
-    // --- Gestión de Visibilidad de Navegación (Hot-update) ---
-    const navSyncStatus = document.getElementById('nav-sync-status');
-    const whatsappSelect = document.getElementById('WHATSAPP_VISIBLE_HOT');
-    const instagramSelect = document.getElementById('INSTAGRAM_VISIBLE_HOT');
-    const messengerSelect = document.getElementById('MESSENGER_VISIBLE_HOT');
-    const crmSelect = document.getElementById('CRM_VISIBLE_HOT');
-    const saveNavBtn = document.getElementById('save-nav-hot-btn');
-
-    async function loadNavVisibility() {
-        try {
-            const token = localStorage.getItem('system_config_token') || 'neuroadmin25';
-            const [resWa, resIg, resMs, resCrm] = await Promise.all([
-                fetch(`/api/backoffice/get-setting?key=WHATSAPP_VISIBLE&token=${token}`),
-                fetch(`/api/backoffice/get-setting?key=INSTAGRAM_VISIBLE&token=${token}`),
-                fetch(`/api/backoffice/get-setting?key=MESSENGER_VISIBLE&token=${token}`),
-                fetch(`/api/backoffice/get-setting?key=CRM_VISIBLE&token=${token}`)
-            ]);
-            
-            const dataWa = await resWa.json();
-            const dataIg = await resIg.json();
-            const dataMs = await resMs.json();
-            const dataCrm = await resCrm.json();
-
-            if (dataWa.success && dataWa.value !== null) whatsappSelect.value = dataWa.value;
-            if (dataIg.success && dataIg.value !== null) instagramSelect.value = dataIg.value;
-            if (dataMs.success && dataMs.value !== null) messengerSelect.value = dataMs.value;
-            if (dataCrm.success && dataCrm.value !== null) crmSelect.value = dataCrm.value;
-        } catch (err) {
-            console.error('Error loading nav visibility:', err);
-        }
-    }
-
-    saveNavBtn.addEventListener('click', async () => {
-        saveNavBtn.disabled = true;
-        navSyncStatus.textContent = '⏳ Guardando...';
-        try {
-            const token = localStorage.getItem('system_config_token') || 'neuroadmin25';
-            
-            const settingsToSave = [
-                { key: 'WHATSAPP_VISIBLE', value: whatsappSelect.value },
-                { key: 'INSTAGRAM_VISIBLE', value: instagramSelect.value },
-                { key: 'MESSENGER_VISIBLE', value: messengerSelect.value },
-                { key: 'CRM_VISIBLE', value: crmSelect.value }
-            ];
-
-            const results = await Promise.all(settingsToSave.map(s => 
-                fetch(`/api/backoffice/save-setting?token=${token}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(s)
-                }).then(r => r.json())
-            ));
-
-            const allSuccess = results.every(r => r.success);
-
-            if (allSuccess) {
-                navSyncStatus.textContent = '✅ Visibilidad actualizada correctamente. Recargando...';
-                navSyncStatus.style.color = '#10b981';
-                setTimeout(() => window.location.reload(), 1500);
-            } else {
-                navSyncStatus.textContent = '❌ Error al guardar algunos cambios.';
-                navSyncStatus.style.color = '#ef4444';
-            }
-        } catch (err) {
-            console.error('Error saving nav visibility:', err);
-            navSyncStatus.textContent = '❌ Error de conexión.';
-            navSyncStatus.style.color = '#ef4444';
-        } finally {
-            saveNavBtn.disabled = false;
-        }
-    });
-
-    await loadNavVisibility();
-
-    // --- Gestión de Usuario Admin (Hot-update) ---
-    const adminSyncStatus = document.getElementById('admin-sync-status');
-    const adminUserHot = document.getElementById('ADMIN_USER');
-    const adminPassHot = document.getElementById('ADMIN_PASS');
-    const saveAdminBtn = document.getElementById('save-admin-hot-btn');
-
-    async function loadAdminConfig() {
-        try {
-            const token = localStorage.getItem('system_config_token') || 'neuroadmin25';
-            const [resUser, resPass] = await Promise.all([
-                fetch(`/api/backoffice/get-setting?key=ADMIN_USER&token=${token}`),
-                fetch(`/api/backoffice/get-setting?key=ADMIN_PASS&token=${token}`)
-            ]);
-            
-            const dataUser = await resUser.json();
-            const dataPass = await resPass.json();
-
-            if (dataUser.success && dataUser.value) {
-                adminUserHot.value = dataUser.value;
-                initialVariables['ADMIN_USER'] = dataUser.value;
-            }
-            if (dataPass.success && dataPass.value) {
-                adminPassHot.value = dataPass.value;
-                initialVariables['ADMIN_PASS'] = dataPass.value;
-            }
-        } catch (err) {
-            console.error('Error loading admin config:', err);
-        }
-    }
-
-    saveAdminBtn.addEventListener('click', async () => {
-        saveAdminBtn.disabled = true;
-        adminSyncStatus.textContent = '⏳ Guardando...';
-        adminSyncStatus.style.color = 'inherit';
-
-        try {
-            const token = localStorage.getItem('system_config_token') || 'neuroadmin25';
-            const userValue = adminUserHot.value;
-            const passValue = adminPassHot.value;
-
-            if (!passValue) {
-                alert('La contraseña no puede estar vacía para el guardado Hot-update.');
-                saveAdminBtn.disabled = false;
-                adminSyncStatus.textContent = '';
-                return;
-            }
-
-            const [resUser, resPass] = await Promise.all([
-                fetch(`/api/backoffice/save-setting?token=${token}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ key: 'ADMIN_USER', value: userValue })
-                }),
-                fetch(`/api/backoffice/save-setting?token=${token}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ key: 'ADMIN_PASS', value: passValue })
-                })
-            ]);
-
-            const dataUser = await resUser.json();
-            const dataPass = await resPass.json();
-
-            if (dataUser.success && dataPass.success) {
-                adminSyncStatus.textContent = '✅ Usuario/Pass actualizados (Hot-update).';
-                adminSyncStatus.style.color = '#10b981';
-                // Actualizar initialVariables para evitar que el form principal detecte cambios
-                initialVariables['ADMIN_USER'] = userValue;
-                initialVariables['ADMIN_PASS'] = passValue;
-            } else {
-                adminSyncStatus.textContent = '❌ Error al guardar.';
-                adminSyncStatus.style.color = '#ef4444';
-            }
-        } catch (err) {
-            console.error('Error saving admin config:', err);
-            adminSyncStatus.textContent = '❌ Error de conexión.';
-        } finally {
-            saveAdminBtn.disabled = false;
-        }
-    });
-
-    await loadAdminConfig();
 });

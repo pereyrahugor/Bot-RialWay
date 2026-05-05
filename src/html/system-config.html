@@ -304,10 +304,7 @@
                 </div>
             </div>
             
-            <div style="margin-top: -10px; margin-bottom: 30px; display: flex; gap: 10px; align-items: center;">
-                <button type="button" class="btn" id="save-admin-hot-btn" style="width:auto; padding: 10px 20px; background: #059669; font-size: 13px;">
-                    <i class="fas fa-bolt" style="margin-right:8px;"></i> Guardar sin reiniciar (Hot Update)
-                </button>
+            <div style="margin-top: -10px; margin-bottom: 30px; display: none;">
                 <span id="admin-sync-status" class="status-badge" style="font-size: 12px; margin-left: 10px;"></span>
             </div>
 
@@ -450,7 +447,7 @@
                 <div class="variable-group">
                     <h3>WHATSAPP_VISIBLE</h3>
                     <p class="description">Mostrar o ocultar el acceso a WhatsApp.</p>
-                    <select id="WHATSAPP_VISIBLE_HOT">
+                    <select id="WHATSAPP_VISIBLE_HOT" name="WHATSAPP_VISIBLE">
                         <option value="true">ON - Visible</option>
                         <option value="false">OFF - Oculto</option>
                     </select>
@@ -458,7 +455,7 @@
                 <div class="variable-group">
                     <h3>INSTAGRAM_VISIBLE</h3>
                     <p class="description">Mostrar o ocultar el acceso a Instagram.</p>
-                    <select id="INSTAGRAM_VISIBLE_HOT">
+                    <select id="INSTAGRAM_VISIBLE_HOT" name="INSTAGRAM_VISIBLE">
                         <option value="true">ON - Visible</option>
                         <option value="false">OFF - Oculto</option>
                     </select>
@@ -466,7 +463,7 @@
                 <div class="variable-group">
                     <h3>MESSENGER_VISIBLE</h3>
                     <p class="description">Mostrar o ocultar el acceso a Messenger.</p>
-                    <select id="MESSENGER_VISIBLE_HOT">
+                    <select id="MESSENGER_VISIBLE_HOT" name="MESSENGER_VISIBLE">
                         <option value="true">ON - Visible</option>
                         <option value="false">OFF - Oculto</option>
                     </select>
@@ -474,22 +471,21 @@
                 <div class="variable-group">
                     <h3>CRM_VISIBLE</h3>
                     <p class="description">Mostrar o ocultar el acceso al CRM en el Nav.</p>
-                    <select id="CRM_VISIBLE_HOT">
+                    <select id="CRM_VISIBLE_HOT" name="CRM_VISIBLE">
                         <option value="true">ON - Visible</option>
                         <option value="false">OFF - Oculto</option>
                     </select>
                 </div>
-                <div style="grid-column: 1 / -1; display: flex; justify-content: flex-end; align-items: center; gap: 15px; margin-top: 10px;">
+                <div style="grid-column: 1 / -1; display: none; justify-content: flex-end; align-items: center; gap: 15px; margin-top: 10px;">
                     <div id="nav-sync-status" style="font-weight: 600; font-size: 14px;"></div>
-                    <button type="button" id="save-nav-hot-btn" class="btn" style="width: auto; background: #10b981; border:none; padding: 10px 30px;">
-                        <i class="fas fa-save"></i> Guardar Visibilidad (Sin reiniciar)
-                    </button>
                 </div>
             </div>
 
             <div class="actions">
                 <button type="button" id="cancel-btn" class="btn btn-secondary">Cancelar</button>
-                <button type="submit" id="update-btn" class="btn">Actualizar y Reiniciar</button>
+                <button type="submit" id="update-btn" class="btn" style="background: #10b981; border:none;">
+                    <i class="fas fa-save" style="margin-right:8px;"></i> Guardar (Sin reiniciar)
+                </button>
             </div>
         </form>
     </div>
@@ -521,7 +517,7 @@
                         <i class="fas fa-sync"></i> Sincronizar desde OpenAI
                     </button>
                     <button type="button" id="save-prompt-hot-btn" class="btn" style="width: auto; font-size: 14px; background: #10b981; border:none; padding: 0 25px;">
-                        <i class="fas fa-bolt"></i> Publicar Cambios (Hot-update)
+                        <i class="fas fa-save" style="margin-right:8px;"></i> Guardar (Sin reiniciar)
                     </button>
                 </div>
                 <div id="sync-status" style="font-weight: 600; font-size: 14px;"></div>
