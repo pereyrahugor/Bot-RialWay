@@ -1380,107 +1380,42 @@ export class HistoryHandler {
     private static async bootstrapConfig() {
         try {
             const currentProjectId = this.PROJECT_IDENTIFIER;
-            console.log(`[Bootstrap] Verificando configuración para el proyecto: ${currentProjectId}`);
+            const MASTER_ID = "defaul"; // Según requerimiento del usuario
+            console.log(`[Bootstrap] 🚀 Iniciando Bootstrap para: ${currentProjectId}`);
 
-            // 1. Asegurar que el proyecto 'default' existe en la tabla 'projects'
-            const { data: defaultProj } = await supabase.from('projects').select('id').eq('id', 'default').maybeSingle();
-            if (!defaultProj) {
-                console.log(`🆕 [Bootstrap] Creando proyecto maestro 'default'...`);
-                await supabase.from('projects').insert({ id: 'default', name: 'Plantilla por Defecto' });
-            }
-
-            // 2. Poblar 'default' desde '.env defaul' si está vacío
-            const { data: checkDefaultSettings } = await supabase.from('settings').select('key').eq('project_id', 'default').limit(1);
-            if (!checkDefaultSettings || checkDefaultSettings.length === 0) {
-                console.log(`[Bootstrap] ℹ️ Proyecto 'default' vacío. Cargando desde '.env defaul'...`);
-                const fs = await import('fs');
-                const path = await import('path');
-                const defaultPath = path.join(process.cwd(), '.env defaul');
-                
-                if (fs.existsSync(defaultPath)) {
-                    const content = fs.readFileSync(defaultPath, 'utf-8');
-                    const lines = content.split('\n');
-                    const settingsToDefault: any[] = [];
-                    
-                    for (const line of lines) {
-                        const cleanLine = line.trim();
-                        if (!cleanLine || cleanLine.startsWith('#')) continue;
-                        const match = cleanLine.match(/^([^=]+)=(.*)$/);
-                        if (match) {
-                            let key = match[1].trim();
-                            let value = match[2].trim();
-                            if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-                                value = value.slice(1, -1);
-                            }
-                            settingsToDefault.push({
-                                project_id: 'default',
-                                key,
-                                value,
-                                updated_at: new Date().toISOString()
-                            });
-                        }
-                    }
-                    if (settingsToDefault.length > 0) {
-                        console.log(`📥 [Bootstrap] Guardando ${settingsToDefault.length} variables en proyecto 'default'...`);
-                        await supabase.from('settings').upsert(settingsToDefault, { onConflict: 'project_id,key' });
-                    }
-                }
-            }
-
-            // 3. Asegurar que el proyecto actual existe
-            const { data: project } = await supabase.from('projects').select('id').eq('id', currentProjectId).maybeSingle();
-            if (!project) {
-                console.log(`🆕 [Bootstrap] Registrando proyecto actual: ${currentProjectId}`);
-                await supabase.from('projects').insert({ 
-                    id: currentProjectId, 
-                    name: process.env.RAILWAY_SERVICE_NAME || 'Bot-RialWay'
-                });
-            }
-
-            // 4. Verificar si el proyecto actual tiene settings. Si no, clonar de 'default'
+            // 1. Verificar si el proyecto actual tiene configuración
             const { data: currentSettings } = await supabase.from('settings').select('key').eq('project_id', currentProjectId).limit(1);
+            
             if (!currentSettings || currentSettings.length === 0) {
-                console.log(`🆕 [Bootstrap] Proyecto ${currentProjectId} sin configuración. Clonando desde 'default'...`);
-                const { data: defaultSettings } = await supabase.from('settings').select('key, value').eq('project_id', 'default');
+                console.log(`🆕 [Bootstrap] Proyecto ${currentProjectId} vacío. Intentando clonar desde '${MASTER_ID}'...`);
                 
-                if (defaultSettings && defaultSettings.length > 0) {
-                    const settingsToInsert = defaultSettings.map(s => ({
+                // 2. Obtener configuración del maestro 'defaul'
+                const { data: masterSettings } = await supabase.from('settings').select('key, value').eq('project_id', MASTER_ID);
+                
+                if (masterSettings && masterSettings.length > 0) {
+                    const settingsToInsert = masterSettings.map(s => ({
                         project_id: currentProjectId,
                         key: s.key,
                         value: s.value,
                         updated_at: new Date().toISOString()
                     }));
 
-                    // Inyectar variables de visibilidad/admin si no vienen en el default
-                    const defaults = [
-                        { key: 'WHATSAPP_VISIBLE', value: 'true' },
-                        { key: 'INSTAGRAM_VISIBLE', value: 'false' },
-                        { key: 'MESSENGER_VISIBLE', value: 'false' },
-                        { key: 'CRM_VISIBLE', value: 'false' },
-                        { key: 'ADMIN_USER', value: '' },
-                        { key: 'ADMIN_PASS', value: '' }
-                    ];
-
-                    for (const d of defaults) {
-                        if (!settingsToInsert.find(s => s.key === d.key)) {
-                            settingsToInsert.push({
-                                project_id: currentProjectId,
-                                key: d.key,
-                                value: d.value,
-                                updated_at: new Date().toISOString()
-                            });
-                        }
+                    const { error: cloneErr } = await supabase.from('settings').upsert(settingsToInsert, { onConflict: 'project_id,key' });
+                    
+                    if (cloneErr) {
+                        console.error(`❌ [Bootstrap] Error al clonar desde '${MASTER_ID}':`, cloneErr);
+                    } else {
+                        console.log(`✅ [Bootstrap] Configuración clonada exitosamente desde '${MASTER_ID}' para ${currentProjectId}.`);
                     }
-
-                    console.log(`📥 [Bootstrap] Insertando ${settingsToInsert.length} variables clonadas en ${currentProjectId}...`);
-                    await supabase.from('settings').upsert(settingsToInsert, { onConflict: 'project_id,key' });
+                } else {
+                    console.warn(`⚠️ [Bootstrap] No se encontró configuración en el proyecto maestro '${MASTER_ID}'. El bot iniciará sin variables.`);
                 }
             } else {
-                console.log(`✅ [Bootstrap] Proyecto ${currentProjectId} ya tiene configuración.`);
+                console.log(`✅ [Bootstrap] El proyecto ${currentProjectId} ya cuenta con su propia configuración.`);
             }
 
         } catch (err) {
-            console.error('❌ [Bootstrap] Error en Bootstrap:', err);
+            console.error('❌ [Bootstrap] Error crítico en Bootstrap:', err);
         }
     }
 

@@ -198,7 +198,9 @@ const main = async () => {
         }
     }
 
-    // 4. Initialize Data and Error Reporter
+    // 4. Initialize Database and Configuration
+    await HistoryHandler.initDatabase();
+    
     const groupResumenId = await HistoryHandler.getConfig('ID_GRUPO_RESUMEN') || "";
     errorReporter = new ErrorReporter(adapterProvider, groupResumenId);
     await updateMain();
