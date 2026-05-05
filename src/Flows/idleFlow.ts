@@ -9,12 +9,6 @@ import { ReconectionFlow } from './reconectionFlow';
 import { HistoryHandler } from '../utils/historyHandler'; // Integración con CRM
 import { getGroupProvider } from '../providers/instances';
 
-//** Variables de entorno para el envio de msj de resumen a grupo de WS */
-const ASSISTANT_ID = process.env.ASSISTANT_ID ?? '';
-const ID_GRUPO_RESUMEN = process.env.ID_GRUPO_RESUMEN ?? '';
-const ID_GRUPO_RESUMEN_2 = process.env.ID_GRUPO_RESUMEN_2 ?? '';
-const msjCierre: string = process.env.msjCierre as string;
-
 // Función para formatear el resumen (JSON o texto) de forma amigable para WhatsApp y CRM
 function formatSummary(resumen: string, data: GenericResumenData, userId?: string): string {
     // Si el resumen es JSON puro, lo convertimos a un formato de lista legible
@@ -97,6 +91,12 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
         try {
             // Recuperar contexto dinámico del state o de la DB (RAILWAY_PROJECT_ID)
             let dynamicProjectId = state.get('dynamicProjectId') || process.env.RAILWAY_PROJECT_ID;
+
+            // Fetch dynamic configs
+            const ASSISTANT_ID = await HistoryHandler.getConfig('ASSISTANT_ID', dynamicProjectId) || '';
+            const ID_GRUPO_RESUMEN = await HistoryHandler.getConfig('ID_GRUPO_RESUMEN', dynamicProjectId) || '';
+            const ID_GRUPO_RESUMEN_2 = await HistoryHandler.getConfig('ID_GRUPO_RESUMEN_2', dynamicProjectId) || '';
+            // const msjCierre = await HistoryHandler.getConfig('msjCierre', dynamicProjectId) || '';
 
             const targetAssistantId = state.get('assignedAssistantId') || ASSISTANT_ID;
 

@@ -56,7 +56,7 @@ class MetaCloudProvider extends ProviderClass {
         if (!mediaUrl && mediaId && access_token) {
             try {
                 console.log(`📡 [MetaCloudProvider] Obteniendo URL de descarga para media ID: ${mediaId}`);
-                const apiVersion = process.env.META_API_VERSION || 'v25.0';
+                const apiVersion = process.env.META_API_VERSION || 'v22.0';
                 const res = await axios.get(`https://graph.facebook.com/${apiVersion}/${mediaId}`, {
                     headers: { 'Authorization': `Bearer ${access_token}` }
                 });
@@ -444,7 +444,7 @@ class MetaCloudProvider extends ProviderClass {
             return null;
         }
 
-        const apiVersion = process.env.META_API_VERSION || 'v25.0';
+        const apiVersion = process.env.META_API_VERSION || 'v22.0';
         const url = `https://graph.facebook.com/${apiVersion}/${phone_number_id}/media`;
         
         try {
@@ -476,7 +476,8 @@ class MetaCloudProvider extends ProviderClass {
             return;
         }
 
-        const url = `https://graph.facebook.com/v25.0/${phone_number_id}/messages`;
+        const apiVersion = process.env.META_API_VERSION || 'v22.0';
+        const url = `https://graph.facebook.com/${apiVersion}/${phone_number_id}/messages`;
         const cleanNumber = number.replace(/\D/g, '');
         const toFormat = `+${cleanNumber}`;
         

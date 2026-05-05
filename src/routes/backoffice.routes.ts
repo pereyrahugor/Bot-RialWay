@@ -4,8 +4,7 @@ import { execSync } from 'child_process';
 import url from 'url';
 import bodyParser from 'body-parser';
 import axios from 'axios';
-import * as XLSX_BASE from 'xlsx';
-const XLSX: any = (XLSX_BASE as any).default || XLSX_BASE;
+import * as XLSX from 'xlsx';
 import { backofficeAuth, systemConfigAuth } from "../middleware/auth";
 import { supabase, HistoryHandler as HistoryHandlerClass } from "../utils/historyHandler";
 
@@ -1415,6 +1414,26 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     app.post('/api/backoffice/whatsapp/send-bulk-template', async (req: any, res: any) => {
         await syncMetaProvider();
         return processBulkTemplate(req, res, deps);
+    });
+
+    // --- IMPORTACION EXTERNA DE CONTACTOS ---
+    
+    app.get('/api/backoffice/chats/import-template', backofficeAuth, async (req, res) => {
+        try {
+            const wb = XLSX.utils.book_new();
+            const headers = [['phone', 'name', 'tags']];
+            const ws = XLSX.utils.aoa_to_sheet(headers);
+            XLSX.utils.book_append_sheet(wb, ws, 'Plantilla');
+
+            const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+            res.setHeader('Content-Disposition', 'attachment; filename="plantilla_importacion.xlsx"');
+            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            res.end(buf);
+        } catch (error: any) {
+            console.error('Error generando plantilla de importación:', error);
+            res.status(500).json({ success: false, error: error.message });
+        }
     });
 
     // --- ONBOARDING META ---

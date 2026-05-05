@@ -54,21 +54,8 @@ export class ReconectionFlow {
             /@newsletter$/.test(userId) ||
             /@channel$/.test(userId)
         ) {
-            // console.log(`ReconectionFlow ignorado por filtro de contacto: ${userId}`);
-            // No continuar con la lógica de reconexión
             return;
         }
-
-        // Validar que las variables de entorno requeridas existen y no son vacías
-        const msj1 = process.env.msjSeguimiento1;
-        const msj2 = process.env.msjSeguimiento2;
-        const msj3 = process.env.msjSeguimiento3;
-        if (!msj1 || !msj2 || !msj3) {
-            throw new Error('[ReconectionFlow] Faltan variables de entorno obligatorias: msjSeguimiento1, msjSeguimiento2 o msjSeguimiento3. Verifica tu configuración.');
-        }
-        this.msjSeguimiento1 = msj1;
-        this.msjSeguimiento2 = msj2;
-        this.msjSeguimiento3 = msj3;
     }
 
     // Inicia el ciclo de reconexión
@@ -77,17 +64,24 @@ export class ReconectionFlow {
         const dynamicProjectId = this.state?.get ? this.state.get('dynamicProjectId') : (this.state?.dynamicProjectId || process.env.RAILWAY_PROJECT_ID);
         const targetAssistantId = this.state?.get ? this.state.get('assignedAssistantId') : (this.state?.assignedAssistantId || this.ASSISTANT_ID);
 
+        // 1. Cargar mensajes de seguimiento dinámicamente si no están en process.env
+        const msj1 = await HistoryHandler.getConfig('msjSeguimiento1', dynamicProjectId) || "Hola, ¿estás ahí?";
+        const msj2 = await HistoryHandler.getConfig('msjSeguimiento2', dynamicProjectId) || "¿Podrías indicarme tu nombre para continuar?";
+        const msj3 = await HistoryHandler.getConfig('msjSeguimiento3', dynamicProjectId) || "Parece que no podemos continuar sin tu nombre. ¡Hablamos luego!";
+
+        const t2 = await HistoryHandler.getConfig('timeOutSeguimiento2', dynamicProjectId);
+        const t3 = await HistoryHandler.getConfig('timeOutSeguimiento3', dynamicProjectId);
+
         // Intentar restaurar el estado previo si existe
         if (this.state && this.state.reconectionFlow) {
             this.restoreState(this.state.reconectionFlow);
-            // console.log('[ReconectionFlow] Estado restaurado:', this.state.reconectionFlow);
         }
         const originalCtx = { ...this.ctx };
         const originalFrom = originalCtx.from;
         const jid = originalFrom && originalFrom.endsWith('@s.whatsapp.net')
             ? originalFrom
             : `${originalFrom}@s.whatsapp.net`;
-        // console.log(`[ReconectionFlow] originalCtx.from:`, originalFrom, '| jid usado:', jid);
+
         while (this.attempts < this.maxAttempts) {
             this.attempts++;
             // Guardar el estado actual de reconexión en el state global
@@ -98,26 +92,18 @@ export class ReconectionFlow {
             let timeout: number;
             switch (this.attempts) {
                 case 1: {
-                    msg = this.msjSeguimiento1;
-                    const t2 = process.env.timeOutSeguimiento2;
-                    if (!t2 || isNaN(Number(t2))) {
-                        throw new Error('[ReconectionFlow] Falta o es inválida la variable de entorno timeOutSeguimiento2.');
-                    }
-                    timeout = Number(t2) * 60 * 1000;
+                    msg = msj1;
+                    timeout = (!t2 || isNaN(Number(t2))) ? 60000 : Number(t2) * 60 * 1000;
                     break;
                 }
                 case 2: {
-                    msg = this.msjSeguimiento2;
-                    const t3 = process.env.timeOutSeguimiento3;
-                    if (!t3 || isNaN(Number(t3))) {
-                        throw new Error('[ReconectionFlow] Falta o es inválida la variable de entorno timeOutSeguimiento3.');
-                    }
-                    timeout = Number(t3) * 60 * 1000;
+                    msg = msj2;
+                    timeout = (!t3 || isNaN(Number(t3))) ? 60000 : Number(t3) * 60 * 1000;
                     break;
                 }
                 case 3:
                 default:
-                    msg = this.msjSeguimiento3;
+                    msg = msj3;
                     timeout = 60000; // 1 minuto para el siguiente msj
                     break;
             }

@@ -80,6 +80,9 @@ export class HistoryHandler {
         // 0. Bootstrap de configuración
         await this.bootstrapConfig();
 
+        // 0.1. Cargar todas las settings de la DB a process.env para compatibilidad con flujos legacy
+        await this.loadSettingsIntoProcessEnv();
+
         console.log('🔍 [HistoryHandler] Verificando tablas de historial...');
 
         const tables = [
@@ -827,6 +830,7 @@ export class HistoryHandler {
     // --- Tag Management ---
 
     static async getTags() {
+        if (!supabase) return [];
         try {
             const { data, error } = await supabase
                 .from('tags')
@@ -834,23 +838,30 @@ export class HistoryHandler {
                 .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER)
                 .order('name');
             if (error) throw error;
-            return data;
+            return data || [];
         } catch (err) {
             console.error('[HistoryHandler] Error en getTags:', err);
             return [];
         }
     }
 
-    static async createTag(name: string, color: string) {
+    static async createTag(name: string, color: string = '#6366f1') {
+        if (!supabase) return { success: false, error: 'Supabase not initialized' };
         try {
             const { data, error } = await supabase
                 .from('tags')
-                .insert({ name, color, project_id: HistoryHandler.PROJECT_IDENTIFIER })
+                .insert({ 
+                    name, 
+                    color, 
+                    project_id: HistoryHandler.PROJECT_IDENTIFIER,
+                    created_at: new Date().toISOString()
+                })
                 .select()
                 .single();
             if (error) throw error;
             return { success: true, tag: data };
         } catch (err: any) {
+            console.error('[HistoryHandler] Error en createTag:', err);
             return { success: false, error: err.message };
         }
     }
@@ -1419,6 +1430,42 @@ export class HistoryHandler {
         }
     }
 
+    /**
+     * Carga todas las variables de la tabla 'settings' del proyecto actual
+     * directamente al entorno global 'process.env'.
+     * Esto permite que flujos que dependen de process.env funcionen sin refactorización masiva.
+     */
+    static async loadSettingsIntoProcessEnv() {
+        try {
+            const currentProjectId = this.PROJECT_IDENTIFIER;
+            console.log(`📡 [HistoryHandler] Sincronizando settings de DB -> process.env (Project: ${currentProjectId})...`);
+            
+            const { data, error } = await supabase
+                .from('settings')
+                .select('key, value')
+                .eq('project_id', currentProjectId);
+
+            if (error) throw error;
+
+            if (data && data.length > 0) {
+                let count = 0;
+                data.forEach(setting => {
+                    if (setting.key && setting.value !== null && setting.value !== undefined) {
+                        // Solo sobreescribir si no está definido en el .env físico o si es una variable dinámica
+                        // O mejor aún, la DB manda para permitir configuración en caliente
+                        process.env[setting.key] = setting.value;
+                        count++;
+                    }
+                });
+                console.log(`✅ [HistoryHandler] ${count} variables de entorno sincronizadas.`);
+            } else {
+                console.log(`⚠️ [HistoryHandler] No se encontraron settings en DB para el proyecto ${currentProjectId}.`);
+            }
+        } catch (err) {
+            console.error('❌ [HistoryHandler] Error cargando settings a process.env:', err);
+        }
+    }
+
     // --- User Management ---
 
     static async createUser(username: string, pass: string, role: string = 'subuser') {
@@ -1623,7 +1670,6 @@ export class HistoryHandler {
                 .from('chat_tags')
                 .upsert(associationsToUpsert, { onConflict: 'chat_id,tag_id,project_id' })
                 .select();
-
             if (error) throw error;
             return { success: true, data };
         } catch (err: any) {
@@ -1631,6 +1677,7 @@ export class HistoryHandler {
             return { success: false, error: err.message };
         }
     }
+
 }
 
 // Inicializar base de datos al cargar el modulo (Quitado para evitar race condition, se llama en app.ts main)
