@@ -1913,7 +1913,6 @@ export const processImportExcel = async (req: any, res: any, deps: BackofficeDep
     if (!req.file) return res.status(400).json({ success: false, error: 'No se subió ningún archivo' });
 
     try {
-        const fs = require('fs');
         const fileBuffer = fs.readFileSync(req.file.path);
         const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
         const sheetName = workbook.SheetNames[0];
