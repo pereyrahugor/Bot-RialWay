@@ -29,6 +29,7 @@ import { registerProviderEvents, hasActiveSession } from "./providers/provider.m
 import { startHumanInactivityWorker } from "./workers/humanInactivity.worker";
 import { AiManager } from "./utils/ai.manager";
 import { registerDashboardRoutes } from "./routes/dashboard.routes";
+import { registerExternalApiRoutes } from "./routes/external_api.routes";
 import { syncAssistantTools, getOpenAI, getOpenAIVision } from "./utils/openaiHelper";
 import { discoverMetaIds } from "./utils/metaDiscovery";
 import { RailwayApi } from "./Api-RailWay/Railway";
@@ -292,6 +293,7 @@ const main = async () => {
             upload
         });
         registerDashboardRoutes(app);
+        registerExternalApiRoutes(app, { adapterProvider });
     }
 
     // 6. Initialize AI Manager and flows
