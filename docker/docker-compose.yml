@@ -1,0 +1,22 @@
+version: "3.9"
+
+services:
+  bot-asistente-base-v1-test:
+    build:
+      # El contexto es la raíz del proyecto (un nivel arriba de esta carpeta)
+      # para que los COPY del Dockerfile encuentren src/, scripts/, etc.
+      context: ..
+      dockerfile: docker/Dockerfile
+
+    # Lee todas las variables de entorno desde el .env de la raíz del proyecto
+    env_file:
+      - ../.env
+
+    ports:
+      # Puerto local 3008 → puerto interno 8080 del contenedor
+      # Accedé al bot en http://localhost:3008
+      - "3008:8080"
+
+    #volumes:
+      # Descomenta para persistir credenciales de Google entre reinicios del contenedor
+      #- ./credentials:/app/credentials

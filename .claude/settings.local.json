@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Agustin\\\\Documents\\\\Visual Studio Code - Apps\\\\Bot-RialWay\" -Force)",
+      "Bash(Remove-Item \"c:\\\\Users\\\\Agustin\\\\Documents\\\\Visual Studio Code - Apps\\\\Bot-RialWay\\\\Dockerfile\")",
+      "Bash(Remove-Item \"c:\\\\Users\\\\Agustin\\\\Documents\\\\Visual Studio Code - Apps\\\\Bot-RialWay\\\\docker-compose.yml\")",
+      "PowerShell(Get-ChildItem -Recurse \"c:\\\\Users\\\\Agustin\\\\Documents\\\\Visual Studio Code - Apps\\\\Bot-RialWay\\\\src\" | Where-Object { !$_.PSIsContainer } | Select-Object -ExpandProperty FullName | ForEach-Object { $_.Replace\\(\"c:\\\\Users\\\\Agustin\\\\Documents\\\\Visual Studio Code - Apps\\\\Bot-RialWay\\\\src\\\\\", \"\"\\) })",
+      "Bash(npx tsc *)",
+      "Bash(npx eslint *)",
+      "Bash(npm install *)",
+      "Bash(node -e \"require\\('concurrently'\\); console.log\\('concurrently OK'\\)\")",
+      "Bash(node -e \"require\\('wait-on'\\); console.log\\('wait-on OK'\\)\")",
+      "Bash(node -e \"import\\('open-cli'\\).then\\(\\(\\)=>console.log\\('open-cli OK'\\)\\).catch\\(e=>console.log\\('open-cli ERR:',e.message\\)\\)\")",
+      "Bash(findstr open *)",
+      "Bash(dir node_modules\\\\open-cli)",
+      "Bash(not exist *)",
+      "Bash(node --input-type=module)",
+      "Bash(git -C \"c:\\\\Users\\\\Agustin\\\\Documents\\\\Visual Studio Code - Apps\\\\Bot-RialWay\" remote -v)"
+    ]
+  }
+}

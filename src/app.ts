@@ -12,41 +12,42 @@ import { MetaCloudProvider } from "./providers/MetaCloudProvider";
 import { setAdapterProvider, setGroupProvider, getAdapterProvider, getGroupProvider } from "./providers/instances";
 
 // --- Utils & Handlers ---
-import { restoreSessionFromDb, startSessionSync, deleteSessionFromDb } from "./utils/sessionSync";
+import { restoreSessionFromDb, startSessionSync, deleteSessionFromDb } from "./db/sessionSync";
 import { ErrorReporter } from "./utils/errorReporter";
-import { updateMain } from "./addModule/updateMain";
-import { WebChatManager } from "./utils-web/WebChatManager";
-import { HistoryHandler } from "./utils/historyHandler";
-import { registerProcessCallback, handleQueue, userQueues, userLocks } from "./utils/queueManager";
+import { updateMain } from "./modules/updateMain";
+import { WebChatManager } from "./webchat/WebChatManager";
+import { HistoryHandler } from "./db/historyHandler";
+import { registerProcessCallback, handleQueue, userQueues, userLocks } from "./bot/queueManager";
 
 // --- Managers & Routes ---
-import { registerBackofficeRoutes, processSendMessage, processBulkTemplate, processImportExcel, BackofficeDependencies } from "./routes/backoffice.routes";
+import { registerBackofficeRoutes, processSendMessage, processBulkTemplate, processImportExcel, BackofficeDependencies } from "./backoffice/backoffice.routes";
 import { registerRailwayRoutes } from "./routes/railway.routes";
 import { registerWebchatRoutes } from "./routes/webchat.routes";
 import { registerStaticRoutes } from "./routes/static.routes";
 import { initSocketIO } from "./sockets/socket.manager";
 import { registerProviderEvents, hasActiveSession } from "./providers/provider.manager";
-import { startHumanInactivityWorker } from "./workers/humanInactivity.worker";
-import { AiManager } from "./utils/ai.manager";
+import { startHumanInactivityWorker } from "./bot/humanInactivity.worker";
+import { AiManager } from "./ai/ai.manager";
 import { registerDashboardRoutes } from "./routes/dashboard.routes";
 import { registerExternalApiRoutes } from "./routes/external_api.routes";
-import { syncAssistantTools, getOpenAI, getOpenAIVision } from "./utils/openaiHelper";
-import { discoverMetaIds } from "./utils/metaDiscovery";
-import { RailwayApi } from "./Api-RailWay/Railway";
+import { syncAssistantTools, getOpenAI, getOpenAIVision } from "./ai/openaiHelper";
+import { discoverMetaIds } from "./apis/meta/metaDiscovery";
+import { RailwayApi } from "./apis/railway/Railway";
 import { smartBodyParser, compatibilityLayer, rootRedirect } from "./middleware/global";
 import { backofficeAuth } from "./middleware/auth";
+import { printEnvStatus } from "./config/env";
 import bodyParser from 'body-parser';
 
 // --- Flows ---
-import { welcomeFlowTxt } from "./Flows/welcomeFlowTxt";
-import { welcomeFlowVoice } from "./Flows/welcomeFlowVoice";
-import { welcomeFlowImg } from "./Flows/welcomeFlowImg";
-import { welcomeFlowVideo } from "./Flows/welcomeFlowVideo";
-import { welcomeFlowDoc } from "./Flows/welcomeFlowDoc";
-import { locationFlow } from "./Flows/locationFlow";
-import { idleFlow } from "./Flows/idleFlow";
-import { welcomeFlowButton } from "./Flows/welcomeFlowButton";
-import { reset } from "./utils/timeOut";
+import { welcomeFlowTxt } from "./bot/flows/welcomeFlowTxt";
+import { welcomeFlowVoice } from "./bot/flows/welcomeFlowVoice";
+import { welcomeFlowImg } from "./bot/flows/welcomeFlowImg";
+import { welcomeFlowVideo } from "./bot/flows/welcomeFlowVideo";
+import { welcomeFlowDoc } from "./bot/flows/welcomeFlowDoc";
+import { locationFlow } from "./bot/flows/locationFlow";
+import { idleFlow } from "./bot/flows/idleFlow";
+import { welcomeFlowButton } from "./bot/flows/welcomeFlowButton";
+import { reset } from "./bot/timeOut";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -91,6 +92,8 @@ function registerSafeErrorHandlers() {
  * Main function for Bot and Server Orchestration
  */
 const main = async () => {
+    printEnvStatus();
+
     // 1. Storage cleanup and session restoration
     await HistoryHandler.initDatabase();
     const PORT = process.env.PORT || 8080;
@@ -188,15 +191,23 @@ const main = async () => {
     // --- INICIALIZACIÓN DE MOTORES ---
     // Importante: Llamar a initVendor explícitamente solo una vez aquí.
     if (adapterProvider.initVendor) {
-        console.log('🚀 [App] Inicializando Motor Principal (Baileys)...');
-        await adapterProvider.initVendor();
+        try {
+            console.log('🚀 [App] Inicializando Motor Principal...');
+            await adapterProvider.initVendor();
+        } catch (e: any) {
+            console.warn(`⚠️ [App] Motor principal no pudo inicializarse: ${e.message}. El servidor arrancará sin WhatsApp activo.`);
+        }
     }
 
     if (groupProvider) {
         registerProviderEvents(groupProvider, true);
         if (groupProvider.initVendor) {
-            console.log('🚀 [App] Inicializando Motor de Grupos (Baileys Auxiliar)...');
-            await groupProvider.initVendor();
+            try {
+                console.log('🚀 [App] Inicializando Motor de Grupos...');
+                await groupProvider.initVendor();
+            } catch (e: any) {
+                console.warn(`⚠️ [App] Motor de grupos no pudo inicializarse: ${e.message}.`);
+            }
         }
     }
 

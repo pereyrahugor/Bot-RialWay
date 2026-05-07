@@ -11,14 +11,14 @@ export const registerStaticRoutes = (app: any, { __dirname }: { __dirname: strin
     const serveHtmlPage = (route: string, filename: string, middlewares: any[] = []) => {
         const handler = async (req: any, res: any) => {
             try {
-                const { HistoryHandler } = await import('../utils/historyHandler');
+                const { HistoryHandler } = await import('../db/historyHandler');
                 const possiblePaths = [
-                    path.join(process.cwd(), 'src', 'html', filename),
+                    path.join(process.cwd(), 'src', 'backoffice', 'html', filename),
                     path.join(process.cwd(), filename),
                     path.join(process.cwd(), 'src', filename),
-                    path.join(__dirname, 'html', filename),
+                    path.join(__dirname, '..', 'backoffice', 'html', filename),
                     path.join(__dirname, filename),
-                    path.join(__dirname, '..', 'src', 'html', filename)
+                    path.join(__dirname, '..', 'src', 'backoffice', 'html', filename)
                 ];
 
                 let htmlPath = null;
@@ -90,8 +90,8 @@ export const registerStaticRoutes = (app: any, { __dirname }: { __dirname: strin
     serveHtmlPage("/documentacion", "docs.html");
 
     // Servir archivos estáticos
-    app.use("/js", serve(path.join(process.cwd(), "src", "js")));
-    app.use("/style", serve(path.join(process.cwd(), "src", "style")));
+    app.use("/js", serve(path.join(process.cwd(), "src", "backoffice", "js")));
+    app.use("/style", serve(path.join(process.cwd(), "src", "backoffice", "style")));
     app.use("/assets", serve(path.join(process.cwd(), "src", "assets")));
     app.use("/uploads", serve(path.join(process.cwd(), "uploads")));
 

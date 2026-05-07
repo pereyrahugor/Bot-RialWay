@@ -1,9 +1,9 @@
 import path from 'path';
 import fs from 'fs';
 import { withRetry } from "../utils/retryHelper";
-import { safeToAsk } from "../utils/openaiHelper";
-import { AssistantResponseProcessor } from "../utils/AssistantResponseProcessor";
-import { transcribeAudioFile } from "../utils/audioTranscriptior";
+import { safeToAsk } from "../ai/openaiHelper";
+import { AssistantResponseProcessor } from "../ai/AssistantResponseProcessor";
+import { transcribeAudioFile } from "../ai/audioTranscriptior";
 
 import { backofficeAuth } from "../middleware/auth";
 
@@ -83,7 +83,7 @@ export const registerWebchatRoutes = (app: any, {
                 }
             }
 
-            const { HistoryHandler } = await import("../utils/historyHandler");
+            const { HistoryHandler } = await import("../db/historyHandler");
             const session = webChatManager.getSession(ip);
             let replyText = '';
 

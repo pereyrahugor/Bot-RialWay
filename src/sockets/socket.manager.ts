@@ -1,5 +1,5 @@
 import { Server } from 'socket.io';
-import { historyEvents, HistoryHandler } from '../utils/historyHandler';
+import { historyEvents, HistoryHandler } from '../db/historyHandler';
 
 /**
  * Inicializa Socket.IO y configura los eventos globales y de conexión.

@@ -1,4 +1,4 @@
-import { HistoryHandler } from "../utils/historyHandler";
+import { HistoryHandler } from "../db/historyHandler";
 
 /**
  * Middleware de autenticación robusto para el backoffice.

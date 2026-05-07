@@ -1,4 +1,4 @@
-import { supabase, HistoryHandler } from '../utils/historyHandler';
+import { supabase, HistoryHandler } from '../db/historyHandler';
 import { backofficeAuth } from '../middleware/auth';
 
 /**
@@ -56,29 +56,29 @@ export const registerDashboardRoutes = (app: any) => {
 
             // Procesamiento de datos en el servidor para el cliente
             const totalChats = chats?.length || 0;
-            const totalLeads = chats?.filter(c => c.is_lead)?.length || 0;
+            const totalLeads = chats?.filter((c: any) => c.is_lead)?.length || 0;
             const conversionRate = totalChats > 0 ? (totalLeads / totalChats) * 100 : 0;
 
-            const botMessages = roleStats?.filter(m => m.role === 'assistant')?.length || 0;
+            const botMessages = roleStats?.filter((m: any) => m.role === 'assistant')?.length || 0;
             const totalMessages = roleStats?.length || 0;
             const proactivity = totalMessages > 0 ? (botMessages / totalMessages) * 100 : 0;
 
-            const funnel = tickets?.reduce((acc: any, t) => {
+            const funnel = tickets?.reduce((acc: any, t: any) => {
                 acc[t.estado] = (acc[t.estado] || 0) + 1;
                 return acc;
             }, {});
 
-            const categories = tickets?.reduce((acc: any, t) => {
+            const categories = tickets?.reduce((acc: any, t: any) => {
                 acc[t.tipo || 'Sin Tipo'] = (acc[t.tipo || 'Sin Tipo'] || 0) + 1;
                 return acc;
             }, {});
 
-            const productivity = auditoria?.reduce((acc: any, a) => {
+            const productivity = auditoria?.reduce((acc: any, a: any) => {
                 acc[a.usuario] = (acc[a.usuario] || 0) + 1;
                 return acc;
             }, {});
 
-            const sources = chats?.reduce((acc: any, c) => {
+            const sources = chats?.reduce((acc: any, c: any) => {
                 const s = c.source || 'Directo/WA';
                 acc[s] = (acc[s] || 0) + 1;
                 return acc;

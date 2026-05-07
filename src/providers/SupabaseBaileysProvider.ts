@@ -49,8 +49,8 @@ export class SupabaseBaileysProvider extends BaileysProvider {
             return this.vendor;
         }
 
-        const { useSupabaseAuthState } = await import('../utils/supabaseAdapter');
-        const { vault } = await import('../utils/vault');
+        const { useSupabaseAuthState } = await import('../db/supabaseAdapter');
+        const { vault } = await import('../db/vault');
         
         const supabaseUrl = process.env.SUPABASE_URL || vault.supabaseUrl;
         const supabaseKey = process.env.SUPABASE_KEY || vault.supabaseKey;
@@ -188,7 +188,7 @@ export class SupabaseBaileysProvider extends BaileysProvider {
                     setTimeout(() => this.initProvider(), 5000);
                 } else {
                     console.log(`[SupabaseBaileysProvider] ⚠️ Sesión cerrada por el usuario/logout. Limpiando credenciales y solicitando nuevo QR...`);
-                    const { deleteSessionFromDb } = await import('../utils/sessionSync');
+                    const { deleteSessionFromDb } = await import('../db/sessionSync');
                     await deleteSessionFromDb(this.globalVendorArgs.name);
                     
                     // Reiniciar para generar nuevo QR

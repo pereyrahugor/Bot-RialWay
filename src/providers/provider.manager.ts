@@ -2,8 +2,8 @@ import path from 'path';
 import fs from 'fs';
 import QRCode from 'qrcode';
 import { EVENTS } from "@builderbot/bot";
-import { isSessionInDb } from "../utils/sessionSync";
-import { HistoryHandler } from '../utils/historyHandler';
+import { isSessionInDb } from "../db/sessionSync";
+import { HistoryHandler } from '../db/historyHandler';
 
 /**
  * Cache temporal para IDs de mensajes enviados desde el backoffice.
@@ -72,7 +72,7 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
 
             // Opcional: Guardar en el historial de Supabase si no es un comando de sistema
             if (ctx.body && !ctx.body.startsWith('_event_')) {
-                const { HistoryHandler } = await import('../utils/historyHandler');
+                const { HistoryHandler } = await import('../db/historyHandler');
                 const chatId = ctx.from?.includes('@') ? ctx.from.split('@')[0] : ctx.from;
                 
                 // Extraer un ID único del mensaje para evital duplicados (external_id)
@@ -101,7 +101,7 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
         try {
             const isManual = ctx.isManualIntervention;
             console.log(`${prefix} 📤 Mensaje saliente manual detectado. ID: ${ctx.from}. Body: ${ctx.body}${isManual ? ' [INTERVENCIÓN DESDE APP WHATSAPP]' : ''}`);
-            const { HistoryHandler } = await import('../utils/historyHandler');
+            const { HistoryHandler } = await import('../db/historyHandler');
             
             // Limpiamos el ID si viene con sufijo de Baileys
             const chatId = ctx.from?.includes('@') ? ctx.from.split('@')[0] : ctx.from;
@@ -188,7 +188,7 @@ export const hasActiveSession = async (adapterProvider: any, groupProvider: any 
         const groupStatus = await getStatus(groupProvider, true);
 
         // Fetch meta configuration for additional info if not active
-        const { HistoryHandler } = await import('../utils/historyHandler');
+        const { HistoryHandler } = await import('../db/historyHandler');
         const metaOnboarding = await HistoryHandler.getMetaOnboardingData();
 
         return {

@@ -1,5 +1,8 @@
 {
   "name": "Bot WhatsApp BuilderBot",
+  "build": {
+    "dockerfilePath": "docker/Dockerfile"
+  },
   "description": "Bot de WhatsApp con integración OpenAI, multiagente y soporte de comandos",
   "plugins": [
     "docker"

@@ -1,5 +1,5 @@
 import { backofficeAuth, systemConfigAuth } from "../middleware/auth";
-import { deleteSessionFromDb } from "../utils/sessionSync";
+import { deleteSessionFromDb } from "../db/sessionSync";
 
 /**
  * Registra las rutas de Railway en la instancia de Polka.

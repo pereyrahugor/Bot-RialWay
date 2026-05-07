@@ -1,7 +1,7 @@
 
 import { randomBytes } from 'crypto';
 import bodyParser from 'body-parser';
-import { HistoryHandler, supabase } from "../utils/historyHandler";
+import { HistoryHandler, supabase } from "../db/historyHandler";
 
 /**
  * Helper para registrar logs de la API
@@ -182,7 +182,7 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
                             data: [
                                 {
                                     phone: "54911...",
-                                    variables: expectedVars.reduce((acc, curr) => ({ ...acc, [curr]: "valor_ejemplo" }), {})
+                                    variables: expectedVars.reduce((acc: Record<string, string>, curr: string) => ({ ...acc, [curr]: "valor_ejemplo" }), {})
                                 }
                             ]
                         }
