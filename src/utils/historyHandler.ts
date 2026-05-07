@@ -2,6 +2,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { EventEmitter } from "events";
 import dotenv from "dotenv";
+import crypto from "crypto";
 
 import { vault } from "./vault";
 
@@ -1423,6 +1424,25 @@ export class HistoryHandler {
                 }
             } else {
                 console.log(`✅ [Bootstrap] El proyecto ${currentProjectId} ya cuenta con su propia configuración.`);
+            }
+
+            // 3. Asegurar existencia de API_KEY única para este proyecto
+            const { data: apiKeySetting } = await supabase
+                .from('settings')
+                .select('value')
+                .eq('project_id', currentProjectId)
+                .eq('key', 'api_key')
+                .maybeSingle();
+
+            if (!apiKeySetting) {
+                const uniqueKey = `sk_rialway_${crypto.randomBytes(16).toString('hex')}`;
+                console.log(`🆕 [Bootstrap] Generando API_KEY única para el proyecto: ${uniqueKey}`);
+                await supabase.from('settings').insert({
+                    project_id: currentProjectId,
+                    key: 'api_key',
+                    value: uniqueKey,
+                    updated_at: new Date().toISOString()
+                });
             }
 
         } catch (err) {
