@@ -334,7 +334,8 @@ class MetaCloudProvider extends ProviderClass {
             });
             return response.data;
         } catch (error: any) {
-            console.error('❌ [MetaCloudProvider] Error enviando plantilla:', error?.response?.data || error.message);
+            const errorDetail = error?.response?.data || error.message;
+            console.error('❌ [MetaCloudProvider] Error enviando plantilla:', JSON.stringify(errorDetail, null, 2));
             throw error; // Lanzamos el error para que el proceso masivo lo capture
         }
     }

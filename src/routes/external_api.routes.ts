@@ -36,12 +36,12 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
     const { adapterProvider, groupProvider } = deps;
 
     // --- 1. SOLICITUD DE TOKEN DE UN SOLO USO ---
-    app.post('/api/auth/token', bodyParser.json(), async (req: any, res: any) => {
+    app.post('/api/v1/auth', bodyParser.json(), async (req: any, res: any) => {
         try {
             const { api_key } = req.body;
 
             if (!api_key) {
-                await logApiRequest({ endpoint: '/api/auth/token', status: 'error', error: 'Falta api_key', req });
+                await logApiRequest({ endpoint: '/api/v1/auth', status: 'error', error: 'Falta api_key', req });
                 return res.status(400).json({ success: false, error: "Falta api_key en la solicitud" });
             }
 
@@ -49,7 +49,7 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
             const storedApiKey = await HistoryHandler.getSetting('api_key');
             
             if (!storedApiKey || api_key !== storedApiKey) {
-                await logApiRequest({ endpoint: '/api/auth/token', status: 'error', error: 'API KEY inválida', req });
+                await logApiRequest({ endpoint: '/api/v1/auth', status: 'error', error: 'API KEY inválida', req });
                 return res.status(401).json({ success: false, error: "API KEY inválida" });
             }
 
@@ -70,7 +70,7 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
 
             if (error) throw error;
 
-            await logApiRequest({ token: oneTimeToken, endpoint: '/api/auth/token', status: 'success', req });
+            await logApiRequest({ token: oneTimeToken, endpoint: '/api/v1/auth', status: 'success', req });
 
             return res.json({ 
                 success: true, 
@@ -124,9 +124,40 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
                 return res.status(404).json({ success: false, error: `Plantilla no encontrada: ${template_id}` });
             }
 
-            // Prioridad absoluta al idioma de la plantilla en Meta
             const templateName = foundTemplate.name;
             const finalLanguage = foundTemplate.language || languageCode || 'es';
+
+            // --- VALIDACIÓN DE VARIABLES ---
+            const bodyComponent = foundTemplate.components?.find((c: any) => c.type === 'BODY');
+            const templateText = bodyComponent?.text || '';
+            const expectedVars = (templateText.match(/\{\{(.+?)\}\}/g) || []).map((v: string) => v.replace(/\{\{|\}\}/g, ''));
+            
+            // Validar el primer elemento del data como muestra
+            if (data.length > 0) {
+                const sampleVars = data[0].variables || {};
+                const sampleKeys = Object.keys(sampleVars);
+                
+                // Si la plantilla tiene variables pero el JSON no las tiene o el número no coincide
+                if (expectedVars.length !== sampleKeys.length) {
+                    const errorMsg = `Estructura de variables inválida. La plantilla '${templateName}' espera ${expectedVars.length} variables: [${expectedVars.join(', ')}]. Tú enviaste ${sampleKeys.length}.`;
+                    
+                    await logApiRequest({ token, endpoint: '/api/v1/send-template', status: 'error', error: errorMsg, req });
+                    
+                    return res.status(400).json({ 
+                        success: false, 
+                        error: errorMsg,
+                        expected_format: {
+                            template_id: template_id,
+                            data: [
+                                {
+                                    phone: "54911...",
+                                    variables: expectedVars.reduce((acc, curr) => ({ ...acc, [curr]: "valor_ejemplo" }), {})
+                                }
+                            ]
+                        }
+                    });
+                }
+            }
 
             // Marcar como usado inmediatamente (Atomicidad)
             await supabase.from('api_tokens').update({ is_used: true }).eq('id', tokenData.id);
@@ -141,6 +172,7 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
                 success: true, 
                 message: `Envío iniciado para ${data.length} contactos.`,
                 template_resolved: templateName,
+                language_used: finalLanguage,
                 job_id: tokenData.id 
             });
 
