@@ -205,6 +205,7 @@ async function processExternalBulk(provider: any, templateName: string, language
             // El formato esperado de variables es un objeto { nombre: "valor", ... }
             const parameters = variables ? Object.entries(variables).map(([key, value]) => ({
                 type: 'text',
+                parameter_name: key, // Requerido para plantillas con variables con nombre (Named Parameters)
                 text: String(value)
             })) : [];
 
