@@ -15,10 +15,13 @@ async function logApiRequest(data: {
 }) {
     try {
         const origin_url = data.req.headers.origin || data.req.headers.referer || "direct_request";
+        const ip_address = data.req.headers['x-forwarded-for'] || data.req.socket.remoteAddress || null;
+        
         await supabase.from('api_logs').insert({
             project_id: HistoryHandler.PROJECT_IDENTIFIER,
             token: data.token || null,
             origin_url: origin_url,
+            ip_address: ip_address,
             endpoint: data.endpoint,
             status: data.status,
             error_message: data.error || null,
@@ -39,6 +42,24 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
     app.post('/api/v1/auth', bodyParser.json(), async (req: any, res: any) => {
         try {
             const { api_key } = req.body;
+            const ip_address = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+
+            // 1. Calcular bloqueo exponencial basado en fallos recientes (últimos 15 min)
+            const fifteenMinsAgo = new Date(Date.now() - 15 * 60000).toISOString();
+            const { count: failedAttempts } = await supabase
+                .from('api_logs')
+                .select('*', { count: 'exact', head: true })
+                .eq('endpoint', '/api/v1/auth')
+                .eq('status', 'error')
+                .eq('ip_address', ip_address)
+                .gt('created_at', fifteenMinsAgo);
+
+            const failures = failedAttempts || 0;
+            if (failures > 0) {
+                const delay = Math.min(30000, Math.pow(2, failures - 1) * 1000);
+                console.log(`⏳ [API_AUTH] IP ${ip_address} tiene ${failures} fallos. Aplicando delay de ${delay}ms`);
+                await new Promise(r => setTimeout(r, delay));
+            }
 
             if (!api_key) {
                 await logApiRequest({ endpoint: '/api/v1/auth', status: 'error', error: 'Falta api_key', req });
@@ -95,12 +116,19 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
                 return res.status(400).json({ success: false, error: "Datos incompletos. Se requiere token, template_id y data (array)." });
             }
 
+            // Límite de seguridad: Máximo 2500 destinatarios por petición
+            if (data.length > 2500) {
+                await logApiRequest({ token, endpoint: '/api/v1/send-template', status: 'error', error: 'Exceso de destinatarios', req });
+                return res.status(400).json({ success: false, error: "El límite es de 2500 destinatarios por solicitud masiva." });
+            }
+
             // Validar y quemar el token
             const { data: tokenData, error: fetchError } = await supabase
                 .from('api_tokens')
                 .select('*')
                 .eq('token', token)
                 .eq('is_used', false)
+                .eq('client_id', HistoryHandler.PROJECT_IDENTIFIER) // Validación de scope por proyecto
                 .gt('expires_at', new Date().toISOString())
                 .maybeSingle();
 
@@ -108,6 +136,9 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
                 await logApiRequest({ token, endpoint: '/api/v1/send-template', status: 'error', error: 'Token inválido o expirado', req });
                 return res.status(401).json({ success: false, error: "Token inválido, expirado o ya utilizado." });
             }
+
+            // Marcar como usado inmediatamente (Atomicidad para prevenir Race Condition)
+            await supabase.from('api_tokens').update({ is_used: true }).eq('id', tokenData.id);
 
             // Mapear template_id a templateName
             const provider = adapterProvider.constructor.name === 'MetaCloudProvider' ? adapterProvider : groupProvider;
@@ -158,9 +189,6 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
                     });
                 }
             }
-
-            // Marcar como usado inmediatamente (Atomicidad)
-            await supabase.from('api_tokens').update({ is_used: true }).eq('id', tokenData.id);
 
             // Iniciar proceso de envío
             console.log(`🚀 [API_EXTERNAL] Iniciando envío masivo para plantilla: ${templateName} (${finalLanguage}) con ${data.length} destinatarios`);
