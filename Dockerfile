@@ -6,7 +6,7 @@ FROM node:22-slim AS builder
 WORKDIR /app
 
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 ENV PNPM_HOME=/usr/local/bin
 
 
@@ -22,6 +22,7 @@ COPY tsconfig.json ./
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ git ca-certificates poppler-utils && update-ca-certificates
 
 # Instalar dependencias node
+RUN pnpm config set block-exotic-subdeps false
 RUN pnpm install
 
 # Copiar el resto del código fuente y carpetas necesarias antes del build
@@ -68,7 +69,7 @@ COPY --from=builder /app/src/js ./src/js
 COPY --from=builder /app/src/style ./src/style
 
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 ENV PNPM_HOME=/usr/local/bin
 RUN mkdir /app/tmp
 # Copiar node_modules funcional del builder (Evita que ffmpeg o scripts binarios se rompan en producción)
