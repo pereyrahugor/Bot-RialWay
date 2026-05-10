@@ -2334,12 +2334,19 @@ async function startContactSync() {
         const data = await res.json();
         
         if (data.success) {
-            const { contacts, labels, associations } = data.summary;
-            summaryText.innerHTML = `
-                Sincronizados <b>${contacts}</b> contactos y <b>${labels}</b> etiquetas.<br/>
-                Se crearon <b>${associations}</b> vinculaciones.
-            `;
-            
+            const { contacts, labels, associations, meta_sync_triggered } = data.summary;
+            if (meta_sync_triggered) {
+                summaryText.innerHTML = `
+                    <div style="color: #059669; margin-bottom: 10px;"><i class="fab fa-whatsapp"></i> <b>Sincronización Oficial Meta Solicitada</b></div>
+                    La petición ha sido enviada a los servidores de Meta.<br/>
+                    Los contactos y el historial se cargarán en segundo plano.
+                `;
+            } else {
+                summaryText.innerHTML = `
+                    Sincronizados <b>${contacts}</b> contactos y <b>${labels}</b> etiquetas.<br/>
+                    Se crearon <b>${associations}</b> vinculaciones.
+                `;
+            }
             // Refrescar datos locales
             await fetchChats(true);
             await fetchBotTags();
@@ -2446,3 +2453,4 @@ window.startContactSync = startContactSync;
 window.closeSyncModal = closeSyncModal;
 
 console.log('✅ [BACKOFFICE] Cargado Correctamente.');
+

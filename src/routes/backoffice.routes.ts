@@ -681,10 +681,27 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
-    // --- WHATSAPP SYNC (BAILEYS) ---
+    // --- WHATSAPP SYNC (BAILEYS / META) ---
 
     app.post('/api/backoffice/whatsapp/sync-contacts', backofficeAuth, async (req: any, res: any) => {
         try {
+            // 1. Revisar si estamos en modo META OFFICIAL
+            const metaConfig = await depsHistoryHandler.getMetaOnboardingData(depsHistoryHandler.PROJECT_IDENTIFIER);
+            if (metaConfig && metaConfig.access_token && metaConfig.phone_number_id) {
+                console.log(`📡 [SYNC] Sincronización Meta detectada. Solicitando historial SMB...`);
+                await triggerMetaSync(metaConfig.access_token, metaConfig.phone_number_id);
+                return res.json({
+                    success: true,
+                    summary: {
+                        contacts: 'Meta Sync Triggered',
+                        labels: 'N/A',
+                        associations: 0,
+                        meta_sync_triggered: true
+                    }
+                });
+            }
+
+            // 2. Fallback a Baileys si no hay Meta
             // Priorizamos el groupProvider ya que es el que suele ser Baileys en modo dual
             const provider = deps.groupProvider || deps.adapterProvider;
             
