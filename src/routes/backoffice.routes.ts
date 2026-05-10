@@ -28,23 +28,19 @@ export interface BackofficeDependencies {
  */
 async function triggerMetaSync(accessToken: string, phoneId: string) {
     console.log(`📡 [SMB-SYNC] Iniciando sincronización automática para ${phoneId}...`);
-    try {
-        // 1. Sincronizar Contactos
-        await axios.post(`https://graph.facebook.com/v22.0/${phoneId}/smb_app_data`, 
-            { messaging_product: 'whatsapp', sync_type: 'smb_app_state_sync' },
-            { headers: { 'Authorization': `Bearer ${accessToken}` } }
-        );
-        console.log(`✅ [SMB-SYNC] Solicitud de Contactos enviada.`);
+    // 1. Sincronizar Contactos
+    await axios.post(`https://graph.facebook.com/v22.0/${phoneId}/smb_app_data`, 
+        { messaging_product: 'whatsapp', sync_type: 'smb_app_state_sync' },
+        { headers: { 'Authorization': `Bearer ${accessToken}` } }
+    );
+    console.log(`✅ [SMB-SYNC] Solicitud de Contactos enviada.`);
 
-        // 2. Sincronizar Historial
-        await axios.post(`https://graph.facebook.com/v22.0/${phoneId}/smb_app_data`, 
-            { messaging_product: 'whatsapp', sync_type: 'history' },
-            { headers: { 'Authorization': `Bearer ${accessToken}` } }
-        );
-        console.log(`✅ [SMB-SYNC] Solicitud de Historial enviada.`);
-    } catch (err: any) {
-        console.error(`❌ [SMB-SYNC] Error en sincronización automática:`, err?.response?.data || err.message);
-    }
+    // 2. Sincronizar Historial
+    await axios.post(`https://graph.facebook.com/v22.0/${phoneId}/smb_app_data`, 
+        { messaging_product: 'whatsapp', sync_type: 'history' },
+        { headers: { 'Authorization': `Bearer ${accessToken}` } }
+    );
+    console.log(`✅ [SMB-SYNC] Solicitud de Historial enviada.`);
 }
 
 /** Función unificada para procesar el envío de mensajes e historial */
@@ -689,16 +685,35 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             const metaConfig = await depsHistoryHandler.getMetaOnboardingData(depsHistoryHandler.PROJECT_IDENTIFIER);
             if (metaConfig && metaConfig.access_token && metaConfig.phone_number_id) {
                 console.log(`📡 [SYNC] Sincronización Meta detectada. Solicitando historial SMB...`);
-                await triggerMetaSync(metaConfig.access_token, metaConfig.phone_number_id);
-                return res.json({
-                    success: true,
-                    summary: {
-                        contacts: 'Meta Sync Triggered',
-                        labels: 'N/A',
-                        associations: 0,
-                        meta_sync_triggered: true
+                try {
+                    await triggerMetaSync(metaConfig.access_token, metaConfig.phone_number_id);
+                    return res.json({
+                        success: true,
+                        summary: {
+                            contacts: 'Meta Sync Triggered',
+                            labels: 'N/A',
+                            associations: 0,
+                            meta_sync_triggered: true
+                        }
+                    });
+                } catch (metaErr: any) {
+                    const errorData = metaErr?.response?.data || {};
+                    const details = errorData.error?.error_data?.details || errorData.error?.message || metaErr.message;
+                    
+                    console.error('❌ [SMB-SYNC] Falló la sincronización de Meta:', details);
+                    
+                    if (details.includes('outside of allowed time window')) {
+                        return res.status(403).json({
+                            success: false,
+                            error: 'Meta solo permite la sincronización de historial dentro de las primeras 24 horas después de la vinculación inicial. Pasado este tiempo, los contactos se sincronizarán automáticamente a medida que escriban.'
+                        });
                     }
-                });
+
+                    return res.status(500).json({
+                        success: false,
+                        error: `Error de Meta: ${details}`
+                    });
+                }
             }
 
             // 2. Fallback a Baileys si no hay Meta
