@@ -31,14 +31,14 @@ async function triggerMetaSync(accessToken: string, phoneId: string) {
     try {
         // 1. Sincronizar Contactos
         await axios.post(`https://graph.facebook.com/v22.0/${phoneId}/smb_app_data`, 
-            { sync_type: 'smb_app_state_sync' },
+            { messaging_product: 'whatsapp', sync_type: 'smb_app_state_sync' },
             { headers: { 'Authorization': `Bearer ${accessToken}` } }
         );
         console.log(`✅ [SMB-SYNC] Solicitud de Contactos enviada.`);
 
         // 2. Sincronizar Historial
         await axios.post(`https://graph.facebook.com/v22.0/${phoneId}/smb_app_data`, 
-            { sync_type: 'history' },
+            { messaging_product: 'whatsapp', sync_type: 'history' },
             { headers: { 'Authorization': `Bearer ${accessToken}` } }
         );
         console.log(`✅ [SMB-SYNC] Solicitud de Historial enviada.`);
