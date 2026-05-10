@@ -160,10 +160,40 @@ async function loadTasksDashboard() {
     if (!container) return;
 
     try {
-        const res = await fetch(`/api/backoffice/crm/tasks?token=${activeToken}`);
-        const tasks = await res.json();
+        const tasks = [];
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const fiveDaysLater = new Date(today);
+        fiveDaysLater.setDate(today.getDate() + 5);
 
-        if (!tasks || tasks.length === 0) {
+        allTickets.forEach(ticket => {
+            const lead = allLeads.find(l => l.id === ticket.chat_id) || {};
+            const metadata = crmData[ticket.id] || {};
+            
+            // Tomar la fecha de la metadata (Kanban) o del lead (Base de datos)
+            let alertDateStr = metadata.alertDate || (lead.crm_due_date ? lead.crm_due_date.split('T')[0] : null);
+            
+            if (alertDateStr) {
+                const alertD = new Date(alertDateStr + 'T00:00:00'); // Forzar zona horaria local
+                alertD.setHours(0, 0, 0, 0);
+                
+                if (alertD <= fiveDaysLater) {
+                    const colTitle = columns.find(c => c.id === metadata.columnId)?.title || lead.crm_status || 'NUEVO';
+                    tasks.push({
+                        ticket_id: ticket.id,
+                        chat_id: ticket.chat_id,
+                        name: lead.name || 'Lead sin nombre',
+                        crm_status: colTitle,
+                        crm_due_date: alertDateStr
+                    });
+                }
+            }
+        });
+
+        // Ordenar por fecha (las más antiguas primero)
+        tasks.sort((a, b) => new Date(a.crm_due_date) - new Date(b.crm_due_date));
+
+        if (tasks.length === 0) {
             container.innerHTML = '<div class="tasks-empty">No hay tareas pendientes para los próximos días.</div>';
             return;
         }
@@ -171,17 +201,17 @@ async function loadTasksDashboard() {
         const todayStr = new Date().toISOString().split('T')[0];
 
         container.innerHTML = tasks.map(t => {
-            const dateStr = t.crm_due_date ? t.crm_due_date.split('T')[0] : '';
+            const dateStr = t.crm_due_date;
             const isToday = dateStr === todayStr;
             const isOverdue = dateStr < todayStr;
             const statusClass = isToday ? 'today' : (isOverdue ? 'overdue' : '');
             
             return `
-                <div class="task-item ${statusClass}" onclick="openCardModalFromTask('${t.id}')">
+                <div class="task-item ${statusClass}" onclick="openCardModalFromTask('${t.chat_id}')">
                     <div class="task-date">${formatDate(dateStr)} ${isToday ? '(HOY)' : (isOverdue ? '(VENCIDO)' : '')}</div>
-                    <div class="task-title">${t.name || 'Lead sin nombre'}</div>
-                    <div class="task-lead"><i class="fas fa-tasks"></i> Estado: ${t.crm_status || 'NUEVO'}</div>
-                    <div style="font-size:0.7rem; opacity:0.6; margin-top:5px;">ID: ${t.id.split('@')[0]}</div>
+                    <div class="task-title">${t.name}</div>
+                    <div class="task-lead"><i class="fas fa-tasks"></i> Estado: ${t.crm_status}</div>
+                    <div style="font-size:0.7rem; opacity:0.6; margin-top:5px;">ID: ${t.chat_id.split('@')[0]}</div>
                 </div>
             `;
         }).join('');
