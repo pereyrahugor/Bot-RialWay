@@ -90,7 +90,7 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
 
         try {
             // Recuperar contexto dinámico del state o de la DB (RAILWAY_PROJECT_ID)
-            let dynamicProjectId = state.get('dynamicProjectId') || process.env.RAILWAY_PROJECT_ID;
+            const dynamicProjectId = state.get('dynamicProjectId') || process.env.RAILWAY_PROJECT_ID;
 
             // Fetch dynamic configs
             const ASSISTANT_ID = await HistoryHandler.getConfig('ASSISTANT_ID', dynamicProjectId) || '';

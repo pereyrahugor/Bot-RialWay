@@ -242,7 +242,7 @@ export class AssistantResponseProcessor {
 
         // 5) Detectar rutas de archivos directas en el texto (ej: /app/temp/...)
         // Esto sucede cuando una herramienta devuelve la ruta y el asistente la repite
-        const filePathRegex = /([\/A-Za-z0-9._\-\s:\\]+\.pdf)/gi;
+        const filePathRegex = /([/A-Za-z0-9._\-\s:\\]+\.pdf)/gi;
         let fileMatch;
         while ((fileMatch = filePathRegex.exec(sanitizedTextResponse)) !== null) {
             const p = fileMatch[1].trim();

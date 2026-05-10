@@ -35,12 +35,29 @@ export const registerStaticRoutes = (app: any, { __dirname }: { __dirname: strin
                     
                     console.log(`[Static] 🟢 Sirviendo ${filename} para ${route}. botName=${botName}`);
 
-                    // Obtener configuración de visibilidad desde DB en paralelo para mayor velocidad
+                    // Helper con timeout para evitar bloqueos por red hacia Supabase
+                    const getSettingSafe = async (key: string, defaultValue: string = 'true'): Promise<string> => {
+                        try {
+                            const timeoutPromise = new Promise<string>((_, reject) => 
+                                setTimeout(() => reject(new Error('Timeout')), 2500)
+                            );
+                            const result = await Promise.race([
+                                HistoryHandler.getSetting(key),
+                                timeoutPromise
+                            ]) as string | null;
+                            return result !== null ? result : defaultValue;
+                        } catch (e) {
+                            console.warn(`[Static] ⚠️ Timeout/Error obteniendo setting ${key}, usando default: ${defaultValue}`);
+                            return defaultValue;
+                        }
+                    };
+
+                    // Obtener configuración de visibilidad desde DB en paralelo con safety
                     const [dbWa, dbIg, dbMs, dbCRM] = await Promise.all([
-                        HistoryHandler.getSetting('WHATSAPP_VISIBLE'),
-                        HistoryHandler.getSetting('INSTAGRAM_VISIBLE'),
-                        HistoryHandler.getSetting('MESSENGER_VISIBLE'),
-                        HistoryHandler.getSetting('CRM_VISIBLE')
+                        getSettingSafe('WHATSAPP_VISIBLE'),
+                        getSettingSafe('INSTAGRAM_VISIBLE', 'false'),
+                        getSettingSafe('MESSENGER_VISIBLE', 'false'),
+                        getSettingSafe('CRM_VISIBLE', 'true')
                     ]);
                     
                     // Si cualquiera de las plataformas está activa, mostrar backoffice
@@ -86,8 +103,10 @@ export const registerStaticRoutes = (app: any, { __dirname }: { __dirname: strin
     serveHtmlPage("/system-config", "system-config.html");
     serveHtmlPage("/login", "login.html");
     serveHtmlPage("/backoffice", "backoffice.html");
+    serveHtmlPage("/backoffice-preview", "backoffice-preview.html");
     serveHtmlPage("/crm", "crm.html");
     serveHtmlPage("/documentacion", "docs.html");
+    serveHtmlPage("/docs", "docs.html");
 
     // Servir archivos estáticos
     app.use("/js", serve(path.join(process.cwd(), "src", "js")));

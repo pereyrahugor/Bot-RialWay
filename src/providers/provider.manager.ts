@@ -138,6 +138,30 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
             console.error(`❌ ${prefix} Error guardando mensaje saliente manual:`, err);
         }
     });
+
+    // --- SINCRONIZACIÓN DE CONTACTOS (META SMB) ---
+    provider.on('contacts_sync', async (contacts: any[]) => {
+        try {
+            console.log(`${prefix} 👥 Recibida petición de sincronización para ${contacts.length} contactos...`);
+            const { HistoryHandler } = await import('../utils/historyHandler');
+            
+            const chatsToSync = contacts.map(c => ({
+                id: c.wa_id,
+                name: c.profile?.name || 'User',
+                type: 'whatsapp',
+                last_message_at: new Date().toISOString(),
+                metadata: {
+                    user_id: c.user_id, // BSUID
+                    profile: c.profile
+                }
+            }));
+
+            await HistoryHandler.syncChats(chatsToSync);
+            console.log(`${prefix} ✅ Sincronización de contactos persistida en base de datos.`);
+        } catch (err) {
+            console.error(`❌ ${prefix} Error en sincronización de contactos:`, err);
+        }
+    });
     }
 
     provider.on('ready', () => {

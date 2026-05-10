@@ -1,4 +1,4 @@
-/* global io, metaAppId, FB, toggleLeadsPanel, toggleTicketsPanel, toggleMetaPanel */
+/* global io, metaAppId, FB */
 const token = localStorage.getItem('backoffice_token');
 if (!token) window.location.href = '/login';
 
@@ -18,28 +18,27 @@ async function initCRMData() {
         if (!resSettings.ok) return;
         const settings = await resSettings.json();
         
-        const colSettingValue = settings.CRM_COLUMNS;
-        if (colSettingValue) {
-            crmColumns = JSON.parse(colSettingValue);
+        const colSetting = settings.find(s => s.key === 'CRM_COLUMNS');
+        if (colSetting && colSetting.value) {
+            crmColumns = JSON.parse(colSetting.value);
         } else {
             crmColumns = [
-                { id: 'UNASSIGNED', title: 'Tickets Nuevos' },
-                { id: 'contactado', title: 'Contactado' },
-                { id: 'negociacion', title: 'En Negociación' },
-                { id: 'propuesta', title: 'Propuesta Enviada' },
-                { id: 'cierre', title: 'Cierre' }
+                { id: 'NUEVO', title: 'NUEVO' },
+                { id: 'EN_PROCESO', title: 'EN PROCESO' },
+                { id: 'GANADO', title: 'GANADO' },
+                { id: 'PERDIDO', title: 'PERDIDO' }
             ];
         }
 
-        const dataSettingValue = settings.CRM_METADATA;
-        if (dataSettingValue) {
-            crmData = JSON.parse(dataSettingValue);
+        const dataSetting = settings.find(s => s.key === 'CRM_METADATA');
+        if (dataSetting && dataSetting.value) {
+            crmData = JSON.parse(dataSetting.value);
         }
 
         // Poblar el selector de estados si existe
         const statusSelect = document.getElementById('crm-status-select-side');
         if (statusSelect) {
-            statusSelect.innerHTML = crmColumns.map(col => `<option value="${col.id}">${col.title}</option>`).join('');
+            statusSelect.innerHTML = crmColumns.map(col => `<option value="${col.title}">${col.title}</option>`).join('');
         }
     } catch (e) {
         console.error('[initCRMData] Error:', e);
@@ -338,14 +337,6 @@ function renderChatList(listToRender = chats) {
             ? `<div style="text-align:right;"><span style="color: var(--accent); font-size: 0.75rem;">🤖 Bot</span><br/><span style="font-size:0.65rem; opacity:0.7;">${timeStr}</span></div>`
             : `<div style="text-align:right;"><span style="color: #f87171; font-size: 0.75rem;">👤 Humano</span><br/><span style="font-size:0.65rem; opacity:0.7;">${timeStr}</span></div>`;
 
-        // CRM Status Badge
-        let crmStatusHtml = '';
-        if (chat.crm_status && chat.crm_status !== 'UNASSIGNED') {
-            const col = (crmColumns || []).find(c => c.id === chat.crm_status || c.title === chat.crm_status);
-            const statusLabel = col ? col.title : chat.crm_status;
-            crmStatusHtml = `<span class="crm-status-badge" style="font-size: 0.65rem; background: rgba(99, 102, 241, 0.1); color: var(--accent); padding: 2px 6px; border-radius: 6px; font-weight: 700; margin-top: 4px; display: inline-block; border: 1px solid rgba(99, 102, 241, 0.2); line-height: 1.2;">${statusLabel}</span>`;
-        }
-
         return `
             <div class="chat-item ${activeChatId === chat.id ? 'active' : ''}" onclick="selectChat('${chat.id}')">
                 <div class="chat-avatar">
@@ -359,7 +350,6 @@ function renderChatList(listToRender = chats) {
                         <div style="display:flex; flex-direction:column;">
                             <span class="chat-name">${(chat.name && chat.name !== '[-]') ? chat.name : chat.id.split('@')[0]}</span>
                             <span style="font-size: 0.75rem; opacity: 0.6; color: var(--text-muted); font-weight: normal;">${chat.id.split('@')[0]}</span>
-                            ${crmStatusHtml}
                         </div>
                         ${statusBadge}
                     </div>
@@ -801,12 +791,12 @@ async function loadCRMJump(chatId) {
             const statusSelect = document.getElementById('crm-status-select-side');
             if (statusSelect) {
                 // Rellenar opciones según columnas del CRM
-                statusSelect.innerHTML = crmColumns.map(c => `<option value="${c.id}">${c.title}</option>`).join('');
+                statusSelect.innerHTML = crmColumns.map(c => `<option value="${c.title}">${c.title}</option>`).join('');
                 
                 // Buscar estado actual en metadatos
                 const meta = crmData[activeTicketId] || {};
-                const currentColumnId = meta.columnId || 'UNASSIGNED';
-                statusSelect.value = currentColumnId;
+                const currentColumn = crmColumns.find(c => c.id === (meta.columnId || 'UNASSIGNED'));
+                if (currentColumn) statusSelect.value = currentColumn.title;
             }
         } else {
             container.style.display = 'none';
@@ -878,30 +868,7 @@ function populateCRMFields(chat) {
 
     // CRM Native Columns
     const statusEl = document.getElementById('crm-status-select-side');
-    if (statusEl) {
-        // Asegurar que el select tenga las opciones cargadas
-        if (statusEl.options.length <= 1 && crmColumns && crmColumns.length > 0) {
-            let optionsHtml = '';
-            if (!crmColumns.some(c => c.id === 'UNASSIGNED')) {
-                optionsHtml += '<option value="UNASSIGNED">Sin Asignar</option>';
-            }
-            optionsHtml += crmColumns.map(c => `<option value="${c.id}">${c.title}</option>`).join('');
-            statusEl.innerHTML = optionsHtml;
-        }
-
-        const currentVal = chat.crm_status || 'UNASSIGNED';
-        // Intentar establecer por valor (ID)
-        statusEl.value = currentVal;
-        
-        // Si no hay coincidencia exacta (selectedIndex -1), intentar buscar por Título (para compatibilidad)
-        if (statusEl.selectedIndex === -1) {
-            const col = crmColumns.find(c => c.id === currentVal || c.title === currentVal);
-            if (col) statusEl.value = col.id;
-            else statusEl.value = currentVal; // Fallback al valor crudo si no coincide
-        }
-        
-        console.log(`[CRM] Poblando estado: ${currentVal} -> Asignado: ${statusEl.value}`);
-    }
+    if (statusEl) statusEl.value = chat.crm_status || 'NUEVO';
     
     const dueDateEl = document.getElementById('crm-due-date');
     if (dueDateEl) dueDateEl.value = chat.crm_due_date ? chat.crm_due_date.split('T')[0] : '';
@@ -929,7 +896,7 @@ async function saveCRMDetails() {
         offered_product: document.getElementById('crm-product').value,
         ticket_title: document.getElementById('crm-ticket-title')?.value || '',
         priority: document.getElementById('crm-priority')?.value || 'Baja',
-        crm_status: document.getElementById('crm-status-select-side')?.value || 'UNASSIGNED',
+        crm_status: document.getElementById('crm-status-select-side')?.value || 'NUEVO',
         crm_due_date: document.getElementById('crm-due-date')?.value || null
     };
 
@@ -953,7 +920,7 @@ async function saveCRMDetails() {
             });
 
             // Sincronizar Metadatos (Columna)
-            const col = crmColumns.find(c => c.id === details.crm_status || c.title === details.crm_status);
+            const col = crmColumns.find(c => c.title === details.crm_status);
             if (col) {
                 if (!crmData[activeTicketId]) crmData[activeTicketId] = {};
                 crmData[activeTicketId].columnId = col.id;
@@ -2294,21 +2261,6 @@ window.detectTemplateVariables = detectTemplateVariables;
 window.assignTicketToMe = assignTicketToMe;
 window.closeActiveTicket = closeActiveTicket;
 window.reopenActiveTicket = reopenActiveTicket;
-
-// Manejar parámetros de URL para abrir paneles específicos
-window.addEventListener('DOMContentLoaded', () => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const panel = urlParams.get('panel');
-    
-    if (panel === 'leads' || panel === 'contacts') {
-        setTimeout(() => window.toggleLeadsPanel(), 1000);
-    } else if (panel === 'tickets') {
-        setTimeout(() => window.toggleTicketsPanel(), 1000);
-    } else if (panel === 'meta') {
-        setTimeout(() => window.toggleMetaPanel(), 1000);
-    }
-});
-
 window.deleteActiveTicket = deleteActiveTicket;
 window.toggleIntervention = toggleIntervention;
 
@@ -2446,3 +2398,7 @@ window.startContactSync = startContactSync;
 window.closeSyncModal = closeSyncModal;
 
 console.log('✅ [BACKOFFICE] Cargado Correctamente.');
+
+// --- Inicialización automática ---
+fetchChats(true);
+fetchBotTags();

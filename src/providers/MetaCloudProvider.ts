@@ -499,7 +499,7 @@ class MetaCloudProvider extends ProviderClass {
         if (mediaSource) {
             console.log(`[MetaCloudProvider] 📂 Media detectado en sendMessage:`, typeof mediaSource === 'string' ? mediaSource : JSON.stringify(mediaSource));
             
-            let mediaUrl = typeof mediaSource === 'string' ? mediaSource : (mediaSource.url || mediaSource.path || mediaSource.link);
+            const mediaUrl = typeof mediaSource === 'string' ? mediaSource : (mediaSource.url || mediaSource.path || mediaSource.link);
             const mimeType = (typeof mediaSource === 'object') ? (mediaSource.mimetype || mediaSource.mimeType || '') : '';
             
             // El caption no debe ser la ruta del archivo si el mensaje era una ruta
@@ -606,6 +606,35 @@ class MetaCloudProvider extends ProviderClass {
         }
     }
 
+    /**
+     * Solicita la sincronización de datos de la App WhatsApp Business (SMB)
+     * @param syncType 'smb_app_state_sync' para contactos o 'history' para historial de mensajes
+     */
+    public async requestSmbSync(syncType: 'smb_app_state_sync' | 'history'): Promise<any> {
+        const { access_token, phone_number_id } = this.config;
+        if (!access_token || !phone_number_id) {
+            console.error('❌ [MetaCloudProvider] Falta configuración para solicitar sincronización SMB');
+            return null;
+        }
+
+        const url = `https://graph.facebook.com/v22.0/${phone_number_id}/smb_app_data`;
+        const body = { sync_type: syncType };
+
+        try {
+            console.log(`📡 [MetaCloudProvider] Solicitando sincronización SMB: ${syncType}`);
+            const response = await axios.post(url, body, {
+                headers: {
+                    'Authorization': `Bearer ${access_token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            return response.data;
+        } catch (error: any) {
+            console.error(`❌ [MetaCloudProvider] Error solicitando sincronización ${syncType}:`, error?.response?.data || error.message);
+            return null;
+        }
+    }
+
     public async sendImage(number: string, media: string, caption: string = ''): Promise<any> {
         return this.sendMessage(number, caption, { media: { url: media, mimetype: 'image/png' } });
     }
@@ -661,12 +690,13 @@ class MetaCloudProvider extends ProviderClass {
                 if (body.object === 'page') {
                     this.processMessengerMessage(body);
                 } else {
-                    // Detectar si algún change viene del campo 'smb_message_echoes'
-                    // Esto indica mensajes enviados manualmente desde la app de WhatsApp Business
-                    const hasSmbEcho = body.entry?.some((entry: any) =>
-                        entry.changes?.some((change: any) => change.field === 'smb_message_echoes')
+                    // Detectar si algún change viene de campos SMB
+                    const hasSmbField = body.entry?.some((entry: any) =>
+                        entry.changes?.some((change: any) => 
+                            ['smb_message_echoes', 'smb_app_state_sync', 'history'].includes(change.field)
+                        )
                     );
-                    this.processIncomingMessage(body, hasSmbEcho);
+                    this.processIncomingMessage(body, hasSmbField);
                 }
             });
         } catch (e) {
@@ -693,7 +723,16 @@ class MetaCloudProvider extends ProviderClass {
                     const isThisChangeEcho = fieldName === 'smb_message_echoes' || isEchoWebhook;
 
                     const messages = value?.messages || value?.message_echoes;
+                    const contactData = value?.contacts; // Para smb_app_state_sync
 
+                    // 1. MANEJO DE SINCRONIZACIÓN DE CONTACTOS (smb_app_state_sync)
+                    if (fieldName === 'smb_app_state_sync' && contactData && Array.isArray(contactData)) {
+                        console.log(`📡 [MetaCloudProvider] Recibida sincronización de ${contactData.length} contactos SMB`);
+                        this.emit('contacts_sync', contactData);
+                        continue;
+                    }
+
+                    // 2. MANEJO DE HISTORIAL O MENSAJES (messages / history / message_echoes)
                     if (messages && Array.isArray(messages)) {
                         
                         // Filtro de número destino para asegurar que es para nosotros
@@ -703,7 +742,7 @@ class MetaCloudProvider extends ProviderClass {
                         }
 
                         if (isThisChangeEcho) {
-                            console.log(`📡 [MetaCloudProvider] Procesando ${messages.length} mensajes de tipo ECO (Manual App)`);
+                            console.log(`📡 [MetaCloudProvider] Procesando ${messages.length} mensajes de tipo ECO/SMB (Manual App o Historial)`);
                         }
 
                         const contact = value.contacts?.[0];
@@ -729,19 +768,25 @@ class MetaCloudProvider extends ProviderClass {
                             }
 
                             // --- DETECCIÓN DE ECHO ---
-                            // Caso 1: smb_message_echoes → Mensaje enviado desde la app de WhatsApp (Atención Humana)
+                            // Caso 1: smb_message_echoes / history → Mensaje enviado desde la app de WhatsApp o histórico
                             // Caso 2: recipient_id presente → Echo estándar de la API
                             const isEcho = isThisChangeEcho || !!msg.recipient_id;
+
+                            // Para el campo 'history', debemos distinguir si el mensaje lo envió el negocio o el cliente
+                            let actualIsEcho = isEcho;
+                            if (fieldName === 'history') {
+                                // Si el 'from' es nuestro número, es un mensaje enviado por nosotros (echo)
+                                actualIsEcho = String(msg.from) === String(this.config.phone_number_id);
+                            }
 
                             // Para echos de smb_message_echoes, el "from" contiene nuestro número, 
                             // y el "to" contiene el número del destinatario.
                             const recipientId = msg.recipient_id || msg.to || wa_id || msg.from;
 
-                            if (isEcho) {
-                                console.log(`📋 [MetaCloudProvider] ECO DETECTADO. Field: ${fieldName}. De: ${msg.from} Para: ${msg.recipient_id || msg.to || 'N/A'}. Result chatId: ${recipientId}`);
-                                if (recipientId === String(this.config.phone_number_id) || recipientId === String(this.config.numberId)) {
-                                    console.warn(`⚠️ [MetaCloudProvider] ATENCIÓN: El recipientId coincide con el Bot ID. El mensaje podría no verse en el chat del cliente.`);
-                                }
+                            if (actualIsEcho) {
+                                console.log(`📋 [MetaCloudProvider] ECO/HISTORY (Assistant) DETECTADO. Field: ${fieldName}. De: ${msg.from} Para: ${msg.recipient_id || msg.to || 'N/A'}. Result chatId: ${recipientId}`);
+                            } else if (fieldName === 'history') {
+                                console.log(`📋 [MetaCloudProvider] HISTORY (User) DETECTADO. De: ${msg.from}. Result chatId: ${msg.from}`);
                             }
 
                             // Forzar que el body no esté vacío para eventos de voz para que el core del bot los procese
@@ -750,13 +795,13 @@ class MetaCloudProvider extends ProviderClass {
                             const formatedMessage: any = {
                                 from: wa_id || msg.from,
                                 body: bodyText,
-                                phoneNumber: isEcho ? recipientId : msg.from,
+                                phoneNumber: actualIsEcho ? recipientId : msg.from,
                                 userId: bsuid, // Añadimos el BSUID al contexto
-                                name: isEcho ? 'Operador (App WhatsApp)' : (contact?.profile?.name || 'User'),
+                                name: actualIsEcho ? 'Operador (App WhatsApp)' : (contact?.profile?.name || 'User'),
                                 type: type,
                                 payload: msg,
                                 platform: 'whatsapp',
-                                isManualIntervention: isThisChangeEcho // Flag para que el provider.manager active modo humano
+                                isManualIntervention: isThisChangeEcho && fieldName !== 'history' // Solo marcar intervención si no es historial retroactivo
                             };
 
                             // Enriquecer con objeto media para que los flujos (saveFile) tengan lo necesario
@@ -789,7 +834,7 @@ class MetaCloudProvider extends ProviderClass {
                                 };
                             }
 
-                            if (isEcho) {
+                            if (actualIsEcho) {
                                 this.emit('message_from_me', formatedMessage);
                             } else {
                                 this.emit('message', formatedMessage);

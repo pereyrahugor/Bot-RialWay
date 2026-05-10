@@ -44,20 +44,31 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
             const { api_key } = req.body;
             const ip_address = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
 
-            // 1. Calcular bloqueo exponencial basado en fallos recientes (últimos 15 min)
+            // 1. Calcular bloqueo exponencial basado en fallos recientes consecutivos (últimos 15 min)
             const fifteenMinsAgo = new Date(Date.now() - 15 * 60000).toISOString();
-            const { count: failedAttempts } = await supabase
+            const { data: recentLogs } = await supabase
                 .from('api_logs')
-                .select('*', { count: 'exact', head: true })
+                .select('status')
                 .eq('endpoint', '/api/v1/auth')
-                .eq('status', 'error')
                 .eq('ip_address', ip_address)
-                .gt('created_at', fifteenMinsAgo);
+                .gt('created_at', fifteenMinsAgo)
+                .order('created_at', { ascending: false });
 
-            const failures = failedAttempts || 0;
+            let failures = 0;
+            if (recentLogs && recentLogs.length > 0) {
+                for (const log of recentLogs) {
+                    if (log.status === 'success') {
+                        break; // Si la petición fue exitosa, reiniciamos el contador de fallos previos
+                    }
+                    if (log.status === 'error') {
+                        failures++;
+                    }
+                }
+            }
+
             if (failures > 0) {
                 const delay = Math.min(30000, Math.pow(2, failures - 1) * 1000);
-                console.log(`⏳ [API_AUTH] IP ${ip_address} tiene ${failures} fallos. Aplicando delay de ${delay}ms`);
+                console.log(`⏳ [API_AUTH] IP ${ip_address} tiene ${failures} fallos consecutivos. Aplicando delay de ${delay}ms`);
                 await new Promise(r => setTimeout(r, delay));
             }
 

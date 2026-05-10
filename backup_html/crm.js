@@ -325,10 +325,11 @@ function initDragAndDrop() {
                 if (!crmData[ticketId]) crmData[ticketId] = {};
                 crmData[ticketId].columnId = newColumnId;
                 
-                // Sincronizar crm_status con el ID de la columna (más robusto para integraciones)
+                // Sincronizar crm_status con el título de la columna
+                const colTitle = columns.find(c => c.id === newColumnId)?.title || 'CRM';
                 const ticket = allTickets.find(t => t.id === ticketId);
                 if (ticket && ticket.chat_id) {
-                    await updateLeadStatus(ticket.chat_id, newColumnId);
+                    await updateLeadStatus(ticket.chat_id, colTitle);
                 }
 
                 saveCRMMetadata();
@@ -418,8 +419,9 @@ function openCardModal(ticketId) {
     // Cargar opciones de estado basadas en las columnas
     const selectStatus = document.getElementById('edit-lead-status');
     if (selectStatus) {
-        selectStatus.innerHTML = columns.map(c => `<option value="${c.id}">${c.title}</option>`).join('');
-        selectStatus.value = metadata.columnId || 'UNASSIGNED';
+        selectStatus.innerHTML = columns.map(c => `<option value="${c.title}">${c.title}</option>`).join('');
+        const colTitle = columns.find(c => c.id === (metadata.columnId || 'UNASSIGNED'))?.title;
+        selectStatus.value = colTitle || 'Tickets Nuevos';
     }
 
     window.applyCRMConfig(); // Aplicar orden y visibilidad
@@ -605,7 +607,6 @@ document.getElementById('card-edit-form').onsubmit = async (e) => {
     metadata.alertDate = document.getElementById('edit-alert-date').value;
     metadata.priority = document.getElementById('edit-priority').value;
     metadata.customNotes = leadData.notes;
-    metadata.columnId = leadData.crm_status; // Sincronizar la columna con el estado seleccionado en el modal
     
     crmData[currentEditId] = metadata;
 

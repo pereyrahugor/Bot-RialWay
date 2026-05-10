@@ -64,7 +64,7 @@ export class HistoryHandler {
         'DB_TABLES', 'OPENAI_TOOLS_DEFINITION', 'msjCierre', 'msjSeguimiento1', 'msjSeguimiento2', 'msjSeguimiento3',
         'timeOutCierre', 'timeOutSeguimiento2', 'timeOutSeguimiento3', 'ID_GRUPO_RESUMEN', 'ID_GRUPO_RESUMEN_2',
         'SHEET_ID_RESUMEN', 'SHEET_ID_UPDATE', 'DOCX_ID_UPDATE', 'GOOGLE_CALENDAR_ID',
-        'ADMIN_USER', 'ADMIN_PASS', 'WHATSAPP_VISIBLE', 'INSTAGRAM_VISIBLE', 'MESSENGER_VISIBLE', 'CRM_VISIBLE'
+        'ADMIN_USER', 'ADMIN_PASS', 'WHATSAPP_VISIBLE', 'INSTAGRAM_VISIBLE', 'MESSENGER_VISIBLE', 'CRM_FIELDS_CONFIG'
     ];
 
     static readonly FIXED_KEYS = [
@@ -255,10 +255,10 @@ export class HistoryHandler {
                         }
 
                         // Verificar campos CRM
-                        const { error: crmErr } = await supabase.from('chats').select('notes, email, source').limit(1);
+                        const { error: crmErr } = await supabase.from('chats').select('notes, email, source, crm_status, crm_due_date').limit(1);
                         if (crmErr && crmErr.code === '42703') {
                             console.log(`🔧 Agregando columnas CRM a chats...`);
-                            await supabase.rpc('exec_sql', { query: `ALTER TABLE chats ADD COLUMN IF NOT EXISTS notes TEXT, ADD COLUMN IF NOT EXISTS email TEXT, ADD COLUMN IF NOT EXISTS source TEXT;` });
+                            await supabase.rpc('exec_sql', { query: `ALTER TABLE chats ADD COLUMN IF NOT EXISTS notes TEXT, ADD COLUMN IF NOT EXISTS email TEXT, ADD COLUMN IF NOT EXISTS source TEXT, ADD COLUMN IF NOT EXISTS crm_status TEXT, ADD COLUMN IF NOT EXISTS crm_due_date TIMESTAMPTZ, ADD COLUMN IF NOT EXISTS is_lead BOOLEAN DEFAULT false;` });
                         }
 
                     // Migración para user_id (Meta BSUID)
@@ -607,9 +607,6 @@ export class HistoryHandler {
         }
     }
 
-    /**
-     * Actualiza los detalles de contacto (CRM)
-     */
     static async updateContactDetails(rawChatId: string, details: { 
         name?: string, 
         email?: string, 
@@ -619,7 +616,9 @@ export class HistoryHandler {
         cuit_dni?: string,
         tax_status?: string,
         address?: string,
-        offered_product?: string
+        offered_product?: string,
+        crm_status?: string,
+        crm_due_date?: string | null
     }, forcedProjectId?: string) {
         const chatId = this.normalizeId(rawChatId);
         const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
@@ -756,10 +755,10 @@ export class HistoryHandler {
      */
     static async listChats(limit: number = 20, offset: number = 0, search?: string, tagId?: string, assignedTo?: string | null, platform?: string) {
         try {
-            // Campos mínimos para la lista (se excluyen notas, address, email, etc. para rendimiento)
-            let selectString = 'id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, chat_tags(tag_id, tags(*))';
+            // Campos mínimos para la lista (se incluyen campos CRM para autocompletado de Excel)
+            let selectString = 'id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, crm_status, crm_due_date, notes, email, source, is_lead, cuit_dni, tax_status, address, offered_product, chat_tags(tag_id, tags(*))';
             if (tagId) {
-                selectString = 'id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, chat_tags!inner(tag_id, tags(*))';
+                selectString = 'id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, crm_status, crm_due_date, notes, email, source, is_lead, cuit_dni, tax_status, address, offered_product, chat_tags!inner(tag_id, tags(*))';
             }
 
             let query = supabase
@@ -769,7 +768,10 @@ export class HistoryHandler {
             // Filtrar estrictamente por el ID único de este bot en Railway
             query = query.eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
 
-            if (platform && platform !== 'all') {
+            if (platform === 'leads') {
+                // Filtramos por chats que tengan algún estado CRM o estén marcados como leads
+                query = query.or('crm_status.not.is.null,is_lead.eq.true');
+            } else if (platform && platform !== 'all') {
                 query = query.eq('type', platform);
             }
 
@@ -1046,13 +1048,17 @@ export class HistoryHandler {
     /**
      * Lista los tickets del proyecto
      */
-    static async listTickets(limit: number = 50, offset: number = 0, estado?: string, tipo?: string, chatId?: string) {
-        console.log(`[HistoryHandler] listTickets -> req: estado=${estado}, tipo=${tipo}, chatId=${chatId}, project=${PROJECT_ID}`);
+    static async listTickets(limit: number = 50, offset: number = 0, estado?: string, tipo?: string, chatId?: string, ticketId?: string) {
+        console.log(`[HistoryHandler] listTickets -> req: estado=${estado}, tipo=${tipo}, chatId=${chatId}, ticketId=${ticketId}, project=${HistoryHandler.PROJECT_IDENTIFIER}`);
         try {
             let query = supabase
                 .from('tickets')
                 .select('*, chats(name, id)')
                 .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
+
+            if (ticketId && ticketId !== 'null' && ticketId !== 'undefined' && ticketId !== '') {
+                query = query.eq('id', ticketId);
+            }
 
             if (chatId && chatId !== 'null' && chatId !== 'undefined' && chatId !== '') {
                 query = query.eq('chat_id', chatId);
@@ -1084,6 +1090,7 @@ export class HistoryHandler {
                         .select('*')
                         .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
                     
+                    if (ticketId) fallbackQuery = fallbackQuery.eq('id', ticketId);
                     if (chatId) fallbackQuery = fallbackQuery.eq('chat_id', chatId);
                     if (estado) fallbackQuery = fallbackQuery.eq('estado', estado);
                     else fallbackQuery = fallbackQuery.in('estado', ['Abierto', 'En progreso']);
@@ -1109,6 +1116,91 @@ export class HistoryHandler {
     /**
      * Actualiza el estado de un ticket
      */
+    /**
+     * Actualiza tanto los detalles del ticket como los del contacto asociado (Lead)
+     */
+    static async updateLeadAndTicket(ticketId: string, details: any) {
+        try {
+            console.log(`[HistoryHandler] Actualizando Lead/Ticket ${ticketId}`);
+            
+            // 1. Obtener el ticket para saber el chat_id
+            const { data: ticket, error: tError } = await supabase
+                .from('tickets')
+                .select('chat_id')
+                .eq('id', ticketId)
+                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER)
+                .single();
+            
+            if (tError || !ticket) throw new Error('Ticket no encontrado');
+
+            // 2. Actualizar Ticket
+            const ticketUpdate: any = { updated_at: new Date().toISOString() };
+            if (details.titulo !== undefined) ticketUpdate.titulo = details.titulo;
+            if (details.notas !== undefined) ticketUpdate.notas = details.notas;
+            if (details.vencimiento !== undefined) ticketUpdate.vencimiento = details.vencimiento;
+            
+            // Soportar tanto priority (frontend) como prioridad (db)
+            const priorityVal = details.priority || details.prioridad;
+            if (priorityVal !== undefined) ticketUpdate.prioridad = priorityVal;
+            
+            // Mapeo opcional: si el crm_status es algo que implique cerrar el ticket
+            if (details.contact?.crm_status === 'Cerrado' || details.contact?.crm_status === 'Vendido') {
+                ticketUpdate.estado = 'Cerrado';
+            }
+
+            const { error: upTicketErr } = await supabase
+                .from('tickets')
+                .update(ticketUpdate)
+                .eq('id', ticketId)
+                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
+            
+            if (upTicketErr) throw upTicketErr;
+
+            // 3. Actualizar Contacto (Chat)
+            if (details.contact) {
+                const chatUpdate: any = {
+                    name: details.contact.name,
+                    email: details.contact.email,
+                    cuit_dni: details.contact.cuit_dni,
+                    address: details.contact.address,
+                    tax_status: details.contact.tax_status,
+                    offered_product: details.contact.offered_product,
+                    crm_status: details.contact.crm_status,
+                    notes: details.notas // Sincronizar notas también en el chat si se desea
+                };
+
+                if (details.contact.source) chatUpdate.source = details.contact.source;
+
+                const { error: upChatErr } = await supabase
+                    .from('chats')
+                    .update(chatUpdate)
+                    .eq('id', ticket.chat_id)
+                    .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
+                
+                if (upChatErr) throw upChatErr;
+                
+                // Si el estado es cerrado, aplicar lógica de reset de bot
+                if (ticketUpdate.estado === 'Cerrado') {
+                    await supabase
+                        .from('chats')
+                        .update({ assigned_agent: 'asistente1', bot_enabled: true })
+                        .eq('id', ticket.chat_id)
+                        .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
+                    
+                    historyEvents.emit('bot_toggled', { chatId: ticket.chat_id, enabled: true, assigned_agent: 'asistente1' });
+                }
+            }
+
+            // Notificar cambios
+            historyEvents.emit('ticket_updated', { id: ticketId, ...ticketUpdate });
+            
+            return { success: true };
+        } catch (err: any) {
+            console.error('[HistoryHandler] Error en updateLeadAndTicket:', err);
+            return { success: false, error: err.message };
+        }
+    }
+
     static async updateTicketStatus(ticketId: string, nuevoEstado: string) {
         try {
             const { data, error } = await supabase
@@ -1168,6 +1260,35 @@ export class HistoryHandler {
             return [];
         }
     }
+    /**
+     * Obtiene los leads con tareas próximas (hoy + 5 días)
+     */
+    static async getTasksDashboard() {
+        try {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            const fiveDaysLater = new Date();
+            fiveDaysLater.setDate(today.getDate() + 5);
+            fiveDaysLater.setHours(23, 59, 59, 999);
+
+            const { data, error } = await supabase
+                .from('chats')
+                .select('id, name, type, crm_status, crm_due_date')
+                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER)
+                .eq('is_lead', true)
+                .gte('crm_due_date', today.toISOString())
+                .lte('crm_due_date', fiveDaysLater.toISOString())
+                .order('crm_due_date', { ascending: true });
+
+            if (error) throw error;
+            return data || [];
+        } catch (err) {
+            console.error('[HistoryHandler] Error en getTasksDashboard:', err);
+            return [];
+        }
+    }
+
     /**
      * Guarda o actualiza los datos de onboarding de Meta
      */

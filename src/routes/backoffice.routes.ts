@@ -23,6 +23,30 @@ export interface BackofficeDependencies {
     upload: any;
 }
 
+/**
+ * Helper para disparar la sincronización de Meta SMB (Contactos + Historial)
+ */
+async function triggerMetaSync(accessToken: string, phoneId: string) {
+    console.log(`📡 [SMB-SYNC] Iniciando sincronización automática para ${phoneId}...`);
+    try {
+        // 1. Sincronizar Contactos
+        await axios.post(`https://graph.facebook.com/v22.0/${phoneId}/smb_app_data`, 
+            { sync_type: 'smb_app_state_sync' },
+            { headers: { 'Authorization': `Bearer ${accessToken}` } }
+        );
+        console.log(`✅ [SMB-SYNC] Solicitud de Contactos enviada.`);
+
+        // 2. Sincronizar Historial
+        await axios.post(`https://graph.facebook.com/v22.0/${phoneId}/smb_app_data`, 
+            { sync_type: 'history' },
+            { headers: { 'Authorization': `Bearer ${accessToken}` } }
+        );
+        console.log(`✅ [SMB-SYNC] Solicitud de Historial enviada.`);
+    } catch (err: any) {
+        console.error(`❌ [SMB-SYNC] Error en sincronización automática:`, err?.response?.data || err.message);
+    }
+}
+
 /** Función unificada para procesar el envío de mensajes e historial */
 export const processSendMessage = async (
     req: any, 
@@ -204,10 +228,10 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
             if (row.header_media_url && (row.header_media_url.includes('drive.google.com') || row.header_media_url.includes('scontent.whatsapp.net') || row.header_media_url.includes('fbcdn.net'))) {
                 
                 let directUrl = row.header_media_url;
-                let isDrive = row.header_media_url.includes('drive.google.com');
+                const isDrive = row.header_media_url.includes('drive.google.com');
 
                 if (isDrive) {
-                    const driveIdMatch = row.header_media_url.match(/\/d\/([^\/]+)/) || row.header_media_url.match(/id=([^\&]+)/);
+                    const driveIdMatch = row.header_media_url.match(/\/d\/([^/]+)/) || row.header_media_url.match(/id=([^&]+)/);
                     if (driveIdMatch && driveIdMatch[1]) {
                         directUrl = `https://drive.google.com/uc?export=download&id=${driveIdMatch[1]}`;
                     }
@@ -351,7 +375,7 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                         
                         // Meta requiere SIEMPRE enviar el componente HEADER si la plantilla lo define.
                         // Si el usuario deja la celda vacía o con el link scontent original, lo usamos.
-                        let mediaLink = row.header_media_url || defaultMediaUrl || compDef.example?.header_handle?.[0];
+                        const mediaLink = row.header_media_url || defaultMediaUrl || compDef.example?.header_handle?.[0];
                         
                         if (!mediaLink) {
                             console.warn(`⚠️ [BULK] No hay mediaLink para HEADER en la plantilla ${templateName}. Esto causará error en Meta.`);
@@ -565,6 +589,17 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     });
 
     // --- NUEVO: IMPORTACIÓN DE CONTACTOS ---
+    app.get('/api/backoffice/chats/:id', backofficeAuth, async (req: any, res: any) => {
+        try {
+            const { id } = req.params;
+            const chat = await depsHistoryHandler.getChat(id);
+            if (!chat) return res.status(404).json({ success: false, error: 'Chat not found' });
+            res.json(chat);
+        } catch (err: any) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
     app.get('/api/backoffice/chats/import-template', backofficeAuth, (req, res) => {
         try {
             const data = [
@@ -917,13 +952,27 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         res.json(tags);
     });
 
+    app.get('/api/backoffice/chat/:id/contact', backofficeAuth, async (req, res) => {
+        try {
+            const { id } = req.params;
+            const contact = await depsHistoryHandler.getChat(id);
+            if (!contact) {
+                return res.status(404).json({ success: false, error: 'Contact not found' });
+            }
+            res.json(contact);
+        } catch (err: any) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
     app.put('/api/backoffice/chat/:id/contact', backofficeAuth, bodyParser.json(), async (req, res) => {
         try {
             const { id } = req.params;
-            const { name, email, notes, source, cuit_dni, tax_status, address, offered_product } = req.body;
+            const { name, email, notes, source, cuit_dni, tax_status, address, offered_product, crm_status, crm_due_date } = req.body;
             const result = await depsHistoryHandler.updateContactDetails(id, { 
                 name, email, notes, source, 
                 cuit_dni, tax_status, address, offered_product,
+                crm_status, crm_due_date,
                 is_lead: true 
             });
             res.json(result);
@@ -983,9 +1032,10 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         const estado = req.query.estado as string;
         const tipo = req.query.tipo as string;
         const chatId = req.query.chatId as string;
+        const id = req.query.id as string;
         const limit = parseInt(req.query.limit as string) || 50;
         const offset = parseInt(req.query.offset as string) || 0;
-        const result = await depsHistoryHandler.listTickets(limit, offset, estado, tipo, chatId);
+        const result = await depsHistoryHandler.listTickets(limit, offset, estado, tipo, chatId, id);
         res.json(result);
     });
 
@@ -996,11 +1046,52 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         res.json(result);
     });
 
+    app.put('/api/backoffice/crm/ticket/:id', backofficeAuth, bodyParser.json(), async (req, res) => {
+        try {
+            const { id } = req.params;
+            const result = await depsHistoryHandler.updateLeadAndTicket(id, req.body);
+            res.json(result);
+        } catch (err: any) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
     app.put('/api/backoffice/tickets/:id', backofficeAuth, bodyParser.json(), async (req, res) => {
         const { id } = req.params;
         const { estado } = req.body;
         const result = await depsHistoryHandler.updateTicketStatus(id, estado);
         res.json(result);
+    });
+
+    // --- CRM CONFIG & DASHBOARD ---
+
+    app.get('/api/backoffice/crm/config', backofficeAuth, async (req, res) => {
+        try {
+            const configStr = await depsHistoryHandler.getSetting('CRM_CONFIG');
+            const config = configStr ? JSON.parse(configStr) : null;
+            res.json({ success: true, config });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    app.post('/api/backoffice/crm/config', backofficeAuth, bodyParser.json(), async (req, res) => {
+        try {
+            const { config } = req.body;
+            await depsHistoryHandler.saveSetting('CRM_CONFIG', JSON.stringify(config));
+            res.json({ success: true });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    app.get('/api/backoffice/crm/tasks', backofficeAuth, async (req, res) => {
+        try {
+            const tasks = await depsHistoryHandler.getTasksDashboard();
+            res.json(tasks);
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
     });
 
     app.get('/api/backoffice/leads', backofficeAuth, async (req, res) => {
@@ -1387,11 +1478,25 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                     }
                 }
 
+                const autoCompletable = [
+                    'name', 'last_message_at', 'last_human_message_at', 'notes', 'email', 
+                    'crm_status', 'crm_due_date', 'cuit_dni', 'tax_status', 'address', 'offered_product'
+                ];
+
                 chats.forEach((chat: any) => {
                     const cleanPhone = chat.id.split('@')[0];
                     if (cleanPhone === '5491100000000') return; // Evitar duplicar el ejemplo si existiera
                     const row = [cleanPhone];
-                    for (let i = 1; i < headers.length; i++) row.push('');
+                    
+                    // Llenar variables si coinciden con los nombres de campos del chat
+                    for (let i = 1; i < headers.length; i++) {
+                        const h = headers[i];
+                        if (autoCompletable.includes(h)) {
+                            row.push(chat[h] || '');
+                        } else {
+                            row.push('');
+                        }
+                    }
                     rows.push(row);
                 });
             }
@@ -1634,6 +1739,12 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                 }
 
                 await depsHistoryHandler.saveMetaOnboardingData(finalWabaId, finalPhoneId, accessToken, { verified_name: finalVerifiedName }, projectId);
+                
+                // --- SINCRONIZACIÓN AUTOMÁTICA SMB ---
+                // Solicitamos contactos e historial inmediatamente tras la vinculación
+                if (finalPhoneId) {
+                    await triggerMetaSync(accessToken, finalPhoneId);
+                }
             }
 
             console.log(`✅ [CALLBACK] Onboarding finalizado con éxito para Proyecto: ${projectId}`);
@@ -1662,6 +1773,36 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                     </div>
                 </div>
             `);
+        }
+    });
+
+    /**
+     * Endpoint para vinculación manual de IDs si el auto-descubrimiento falló.
+     * También dispara la sincronización SMB automática.
+     */
+    app.post('/api/backoffice/whatsapp/sync-manual', bodyParser.json(), async (req, res) => {
+        const { token, wabaId, phoneNumberId, projectId } = req.body;
+        if (!token || !wabaId || !phoneNumberId) {
+            return res.status(400).json({ success: false, error: 'Faltan campos obligatorios' });
+        }
+
+        try {
+            console.log(`📡 [SYNC-MANUAL] Vinculando manualmente para Proyecto: ${projectId}`);
+            await depsHistoryHandler.saveMetaOnboardingData(wabaId, phoneNumberId, token, { manual: true }, projectId);
+            
+            // Disparar sincronización SMB
+            await triggerMetaSync(token, phoneNumberId);
+
+            // Programar reinicio
+            setTimeout(() => {
+                console.log('🔄 [SYSTEM] Reiniciando bot por vinculación manual...');
+                process.exit(1);
+            }, 3000);
+
+            res.json({ success: true });
+        } catch (error: any) {
+            console.error('❌ [SYNC-MANUAL] Error:', error);
+            res.status(500).json({ success: false, error: error.message });
         }
     });
 
@@ -1738,6 +1879,98 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
+    // --- META SMB SYNC ---
+    /**
+     * Dispara la sincronización de contactos o historial desde Meta SMB API.
+     * Esto enviará webhooks smb_app_state_sync o history que son procesados por el provider.
+     */
+    app.post('/api/backoffice/whatsapp/sync-smb', backofficeAuth, bodyParser.json(), async (req, res) => {
+        const { type } = req.body; // 'contacts' | 'history'
+        if (!['contacts', 'history'].includes(type)) {
+            return res.status(400).json({ success: false, error: 'Tipo de sincronización inválido. Use "contacts" o "history".' });
+        }
+
+        try {
+            // @ts-ignore
+            const provider = app.get('whatsappProvider');
+            
+            if (!provider || provider.constructor.name !== 'MetaCloudProvider') {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: 'El proveedor Meta Cloud no está activo. Verifique que el bot esté configurado con Meta.' 
+                });
+            }
+
+            const syncType = type === 'contacts' ? 'smb_app_state_sync' : 'history';
+            console.log(`📡 [BACKOFFICE] Disparando sincronización SMB: ${syncType}`);
+            const result = await (provider as any).requestSmbSync(syncType);
+
+            if (result) {
+                res.json({ 
+                    success: true, 
+                    message: `Solicitud de sincronización de ${type} enviada a Meta correctamente.`, 
+                    data: result 
+                });
+            } else {
+                res.status(500).json({ success: false, error: 'Meta rechazó la solicitud de sincronización o hubo un error de red.' });
+            }
+        } catch (error: any) {
+            console.error('❌ [BACKOFFICE] Error en sync-smb:', error);
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
+    
+    // --- CRM ROUTES ---
+    app.get('/api/backoffice/crm/tasks', backofficeAuth, async (req, res) => {
+        try {
+            const tasks = await depsHistoryHandler.getTasksDashboard();
+            res.json({ success: true, tasks });
+        } catch (error: any) {
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
+    app.post('/api/backoffice/crm/update-lead', backofficeAuth, bodyParser.json(), async (req, res) => {
+        const { leadId, crm_status, crm_due_date } = req.body;
+        if (!leadId) return res.status(400).json({ success: false, error: 'leadId is required' });
+        
+        try {
+            const updateData: any = {};
+            if (crm_status !== undefined) updateData.crm_status = crm_status;
+            if (crm_due_date !== undefined) updateData.crm_due_date = crm_due_date;
+
+            const { error } = await supabase
+                .from('chats')
+                .update(updateData)
+                .eq('id', leadId)
+                .eq('project_id', depsHistoryHandler.PROJECT_IDENTIFIER);
+
+            if (error) throw error;
+            res.json({ success: true });
+        } catch (error: any) {
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
+    app.get('/api/backoffice/crm/config', backofficeAuth, async (req, res) => {
+        try {
+            const config = await depsHistoryHandler.getSetting('CRM_CONFIG');
+            res.json({ success: true, config: config ? JSON.parse(config) : null });
+        } catch (error: any) {
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
+    app.post('/api/backoffice/crm/config', backofficeAuth, bodyParser.json(), async (req, res) => {
+        const { config } = req.body;
+        try {
+            await depsHistoryHandler.saveSetting('CRM_CONFIG', JSON.stringify(config));
+            res.json({ success: true });
+        } catch (error: any) {
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
     // --- CONFIGURACION DINAMICA (HOT-UPDATE) ---
 
     /**
@@ -1804,11 +2037,16 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     app.get('/api/backoffice/settings', backofficeAuth, async (req, res) => {
         try {
-            const keys = ['WHATSAPP_VISIBLE', 'INSTAGRAM_VISIBLE', 'MESSENGER_VISIBLE', 'CRM_VISIBLE'];
+            const { data: dbSettings, error } = await supabase
+                .from('settings')
+                .select('key, value')
+                .eq('project_id', depsHistoryHandler.PROJECT_IDENTIFIER);
+
+            if (error) throw error;
             const results: any = {};
-            for (const key of keys) {
-                results[key] = await depsHistoryHandler.getSetting(key);
-            }
+            dbSettings?.forEach((s: any) => {
+                results[s.key] = s.value;
+            });
             res.json(results);
         } catch (error: any) {
             res.status(500).json({ success: false, error: error.message });
@@ -1878,29 +2116,28 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     // --- GET README / INSTRUCTIONS ---
     app.get('/api/backoffice/get-docs', backofficeAuth, async (req, res) => {
         try {
-            // Buscamos la ruta absoluta real
             const rootDir = process.cwd();
             const docsPath = path.join(rootDir, 'docs', 'INSTRUCCIONES_USO.md');
             
             console.log(`📂 [Docs] Intentando cargar: ${docsPath}`);
 
+            let content = '';
             if (fs.existsSync(docsPath)) {
-                const content = fs.readFileSync(docsPath, 'utf8');
-                res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify({ success: true, content }));
+                content = fs.readFileSync(docsPath, 'utf8');
             } else {
-                console.error(`❌ [Docs] Archivo no encontrado en: ${docsPath}`);
-                // Intentar ruta alternativa por si acaso (dist/../docs)
                 const altPath = path.join(path.dirname(url.fileURLToPath(import.meta.url)), '..', '..', 'docs', 'INSTRUCCIONES_USO.md');
                 if (fs.existsSync(altPath)) {
-                    const content = fs.readFileSync(altPath, 'utf8');
-                    res.setHeader('Content-Type', 'application/json');
-                    res.end(JSON.stringify({ success: true, content }));
-                } else {
-                    res.status(404).json({ success: false, error: `Archivo no encontrado en root o alt. Path: ${docsPath}` });
+                    content = fs.readFileSync(altPath, 'utf8');
                 }
             }
+
+            if (content) {
+                return res.json({ success: true, content });
+            } else {
+                return res.status(404).json({ success: false, error: `Archivo no encontrado en root o alt. Path: ${docsPath}` });
+            }
         } catch (error: any) {
+            console.error('❌ [Docs] Error:', error.message);
             res.status(500).json({ success: false, error: error.message });
         }
     });

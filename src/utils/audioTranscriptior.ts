@@ -1,4 +1,4 @@
-import { createReadStream } from "fs";
+import fs, { createReadStream } from "fs";
 import OpenAI from "openai";
 
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({ 
@@ -23,8 +23,6 @@ export const transcribeAudioFile = async (filePath: string): Promise<string | nu
     const extension = filePath.split('.').pop()?.toLowerCase();
     const validExtensions = ['flac', 'mp3', 'mp4', 'mpeg', 'mpga', 'm4a', 'ogg', 'wav', 'webm'];
     
-    const fs = require('fs');
-
     if (!extension || !validExtensions.includes(extension)) {
       finalPath = `${filePath}.ogg`;
       fs.renameSync(filePath, finalPath);
@@ -50,7 +48,6 @@ export const transcribeAudioFile = async (filePath: string): Promise<string | nu
   } catch (error: any) {
     console.error("❌ Error en la transcripción:", error?.response?.data || error.message || error);
     // Intentar restaurar si falló
-    const fs = require('fs');
     if (finalPath !== filePath && fs.existsSync(finalPath)) {
          fs.renameSync(finalPath, filePath);
     }

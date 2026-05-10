@@ -1,7 +1,12 @@
 /* Los estilos base ahora los proporciona crm-common.css */
 /* Reutilizamos las variables del tema común */
 
-
+/* El layout del backoffice usa .crm-main-container como base */
+.crm-main-container {
+    padding: 0; /* Backoffice usa el espacio completo */
+    display: flex;
+    flex-direction: row;
+}
 
 #sidebar {
     width: 320px;
@@ -1223,7 +1228,34 @@ input:checked + .slider:before { transform: translateX(20px); background-color: 
 }
 
 /* --- Global Sidebar/Navbar Overrides for Backoffice --- */
-/* Navbar styles are now managed in crm-common.css for consistency and animations */
+#navbar {
+    width: 64px;
+    background: var(--bg-sidebar);
+    border-right: 1px solid var(--border);
+    padding: 12px 0;
+}
+
+.nav-item {
+    width: 40px;
+    height: 40px;
+    margin-bottom: 24px;
+    font-size: 1.1rem;
+    color: var(--text-muted);
+}
+
+.nav-item:hover {
+    background: rgba(0,0,0,0.05);
+    color: var(--text-main);
+}
+
+.nav-item.active {
+    background: rgba(0,0,0,0.08);
+    color: var(--text-main);
+    box-shadow: none;
+}
+
+[data-theme="dark"] .nav-item:hover { background: rgba(255,255,255,0.1); }
+[data-theme="dark"] .nav-item.active { background: rgba(255,255,255,0.15); color: white; }
 
 /* --- Chat Header Structure --- */
 #chat-header {
