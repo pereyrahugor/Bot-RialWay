@@ -1247,14 +1247,17 @@ export class HistoryHandler {
             // Esto asegura que la Agenda/Contactos solo tenga contactos generados o validados por alguien.
             const { data, error } = await supabase
                 .from('chats')
-                .select('*')
+                .select('*, chat_tags(tag_id, tags(*))')
                 .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER)
                 .eq('is_lead', true)
                 .order('last_human_message_at', { ascending: false })
                 .range(offset, offset + limit - 1);
 
             if (error) throw error;
-            return data || [];
+            return (data || []).map(chat => ({
+                ...chat,
+                tags: chat.chat_tags ? chat.chat_tags.map((ct: any) => ct.tags).filter((t: any) => t !== null) : []
+            }));
         } catch (err) {
             console.error('[HistoryHandler] Error en listEditedLeads:', err);
             return [];
@@ -1277,7 +1280,7 @@ export class HistoryHandler {
                 .select('id, name, type, crm_status, crm_due_date')
                 .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER)
                 .eq('is_lead', true)
-                .gte('crm_due_date', today.toISOString())
+                .not('crm_due_date', 'is', null)
                 .lte('crm_due_date', fiveDaysLater.toISOString())
                 .order('crm_due_date', { ascending: true });
 

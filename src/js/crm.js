@@ -490,6 +490,7 @@ window.addTagToLead = async (tagId) => {
                 if (tag) lead.tags.push(tag);
             }
             renderLeadTags();
+            renderBoard();
         }
     } catch (e) {
         console.error(e);
@@ -511,6 +512,7 @@ window.removeTagFromLead = async (tagId) => {
                 lead.tags = lead.tags.filter(t => (typeof t === 'string' ? t : t.id) !== tagId);
             }
             renderLeadTags();
+            renderBoard();
         }
     } catch (e) {
         console.error(e);
