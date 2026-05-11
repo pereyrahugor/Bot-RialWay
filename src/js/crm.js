@@ -662,31 +662,37 @@ document.getElementById('card-edit-form').onsubmit = async (e) => {
     metadata.alertDate = document.getElementById('edit-alert-date').value;
     metadata.priority = document.getElementById('edit-priority').value;
     metadata.customNotes = leadData.notes;
-    metadata.columnId = leadData.crm_status; // Sincronizar la columna con el estado seleccionado en el modal
+    metadata.columnId = leadData.crm_status; 
     
     crmData[currentEditId] = metadata;
+
+    const ticketTitle = document.getElementById('edit-ticket-title').value;
 
     showToast('💾 Guardando...', 'success');
 
     try {
         await saveCRMMetadata();
         
-        if (chatId) {
-            await fetch(`/api/backoffice/chat/${chatId}/contact?token=${activeToken}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(leadData)
-            });
+        // Usar el endpoint unificado para actualizar Ticket y Lead
+        await fetch(`/api/backoffice/crm/ticket/${currentEditId}?token=${activeToken}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                titulo: ticketTitle,
+                priority: leadData.priority,
+                notas: mainNotes,
+                contact: leadData
+            })
+        });
 
+        if (chatId && isAdmin) {
             // Guardar asignación si es admin
-            if (isAdmin) {
-                const assignee = document.getElementById('edit-lead-assignee').value;
-                await fetch(`/api/backoffice/chat/assign?token=${activeToken}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ chatId, userId: assignee || null })
-                });
-            }
+            const assignee = document.getElementById('edit-lead-assignee').value;
+            await fetch(`/api/backoffice/chat/assign?token=${activeToken}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chatId, userId: assignee || null })
+            });
         }
         
         closeCardModal();
