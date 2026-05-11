@@ -1934,11 +1934,12 @@ function renderTemplateCards(container, templates, isLibrary = false) {
         const statusLabel = t.status === 'APPROVED' ? 'Aprobada' : (t.status === 'REJECTED' ? 'Rechazada' : 'Pendiente');
         
         return `
-            <div class="meta-card" onclick="showTemplateDetail('${t.name}', ${isLibrary}, '${t.language}')">
+            <div class="meta-card" onclick="showTemplateDetail('${t.id || t.name}', ${isLibrary}, '${t.language}')">
                 <div class="meta-card-tag ${statusClass}">${isLibrary ? 'BIBLIOTECA' : statusLabel}</div>
                 <div class="meta-card-name" style="font-weight:700;">${t.name}</div>
                 <div class="meta-card-desc" style="font-size:0.85rem; line-height:1.4; color:var(--text-main);">${cleanText}</div>
                 <div style="font-size:0.7rem; color:var(--text-muted); display:flex; flex-wrap:wrap; gap:8px; margin-top:auto; padding-top:10px; border-top:1px solid rgba(0,0,0,0.05);">
+                    <span title="ID de Plantilla" style="background:rgba(6,104,225,0.05); padding:2px 6px; border-radius:4px; font-weight: 600;"><i class="fas fa-fingerprint"></i> ID: ${t.id || 'N/A'}</span>
                     <span title="Idioma" style="background:rgba(0,0,0,0.05); padding:2px 6px; border-radius:4px;"><i class="fas fa-globe"></i> ${t.language.toUpperCase()}</span>
                     <span title="Categoría" style="background:rgba(0,0,0,0.05); padding:2px 6px; border-radius:4px;"><i class="fas fa-tag"></i> ${t.category}</span>
                 </div>
@@ -1947,10 +1948,11 @@ function renderTemplateCards(container, templates, isLibrary = false) {
     }).join('');
 }
 
-function showTemplateDetail(templateName, isLibrary, language) {
+function showTemplateDetail(idOrName, isLibrary, language) {
     const templates = isLibrary ? libraryTemplates : availableTemplates;
-    const template = templates.find(t => t.name === templateName && (!language || t.language === language));
+    const template = templates.find(t => (t.id === idOrName || t.name === idOrName) && (!language || t.language === language));
     if (!template) return;
+
     currentSelectedTemplate = template;
     
     // Usar la lógica centralizada de pestañas para mostrar el detalle
@@ -1963,6 +1965,18 @@ function showTemplateDetail(templateName, isLibrary, language) {
     document.getElementById('detail-tpl-name').innerText = template.name;
     document.getElementById('detail-tpl-lang-badge').innerHTML = `<i class="fas fa-globe"></i> ${template.language.toUpperCase()}`;
     document.getElementById('detail-tpl-cat-badge').innerHTML = `<i class="fas fa-tag"></i> ${template.category}`;
+    
+    // Mostrar ID en el detalle si existe
+    const nameHeader = document.getElementById('detail-tpl-name');
+    if (template.id && !document.getElementById('detail-tpl-id')) {
+        const idBadge = document.createElement('div');
+        idBadge.id = 'detail-tpl-id';
+        idBadge.style = 'font-size: 0.75rem; color: var(--text-muted); margin-top: 4px; font-family: monospace;';
+        idBadge.innerText = `ID: ${template.id}`;
+        nameHeader.parentNode.insertBefore(idBadge, nameHeader.nextSibling);
+    } else if (document.getElementById('detail-tpl-id')) {
+        document.getElementById('detail-tpl-id').innerText = `ID: ${template.id || ''}`;
+    }
     
     const statusEl = document.getElementById('detail-tpl-status');
     const statusClass = template.status === 'APPROVED' ? 'meta-status-approved' : (template.status === 'REJECTED' ? 'meta-status-rejected' : 'meta-status-pending');
