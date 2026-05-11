@@ -149,7 +149,10 @@ async function syncCRM() {
 
 window.toggleTasksDashboard = () => {
     const panel = document.getElementById('tasks-dashboard');
+    const btn = document.getElementById('btn-tasks-dashboard');
     panel.classList.toggle('active');
+    if (btn) btn.classList.toggle('active');
+    
     if (panel.classList.contains('active')) {
         loadTasksDashboard();
     }
@@ -160,66 +163,88 @@ async function loadTasksDashboard() {
     if (!container) return;
 
     try {
+        console.log('[Tasks] Cargando dashboard de tareas...');
         const tasks = [];
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        const fiveDaysLater = new Date(today);
-        fiveDaysLater.setDate(today.getDate() + 5);
+        
+        const limitDate = new Date(today);
+        limitDate.setDate(today.getDate() + 7); // Ver hasta 7 días adelante
+        limitDate.setHours(23, 59, 59, 999);
 
         allTickets.forEach(ticket => {
             const lead = allLeads.find(l => l.id === ticket.chat_id) || {};
             const metadata = crmData[ticket.id] || {};
             
-            // Tomar la fecha de la metadata (Kanban) o del lead (Base de datos)
+            // Prioridad: 1. Metadata del Kanban, 2. Campo del Lead en DB
             let alertDateStr = metadata.alertDate || (lead.crm_due_date ? lead.crm_due_date.split('T')[0] : null);
             
             if (alertDateStr) {
-                const alertD = new Date(alertDateStr + 'T00:00:00'); // Forzar zona horaria local
+                // Normalizar fecha para evitar problemas de zona horaria
+                const dateParts = alertDateStr.split('-');
+                const alertD = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
                 alertD.setHours(0, 0, 0, 0);
                 
-                if (alertD <= fiveDaysLater) {
+                // Incluir todas las vencidas Y las que vencen en los próximos 7 días
+                if (alertD <= limitDate) {
                     const colTitle = columns.find(c => c.id === metadata.columnId)?.title || lead.crm_status || 'NUEVO';
                     tasks.push({
                         ticket_id: ticket.id,
                         chat_id: ticket.chat_id,
                         name: lead.name || 'Lead sin nombre',
                         crm_status: colTitle,
-                        crm_due_date: alertDateStr
+                        crm_due_date: alertDateStr,
+                        priority: metadata.priority || 'Media',
+                        alertD: alertD // Guardamos objeto Date para sort preciso
                     });
                 }
             }
         });
 
-        // Ordenar por fecha (las más antiguas primero)
-        tasks.sort((a, b) => new Date(a.crm_due_date) - new Date(b.crm_due_date));
+        // Ordenar: Vencidas primero (más viejas), luego por fecha ascendente
+        tasks.sort((a, b) => a.alertD - b.alertD);
+
+        console.log(`[Tasks] Tareas encontradas: ${tasks.length}`);
 
         if (tasks.length === 0) {
-            container.innerHTML = '<div class="tasks-empty">No hay tareas pendientes para los próximos días.</div>';
+            container.innerHTML = `
+                <div class="tasks-empty">
+                    <i class="fas fa-check-double" style="font-size: 2rem; display: block; margin-bottom: 10px; opacity: 0.5;"></i>
+                    No hay tareas pendientes o vencidas.
+                </div>`;
             return;
         }
 
-        const todayStr = new Date().toISOString().split('T')[0];
+        const todayStr = today.toISOString().split('T')[0];
 
         container.innerHTML = tasks.map(t => {
             const dateStr = t.crm_due_date;
             const isToday = dateStr === todayStr;
-            const isOverdue = dateStr < todayStr;
+            const isOverdue = t.alertD < today;
             const statusClass = isToday ? 'today' : (isOverdue ? 'overdue' : '');
+            const priorityColor = getPriorityColor(t.priority);
             
             return `
                 <div class="task-item ${statusClass}" onclick="openCardModalFromTask('${t.chat_id}')">
-                    <div class="task-date">${formatDate(dateStr)} ${isToday ? '(HOY)' : (isOverdue ? '(VENCIDO)' : '')}</div>
+                    <div class="task-date ${statusClass}">
+                        ${formatDate(dateStr)} ${isToday ? '(HOY)' : (isOverdue ? '(VENCIDO)' : '')}
+                    </div>
                     <div class="task-title">${t.name}</div>
-                    <div class="task-lead"><i class="fas fa-tasks"></i> Estado: ${t.crm_status}</div>
-                    <div style="font-size:0.7rem; opacity:0.6; margin-top:5px;">ID: ${t.chat_id.split('@')[0]}</div>
+                    <div class="task-footer-info">
+                        <span class="task-badge-status"><i class="fas fa-columns"></i> ${t.crm_status}</span>
+                        <span class="task-badge-priority" style="border-left: 3px solid ${priorityColor}; padding-left: 5px;">
+                            ${t.priority}
+                        </span>
+                    </div>
                 </div>
             `;
         }).join('');
     } catch (e) {
         console.error('[Tasks] Error:', e);
-        container.innerHTML = '<div class="tasks-empty" style="color:#ef4444;">Error al cargar tareas.</div>';
+        container.innerHTML = '<div class="tasks-empty" style="color:#ef4444;">Error al cargar tareas en el dashboard.</div>';
     }
 }
+
 
 async function openCardModalFromTask(chatId) {
     // Buscar el ticket asociado a este chat
@@ -1097,62 +1122,4 @@ function handleDrop(e) {
 }
 
 // --- Tasks Dashboard Logic ---
-window.toggleTasksDashboard = () => {
-    const panel = document.getElementById('tasks-dashboard');
-    const btn = document.getElementById('btn-tasks-dashboard');
-    panel.classList.toggle('active');
-    btn.classList.toggle('active');
-    
-    if (panel.classList.contains('active')) {
-        renderTasks();
-    }
-};
-
-function renderTasks() {
-    const container = document.getElementById('tasks-list-content');
-    if (!container) return;
-
-    const today = new Date();
-    today.setHours(0,0,0,0);
-    const limitDate = new Date();
-    limitDate.setDate(today.getDate() + 5);
-    limitDate.setHours(23,59,59,999);
-
-    const pendingTasks = allTickets.filter(t => {
-        if (!t.vencimiento) return false;
-        const vDate = new Date(t.vencimiento);
-        return vDate >= today && vDate <= limitDate;
-    }).sort((a, b) => new Date(a.vencimiento) - new Date(b.vencimiento));
-
-    if (pendingTasks.length === 0) {
-        container.innerHTML = `
-            <div style="text-align:center; padding:40px; opacity:0.6;">
-                <i class="fas fa-check-circle" style="font-size:2.5rem; color:var(--success); margin-bottom:15px;"></i>
-                <p>No hay tareas pendientes para los próximos 5 días.</p>
-            </div>
-        `;
-        return;
-    }
-
-    container.innerHTML = pendingTasks.map(t => {
-        const vDate = new Date(t.vencimiento);
-        const isToday = vDate.toDateString() === today.toDateString();
-        const dateStr = isToday ? 'HOY' : vDate.toLocaleDateString([], {day:'2-digit', month:'2-digit'});
-        const priorityColor = t.prioridad === 'Alta' ? '#ef4444' : (t.prioridad === 'Media' ? '#f59e0b' : '#3b82f6');
-        
-        return `
-            <div class="task-card ${isToday ? 'today' : ''}" onclick="openCardModal('${t.id}')">
-                <div class="task-date ${isToday ? 'today' : ''}">${dateStr}</div>
-                <div class="task-info">
-                    <div class="task-title">${t.titulo || 'Lead sin título'}</div>
-                    <div class="task-meta">
-                        <span class="task-priority" style="background:${priorityColor}">${t.prioridad || 'Media'}</span>
-                        <span class="task-status"><i class="fas fa-columns"></i> ${t.estado}</span>
-                    </div>
-                </div>
-                <i class="fas fa-chevron-right task-arrow"></i>
-            </div>
-        `;
-    }).join('');
-}
 
