@@ -201,22 +201,74 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
                 }
             }
 
-            // Iniciar proceso de envío
-            console.log(`🚀 [API_EXTERNAL] Iniciando envío masivo para plantilla: ${templateName} (${finalLanguage}) con ${data.length} destinatarios`);
+            // --- VALIDACIÓN Y ENVÍO DEL PRIMER MENSAJE ---
+            // Probamos siempre con el primer contacto de la lista. 
+            // Si este falla (por ejemplo, error de parámetros), informamos de inmediato al cliente.
+            const firstItem = data[0];
+            const { phone: firstPhone, variables: firstVars } = firstItem;
+            let firstMsgId = null;
 
+            try {
+                const parameters = firstVars ? Object.entries(firstVars).map(([key, value]) => ({
+                    type: 'text',
+                    parameter_name: key,
+                    text: String(value)
+                })) : [];
+
+                const components = parameters.length > 0 ? [{
+                    type: 'BODY',
+                    parameters: parameters
+                }] : [];
+
+                const resApi = await provider.sendTemplate(firstPhone, templateName, finalLanguage, components);
+                
+                if (resApi?.messages) {
+                    firstMsgId = resApi.messages[0].id;
+                    await HistoryHandler.saveMessage(firstPhone, 'assistant', `[API Externa: ${templateName}]`, 'text', null, null, firstMsgId);
+                } else {
+                    throw new Error("Respuesta vacía o inesperada de Meta");
+                }
+            } catch (e: any) {
+                const metaError = e.response?.data || { message: e.message };
+                console.error(`❌ [API_EXTERNAL] Error de validación en el primer envío:`, JSON.stringify(metaError));
+                
+                await logApiRequest({ token, endpoint: '/api/v1/send-template', status: 'error', error: JSON.stringify(metaError), req });
+
+                return res.status(400).json({
+                    success: false,
+                    error: "Error de validación en el envío (petición abortada)",
+                    details: metaError,
+                    note: "Se abortó el proceso porque el primer mensaje falló. Verifica los parámetros y la plantilla."
+                });
+            }
+
+            // Registro de éxito inicial
             await logApiRequest({ token, endpoint: '/api/v1/send-template', status: 'success', req });
 
-            // Respondemos 202 (Accepted) para no bloquear al cliente
-            res.status(202).json({ 
-                success: true, 
-                message: `Envío iniciado para ${data.length} contactos.`,
-                template_resolved: templateName,
-                language_used: finalLanguage,
-                job_id: tokenData.id 
-            });
+            // --- RESPUESTA SEGÚN VOLUMEN ---
+            if (data.length === 1) {
+                // Caso individual exitoso
+                return res.json({
+                    success: true,
+                    message: "Mensaje enviado con éxito",
+                    message_id: firstMsgId,
+                    template: templateName
+                });
+            } else {
+                // Caso masivo: el primero fue un éxito, el resto va a background
+                console.log(`🚀 [API_EXTERNAL] Primer envío exitoso. Iniciando resto del masivo (${data.length - 1} pendientes)`);
+                
+                res.status(202).json({ 
+                    success: true, 
+                    message: `Validación exitosa. Iniciando resto del envío masivo (${data.length - 1} restantes).`,
+                    template_resolved: templateName,
+                    first_message_id: firstMsgId,
+                    job_id: tokenData.id 
+                });
 
-            // Proceso en background (Async)
-            processExternalBulk(provider, templateName, finalLanguage, data, token);
+                // Procesamos el RESTO de la lista (del índice 1 en adelante)
+                processExternalBulk(provider, templateName, finalLanguage, data.slice(1), token);
+            }
 
         } catch (err: any) {
             console.error('❌ [API_EXTERNAL] Error en /api/v1/send-template:', err.message);
@@ -265,7 +317,8 @@ async function processExternalBulk(provider: any, templateName: string, language
             }
         } catch (e: any) {
             errors++;
-            console.error(`❌ [API_EXTERNAL] Error enviando a ${phone}:`, e.message);
+            const errorDetail = e.response?.data || e.message;
+            console.error(`❌ [API_EXTERNAL] Error enviando a ${phone}:`, JSON.stringify(errorDetail));
         }
 
         await new Promise(r => setTimeout(r, 250));
