@@ -641,53 +641,52 @@ export class HistoryHandler {
     /**
      * Crea un lead manualmente desde la interfaz (sin necesidad de chat previo)
      */
-   static async createNewLeadManual(chatId: string, details: any) {
-    try {
-        // 1. Crear o actualizar el chat (Lead)
-        const { error: chatErr } = await supabase
-            .from('chats')
-            .upsert({
-                id: chatId,
-                project_id: HistoryHandler.PROJECT_IDENTIFIER,
-                ...details,
-                is_lead: true,
-                created_at: new Date().toISOString()
-            }, { onConflict: 'id,project_id' });
+    static async createNewLeadManual(chatId: string, details: any) {
+        try {
+            // 1. Crear o actualizar el chat (Lead)
+            const { error: chatErr } = await supabase
+                .from('chats')
+                .upsert({
+                    id: chatId,
+                    project_id: HistoryHandler.PROJECT_IDENTIFIER,
+                    ...details,
+                    is_lead: true,
+                    created_at: new Date().toISOString()
+                }, { onConflict: 'id,project_id' });
 
-        if (chatErr) throw chatErr;
+            if (chatErr) throw chatErr;
 
-        // 2. Crear un ticket inicial "NUEVO LEAD" para que aparezca en el CRM
+            // 2. Crear un ticket inicial "NUEVO LEAD" para que aparezca en el CRM
+            // FIX: buscar el cliente por telefono para asignar cliente_id al ticket
+            const { data: clienteData } = await supabase
+                .from('clientes')
+                .select('id')
+                .eq('telefono', chatId)
+                .maybeSingle();
 
-        // NUEVO: buscar el cliente por telefono para asignar cliente_id al ticket
-        const { data: cliente } = await supabase
-            .from('clientes')
-            .select('id')
-            .eq('telefono', chatId)
-            .maybeSingle();
+            const { data: ticket, error: ticketErr } = await supabase
+                .from('tickets')
+                .insert({
+                    chat_id: chatId,
+                    project_id: HistoryHandler.PROJECT_IDENTIFIER,
+                    titulo: `Lead: ${details.name || chatId}`,
+                    descripcion: details.notes || 'Lead creado manualmente',
+                    tipo: details.offered_product || 'Nuevo Lead',
+                    prioridad: 'Media',
+                    estado: 'Abierto',
+                    created_at: new Date().toISOString(),
+                    cliente_id: clienteData?.id ?? null // FIX: uuid del cliente o null si no hay match
+                })
+                .select()
+                .single();
 
-        const { data: ticket, error: ticketErr } = await supabase
-            .from('tickets')
-            .insert({
-                chat_id: chatId,
-                project_id: HistoryHandler.PROJECT_IDENTIFIER,
-                cliente_id: cliente?.id ?? null, // NUEVO: asigna el id si existe, null si no
-                titulo: `Lead: ${details.name || chatId}`,
-                descripcion: details.notes || 'Lead creado manualmente',
-                tipo: details.offered_product || 'Nuevo Lead',
-                prioridad: 'Media',
-                estado: 'Abierto',
-                created_at: new Date().toISOString()
-            })
-            .select()
-            .single();
-
-        if (ticketErr) throw ticketErr;
-        return { success: true, ticket };
-    } catch (err: any) {
-        console.error('[HistoryHandler] Error en createNewLeadManual:', err);
-        return { success: false, error: err.message };
+            if (ticketErr) throw ticketErr;
+            return { success: true, ticket };
+        } catch (err: any) {
+            console.error('[HistoryHandler] Error en createNewLeadManual:', err);
+            return { success: false, error: err.message };
+        }
     }
-}
 
     /**
      * Verifica si el bot está habilitado para un usuario
@@ -997,45 +996,45 @@ export class HistoryHandler {
         }
     }
 
-    /**
+     /**
      * Crea un nuevo ticket
      */
     static async createTicket(rawChatId: string, titulo: string, descripcion: string, tipo: string = 'Soporte', prioridad: string = 'Media', forcedProjectId?: string) {
-    const chatId = this.normalizeId(rawChatId);
-    const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
-    try {
-        // NUEVO: buscar el cliente por telefono para asignar cliente_id al ticket
-        const { data: cliente } = await supabase
-            .from('clientes')
-            .select('id')
-            .eq('telefono', chatId)
-            .maybeSingle();
+        const chatId = this.normalizeId(rawChatId);
+        const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+        try { // FIX: buscar el cliente por telefono para asignar cliente_id al ticket
+            const { data: clienteData } = await supabase
+                .from('clientes')
+                .select('id')
+                .eq('telefono', chatId)
+                .maybeSingle();
 
-        const { data, error } = await supabase
-            .from('tickets')
-            .insert({
-                chat_id: chatId,
-                project_id: currentProjectId,
-                cliente_id: cliente?.id ?? null, // NUEVO: asigna el id si existe, null si no
-                titulo,
-                descripcion,
-                tipo,
-                prioridad,
-                estado: 'Abierto'
-            })
-            .select()
-            .single();
+            const { data, error } = await supabase
+                .from('tickets')
+                .insert({
+                    chat_id: chatId,
+                    project_id: currentProjectId,
+                    titulo,
+                    descripcion,
+                    tipo,
+                    prioridad,
+                    estado: 'Abierto',
+                    cliente_id: clienteData?.id ?? null // FIX: uuid del cliente o null si no hay match
+                })
+                .select()
+                .single();
 
-        if (error) throw error;
-
-        historyEvents.emit('ticket_updated', { chatId, ticket: data });
-
-        return { success: true, ticket: data };
-    } catch (err: any) {
-        console.error('[HistoryHandler] Error en createTicket:', err);
-        return { success: false, error: err.message };
+            if (error) throw error;
+            
+            // Emitir evento para WebSockets
+            historyEvents.emit('ticket_updated', { chatId, ticket: data });
+            
+            return { success: true, ticket: data };
+        } catch (err: any) {
+            console.error('[HistoryHandler] Error en createTicket:', err);
+            return { success: false, error: err.message };
+        }
     }
-}
 
     /**
      * Obtiene el conteo de tickets pendientes (Abiertos o En progreso)
