@@ -1592,21 +1592,42 @@ export class HistoryHandler {
             ];
 
             for (const item of mandatoryKeys) {
-                const { data: exists } = await supabase
+                const { data: existingEntry } = await supabase
                     .from('settings')
-                    .select('key')
+                    .select('key, value')
                     .eq('project_id', currentProjectId)
                     .eq('key', item.key)
                     .maybeSingle();
                 
-                if (!exists) {
-                    console.log(`🆕 [Bootstrap] Creando variable faltante '${item.key}' en settings con valor default.`);
-                    await supabase.from('settings').insert({
-                        project_id: currentProjectId,
-                        key: item.key,
-                        value: item.defaultValue,
-                        updated_at: new Date().toISOString()
-                    });
+                if (!existingEntry || existingEntry.value === 'PENDING') {
+                    console.log(`🔍 [Bootstrap] Variable '${item.key}' ${!existingEntry ? 'faltante' : 'en estado PENDING'}. Buscando valor...`);
+                    
+                    let finalValue = item.defaultValue;
+
+                    // Si el valor en env es 'PENDING', intentamos buscar en el proyecto maestro 'defaul'
+                    if (finalValue === 'PENDING') {
+                        const { data: masterVal } = await supabase
+                            .from('settings')
+                            .select('value')
+                            .eq('project_id', MASTER_ID)
+                            .eq('key', item.key)
+                            .maybeSingle();
+                        
+                        if (masterVal && masterVal.value) {
+                            console.log(`🎯 [Bootstrap] Valor para '${item.key}' recuperado desde el maestro '${MASTER_ID}'.`);
+                            finalValue = masterVal.value;
+                        }
+                    }
+
+                    if (finalValue !== 'PENDING') {
+                        console.log(`🆕 [Bootstrap] ${!existingEntry ? 'Creando' : 'Actualizando'} variable '${item.key}' con valor: ${finalValue.substring(0, 10)}...`);
+                        await supabase.from('settings').upsert({
+                            project_id: currentProjectId,
+                            key: item.key,
+                            value: finalValue,
+                            updated_at: new Date().toISOString()
+                        }, { onConflict: 'project_id,key' });
+                    }
                 }
             }
 

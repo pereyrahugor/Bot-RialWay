@@ -48,10 +48,10 @@ export const registerDashboardRoutes = (app: any) => {
     
     app.get('/api/dashboard/openai-usage', async (req: any, res: any) => {
         try {
-            const adminKey = process.env.OPENAI_ADMIN_API_KEY;
-            if (!adminKey) {
+            const adminKey = await HistoryHandler.getConfig('OPENAI_ADMIN_API_KEY');
+            if (!adminKey || adminKey === 'PENDING') {
                 res.statusCode = 400;
-                return res.end(JSON.stringify({ success: false, error: 'OPENAI_ADMIN_API_KEY no configurada' }));
+                return res.end(JSON.stringify({ success: false, error: 'OPENAI_ADMIN_API_KEY no configurada o en estado PENDING' }));
             }
 
             const now = new Date();
