@@ -1,11 +1,79 @@
 import { supabase, HistoryHandler } from '../utils/historyHandler';
 import { backofficeAuth } from '../middleware/auth';
+import axios from 'axios';
+
+/**
+ * Obtiene el costo de OpenAI para un rango de fechas y lo multiplica por 1.5
+ */
+async function getOpenAICost(adminKey: string, year: number, month: number) {
+    try {
+        const startOfMonth = new Date(year, month, 1);
+        const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59);
+        const now = new Date();
+
+        const params = {
+            start_time: Math.floor(startOfMonth.getTime() / 1000),
+            end_time: Math.floor(Math.min(endOfMonth.getTime(), now.getTime()) / 1000)
+        };
+
+        const res = await axios.get('https://api.openai.com/v1/organization/costs', {
+            headers: { 'Authorization': `Bearer ${adminKey}` },
+            params: params
+        });
+
+        let total = 0;
+        if (res.data.data) {
+            res.data.data.forEach((bucket: any) => {
+                if (bucket.results) {
+                    bucket.results.forEach((result: any) => {
+                        if (result.amount && result.amount.value) {
+                            total += parseFloat(result.amount.value);
+                        }
+                    });
+                }
+            });
+        }
+        // Multiplicar por 1.5 según requerimiento del usuario
+        return parseFloat((total * 1.5).toFixed(2));
+    } catch (e) {
+        console.error(`[OpenAI Cost Error] ${year}-${month + 1}:`, e);
+        return 0;
+    }
+}
 
 /**
  * Registra las rutas de la API de Dashboard en la instancia de Polka.
  */
 export const registerDashboardRoutes = (app: any) => {
     
+    app.get('/api/dashboard/openai-usage', async (req: any, res: any) => {
+        try {
+            const adminKey = process.env.OPENAI_ADMIN_API_KEY;
+            if (!adminKey) {
+                res.statusCode = 400;
+                return res.end(JSON.stringify({ success: false, error: 'OPENAI_ADMIN_API_KEY no configurada' }));
+            }
+
+            const now = new Date();
+            const usageData: any = {};
+
+            // Obtener los últimos 3 meses + mes en curso
+            for (let i = 3; i >= 0; i--) {
+                const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                const cost = await getOpenAICost(adminKey, date.getFullYear(), date.getMonth());
+                const label = date.toLocaleString('es-ES', { month: 'short', year: '2-digit' });
+                usageData[label] = cost;
+            }
+
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ success: true, data: usageData }));
+        } catch (e) {
+            console.error('[OPENAI USAGE ERROR]', e);
+            res.statusCode = 500;
+            res.end(JSON.stringify({ success: false, error: 'Fallo al obtener uso de OpenAI' }));
+        }
+    });
+
     app.get('/api/dashboard/stats', async (req: any, res: any) => {
         try {
             const PROJECT_ID = HistoryHandler.PROJECT_IDENTIFIER;
