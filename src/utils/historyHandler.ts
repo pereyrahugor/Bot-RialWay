@@ -60,7 +60,7 @@ export class HistoryHandler {
     static readonly EDITABLE_KEYS = [
         'ASSISTANT_NAME', 'ASSISTANT_ID', 'ASSISTANT_2', 'ASSISTANT_3', 'ASSISTANT_4', 'ASSISTANT_5',
         'ASSISTANT_PROMPT', 'ASSISTANT_PROMPT_2', 'ASSISTANT_PROMPT_3', 'ASSISTANT_PROMPT_4', 'ASSISTANT_PROMPT_5',
-        'OPENAI_API_KEY', 'ASSISTANT_ID_IMG', 'OPENAI_API_KEY_IMG', 'VECTOR_STORE_ID', 'EXTRA_SYSTEM_PROMPT',
+        'OPENAI_API_KEY', 'OPENAI_ADMIN_API_KEY', 'ASSISTANT_ID_IMG', 'OPENAI_API_KEY_IMG', 'VECTOR_STORE_ID', 'EXTRA_SYSTEM_PROMPT',
         'DB_TABLES', 'OPENAI_TOOLS_DEFINITION', 'msjCierre', 'msjSeguimiento1', 'msjSeguimiento2', 'msjSeguimiento3',
         'timeOutCierre', 'timeOutSeguimiento2', 'timeOutSeguimiento3', 'ID_GRUPO_RESUMEN', 'ID_GRUPO_RESUMEN_2',
         'SHEET_ID_RESUMEN', 'SHEET_ID_UPDATE', 'DOCX_ID_UPDATE', 'GOOGLE_CALENDAR_ID',
@@ -1583,6 +1583,31 @@ export class HistoryHandler {
                     value: uniqueKey,
                     updated_at: new Date().toISOString()
                 });
+            }
+
+            // 4. Asegurar existencia de variables obligatorias (pueden ser nuevas en el código)
+            const mandatoryKeys = [
+                { key: 'OPENAI_ADMIN_API_KEY', defaultValue: process.env.OPENAI_ADMIN_API_KEY || 'PENDING' },
+                { key: 'ASSISTANT_NAME', defaultValue: process.env.ASSISTANT_NAME || 'Bot' }
+            ];
+
+            for (const item of mandatoryKeys) {
+                const { data: exists } = await supabase
+                    .from('settings')
+                    .select('key')
+                    .eq('project_id', currentProjectId)
+                    .eq('key', item.key)
+                    .maybeSingle();
+                
+                if (!exists) {
+                    console.log(`🆕 [Bootstrap] Creando variable faltante '${item.key}' en settings con valor default.`);
+                    await supabase.from('settings').insert({
+                        project_id: currentProjectId,
+                        key: item.key,
+                        value: item.defaultValue,
+                        updated_at: new Date().toISOString()
+                    });
+                }
             }
 
         } catch (err) {
