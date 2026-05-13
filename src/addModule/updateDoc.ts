@@ -15,14 +15,17 @@ const DOCX_FILE_IDS = (process.env.DOCX_ID_UPDATE || "")
 const VECTOR_STORE_ID = process.env.VECTOR_STORE_ID ?? "";
 let currentFileId: string | null = null;
 
-import { createGoogleAuth } from "../utils/googleAuth";
+// Se eliminaron inicializaciones estáticas para evitar errores de carga prematura
+const getDriveClient = () => {
+    const auth = createGoogleAuth(["https://www.googleapis.com/auth/drive.readonly"]);
+    return google.drive({ version: "v3", auth });
+};
 
-// Construir credenciales usando la utilidad centralizada
-const auth = createGoogleAuth(["https://www.googleapis.com/auth/drive.readonly"]);
-const drive = google.drive({ version: "v3", auth });
-const openai = (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.length > 5) 
-    ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) 
-    : null;
+const getOpenAIClient = () => {
+    const key = process.env.OPENAI_API_KEY;
+    return (key && key.length > 5) ? new OpenAI({ apiKey: key }) : null;
+};
+
 
 // Función principal para procesar todos los docs
 export async function updateAllDocs() {
@@ -33,12 +36,15 @@ export async function updateAllDocs() {
 
 // Procesa un docx por ID, obtiene el nombre real y ejecuta la lógica
 async function processDocById(DOCX_FILE_ID: string) {
+    const drive = getDriveClient();
+    const openai = getOpenAIClient();
     try {
         if (!DOCX_FILE_ID) throw new Error("No se definió DOCX_FILE_ID en el .env");
         // Obtener el nombre real del archivo desde Google Drive
         const meta = await drive.files.get({ fileId: DOCX_FILE_ID, fields: "name, mimeType" });
         const fileName = meta.data.name || `archivo_${Date.now()}.docx`;
         const mimeType = meta.data.mimeType || "";
+
         // Verifica que la carpeta temp exista
         if (!fs.existsSync("temp")) {
             fs.mkdirSync("temp", { recursive: true });
@@ -111,8 +117,10 @@ async function processDocById(DOCX_FILE_ID: string) {
 }
 
 async function attachFileToVectorStore(fileId: string) {
+    const openai = getOpenAIClient();
     if (!openai) return true;
     try {
+
         if (!VECTOR_STORE_ID || VECTOR_STORE_ID === "vs_" || VECTOR_STORE_ID.trim() === "") {
             console.warn("⚠️ Salteando adjuntar archivo: VECTOR_STORE_ID no definido o inválido.");
             return true;
@@ -136,8 +144,10 @@ async function attachFileToVectorStore(fileId: string) {
 }
 
 async function deleteOldDocxFiles(fileName: string) {
+    const openai = getOpenAIClient();
     if (!openai) return;
     try {
+
         console.log("🗑️ Eliminando archivos .docx anteriores del vector store...");
         const files = await openai.files.list();
         for (const file of files.data) {

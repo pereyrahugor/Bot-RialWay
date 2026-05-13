@@ -23,19 +23,26 @@ const SHEET_IDS = (process.env.SHEET_ID_UPDATE || "")
 const VECTOR_STORE_ID = process.env.VECTOR_STORE_ID || "";
 let currentFileId: string | null = null;
 
-import { createGoogleAuth } from "../utils/googleAuth";
+// Se eliminaron las inicializaciones estáticas para evitar errores de autenticación antes de cargar settings
+const getSheetsClient = () => {
+    const auth = createGoogleAuth(["https://www.googleapis.com/auth/spreadsheets"]);
+    return google.sheets({ version: "v4", auth });
+};
 
-// Construir credenciales usando la utilidad centralizada
-const auth = createGoogleAuth(["https://www.googleapis.com/auth/spreadsheets"]);
+const getOpenAIClient = () => {
+    const key = process.env.OPENAI_API_KEY;
+    return key ? new OpenAI({ apiKey: key }) : null;
+};
 
-const sheets = google.sheets({ version: "v4", auth });
-const openai = process.env.OPENAI_API_KEY ? new OpenAI() : null;
 
 // Función principal para procesar todos los sheets
 export async function updateAllSheets(options: { forceRecreate?: boolean } = {}) {
+    const sheets = getSheetsClient();
     const tableNames: string[] = [];
     for (const SHEET_ID of SHEET_IDS) {
+
         const tableName = await processSheetById(SHEET_ID, options);
+
         if (tableName) {
             tableNames.push(tableName);
         }

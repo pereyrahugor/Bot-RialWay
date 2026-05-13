@@ -4,7 +4,7 @@ import "dotenv/config";
 import { GenericResumenData } from "./extractJsonData";
 import { createGoogleAuth } from "./googleAuth";
 
-const auth = createGoogleAuth(["https://www.googleapis.com/auth/spreadsheets"]);
+// La inicialización se movió dentro de la función para ser lazy y evitar errores de carga prematura
 
 // ID de la hoja de cálculo desde .env
 const SHEET_ID = process.env.SHEET_ID_RESUMEN ?? "";
@@ -15,7 +15,9 @@ const SHEET_ID = process.env.SHEET_ID_RESUMEN ?? "";
  */
 export const addToSheet = async (data: GenericResumenData): Promise<void> => {
     try {
+        const auth = createGoogleAuth(["https://www.googleapis.com/auth/spreadsheets"]);
         const sheets = google.sheets({ version: "v4", auth });
+
 
         // Obtener la fecha y hora actual
         const fechaHora: string = moment().format("YYYY-MM-DD HH:mm:ss");

@@ -4,12 +4,15 @@ import fs from "fs";
 import path from "path";
 import { finished } from "stream/promises";
 
-const auth = createGoogleAuth([
-    "https://www.googleapis.com/auth/drive.readonly",
-    "https://www.googleapis.com/auth/drive.file"
-]);
+// Se eliminaron inicializaciones estáticas para evitar errores de carga prematura
+const getDriveClient = () => {
+    const auth = createGoogleAuth([
+        "https://www.googleapis.com/auth/drive.readonly",
+        "https://www.googleapis.com/auth/drive.file"
+    ]);
+    return google.drive({ version: "v3", auth });
+};
 
-const drive = google.drive({ version: "v3", auth });
 
 /**
  * Descarga un archivo desde Google Drive dado su ID.
@@ -25,10 +28,12 @@ export const downloadFileFromDrive = async (fileId: string): Promise<string> => 
         }
 
         // Obtener metadatos del archivo para saber el nombre original
+        const drive = getDriveClient();
         const fileMetadata = await drive.files.get({
             fileId: fileId,
             fields: "name, mimeType",
         });
+
 
         const fileName = fileMetadata.data.name || `${fileId}.pdf`;
         const filePath = path.join(tempDir, fileName);
