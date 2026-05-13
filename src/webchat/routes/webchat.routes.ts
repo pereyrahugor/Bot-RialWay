@@ -83,7 +83,7 @@ export const registerWebchatRoutes = (app: any, {
                 }
             }
 
-            const { HistoryHandler } = await import("../../utils/historyHandler");
+            const { HistoryHandler } = await import("../../db/historyHandler");
             const session = webChatManager.getSession(ip);
             let replyText = '';
 

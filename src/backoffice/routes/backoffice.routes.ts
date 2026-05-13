@@ -503,7 +503,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     // --- AUTH ---
 
-    app.post('/api/backoffice/auth', bodyParser.json(), async (req, res) => {
+    app.post('/api/backoffice/auth', bodyParser.json(), async (req: any, res: any) => {
         const { user, pass, token } = req.body;
         
         // 1. Soporte para login dinámico (Prioridad: DB > Env)
@@ -596,7 +596,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
-    app.get('/api/backoffice/chats/import-template', backofficeAuth, (req, res) => {
+    app.get('/api/backoffice/chats/import-template', backofficeAuth, (req: any, res: any) => {
         try {
             const data = [
                 { phone: '5491122334455', name: 'Juan Perez', tags: 'Cliente, Interesado' },
@@ -615,7 +615,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
-    app.post('/api/backoffice/chats/import', backofficeAuth, (req, res) => {
+    app.post('/api/backoffice/chats/import', backofficeAuth, (req: any, res: any) => {
         return processImportExcel(req, res, deps);
     });
 
@@ -627,7 +627,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         res.json(messages);
     });
 
-    app.get('/api/backoffice/profile-pic/:chatId', async (req, res) => {
+    app.get('/api/backoffice/profile-pic/:chatId', async (req: any, res: any) => {
         try {
             const { chatId } = req.params;
             const token = req.query.token as string;
@@ -944,7 +944,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     // --- SEND MESSAGE & TOGGLE BOT ---
 
-    app.post('/api/backoffice/send-message', backofficeAuth, (req, res, next) => {
+    app.post('/api/backoffice/send-message', backofficeAuth, (req: any, res: any, _next: any) => {
         if (req.body && Object.keys(req.body).length > 0) {
             console.warn("⚠️ [BACKOFFICE] Cuerpo detectado ANTES de Multer. Posible conflicto de stream.");
         }
@@ -962,7 +962,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         });
     });
 
-    app.post('/api/backoffice/toggle-bot', backofficeAuth, bodyParser.json(), async (req, res) => {
+    app.post('/api/backoffice/toggle-bot', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         const { chatId, enabled } = req.body;
         if (!chatId) return res.status(400).json({ success: false, error: 'chatId is required' });
         
@@ -979,12 +979,12 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     // --- TAGS ---
 
-    app.get('/api/backoffice/tags', backofficeAuth, async (req, res) => {
+    app.get('/api/backoffice/tags', backofficeAuth, async (req: any, res: any) => {
         const tags = await depsHistoryHandler.getTags();
         res.json(tags);
     });
 
-    app.get('/api/backoffice/chat/:id/contact', backofficeAuth, async (req, res) => {
+    app.get('/api/backoffice/chat/:id/contact', backofficeAuth, async (req: any, res: any) => {
         try {
             const { id } = req.params;
             const contact = await depsHistoryHandler.getChat(id);
@@ -997,7 +997,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
-    app.put('/api/backoffice/chat/:id/contact', backofficeAuth, bodyParser.json(), async (req, res) => {
+    app.put('/api/backoffice/chat/:id/contact', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         try {
             const { id } = req.params;
             const { name, email, notes, source, cuit_dni, tax_status, address, offered_product, crm_status, crm_due_date } = req.body;
@@ -1013,7 +1013,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
-    app.post('/api/backoffice/chat/manual-lead', backofficeAuth, bodyParser.json(), async (req, res) => {
+    app.post('/api/backoffice/chat/manual-lead', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         try {
             const { chatId, details } = req.body;
             if (!chatId) return res.status(400).json({ success: false, error: 'chatId (phone) is required' });
@@ -1024,43 +1024,43 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
-    app.post('/api/backoffice/tags', backofficeAuth, bodyParser.json(), async (req, res) => {
+    app.post('/api/backoffice/tags', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         const { name, color } = req.body;
         const result = await depsHistoryHandler.createTag(name, color);
         res.json(result);
     });
 
-    app.put('/api/backoffice/tags/:id', backofficeAuth, bodyParser.json(), async (req, res) => {
+    app.put('/api/backoffice/tags/:id', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         const { name, color } = req.body;
         const result = await depsHistoryHandler.updateTag(req.params.id, name, color);
         res.json(result);
     });
 
-    app.delete('/api/backoffice/tags/:id', backofficeAuth, async (req, res) => {
+    app.delete('/api/backoffice/tags/:id', backofficeAuth, async (req: any, res: any) => {
         const result = await depsHistoryHandler.deleteTag(req.params.id);
         res.json(result);
     });
 
-    app.post('/api/backoffice/chats/:chatId/tags', backofficeAuth, bodyParser.json(), async (req, res) => {
+    app.post('/api/backoffice/chats/:chatId/tags', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         const { tagId } = req.body;
         const result = await depsHistoryHandler.addTagToChat(req.params.chatId, tagId);
         res.json(result);
     });
 
-    app.delete('/api/backoffice/chats/:chatId/tags/:tagId', backofficeAuth, async (req, res) => {
+    app.delete('/api/backoffice/chats/:chatId/tags/:tagId', backofficeAuth, async (req: any, res: any) => {
         const result = await depsHistoryHandler.removeTagFromChat(req.params.chatId, req.params.tagId);
         res.json(result);
     });
 
     // --- TICKETS ---
 
-    app.get('/api/backoffice/tickets/pending-count', backofficeAuth, async (req, res) => {
+    app.get('/api/backoffice/tickets/pending-count', backofficeAuth, async (req: any, res: any) => {
         const tipo = req.query.tipo as string;
         const count = await depsHistoryHandler.getPendingTicketsCount(tipo);
         res.json({ count });
     });
 
-    app.get('/api/backoffice/tickets', backofficeAuth, async (req, res) => {
+    app.get('/api/backoffice/tickets', backofficeAuth, async (req: any, res: any) => {
         const estado = req.query.estado as string;
         const tipo = req.query.tipo as string;
         const chatId = req.query.chatId as string;
@@ -1071,14 +1071,14 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         res.json(result);
     });
 
-    app.post('/api/backoffice/tickets', backofficeAuth, bodyParser.json(), async (req, res) => {
+    app.post('/api/backoffice/tickets', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         const { chatId, titulo, descripcion, tipo, prioridad } = req.body;
         if (!chatId || !titulo) return res.status(400).json({ success: false, error: 'chatId and titulo are required' });
         const result = await depsHistoryHandler.createTicket(chatId, titulo, descripcion, tipo, prioridad);
         res.json(result);
     });
 
-    app.put('/api/backoffice/crm/ticket/:id', backofficeAuth, bodyParser.json(), async (req, res) => {
+    app.put('/api/backoffice/crm/ticket/:id', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         try {
             const { id } = req.params;
             const result = await depsHistoryHandler.updateLeadAndTicket(id, req.body);
@@ -1088,7 +1088,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
-    app.put('/api/backoffice/tickets/:id', backofficeAuth, bodyParser.json(), async (req, res) => {
+    app.put('/api/backoffice/tickets/:id', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         const { id } = req.params;
         const { estado } = req.body;
         const result = await depsHistoryHandler.updateTicketStatus(id, estado);
@@ -1097,7 +1097,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     // --- CRM CONFIG & DASHBOARD ---
 
-    app.get('/api/backoffice/crm/config', backofficeAuth, async (req, res) => {
+    app.get('/api/backoffice/crm/config', backofficeAuth, async (req: any, res: any) => {
         try {
             const configStr = await depsHistoryHandler.getSetting('CRM_CONFIG');
             const config = configStr ? JSON.parse(configStr) : null;
@@ -1107,7 +1107,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
-    app.post('/api/backoffice/crm/config', backofficeAuth, bodyParser.json(), async (req, res) => {
+    app.post('/api/backoffice/crm/config', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         try {
             const { config } = req.body;
             await depsHistoryHandler.saveSetting('CRM_CONFIG', JSON.stringify(config));
@@ -1117,7 +1117,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
-    app.get('/api/backoffice/crm/tasks', backofficeAuth, async (req, res) => {
+    app.get('/api/backoffice/crm/tasks', backofficeAuth, async (req: any, res: any) => {
         try {
             const tasks = await depsHistoryHandler.getTasksDashboard();
             res.json(tasks);
@@ -1126,7 +1126,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
-    app.get('/api/backoffice/leads', backofficeAuth, async (req, res) => {
+    app.get('/api/backoffice/leads', backofficeAuth, async (req: any, res: any) => {
         const limit = parseInt(req.query.limit as string) || 50;
         const offset = parseInt(req.query.offset as string) || 0;
         const result = await depsHistoryHandler.listEditedLeads(limit, offset);
@@ -1135,7 +1135,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     // --- ONBOARDING META ---
 
-    app.get('/api/backoffice/whatsapp/config', async (req, res) => {
+    app.get('/api/backoffice/whatsapp/config', async (req: any, res: any) => {
         // Validación de token
         const q: any = {};
         try { 
@@ -1179,7 +1179,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         });
     });
 
-    app.post('/api/backoffice/whatsapp/sync-manual', systemConfigAuth, bodyParser.json(), async (req, res) => {
+    app.post('/api/backoffice/whatsapp/sync-manual', systemConfigAuth, bodyParser.json(), async (req: any, res: any) => {
         const { token: manualToken, wabaId, phoneNumberId, projectId: bodyProjectId } = req.body;
         if (!manualToken) return res.status(400).json({ success: false, error: 'Token is required' });
 
@@ -1315,7 +1315,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     });
 
     /** Paso 1: Añadir número a Meta y solicitar OTP */
-    app.post('/api/backoffice/whatsapp/register-step-1', bodyParser.json(), async (req, res) => {
+    app.post('/api/backoffice/whatsapp/register-step-1', bodyParser.json(), async (req: any, res: any) => {
         const { phoneNumber, verifiedName, projectId, manualWabaId, manualToken } = req.body;
         try {
             const config = await depsHistoryHandler.getMetaOnboardingData(projectId, true); // Fallback al main_token habilitado
@@ -1367,7 +1367,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     });
 
     /** Paso 2: Verificar OTP y activar el bot */
-    app.post('/api/backoffice/whatsapp/register-step-2', bodyParser.json(), async (req, res) => {
+    app.post('/api/backoffice/whatsapp/register-step-2', bodyParser.json(), async (req: any, res: any) => {
         const { phoneId, code, projectId } = req.body;
         try {
             const config = await depsHistoryHandler.getMetaOnboardingData(projectId);
@@ -1555,7 +1555,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     // --- IMPORTACION EXTERNA DE CONTACTOS ---
     
-    app.get('/api/backoffice/chats/import-template', backofficeAuth, async (req, res) => {
+    app.get('/api/backoffice/chats/import-template', backofficeAuth, async (req: any, res: any) => {
         try {
             const wb = XLSX.utils.book_new();
             const headers = [['phone', 'name', 'tags']];
@@ -1575,7 +1575,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     // --- ONBOARDING META ---
 
-    app.get('/api/backoffice/whatsapp/onboard-callback', async (req, res) => {
+    app.get('/api/backoffice/whatsapp/onboard-callback', async (req: any, res: any) => {
         const { code, wabaId: queryWabaId, phoneId: queryPhoneId, projectId: queryProjectId } = req.query;
         const projectId = (queryProjectId as string) || process.env.RAILWAY_PROJECT_ID || 'default_project';
         
@@ -1812,7 +1812,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
      * Endpoint para vinculación manual de IDs si el auto-descubrimiento falló.
      * También dispara la sincronización SMB automática.
      */
-    app.post('/api/backoffice/whatsapp/sync-manual', bodyParser.json(), async (req, res) => {
+    app.post('/api/backoffice/whatsapp/sync-manual', bodyParser.json(), async (req: any, res: any) => {
         const { token, wabaId, phoneNumberId, projectId } = req.body;
         if (!token || !wabaId || !phoneNumberId) {
             return res.status(400).json({ success: false, error: 'Faltan campos obligatorios' });
@@ -1838,7 +1838,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
-    app.post('/api/backoffice/whatsapp/onboard', systemConfigAuth, bodyParser.json(), async (req, res) => {
+    app.post('/api/backoffice/whatsapp/onboard', systemConfigAuth, bodyParser.json(), async (req: any, res: any) => {
         const { code } = req.body;
         if (!code) return res.status(400).json({ success: false, error: 'Code is required' });
         try {
@@ -1864,7 +1864,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     // --- SYNC ASSISTANT PROMPT ---
 
-    app.post('/api/backoffice/sync-assistant-prompt', systemConfigAuth, bodyParser.json(), async (req, res) => {
+    app.post('/api/backoffice/sync-assistant-prompt', systemConfigAuth, bodyParser.json(), async (req: any, res: any) => {
         const { assistantId } = req.body;
         if (!assistantId) return res.status(400).json({ success: false, error: 'assistantId is required' });
 
@@ -1889,7 +1889,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     });
 
     // --- GENERIC SETTINGS (Used by CRM) ---
-    app.get('/api/backoffice/get-setting', backofficeAuth, async (req, res) => {
+    app.get('/api/backoffice/get-setting', backofficeAuth, async (req: any, res: any) => {
         const key = req.query.key as string;
         if (!key) return res.status(400).json({ success: false, error: 'key is required' });
         try {
@@ -1900,7 +1900,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
-    app.post('/api/backoffice/save-setting', backofficeAuth, bodyParser.json(), async (req, res) => {
+    app.post('/api/backoffice/save-setting', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         const { key, value } = req.body;
         if (!key) return res.status(400).json({ success: false, error: 'key is required' });
         try {
@@ -1920,7 +1920,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
      * Dispara la sincronización de contactos o historial desde Meta SMB API.
      * Esto enviará webhooks smb_app_state_sync o history que son procesados por el provider.
      */
-    app.post('/api/backoffice/whatsapp/sync-smb', backofficeAuth, bodyParser.json(), async (req, res) => {
+    app.post('/api/backoffice/whatsapp/sync-smb', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         const { type } = req.body; // 'contacts' | 'history'
         if (!['contacts', 'history'].includes(type)) {
             return res.status(400).json({ success: false, error: 'Tipo de sincronización inválido. Use "contacts" o "history".' });
@@ -1957,7 +1957,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     });
     
     // --- CRM ROUTES ---
-    app.get('/api/backoffice/crm/tasks', backofficeAuth, async (req, res) => {
+    app.get('/api/backoffice/crm/tasks', backofficeAuth, async (req: any, res: any) => {
         try {
             const tasks = await depsHistoryHandler.getTasksDashboard();
             res.json({ success: true, tasks });
@@ -1966,7 +1966,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
-    app.post('/api/backoffice/crm/update-lead', backofficeAuth, bodyParser.json(), async (req, res) => {
+    app.post('/api/backoffice/crm/update-lead', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         const { leadId, crm_status, crm_due_date } = req.body;
         if (!leadId) return res.status(400).json({ success: false, error: 'leadId is required' });
         
@@ -1988,7 +1988,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
-    app.get('/api/backoffice/crm/config', backofficeAuth, async (req, res) => {
+    app.get('/api/backoffice/crm/config', backofficeAuth, async (req: any, res: any) => {
         try {
             const config = await depsHistoryHandler.getSetting('CRM_CONFIG');
             res.json({ success: true, config: config ? JSON.parse(config) : null });
@@ -1997,7 +1997,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
-    app.post('/api/backoffice/crm/config', backofficeAuth, bodyParser.json(), async (req, res) => {
+    app.post('/api/backoffice/crm/config', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         const { config } = req.body;
         try {
             await depsHistoryHandler.saveSetting('CRM_CONFIG', JSON.stringify(config));
@@ -2013,7 +2013,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
      * Obtiene todas las variables de configuración mezclando el entorno (.env) 
      * con la base de datos (settings), priorizando la base de datos.
      */
-    app.get('/api/backoffice/config', systemConfigAuth, async (req, res) => {
+    app.get('/api/backoffice/config', systemConfigAuth, async (req: any, res: any) => {
         try {
             // 1. Obtener variables de Railway si es posible (como base)
             let railwayVars = {};
@@ -2051,7 +2051,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     /**
      * Guarda múltiples configuraciones en la base de datos sin reiniciar el bot.
      */
-    app.post('/api/backoffice/save-settings-bulk', systemConfigAuth, bodyParser.json(), async (req, res) => {
+    app.post('/api/backoffice/save-settings-bulk', systemConfigAuth, bodyParser.json(), async (req: any, res: any) => {
         const { settings } = req.body;
         if (!settings || typeof settings !== 'object') {
             return res.status(400).json({ success: false, error: 'settings object is required' });
@@ -2074,7 +2074,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
-    app.get('/api/backoffice/settings', backofficeAuth, async (req, res) => {
+    app.get('/api/backoffice/settings', backofficeAuth, async (req: any, res: any) => {
         try {
             const { data: dbSettings, error } = await supabase
                 .from('settings')
@@ -2093,7 +2093,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     });
 
     // --- GET STORED PROMPT ---
-    app.get('/api/backoffice/get-prompt', systemConfigAuth, async (req, res) => {
+    app.get('/api/backoffice/get-prompt', systemConfigAuth, async (req: any, res: any) => {
         try {
             const index = req.query.index || '1';
             const settingKey = index === '1' ? 'ASSISTANT_PROMPT' : `ASSISTANT_PROMPT_${index}`;
@@ -2111,7 +2111,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     });
 
     // --- UPDATE PROMPT WITHOUT RESTART ---
-    app.post('/api/backoffice/update-prompt', systemConfigAuth, bodyParser.json(), async (req, res) => {
+    app.post('/api/backoffice/update-prompt', systemConfigAuth, bodyParser.json(), async (req: any, res: any) => {
         const { prompt, index } = req.body;
         const idx = index || '1';
         if (prompt === undefined) return res.status(400).json({ success: false, error: 'prompt is required' });
@@ -2153,7 +2153,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     });
 
     // --- GET README / INSTRUCTIONS ---
-    app.get('/api/backoffice/get-docs', backofficeAuth, async (req, res) => {
+    app.get('/api/backoffice/get-docs', backofficeAuth, async (req: any, res: any) => {
         try {
             const rootDir = process.cwd();
             const docsPath = path.join(rootDir, 'docs', 'INSTRUCCIONES_USO.md');

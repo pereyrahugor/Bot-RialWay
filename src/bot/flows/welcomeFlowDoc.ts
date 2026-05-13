@@ -13,7 +13,7 @@ import { execSync } from 'child_process';
 
 
 // Función para convertir PDF a imágenes PNG usando pdftoppm (Poppler)
-function extraerPaginasComoPNG(pdfPath, outputDir) {
+function extraerPaginasComoPNG(pdfPath: string, outputDir: string) {
     // Genera imágenes page-1.png, page-2.png, ... en outputDir
     const outPrefix = path.join(outputDir, 'page');
     execSync(`pdftoppm -png "${pdfPath}" "${outPrefix}"`);
@@ -57,10 +57,10 @@ export const welcomeFlowDoc = addKeyword<BaileysProvider, MemoryDB>(EVENTS.DOCUM
             // Convertir cada página del PDF a imagen (png) usando pdftoppm (Poppler)
             outputDir = path.join("./temp", `pdf_${Date.now()}`);
             fs.mkdirSync(outputDir, { recursive: true });
-            let imagenes = [];
+            let imagenes: string[] = [];
             try {
                 imagenes = extraerPaginasComoPNG(localPath, outputDir);
-            } catch (e) {
+            } catch (e: any) {
                 console.error("Error extrayendo páginas como PNG:", e);
                 await flowDynamic("Error al convertir el PDF a imágenes. Asegúrate de que el PDF no esté protegido y que Poppler esté instalado.");
             }
@@ -74,21 +74,21 @@ export const welcomeFlowDoc = addKeyword<BaileysProvider, MemoryDB>(EVENTS.DOCUM
                 await processImageWithVision(imgBuffer, flowDynamic);
             }
             imagenesGeneradas.push(...imagenes);
-        } catch (err) {
+        } catch (err: any) {
             console.error("Error procesando PDF:", err);
             await flowDynamic("Ocurrió un error al procesar el PDF.");
         } finally {
             // Limpiar archivos temporales SIEMPRE
             if (imagenesGeneradas.length > 0) {
                 for (const imgPath of imagenesGeneradas) {
-                    try { fs.unlinkSync(imgPath); } catch (e) { console.error("Ignorado:", e.message); }
+                    try { fs.unlinkSync(imgPath); } catch (e: any) { console.error("Ignorado:", e.message); }
                 }
             }
             if (outputDir && fs.existsSync(outputDir)) {
-                try { fs.rmSync(outputDir, { recursive: true, force: true }); } catch (e) { console.error("Ignorado:", e.message); }
+                try { fs.rmSync(outputDir, { recursive: true, force: true }); } catch (e: any) { console.error("Ignorado:", e.message); }
             }
             if (localPath && fs.existsSync(localPath)) {
-                try { fs.unlinkSync(localPath); } catch (e) { console.error("Ignorado:", e.message); }
+                try { fs.unlinkSync(localPath); } catch (e: any) { console.error("Ignorado:", e.message); }
             }
         }
     });

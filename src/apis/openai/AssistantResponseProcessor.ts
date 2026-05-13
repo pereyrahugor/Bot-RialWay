@@ -138,7 +138,7 @@ export class AssistantResponseProcessor {
             // console.log('[Debug] Bloque [API] detectado:', jsonStr);
             try {
                 jsonData = JSON.parse(jsonStr);
-            } catch (e) {
+            } catch (e: any) {
                 // console.error('[AssistantResponseProcessor] Error al parsear bloque [API]:', e.message);
                 jsonData = null;
             }
@@ -181,7 +181,7 @@ export class AssistantResponseProcessor {
                 } else if (tipo === "cancel_event") {
                     apiResponse = await CalendarEvents.deleteEvent(jsonData.id);
                 }
-            } catch (err) {
+            } catch (err: any) {
                 apiResponse = { error: "Error en operación API: " + err.message };
             }
 
@@ -283,7 +283,7 @@ export class AssistantResponseProcessor {
                     if (ctx?.from) {
                         await HistoryHandler.saveMessage(ctx.from, 'assistant', cleanRes, 'text', null, ctx.userId, null, ctx.platform, projectId);
                     }
-                } catch (err) {
+                } catch (err: any) {
                     console.error('[WhatsApp Debug] Error en flowDynamic:', err);
                 }
             }
@@ -320,7 +320,7 @@ export class AssistantResponseProcessor {
                         // Pequeña pausa para evitar que WhatsApp ignore mensajes muy rápidos
                         await new Promise(r => setTimeout(r, 600)); 
                         // flowDynamic ejecutado correctamente
-                    } catch (err) {
+                    } catch (err: any) {
                         console.error('[WhatsApp Debug] Error en flowDynamic:', err);
                     }
                 }
@@ -346,7 +346,7 @@ export class AssistantResponseProcessor {
                     
                     // Breve espera entre archivos para asegurar el orden y evitar saturación
                     await new Promise(r => setTimeout(r, 1000));
-                } catch (err) {
+                } catch (err: any) {
                     console.error('[AssistantResponseProcessor] Error enviando PDF:', err);
                 }
             }

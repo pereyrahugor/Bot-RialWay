@@ -105,10 +105,10 @@ export const useSupabaseAuthState = async (
                     });
                     return data;
                 },
-                set: async (data) => {
+                set: async (data: any) => {
                     for (const category in data) {
                         for (const id in data[category]) {
-                            const value = data[category][id];
+                            const value = (data[category] as any)[id];
                             const key = `${category}-${id}.json`;
                             if (value) {
                                 sessionData[key] = value;

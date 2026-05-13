@@ -1,20 +1,20 @@
 export const userQueues = new Map();
 export const userLocks = new Map();
 
-let globalProcessCallback = null;
+let globalProcessCallback: ((item: any) => Promise<void>) | null = null;
 
 /**
  * Registra la función que procesará los elementos de la cola.
  * Ayuda a resolver dependencias circulares.
  */
-export const registerProcessCallback = (cb) => {
+export const registerProcessCallback = (cb: (item: any) => Promise<void>) => {
     globalProcessCallback = cb;
 };
 
 /**
  * Maneja la cola de mensajes para un usuario específico de forma secuencial.
  */
-export const handleQueue = async (userId) => {
+export const handleQueue = async (userId: string) => {
     if (!userQueues.has(userId)) return;
     const queue = userQueues.get(userId);
 

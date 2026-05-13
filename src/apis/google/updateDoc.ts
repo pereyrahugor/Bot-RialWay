@@ -143,7 +143,7 @@ async function attachFileToVectorStore(fileId: string) {
             console.warn("⚠️ No se recibió una confirmación clara de OpenAI.");
             return false;
         }
-    } catch (error) {
+    } catch (error: any) {
         console.error("❌ Error al adjuntar el archivo al vector store:", error.message);
         return false;
     }

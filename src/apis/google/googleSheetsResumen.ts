@@ -1,7 +1,7 @@
 import { google } from "googleapis";
 import moment from "moment";
 import "dotenv/config";
-import { GenericResumenData } from "./extractJsonData";
+import { GenericResumenData } from "../../utils/extractJsonData";
 import { createGoogleAuth } from "./googleAuth";
 
 // La inicialización se movió dentro de la función para ser lazy y evitar errores de carga prematura

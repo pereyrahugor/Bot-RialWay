@@ -289,7 +289,7 @@ async function processSheetById(SHEET_ID: string, options: { forceRecreate?: boo
         }
 
         return tableName;
-    } catch (error) {
+    } catch (error: any) {
         console.error("❌ Error al obtener datos:", error.message);
         return null;
     }
@@ -324,7 +324,7 @@ export async function uploadDataToAssistant(filePath: string, stateId: string) {
         console.log("✅ Datos actualizados en el vector store.");
         await new Promise(resolve => setTimeout(resolve, 2000));
         return true;
-    } catch (error) {
+    } catch (error: any) {
         console.error("❌ Error al subir el archivo al vector store:", error.message);
         return false;
     }
@@ -352,7 +352,7 @@ async function attachFileToVectorStore(fileId: string) {
             console.warn("⚠️ No se recibió una confirmación clara de OpenAI.");
             return false;
         }
-    } catch (error) {
+    } catch (error: any) {
         console.error("❌ Error al adjuntar el archivo al vector store:", error.message);
         return false;
     }
@@ -371,7 +371,7 @@ async function deleteOldFiles(filePath: string) {
                 console.log(`🗑️ Archivo eliminado: ${file.id}`);
             }
         }
-    } catch (error) {
+    } catch (error: any) {
         console.error("❌ Error al eliminar archivo anterior del vector store:", error.message);
     }
 }
@@ -385,7 +385,7 @@ function deleteTemporaryFiles(filePath: string) {
             fs.unlinkSync(file);
             console.log(`🗑️ Archivo temporal eliminado: ${file}`);
         }
-    } catch (error) {
+    } catch (error: any) {
         console.error("❌ Error al eliminar archivos temporales:", error.message);
     }
 }

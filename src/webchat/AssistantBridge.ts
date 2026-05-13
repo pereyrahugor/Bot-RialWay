@@ -22,7 +22,7 @@ export class AssistantBridge {
   public setupWebChat(app: any, server: http.Server) {
     // Servir el archivo webchat.html en /webchat (Polka no tiene sendFile)
 
-    app.get('/webchat', (req, res) => {
+    app.get('/webchat', (req: any, res: any) => {
       const filePath = path.join(process.cwd(), 'src', 'webchat.html');
       res.setHeader('Content-Type', 'text/html');
       res.end(fs.readFileSync(filePath));
@@ -35,27 +35,27 @@ export class AssistantBridge {
     this.io.on('connection', (socket) => {
       console.log('💬 Cliente web conectado');
 
-      socket.on('message', async (msg: string) => {
+      socket.on('message', async (msg: any) => {
         try {
           console.log(`📩 Mensaje web: ${msg}`);
           // Usar lógica principal del bot para webchat
           // Centralizar historial y estado igual que WhatsApp
           const ip = socket.handshake.address || '';
-          if (!global.webchatHistories) global.webchatHistories = {};
+          if (!(global as any).webchatHistories) (global as any).webchatHistories = {};
           const historyKey = `webchat_${ip}`;
-          if (!global.webchatHistories[historyKey]) global.webchatHistories[historyKey] = { history: [], thread_id: null };
-          const _store = global.webchatHistories[historyKey];
+          if (!(global as any).webchatHistories[historyKey]) (global as any).webchatHistories[historyKey] = { history: [], thread_id: null };
+          const _store = (global as any).webchatHistories[historyKey];
           const _history = _store.history;
           const state = {
-            get: function (key) {
+            get: function (key: string) {
               if (key === 'history') return _history;
               if (key === 'thread_id') return _store.thread_id;
               return undefined;
             },
-            setThreadId: function (id) {
+            setThreadId: function (id: any) {
               _store.thread_id = id;
             },
-            update: async function (msg, role = 'user') {
+            update: async function (msg: any, role: string = 'user') {
               if (_history.length > 0) {
                 const last = _history[_history.length - 1];
                 if (last.role === role && last.content === msg) return;
@@ -63,7 +63,7 @@ export class AssistantBridge {
               _history.push({ role, content: msg });
               if (_history.length >= 6) {
                 const last3 = _history.slice(-3);
-                if (last3.every(h => h.role === 'user' && h.content === msg)) {
+                if (last3.every((h: any) => h.role === 'user' && h.content === msg)) {
                   _history.length = 0;
                   _store.thread_id = null;
                 }
@@ -74,7 +74,7 @@ export class AssistantBridge {
           const provider = undefined;
           const gotoFlow = () => {};
           let replyText = '';
-          const flowDynamic = async (arr) => {
+          const flowDynamic = async (arr: any) => {
             if (Array.isArray(arr)) {
               replyText = arr.map(a => a.body).join('\n');
             } else if (typeof arr === 'string') {

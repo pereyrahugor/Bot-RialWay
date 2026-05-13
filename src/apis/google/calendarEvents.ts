@@ -52,7 +52,7 @@ export class CalendarEvents {
             },
         });
         // Devuelve los periodos ocupados en ese rango
-        return res.data.calendars[CALENDAR_ID]?.busy || [];
+        return res.data.calendars![CALENDAR_ID]?.busy || [];
     }
 
     static async testCalendarAccess() {

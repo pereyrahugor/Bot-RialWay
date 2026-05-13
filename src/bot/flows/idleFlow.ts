@@ -21,7 +21,7 @@ function formatSummary(resumen: string, data: GenericResumenData, userId?: strin
                 .map(([k, v]) => `*${k}:* ${v}`)
                 .join('\n');
         }
-    } catch (e) {
+    } catch (e: any) {
         // Si no es JSON, usamos el resumen original pero quitamos el bloque de tipo si existe
         cleanText = resumen.replace(/Tipo:\s*\w+/i, '').replace(/###\s*BLOQUE:\s*GET_RESUMEN/i, '').trim();
     }
@@ -51,7 +51,7 @@ async function sendMediaToGroup(provider: any, state: any, targetGroup: string, 
                 try {
                     fs.unlinkSync(lastImage);
                     await state.update({ lastImage: null });
-                } catch (e) { console.error('Error borrando img:', e.message); }
+                } catch (e: any) { console.error('Error borrando img:', e.message); }
             }
         }
 
@@ -68,7 +68,7 @@ async function sendMediaToGroup(provider: any, state: any, targetGroup: string, 
                 try {
                     fs.unlinkSync(lastVideo);
                     await state.update({ lastVideo: null });
-                } catch (e) { console.error('Error borrando video:', e.message); }
+                } catch (e: any) { console.error('Error borrando video:', e.message); }
             }
         }
     }
@@ -113,7 +113,7 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
             let data: GenericResumenData;
             try {
                 data = JSON.parse(resumen);
-            } catch (error) {
+            } catch (error: any) {
                 console.warn("⚠️ El resumen no es JSON. Se extraerán los datos manualmente.");
                 data = extraerDatosResumen(resumen);
             }
@@ -172,7 +172,7 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                     }
                 }
 
-            } catch (leadError) {
+            } catch (leadError: any) {
                 console.error("❌ Error en automatización de Nuevo Lead:", leadError.message);
             }
             // ----------------------------------------------
@@ -347,7 +347,7 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                 await addToSheet(data);
                 return;
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error al obtener el resumen de OpenAI:", error);
             return endFlow();
         }

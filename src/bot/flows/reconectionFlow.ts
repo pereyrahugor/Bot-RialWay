@@ -32,9 +32,6 @@ export class ReconectionFlow {
     private readonly onSuccess: (data: GenericResumenData) => Promise<void>; // Acción al obtener nombre
     private readonly onFail: () => Promise<void>; // Acción al fallar todos los intentos
     private readonly ASSISTANT_ID = process.env.ASSISTANT_ID ?? '';
-    private readonly msjSeguimiento1: string;
-    private readonly msjSeguimiento2: string;
-    private readonly msjSeguimiento3: string;
 
     constructor(options: ReconectionOptions) {
         this.ctx = options.ctx;

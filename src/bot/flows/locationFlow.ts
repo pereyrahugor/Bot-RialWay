@@ -19,7 +19,7 @@ import { idleFlow } from "./idleFlow";
 // El timeout se calcula dinámicamente dentro de la acción
 
 export async function getAddressFromCoordinates(lat: number, lng: number) {
-    const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+    const apiKey = process.env.GOOGLE_MAPS_API_KEY || '';
     console.log('API KEY utilizada:', apiKey);
     console.log('Parámetros recibidos:', lat, lng);
     const client = new Client({});
@@ -33,7 +33,7 @@ export async function getAddressFromCoordinates(lat: number, lng: number) {
         });
         console.log('Respuesta completa de Google Maps API:', JSON.stringify(response.data, null, 2));
         return response.data;
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error al consultar Google Maps API:', error);
         if (error.response) {
             console.error('Respuesta de error:', JSON.stringify(error.response.data, null, 2));
@@ -111,7 +111,7 @@ export const locationFlow = addKeyword(EVENTS.LOCATION).addAction(
                     await flowDynamic('No se pudo obtener una dirección a partir de la ubicación enviada.');
                     console.log('No se obtuvo respuesta válida de Google Maps API.');
                 }
-            } catch (err) {
+            } catch (err: any) {
                 await flowDynamic('Ocurrió un error al consultar la dirección. Intenta nuevamente más tarde.');
                 console.error('Error inesperado en el flujo de ubicación:', err);
             }

@@ -53,7 +53,7 @@ export class AiManager {
             }, this.DEFAULT_TIMEOUT_MS);
             this.userTimeouts.set(userId, timeoutId);
 
-            const isWhatsApp = userId && userId.includes('@s.whatsapp.net');
+            const isWhatsApp = !!(userId && userId.includes('@s.whatsapp.net'));
             const targetProjectId = projectId || HistoryHandler.PROJECT_IDENTIFIER;
 
             safeToAsk(assistantId, message, state, userId, this.errorReporter, 5, isWhatsApp, targetProjectId, false)

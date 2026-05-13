@@ -18,9 +18,10 @@ export async function askWithThread(assistantId: string, message: string, state:
 
   // Si la respuesta es objeto y tiene thread_id, úsalo
   if (response && typeof response === 'object') {
+    const r = response as any;
     return {
-      text: response.text || String(response),
-      thread_id: response.thread_id || null
+      text: r.text || String(response),
+      thread_id: r.thread_id || null
     };
   }
   // Si la respuesta es string, retorna como texto y thread_id null

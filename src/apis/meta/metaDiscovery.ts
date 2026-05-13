@@ -166,7 +166,7 @@ export async function discoverMetaIds(accessToken: string, mainToken: string | n
                     const bizScope = debugData.granular_scopes.find((s: any) => s.scope === 'business_management');
                     if (bizScope && bizScope.target_ids && bizScope.target_ids.length > 0) {
                         businessId = bizScope.target_ids[0];
-                        logDiag('Debug Token Path', `Business ID detectado en scopes: ${businessId}`, 'info');
+                        logDiag('Debug Token Path', `Business ID detectado en scopes: ${businessId}`, 'success');
                     }
                     
                     // Buscar WABA ID directamente
@@ -175,7 +175,7 @@ export async function discoverMetaIds(accessToken: string, mainToken: string | n
                         const potentialWabaId = wabaScope.target_ids[0];
                         if (!wabaId) {
                             wabaId = potentialWabaId;
-                            logDiag('Debug Token Path', `WABA ID detectado en scopes: ${wabaId}`, 'info');
+                            logDiag('Debug Token Path', `WABA ID detectado en scopes: ${wabaId}`, 'success');
                         }
                     }
                 }

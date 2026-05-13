@@ -193,7 +193,7 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
                             data: [
                                 {
                                     phone: "54911...",
-                                    variables: expectedVars.reduce((acc, curr) => ({ ...acc, [curr]: "valor_ejemplo" }), {})
+                                    variables: expectedVars.reduce((acc: any, curr: any) => ({ ...acc, [curr]: "valor_ejemplo" }), {})
                                 }
                             ]
                         }

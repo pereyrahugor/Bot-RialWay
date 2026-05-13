@@ -4,7 +4,7 @@ import "dotenv/config";
 
 // Object to store timers for each user
 // Objeto para almacenar temporizadores para cada usuario
-const timers = {};
+const timers: Record<string, NodeJS.Timeout> = {};
 // Flow for handling inactivity
 // Flujo para el manejo de la inactividad
 
