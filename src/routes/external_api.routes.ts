@@ -224,8 +224,19 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
                 
                 if (resApi?.messages) {
                     firstMsgId = resApi.messages[0].id;
-                    await HistoryHandler.saveMessage(firstPhone, 'assistant', `[API Externa: ${templateName}]`, 'text', null, null, firstMsgId);
+                    
+                    // Renderizar el texto para el historial
+                    let renderedText = templateText;
+                    if (firstVars) {
+                        for (const [key, value] of Object.entries(firstVars)) {
+                            const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
+                            renderedText = renderedText.replace(regex, String(value));
+                        }
+                    }
+
+                    await HistoryHandler.saveMessage(firstPhone, 'assistant', `[API Externa: ${templateName}]\n${renderedText}`, 'text', null, null, firstMsgId);
                 } else {
+
                     throw new Error("Respuesta vacía o inesperada de Meta");
                 }
             } catch (e: any) {
@@ -267,8 +278,9 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
                 });
 
                 // Procesamos el RESTO de la lista (del índice 1 en adelante)
-                processExternalBulk(provider, templateName, finalLanguage, data.slice(1), token);
+                processExternalBulk(provider, templateName, finalLanguage, data.slice(1), token, templateText);
             }
+
 
         } catch (err: any) {
             console.error('❌ [API_EXTERNAL] Error en /api/v1/send-template:', err.message);
@@ -283,7 +295,8 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
 /**
  * Procesa el envío masivo en segundo plano
  */
-async function processExternalBulk(provider: any, templateName: string, languageCode: string, data: any[], token?: string) {
+async function processExternalBulk(provider: any, templateName: string, languageCode: string, data: any[], token?: string, templateText: string = '') {
+
     let sent = 0;
     let errors = 0;
 
@@ -310,8 +323,19 @@ async function processExternalBulk(provider: any, templateName: string, language
             if (resApi?.messages) {
                 sent++;
                 const msgId = resApi.messages[0].id;
+                
+                // Renderizar para el historial
+                let renderedText = templateText;
+                if (variables) {
+                    for (const [key, value] of Object.entries(variables)) {
+                        const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
+                        renderedText = renderedText.replace(regex, String(value));
+                    }
+                }
+
                 // Guardar en el historial para que el operador lo vea
-                await HistoryHandler.saveMessage(phone, 'assistant', `[API Externa: ${templateName}]`, 'text', null, null, msgId);
+                await HistoryHandler.saveMessage(phone, 'assistant', `[API Externa: ${templateName}]\n${renderedText}`, 'text', null, null, msgId);
+
             } else {
                 errors++;
             }
