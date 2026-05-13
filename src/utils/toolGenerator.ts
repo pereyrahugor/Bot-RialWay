@@ -97,9 +97,10 @@ ${JSON.stringify(tablesSchema, null, 2)}
         if (toolsJson) {
             // Validación estructural: Asegurar que cada tool tenga el wrapper 'type' y 'function'
             try {
-                let tools = JSON.parse(toolsJson);
+                const tools = JSON.parse(toolsJson);
+
                 if (Array.isArray(tools)) {
-                    tools = tools.map(tool => {
+                    const processedTools = tools.map(tool => {
                         // 1. Asegurar wrapper 'type' y 'function'
                         let processed = tool;
                         if (!processed.type && (processed.name || processed.parameters)) {
@@ -117,8 +118,9 @@ ${JSON.stringify(tablesSchema, null, 2)}
                         }
                         return processed;
                     });
-                    toolsJson = JSON.stringify(tools);
+                    toolsJson = JSON.stringify(processedTools);
                 }
+
 
             } catch (e) {
                 console.error("⚠️ [ToolGenerator] Error validando estructura JSON:", e.message);

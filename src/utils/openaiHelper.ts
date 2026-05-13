@@ -177,7 +177,8 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
         if (toolsJson) {
 
             try {
-                let rawTools = safeParseJson(toolsJson);
+                const rawTools = safeParseJson(toolsJson);
+
                 if (Array.isArray(rawTools)) {
                     tools = rawTools.map(tool => {
                         let processed = tool;
