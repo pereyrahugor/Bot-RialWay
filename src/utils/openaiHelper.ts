@@ -180,12 +180,25 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
                 let rawTools = safeParseJson(toolsJson);
                 if (Array.isArray(rawTools)) {
                     tools = rawTools.map(tool => {
-                        if (!tool.type && (tool.name || tool.parameters || tool.description)) {
-                            return { type: "function", function: tool };
+                        let processed = tool;
+                        // 1. Envolver si falta el nivel superior
+                        if (!processed.type && (processed.name || processed.parameters || processed.description)) {
+                            processed = { type: "function", function: processed };
                         }
-                        return tool;
+                        
+                        // 2. Corregir esquema de parámetros si es inválido
+                        if (processed.function && processed.function.parameters) {
+                            if (!processed.function.parameters.type || processed.function.parameters.type === 'None') {
+                                processed.function.parameters.type = 'object';
+                            }
+                            if (!processed.function.parameters.required) {
+                                processed.function.parameters.required = ['tabla', 'dato'];
+                            }
+                        }
+                        return processed;
                     });
                 }
+
             } catch (e) {
                 console.error("[openaiHelper] Error parseando o reparando tools:", e);
             }

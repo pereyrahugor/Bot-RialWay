@@ -61,12 +61,26 @@ Aquí están las tablas disponibles y sus columnas:
 ${JSON.stringify(tablesSchema, null, 2)}
 
 **Reglas críticas de formato (OpenAI Specification):**
-1. El resultado DEBE ser un array conteniendo un objeto con la estructura: {"type": "function", "function": {"name": "query_database", "description": "...", "parameters": {...}}}
-2. El nombre de la función DEBE ser 'query_database'.
-3. Debe tener exactamente dos parámetros en 'parameters.properties': 'tabla' (string) y 'dato' (string).
-4. En la descripción del parámetro 'tabla', enumera las tablas disponibles: ${tableNames.join(', ')}.
-5. En la descripción del parámetro 'dato', explica qué tipo de información se puede buscar (nombres, categorías, etc.) basándote en los nombres de las columnas proporcionadas.
-6. Responde ÚNICAMENTE con el array JSON, sin texto adicional ni bloques de código markdown.`;
+1. El resultado DEBE ser un array conteniendo un objeto con esta estructura EXACTA:
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "query_database",
+      "description": "Breve descripción de qué datos hay en las tablas...",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "tabla": { "type": "string", "description": "Nombre de la tabla: ${tableNames.join(', ')}" },
+          "dato": { "type": "string", "description": "Valor a buscar..." }
+        },
+        "required": ["tabla", "dato"]
+      }
+    }
+  }
+]
+2. Responde ÚNICAMENTE con el array JSON, sin texto adicional ni bloques de código markdown.`;
+
 
 
         const response = await openai.chat.completions.create({
@@ -86,14 +100,26 @@ ${JSON.stringify(tablesSchema, null, 2)}
                 let tools = JSON.parse(toolsJson);
                 if (Array.isArray(tools)) {
                     tools = tools.map(tool => {
-                        // Si el tool no tiene 'type' pero tiene 'name' (significa que es solo el objeto function), lo envolvemos
-                        if (!tool.type && (tool.name || tool.parameters)) {
-                            return { type: 'function', function: tool };
+                        // 1. Asegurar wrapper 'type' y 'function'
+                        let processed = tool;
+                        if (!processed.type && (processed.name || processed.parameters)) {
+                            processed = { type: 'function', function: processed };
                         }
-                        return tool;
+
+                        // 2. Asegurar que 'parameters' tenga 'type: object'
+                        if (processed.function && processed.function.parameters) {
+                            if (!processed.function.parameters.type || processed.function.parameters.type === 'None') {
+                                processed.function.parameters.type = 'object';
+                            }
+                            if (!processed.function.parameters.required) {
+                                processed.function.parameters.required = ['tabla', 'dato'];
+                            }
+                        }
+                        return processed;
                     });
                     toolsJson = JSON.stringify(tools);
                 }
+
             } catch (e) {
                 console.error("⚠️ [ToolGenerator] Error validando estructura JSON:", e.message);
             }
