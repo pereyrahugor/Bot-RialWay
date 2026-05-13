@@ -95,11 +95,9 @@ const main = async () => {
     await HistoryHandler.initDatabase();
     const PORT = process.env.PORT || 8080;
     
-    // Sincronizar herramientas con OpenAI Assistant
-    const ASSISTANT_ID = await HistoryHandler.getConfig('ASSISTANT_ID');
-    if (ASSISTANT_ID) {
-        await syncAssistantTools(ASSISTANT_ID);
-    }
+    // El proceso de sincronización de tools se movió más abajo para asegurar que todas las variables estén recuperadas.
+    // await syncAssistantTools(ASSISTANT_ID); // MOVIDO
+
     
     // Usar un nombre de sesión consistente para evitar desajustes entre SessionSync y el Provider
     // Sanitizar para evitar caracteres inválidos en rutas (como *)
@@ -200,12 +198,20 @@ const main = async () => {
         }
     }
 
-    // 4. Initialize Database and Configuration
-    await HistoryHandler.initDatabase();
+    // 4. Initialize Database and Configuration (Ya inicializado arriba)
+
     
     const groupResumenId = await HistoryHandler.getConfig('ID_GRUPO_RESUMEN') || "";
     errorReporter = new ErrorReporter(adapterProvider, groupResumenId);
     await updateMain();
+    
+    // 4.1. Sincronizar herramientas con OpenAI Assistant (Ahora que el entorno está listo)
+    const ASSISTANT_ID = await HistoryHandler.getConfig('ASSISTANT_ID');
+    if (ASSISTANT_ID) {
+        console.log(`[App] 🔄 Iniciando sincronización de tools para Assistant: ${ASSISTANT_ID}`);
+        await syncAssistantTools(ASSISTANT_ID);
+    }
+
 
     const app = adapterProvider.server;
     if (app) {

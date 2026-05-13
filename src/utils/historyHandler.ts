@@ -75,6 +75,7 @@ export class HistoryHandler {
 
     static async initDatabase() {
         if (this.initialized) return;
+        this.initialized = true;
         console.log(`[HistoryHandler] Initializing DB for Project: ${this.PROJECT_IDENTIFIER}`);
         if (!supabase) return;
 
@@ -321,6 +322,7 @@ export class HistoryHandler {
         }
 
         console.log('✅ [HistoryHandler] Inicialización completa.');
+        this.initialized = true;
     }
     
     /**
