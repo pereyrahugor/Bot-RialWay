@@ -23,7 +23,11 @@ const SHEET_IDS = (process.env.SHEET_ID_UPDATE || "")
 const VECTOR_STORE_ID = process.env.VECTOR_STORE_ID || "";
 let currentFileId: string | null = null;
 
+import { createGoogleAuth } from "../utils/googleAuth";
+
 // Se eliminaron las inicializaciones estáticas para evitar errores de autenticación antes de cargar settings
+
+
 const getSheetsClient = () => {
     const auth = createGoogleAuth(["https://www.googleapis.com/auth/spreadsheets"]);
     return google.sheets({ version: "v4", auth });
@@ -110,9 +114,11 @@ async function ensureTableExists(tableName: string, headers: string[]) {
 
 // Procesa un sheet por ID, obtiene el nombre real y ejecuta la lógica
 async function processSheetById(SHEET_ID: string, options: { forceRecreate?: boolean } = {}) {
+    const sheets = getSheetsClient();
     try {
         // Obtener metadatos para el nombre real de la hoja principal
         const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
+
         const sheetTitle = meta.data.sheets?.[0]?.properties?.title || "Sheet1";
         const SHEET_NAME = sheetTitle;
         const tableName = sanitizeTableName(SHEET_NAME);
@@ -280,6 +286,7 @@ async function processSheetById(SHEET_ID: string, options: { forceRecreate?: boo
 
 // Función para subir datos al vector store de OpenAI
 export async function uploadDataToAssistant(filePath: string, stateId: string) {
+    const openai = getOpenAIClient();
     if (!openai) {
         console.warn("⚠️ IA Desactivada: Saltando subida al vector store.");
         return true; // Continuar aunque no haya IA configurada
@@ -313,6 +320,7 @@ export async function uploadDataToAssistant(filePath: string, stateId: string) {
 }
 
 async function attachFileToVectorStore(fileId: string) {
+    const openai = getOpenAIClient();
     if (!openai) return true;
     try {
         if (!VECTOR_STORE_ID || VECTOR_STORE_ID === "vs_" || VECTOR_STORE_ID.trim() === "") {
@@ -338,6 +346,7 @@ async function attachFileToVectorStore(fileId: string) {
 }
 
 async function deleteOldFiles(filePath: string) {
+    const openai = getOpenAIClient();
     if (!openai) return;
     try {
         const fileName = path.basename(filePath);

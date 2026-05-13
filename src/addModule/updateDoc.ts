@@ -15,7 +15,10 @@ const DOCX_FILE_IDS = (process.env.DOCX_ID_UPDATE || "")
 const VECTOR_STORE_ID = process.env.VECTOR_STORE_ID ?? "";
 let currentFileId: string | null = null;
 
+import { createGoogleAuth } from "../utils/googleAuth";
+
 // Se eliminaron inicializaciones estáticas para evitar errores de carga prematura
+
 const getDriveClient = () => {
     const auth = createGoogleAuth(["https://www.googleapis.com/auth/drive.readonly"]);
     return google.drive({ version: "v3", auth });
