@@ -1,4 +1,4 @@
-import { HistoryHandler, supabase } from "../utils/historyHandler";
+import { HistoryHandler, supabase } from "../db/historyHandler";
 
 /**
  * Inicia un worker que verifica cada minuto los chats con intervención humana (bot desactivado).
