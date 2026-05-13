@@ -3,6 +3,9 @@
 dist/*
 temp/voiceNote
 !tmp/.gitkeep
+.claude
+CLAUDE.md
+mejoras.md
 
 *_sessions
 .wwebjs*

@@ -12,41 +12,40 @@ import { MetaCloudProvider } from "./providers/MetaCloudProvider";
 import { setAdapterProvider, setGroupProvider, getAdapterProvider, getGroupProvider } from "./providers/instances";
 
 // --- Utils & Handlers ---
-import { restoreSessionFromDb, startSessionSync, deleteSessionFromDb } from "./utils/sessionSync";
-import { ErrorReporter } from "./utils/errorReporter";
-import { updateMain } from "./addModule/updateMain";
-import { WebChatManager } from "./utils-web/WebChatManager";
-import { HistoryHandler } from "./utils/historyHandler";
-import { registerProcessCallback, handleQueue, userQueues, userLocks } from "./utils/queueManager";
+import { restoreSessionFromDb, startSessionSync, deleteSessionFromDb } from "./providers/sessionSync";
+import { ErrorReporter } from "./bot/errorReporter";
+import { updateMain } from "./apis/google/updateMain";
+import { WebChatManager } from "./webchat/WebChatManager";
+import { HistoryHandler } from "./db/historyHandler";
+import { registerProcessCallback, handleQueue, userQueues, userLocks } from "./bot/queueManager";
 
 // --- Managers & Routes ---
-import { registerBackofficeRoutes, processSendMessage, processBulkTemplate, processImportExcel, BackofficeDependencies } from "./routes/backoffice.routes";
-import { registerRailwayRoutes } from "./routes/railway.routes";
-import { registerWebchatRoutes } from "./routes/webchat.routes";
-import { registerStaticRoutes } from "./routes/static.routes";
+import { processSendMessage, processBulkTemplate, processImportExcel, BackofficeDependencies } from "./backoffice/routes/backoffice.routes";
+import { mountBackoffice } from "./backoffice/index";
+import { registerRailwayRoutes } from "./apis/railway/railway.routes";
+import { registerWebchatRoutes } from "./webchat/routes/webchat.routes";
 import { initSocketIO } from "./sockets/socket.manager";
 import { registerProviderEvents, hasActiveSession } from "./providers/provider.manager";
 import { startHumanInactivityWorker } from "./workers/humanInactivity.worker";
-import { AiManager } from "./utils/ai.manager";
-import { registerDashboardRoutes } from "./routes/dashboard.routes";
-import { registerExternalApiRoutes } from "./routes/external_api.routes";
-import { syncAssistantTools, getOpenAI, getOpenAIVision } from "./utils/openaiHelper";
-import { discoverMetaIds } from "./utils/metaDiscovery";
-import { RailwayApi } from "./Api-RailWay/Railway";
+import { AiManager } from "./bot/ai.manager";
+import { registerExternalApiRoutes } from "./apis/external/external_api.routes";
+import { syncAssistantTools, getOpenAI, getOpenAIVision } from "./apis/openai/openaiHelper";
+import { discoverMetaIds } from "./apis/meta/metaDiscovery";
+import { RailwayApi } from "./apis/railway/Railway";
 import { smartBodyParser, compatibilityLayer, rootRedirect } from "./middleware/global";
-import { backofficeAuth } from "./middleware/auth";
+import { backofficeAuth } from "./backoffice/middleware/auth";
 import bodyParser from 'body-parser';
 
 // --- Flows ---
-import { welcomeFlowTxt } from "./Flows/welcomeFlowTxt";
-import { welcomeFlowVoice } from "./Flows/welcomeFlowVoice";
-import { welcomeFlowImg } from "./Flows/welcomeFlowImg";
-import { welcomeFlowVideo } from "./Flows/welcomeFlowVideo";
-import { welcomeFlowDoc } from "./Flows/welcomeFlowDoc";
-import { locationFlow } from "./Flows/locationFlow";
-import { idleFlow } from "./Flows/idleFlow";
-import { welcomeFlowButton } from "./Flows/welcomeFlowButton";
-import { reset } from "./utils/timeOut";
+import { welcomeFlowTxt } from "./bot/flows/welcomeFlowTxt";
+import { welcomeFlowVoice } from "./bot/flows/welcomeFlowVoice";
+import { welcomeFlowImg } from "./bot/flows/welcomeFlowImg";
+import { welcomeFlowVideo } from "./bot/flows/welcomeFlowVideo";
+import { welcomeFlowDoc } from "./bot/flows/welcomeFlowDoc";
+import { locationFlow } from "./bot/flows/locationFlow";
+import { idleFlow } from "./bot/flows/idleFlow";
+import { welcomeFlowButton } from "./bot/flows/welcomeFlowButton";
+import { reset } from "./bot/timeOut";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -291,14 +290,7 @@ const main = async () => {
         
         const openaiMainDynamic = await getOpenAI();
 
-        registerBackofficeRoutes(app, {
-            adapterProvider,
-            groupProvider,
-            HistoryHandler,
-            openaiMain: openaiMainDynamic,
-            upload
-        });
-        registerDashboardRoutes(app);
+        mountBackoffice(app, { provider: adapterProvider, groupProvider, openaiMain: openaiMainDynamic, upload });
         registerExternalApiRoutes(app, { adapterProvider });
     }
 
@@ -339,7 +331,6 @@ const main = async () => {
         registerRailwayRoutes(app, { RailwayApi });
         const openaiVision = await getOpenAIVision();
         registerWebchatRoutes(app, { webChatManager, openaiVision, aiManager: aiManagerInstance });
-        registerStaticRoutes(app, { __dirname });
 
         // API Health & Info
         app.get("/health", (_req: any, res: any) => res.json({ status: "ok", time: new Date().toISOString() }));
