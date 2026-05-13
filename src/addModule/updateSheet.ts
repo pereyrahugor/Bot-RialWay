@@ -7,6 +7,7 @@ import * as glob from "glob";
 import { createClient } from "@supabase/supabase-js";
 
 import { vault } from "../utils/vault";
+import { autoUpdateBotAbilities } from "../utils/toolGenerator";
 
 dotenv.config();
 
@@ -32,8 +33,17 @@ const openai = process.env.OPENAI_API_KEY ? new OpenAI() : null;
 
 // Función principal para procesar todos los sheets
 export async function updateAllSheets(options: { forceRecreate?: boolean } = {}) {
+    const tableNames: string[] = [];
     for (const SHEET_ID of SHEET_IDS) {
-        await processSheetById(SHEET_ID, options);
+        const tableName = await processSheetById(SHEET_ID, options);
+        if (tableName) {
+            tableNames.push(tableName);
+        }
+    }
+
+    // Al finalizar, actualizar automáticamente las habilidades del bot
+    if (tableNames.length > 0) {
+        await autoUpdateBotAbilities(tableNames);
     }
 }
 
@@ -98,6 +108,7 @@ async function processSheetById(SHEET_ID: string, options: { forceRecreate?: boo
         const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
         const sheetTitle = meta.data.sheets?.[0]?.properties?.title || "Sheet1";
         const SHEET_NAME = sheetTitle;
+        const tableName = sanitizeTableName(SHEET_NAME);
         const TXT_PATH = path.join("temp", `${SHEET_NAME}.json`);
 
         console.log(`📌 Obteniendo datos de Google Sheets: ${SHEET_ID} (${SHEET_NAME})`);
@@ -112,7 +123,7 @@ async function processSheetById(SHEET_ID: string, options: { forceRecreate?: boo
         const rows = response.data.values;
         if (!rows || rows.length === 0) {
             console.warn("⚠️ No se encontraron datos en la hoja de cálculo.");
-            return [];
+            return null;
         }
 
         // Calcular última fila y columna con datos reales
@@ -150,14 +161,14 @@ async function processSheetById(SHEET_ID: string, options: { forceRecreate?: boo
         const fullRows = fullResponse.data.values;
         if (!fullRows || fullRows.length === 0) {
             console.warn("⚠️ No se encontraron datos en el rango calculado.");
-            return [];
+            return null;
         }
         // Validar headers
         const headers = fullRows[0].map((h: string) => (h || "").trim());
         const validHeaders = headers.filter(h => h.length > 0);
         if (validHeaders.length === 0) {
             console.warn("⚠️ La primera fila no contiene encabezados válidos.");
-            return [];
+            return null;
         }
 
         // Formatear los datos obtenidos de forma flexible, convirtiendo valores numéricos
@@ -197,7 +208,6 @@ async function processSheetById(SHEET_ID: string, options: { forceRecreate?: boo
 
         // --- SUPABASE INTEGRATION START ---
         if (supabase) {
-            const tableName = sanitizeTableName(SHEET_NAME);
             const headersSanitized = headers.map(h => sanitizeColumnName(h));
             
             if (options.forceRecreate) {
@@ -254,7 +264,7 @@ async function processSheetById(SHEET_ID: string, options: { forceRecreate?: boo
             console.error("❌ Error al enviar los datos al vector store.");
         }
 
-        return formattedData;
+        return tableName;
     } catch (error) {
         console.error("❌ Error al obtener datos:", error.message);
         return null;
