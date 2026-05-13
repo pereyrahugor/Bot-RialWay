@@ -62,10 +62,30 @@ export async function syncAssistantTools(assistantId: string): Promise<boolean> 
 
     try {
         const { HistoryHandler } = await import("./historyHandler");
-        const toolsJson = await HistoryHandler.getConfig('OPENAI_TOOLS_DEFINITION');
+        let toolsJson = await HistoryHandler.getConfig('OPENAI_TOOLS_DEFINITION');
+
         if (!toolsJson) {
-            console.log("[openaiHelper] No se detectó OPENAI_TOOLS_DEFINITION. Omitiendo sincronización de tools.");
-            return false;
+            console.log("[openaiHelper] No se detectó OPENAI_TOOLS_DEFINITION. Verificando DB_TABLES para autogeneración...");
+            const dbTablesStr = await HistoryHandler.getConfig('DB_TABLES');
+            
+            if (dbTablesStr && dbTablesStr.trim() !== "") {
+                try {
+                    const { autoUpdateBotAbilities } = await import("./toolGenerator");
+                    const tableNames = dbTablesStr.split(',').map(t => t.trim());
+                    console.log(`[openaiHelper] 🤖 Intentando autogenerar tools para tablas: ${dbTablesStr}`);
+                    await autoUpdateBotAbilities(tableNames);
+                    
+                    // Re-intentar obtener la definición recién generada
+                    toolsJson = await HistoryHandler.getConfig('OPENAI_TOOLS_DEFINITION');
+                } catch (genError: any) {
+                    console.error("[openaiHelper] ❌ Error en autogeneración de tools:", genError.message);
+                }
+            }
+
+            if (!toolsJson) {
+                console.log("[openaiHelper] ⚠️ Sincronización de tools omitida: No hay definición ni tablas para generar.");
+                return false;
+            }
         }
 
         const tools = safeParseJson(toolsJson);

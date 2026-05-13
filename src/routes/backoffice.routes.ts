@@ -1904,6 +1904,10 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         const { key, value } = req.body;
         if (!key) return res.status(400).json({ success: false, error: 'key is required' });
         try {
+            const PROTECTED_KEYS = ['OPENAI_ADMIN_API_KEY', 'OPENAI_API_KEY_TOOLS'];
+            if (PROTECTED_KEYS.includes(key)) {
+                return res.status(403).json({ success: false, error: 'Esta variable es estática y solo puede editarse vía base de datos.' });
+            }
             await depsHistoryHandler.saveSetting(key, value);
             res.json({ success: true });
         } catch (error: any) {
@@ -2055,12 +2059,15 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
         try {
             const keys = Object.keys(settings);
-            console.log(`📡 [HOT-UPDATE] Guardando ${keys.length} variables en la base de datos...`);
+            const PROTECTED_KEYS = ['OPENAI_ADMIN_API_KEY', 'OPENAI_API_KEY_TOOLS'];
+            const keysToSave = keys.filter(k => !PROTECTED_KEYS.includes(k));
+            
+            console.log(`📡 [HOT-UPDATE] Guardando ${keysToSave.length} variables en la base de datos...`);
 
-            const promises = keys.map(key => depsHistoryHandler.saveSetting(key, settings[key]));
+            const promises = keysToSave.map(key => depsHistoryHandler.saveSetting(key, settings[key]));
             await Promise.all(promises);
 
-            res.json({ success: true, message: `${keys.length} variables guardadas correctamente (Hot-update)` });
+            res.json({ success: true, message: `${keysToSave.length} variables guardadas (se omitieron ${keys.length - keysToSave.length} protegidas)` });
         } catch (error: any) {
             console.error('Error al guardar settings bulk:', error.message);
             res.status(500).json({ success: false, error: error.message });
