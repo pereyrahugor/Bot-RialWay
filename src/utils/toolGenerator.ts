@@ -18,7 +18,9 @@ export async function autoUpdateBotAbilities(tableNames: string[]) {
     try {
         const supabaseUrl = process.env.SUPABASE_URL;
         const supabaseKey = process.env.SUPABASE_KEY;
-        const openaiKey = await HistoryHandler.getConfig('OPENAI_API_KEY');
+        
+        // Intentar obtener la clave específica para el generador, fallback a la principal
+        const openaiKey = await HistoryHandler.getConfig('OPENAI_API_KEY_TOOLS') || await HistoryHandler.getConfig('OPENAI_API_KEY');
 
         if (!supabaseUrl || !supabaseKey || !openaiKey) {
             console.error("❌ [ToolGenerator] Faltan credenciales (Supabase u OpenAI).");
