@@ -21,3 +21,4 @@ docs/whatsapp_embedded_signup_plan.md
 scripts/meta-tools/
 
 API_EXTERNAL_DOCUMENTATION.md
+*.cjs

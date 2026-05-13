@@ -1,16 +1,14 @@
 import "dotenv/config";
 
 const RAILWAY_GRAPHQL_ENDPOINT = "https://backboard.railway.com/graphql/v2";
-const RAILWAY_TEAM_TOKEN = process.env.RAILWAY_TOKEN;
-const RAILWAY_PROJECT_ID = process.env.RAILWAY_PROJECT_ID;
-const RAILWAY_ENVIRONMENT_ID = process.env.RAILWAY_ENVIRONMENT_ID;
-const RAILWAY_SERVICE_ID = process.env.RAILWAY_SERVICE_ID;
 
-if (!RAILWAY_TEAM_TOKEN || !RAILWAY_PROJECT_ID || !RAILWAY_ENVIRONMENT_ID || !RAILWAY_SERVICE_ID) {
-  console.warn(
-    "⚠️ [RailwayApi] Variables de entorno de Railway incompletas. Las funciones de control de despliegue y variables estarán deshabilitadas."
-  );
-}
+// Las variables se obtienen dinámicamente para soportar Hot-update desde DB
+const getRailwayConfig = () => ({
+  token: process.env.RAILWAY_TOKEN,
+  projectId: process.env.RAILWAY_PROJECT_ID,
+  environmentId: process.env.RAILWAY_ENVIRONMENT_ID,
+  serviceId: process.env.RAILWAY_SERVICE_ID,
+});
 
 interface DeploymentNode {
   id: string;
@@ -33,7 +31,8 @@ export class RailwayApi {
    * Helper privado para realizar peticiones fetch y validar la respuesta JSON
    */
   private static async fetchRailway(query: string, variables: any): Promise<any> {
-    if (!RAILWAY_TEAM_TOKEN) {
+    const config = getRailwayConfig();
+    if (!config.token) {
         throw new Error("No se puede realizar la petición a Railway: RAILWAY_TOKEN no configurado.");
     }
     const body = JSON.stringify({ query, variables });
@@ -42,7 +41,7 @@ export class RailwayApi {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${RAILWAY_TEAM_TOKEN}`,
+        "Authorization": `Bearer ${config.token}`,
       },
       body,
     });
@@ -97,10 +96,11 @@ export class RailwayApi {
       }
     `;
 
+    const config = getRailwayConfig();
     const variables = {
-      projectId: RAILWAY_PROJECT_ID,
-      environmentId: RAILWAY_ENVIRONMENT_ID,
-      serviceId: RAILWAY_SERVICE_ID,
+      projectId: config.projectId,
+      environmentId: config.environmentId,
+      serviceId: config.serviceId,
     };
 
     try {
@@ -137,10 +137,11 @@ export class RailwayApi {
       }
     `;
 
+    const config = getRailwayConfig();
     const variables = {
-      projectId: RAILWAY_PROJECT_ID,
-      environmentId: RAILWAY_ENVIRONMENT_ID,
-      serviceId: RAILWAY_SERVICE_ID,
+      projectId: config.projectId,
+      environmentId: config.environmentId,
+      serviceId: config.serviceId,
     };
 
     try {
@@ -187,11 +188,12 @@ export class RailwayApi {
       }
     `;
 
+    const config = getRailwayConfig();
     const variables = {
       input: {
-        projectId: RAILWAY_PROJECT_ID,
-        environmentId: RAILWAY_ENVIRONMENT_ID,
-        serviceId: RAILWAY_SERVICE_ID,
+        projectId: config.projectId,
+        environmentId: config.environmentId,
+        serviceId: config.serviceId,
         variables: filteredVariables
       }
     };

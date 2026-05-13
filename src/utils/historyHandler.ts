@@ -1587,6 +1587,7 @@ export class HistoryHandler {
             // 4. Asegurar existencia de variables obligatorias (pueden ser nuevas en el código)
             const mandatoryKeys = [
                 { key: 'OPENAI_ADMIN_API_KEY', defaultValue: process.env.OPENAI_ADMIN_API_KEY || 'PENDING' },
+                { key: 'OPENAI_API_KEY_TOOLS', defaultValue: process.env.OPENAI_API_KEY_TOOLS || 'PENDING' },
                 { key: 'ASSISTANT_NAME', defaultValue: process.env.ASSISTANT_NAME || 'Bot' }
             ];
 
