@@ -60,12 +60,14 @@ Esta función se usa para consultar una base de datos Postgres.
 Aquí están las tablas disponibles y sus columnas:
 ${JSON.stringify(tablesSchema, null, 2)}
 
-**Reglas críticas:**
-1. El nombre de la función DEBE ser 'query_database'.
-2. Debe tener exactamente dos parámetros: 'tabla' (string) y 'dato' (string).
-3. En la descripción del parámetro 'tabla', enumera las tablas disponibles: ${tableNames.join(', ')}.
-4. En la descripción del parámetro 'dato', explica qué tipo de información se puede buscar (nombres, categorías, etc.) basándote en los nombres de las columnas proporcionadas.
-5. Responde ÚNICAMENTE con el objeto JSON dentro de un array [], sin texto adicional ni bloques de código markdown.`;
+**Reglas críticas de formato (OpenAI Specification):**
+1. El resultado DEBE ser un array conteniendo un objeto con la estructura: {"type": "function", "function": {"name": "query_database", "description": "...", "parameters": {...}}}
+2. El nombre de la función DEBE ser 'query_database'.
+3. Debe tener exactamente dos parámetros en 'parameters.properties': 'tabla' (string) y 'dato' (string).
+4. En la descripción del parámetro 'tabla', enumera las tablas disponibles: ${tableNames.join(', ')}.
+5. En la descripción del parámetro 'dato', explica qué tipo de información se puede buscar (nombres, categorías, etc.) basándote en los nombres de las columnas proporcionadas.
+6. Responde ÚNICAMENTE con el array JSON, sin texto adicional ni bloques de código markdown.`;
+
 
         const response = await openai.chat.completions.create({
             model: "gpt-4o-mini",
@@ -79,9 +81,27 @@ ${JSON.stringify(tablesSchema, null, 2)}
         toolsJson = toolsJson.replace(/```json/g, "").replace(/```/g, "").trim();
 
         if (toolsJson) {
+            // Validación estructural: Asegurar que cada tool tenga el wrapper 'type' y 'function'
+            try {
+                let tools = JSON.parse(toolsJson);
+                if (Array.isArray(tools)) {
+                    tools = tools.map(tool => {
+                        // Si el tool no tiene 'type' pero tiene 'name' (significa que es solo el objeto function), lo envolvemos
+                        if (!tool.type && (tool.name || tool.parameters)) {
+                            return { type: 'function', function: tool };
+                        }
+                        return tool;
+                    });
+                    toolsJson = JSON.stringify(tools);
+                }
+            } catch (e) {
+                console.error("⚠️ [ToolGenerator] Error validando estructura JSON:", e.message);
+            }
+
             // 4. Guardar en la base de datos
             await HistoryHandler.saveSetting('OPENAI_TOOLS_DEFINITION', toolsJson);
             console.log("✅ [ToolGenerator] OPENAI_TOOLS_DEFINITION actualizada exitosamente.");
+
 
             // 5. Sincronizar con el Asistente
             const assistantId = await HistoryHandler.getConfig('ASSISTANT_ID');

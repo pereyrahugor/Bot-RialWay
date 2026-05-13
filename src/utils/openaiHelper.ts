@@ -175,12 +175,22 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
         let tools: any[] = [];
         const toolsJson = await HistoryHandler.getConfig('OPENAI_TOOLS_DEFINITION');
         if (toolsJson) {
+
             try {
-                tools = safeParseJson(toolsJson);
+                let rawTools = safeParseJson(toolsJson);
+                if (Array.isArray(rawTools)) {
+                    tools = rawTools.map(tool => {
+                        if (!tool.type && (tool.name || tool.parameters || tool.description)) {
+                            return { type: "function", function: tool };
+                        }
+                        return tool;
+                    });
+                }
             } catch (e) {
-                console.error("[openaiHelper] Error parseando tools:", e);
+                console.error("[openaiHelper] Error parseando o reparando tools:", e);
             }
         }
+
 
         // 4. Bucle de ejecución para Chat Completions con Function Calling
         let responseContent = "";

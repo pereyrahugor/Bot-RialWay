@@ -83,7 +83,17 @@ async function ensureTableExists(tableName: string, headers: string[]) {
         
         // Construct Create Table SQL
         const columnsSql = headers.map(h => `${sanitizeColumnName(h)} TEXT`).join(', ');
-        const createSql = `CREATE TABLE IF NOT EXISTS ${tableName} (id uuid DEFAULT gen_random_uuid() PRIMARY KEY, ${columnsSql}, created_at TIMESTAMPTZ DEFAULT NOW());`;
+        const createSql = `
+            CREATE TABLE IF NOT EXISTS ${tableName} (
+                id uuid DEFAULT gen_random_uuid() PRIMARY KEY, 
+                ${columnsSql}, 
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            );
+            GRANT ALL ON TABLE ${tableName} TO service_role;
+            GRANT ALL ON TABLE ${tableName} TO authenticated;
+            GRANT SELECT ON TABLE ${tableName} TO anon;
+        `;
+
         
         const rpc = await supabase.rpc('exec_sql', { query: createSql });
         if (rpc.error) {

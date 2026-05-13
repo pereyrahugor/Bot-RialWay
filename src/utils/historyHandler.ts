@@ -102,7 +102,10 @@ export class HistoryHandler {
                     last_human_message_at TIMESTAMPTZ,
                     metadata JSONB DEFAULT '{}'::jsonb,
                     PRIMARY KEY (id, project_id)
-                );`
+                );
+                GRANT ALL ON TABLE chats TO service_role;
+                GRANT ALL ON TABLE chats TO authenticated;
+                GRANT SELECT ON TABLE chats TO anon;`
             },
             {
                 name: 'tags',
@@ -112,7 +115,10 @@ export class HistoryHandler {
                     name TEXT NOT NULL,
                     color TEXT DEFAULT '#000000',
                     created_at TIMESTAMPTZ DEFAULT NOW()
-                );`
+                );
+                GRANT ALL ON TABLE tags TO service_role;
+                GRANT ALL ON TABLE tags TO authenticated;
+                GRANT SELECT ON TABLE tags TO anon;`
             },
             {
                 name: 'indices',
@@ -121,6 +127,12 @@ export class HistoryHandler {
                     CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
                     CREATE INDEX IF NOT EXISTS idx_chats_project_id ON chats(project_id);
                     CREATE INDEX IF NOT EXISTS idx_chats_last_message ON chats(last_message_at DESC);
+                    GRANT ALL ON TABLE messages TO service_role;
+                    GRANT ALL ON TABLE messages TO authenticated;
+                    GRANT SELECT ON TABLE messages TO anon;
+                    GRANT ALL ON TABLE chats TO service_role;
+                    GRANT ALL ON TABLE chats TO authenticated;
+                    GRANT SELECT ON TABLE chats TO anon;
                 `
             },
             {
@@ -131,7 +143,10 @@ export class HistoryHandler {
                     project_id TEXT,
                     PRIMARY KEY (chat_id, tag_id, project_id),
                     FOREIGN KEY (chat_id, project_id) REFERENCES chats(id, project_id)
-                );`
+                );
+                GRANT ALL ON TABLE chat_tags TO service_role;
+                GRANT ALL ON TABLE chat_tags TO authenticated;
+                GRANT SELECT ON TABLE chat_tags TO anon;`
             },
             {
                 name: 'messages',
@@ -145,7 +160,10 @@ export class HistoryHandler {
                     external_id TEXT UNIQUE,
                     created_at TIMESTAMPTZ DEFAULT NOW(),
                     FOREIGN KEY (chat_id, project_id) REFERENCES chats(id, project_id)
-                );`
+                );
+                GRANT ALL ON TABLE messages TO service_role;
+                GRANT ALL ON TABLE messages TO authenticated;
+                GRANT SELECT ON TABLE messages TO anon;`
             },
             {
                 name: 'tickets',
@@ -161,7 +179,10 @@ export class HistoryHandler {
                     created_at TIMESTAMPTZ DEFAULT NOW(),
                     updated_at TIMESTAMPTZ DEFAULT NOW(),
                     FOREIGN KEY (chat_id, project_id) REFERENCES chats(id, project_id)
-                );`
+                );
+                GRANT ALL ON TABLE tickets TO service_role;
+                GRANT ALL ON TABLE tickets TO authenticated;
+                GRANT SELECT ON TABLE tickets TO anon;`
             },
             {
                 name: 'meta_onboarding',
@@ -175,7 +196,10 @@ export class HistoryHandler {
                     status TEXT DEFAULT 'active',
                     created_at TIMESTAMPTZ DEFAULT NOW(),
                     updated_at TIMESTAMPTZ DEFAULT NOW()
-                );`
+                );
+                GRANT ALL ON TABLE meta_onboarding TO service_role;
+                GRANT ALL ON TABLE meta_onboarding TO authenticated;
+                GRANT SELECT ON TABLE meta_onboarding TO anon;`
             },
             {
                 name: 'settings',
@@ -185,7 +209,10 @@ export class HistoryHandler {
                     value TEXT,
                     updated_at TIMESTAMPTZ DEFAULT NOW(),
                     PRIMARY KEY (project_id, key)
-                );`
+                );
+                GRANT ALL ON TABLE settings TO service_role;
+                GRANT ALL ON TABLE settings TO authenticated;
+                GRANT SELECT ON TABLE settings TO anon;`
             },
             {
                 name: 'users',
@@ -199,9 +226,26 @@ export class HistoryHandler {
                     role TEXT DEFAULT 'subuser',
                     created_at TIMESTAMPTZ DEFAULT NOW(),
                     UNIQUE (project_id, username)
-                );`
+                );
+                GRANT ALL ON TABLE users TO service_role;
+                GRANT ALL ON TABLE users TO authenticated;
+                GRANT SELECT ON TABLE users TO anon;`
+            },
+            {
+                name: 'routing_table',
+                sql: `CREATE TABLE IF NOT EXISTS routing_table (
+                    phone_number_id TEXT PRIMARY KEY,
+                    waba_id TEXT,
+                    project_id TEXT,
+                    project_url TEXT,
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                );
+                GRANT ALL ON TABLE routing_table TO service_role;
+                GRANT ALL ON TABLE routing_table TO authenticated;
+                GRANT SELECT ON TABLE routing_table TO anon;`
             }
         ];
+
 
         for (const table of tables) {
             console.log(`🔍 [HistoryHandler] Procesando tabla: ${table.name}`);
