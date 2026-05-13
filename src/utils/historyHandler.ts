@@ -1590,8 +1590,13 @@ export class HistoryHandler {
             const mandatoryKeys = [
                 { key: 'OPENAI_ADMIN_API_KEY', defaultValue: process.env.OPENAI_ADMIN_API_KEY || 'PENDING' },
                 { key: 'OPENAI_API_KEY_TOOLS', defaultValue: process.env.OPENAI_API_KEY_TOOLS || 'PENDING' },
-                { key: 'ASSISTANT_NAME', defaultValue: process.env.ASSISTANT_NAME || 'Bot' }
+                { key: 'ASSISTANT_NAME', defaultValue: process.env.ASSISTANT_NAME || 'Bot' },
+                { key: 'SHEET_ID_UPDATE', defaultValue: 'PENDING' },
+                { key: 'DOCX_ID_UPDATE', defaultValue: 'PENDING' },
+                { key: 'GOOGLE_PRIVATE_KEY', defaultValue: 'PENDING' },
+                { key: 'GOOGLE_CLIENT_EMAIL', defaultValue: 'PENDING' }
             ];
+
 
             for (const item of mandatoryKeys) {
                 const { data: existingEntry } = await supabase

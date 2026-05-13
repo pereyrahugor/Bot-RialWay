@@ -15,13 +15,8 @@ const supabaseUrl = process.env.SUPABASE_URL || vault.supabaseUrl;
 const supabaseKey = process.env.SUPABASE_KEY || vault.supabaseKey;
 const supabase = (supabaseUrl && supabaseKey) ? createClient(supabaseUrl, supabaseKey) : null;
 
-// Permitir múltiples IDs separados por coma y espacios
-const SHEET_IDS = (process.env.SHEET_ID_UPDATE || "")
-    .split(",")
-    .map(id => id.trim())
-    .filter(Boolean);
-const VECTOR_STORE_ID = process.env.VECTOR_STORE_ID || "";
 let currentFileId: string | null = null;
+
 
 import { createGoogleAuth } from "../utils/googleAuth";
 
@@ -41,9 +36,15 @@ const getOpenAIClient = () => {
 
 // Función principal para procesar todos los sheets
 export async function updateAllSheets(options: { forceRecreate?: boolean } = {}) {
+    const SHEET_IDS = (process.env.SHEET_ID_UPDATE || "")
+        .split(",")
+        .map(id => id.trim())
+        .filter(Boolean);
+
     const sheets = getSheetsClient();
     const tableNames: string[] = [];
     for (const SHEET_ID of SHEET_IDS) {
+
 
         const tableName = await processSheetById(SHEET_ID, options);
 
@@ -320,7 +321,9 @@ export async function uploadDataToAssistant(filePath: string, stateId: string) {
 }
 
 async function attachFileToVectorStore(fileId: string) {
+    const VECTOR_STORE_ID = process.env.VECTOR_STORE_ID || "";
     const openai = getOpenAIClient();
+
     if (!openai) return true;
     try {
         if (!VECTOR_STORE_ID || VECTOR_STORE_ID === "vs_" || VECTOR_STORE_ID.trim() === "") {

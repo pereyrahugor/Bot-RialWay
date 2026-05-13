@@ -7,13 +7,8 @@ import * as glob from "glob";
 
 dotenv.config();
 
-// Permitir múltiples IDs separados por coma y espacios
-const DOCX_FILE_IDS = (process.env.DOCX_ID_UPDATE || "")
-    .split(",")
-    .map(id => id.trim())
-    .filter(Boolean);
-const VECTOR_STORE_ID = process.env.VECTOR_STORE_ID ?? "";
 let currentFileId: string | null = null;
+
 
 import { createGoogleAuth } from "../utils/googleAuth";
 
@@ -32,7 +27,13 @@ const getOpenAIClient = () => {
 
 // Función principal para procesar todos los docs
 export async function updateAllDocs() {
+    const DOCX_FILE_IDS = (process.env.DOCX_ID_UPDATE || "")
+        .split(",")
+        .map(id => id.trim())
+        .filter(Boolean);
+
     for (const DOCX_FILE_ID of DOCX_FILE_IDS) {
+
         await processDocById(DOCX_FILE_ID);
     }
 }
@@ -120,7 +121,9 @@ async function processDocById(DOCX_FILE_ID: string) {
 }
 
 async function attachFileToVectorStore(fileId: string) {
+    const VECTOR_STORE_ID = process.env.VECTOR_STORE_ID || "";
     const openai = getOpenAIClient();
+
     if (!openai) return true;
     try {
 
