@@ -295,7 +295,8 @@ function distributeCards() {
     allTickets.forEach(ticket => {
         const lead = allLeads.find(l => l.id === ticket.chat_id);
         const metadata = crmData[ticket.id] || {};
-        const columnId = metadata.columnId || 'UNASSIGNED';
+        // Priorizar el posicionamiento manual del metadata, pero caer al crm_status de la DB si es nuevo
+        const columnId = metadata.columnId || lead?.crm_status || 'UNASSIGNED';
         
         const container = document.getElementById(`cards-${columnId}`);
         if (container) {
@@ -1129,3 +1130,23 @@ function handleDrop(e) {
 
 // --- Tasks Dashboard Logic ---
 
+// --- Real-time Updates via Socket.IO ---
+if (typeof io !== 'undefined') {
+    const socket = io();
+    console.log('📡 [Socket] Conectado para actualizaciones en tiempo real');
+
+    socket.on('contact_updated', (payload) => {
+        console.log('📡 [Socket] Contacto actualizado:', payload.chatId);
+        // Si el contacto actualizado es uno de los que estamos viendo, resincronizar
+        syncCRM();
+    });
+
+    socket.on('ticket_updated', (payload) => {
+        console.log('📡 [Socket] Ticket actualizado o nuevo');
+        syncCRM();
+    });
+
+    socket.on('new_message', (payload) => {
+        // Opcional: mostrar una notificación visual si llega un mensaje nuevo a un lead activo
+    });
+}
