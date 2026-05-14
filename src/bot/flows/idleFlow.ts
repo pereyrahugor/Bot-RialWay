@@ -152,7 +152,9 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                     if (cleanNombre && cleanNombre !== '-') updateData.name = cleanNombre;
                     if (cleanEmail && cleanEmail !== '-') updateData.email = cleanEmail;
                     if (cleanSource && cleanSource !== '-') updateData.source = cleanSource;
-                    if (cleanStatus && cleanStatus !== '-') updateData.crm_status = cleanStatus; // Sin toUpperCase() para coincidir con IDs de columnas
+                    if (cleanStatus && cleanStatus !== '-') {
+                        updateData.crm_status = await HistoryHandler.mapStatusToId(cleanStatus, dynamicProjectId);
+                    }
 
                     const updateResult = await HistoryHandler.updateContactDetails(userId, updateData, dynamicProjectId);
                     

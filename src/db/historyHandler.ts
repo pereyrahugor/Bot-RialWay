@@ -1647,6 +1647,47 @@ export class HistoryHandler {
         return envValue;
     }
 
+    /**
+     * Mapea un estado legible por humanos (título de la columna) al ID técnico de la columna del CRM.
+     * Esto permite que la IA devuelva "QUIERE REUNION" y se guarde "propuesta" en la base de datos.
+     */
+    static async mapStatusToId(statusLabel: string, projectId: string | null = null): Promise<string> {
+        if (!statusLabel || statusLabel === '-') return statusLabel;
+
+        try {
+            const crmColumnsRaw = await this.getSetting('CRM_COLUMNS', projectId);
+            if (!crmColumnsRaw) return statusLabel;
+
+            const columns = JSON.parse(crmColumnsRaw);
+            if (!Array.isArray(columns)) return statusLabel;
+
+            // Normalización para comparación (sin espacios extra, minúsculas)
+            const normalizedInput = statusLabel.trim().toLowerCase();
+
+            // 1. Buscar coincidencia exacta por título
+            const match = columns.find((col: any) => 
+                col.title && col.title.trim().toLowerCase() === normalizedInput
+            );
+
+            if (match) {
+                console.log(`🎯 [HistoryHandler] Mapeo de estado: "${statusLabel}" -> "${match.id}"`);
+                return match.id;
+            }
+
+            // 2. Si no hay match exacto, buscar por ID (por si la IA ya devolvió el ID correcto)
+            const idMatch = columns.find((col: any) => 
+                col.id && col.id.trim().toLowerCase() === normalizedInput
+            );
+            
+            if (idMatch) return idMatch.id;
+
+            return statusLabel; // Fallback
+        } catch (err) {
+            console.error('[HistoryHandler] Error en mapStatusToId:', err);
+            return statusLabel;
+        }
+    }
+
     private static async bootstrapConfig() {
         try {
             const currentProjectId = this.PROJECT_IDENTIFIER;
