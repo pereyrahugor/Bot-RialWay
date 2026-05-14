@@ -677,6 +677,14 @@ export class HistoryHandler {
                 .eq('project_id', currentProjectId);
 
             if (error) throw error;
+
+            // Emitir evento para actualización en tiempo real en el Backoffice/CRM
+            historyEvents.emit('contact_updated', { 
+                chatId, 
+                project_id: currentProjectId, 
+                details 
+            });
+
             return { success: true };
         } catch (err: any) {
             console.error('[HistoryHandler] Error en updateContactDetails:', err);
@@ -737,6 +745,13 @@ export class HistoryHandler {
                 }
             }
             console.log(`🏷️ [HistoryHandler] ${tagsList.length} etiquetas procesadas para ${chatId}`);
+            
+            // Emitir evento para refrescar UI
+            historyEvents.emit('contact_updated', { 
+                chatId, 
+                project_id: projectId, 
+                tags: tagsList 
+            });
         } catch (err) {
             console.error(`❌ [HistoryHandler] Error asignando etiquetas a ${chatId}:`, err);
         }

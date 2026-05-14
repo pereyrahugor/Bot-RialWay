@@ -26,6 +26,10 @@ export const initSocketIO = (serverInstance: any, { processUserMessage }: any) =
             io.emit('bot_toggled', payload);
         });
 
+        historyEvents.on('contact_updated', (payload) => {
+            io.emit('contact_updated', payload);
+        });
+
         io.on('connection', (socket) => {
             // console.log('💬 Cliente web conectado');
             socket.on('message', async (msg) => {
