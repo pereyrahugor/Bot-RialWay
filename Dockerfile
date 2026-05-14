@@ -21,6 +21,7 @@ RUN pnpm config set block-exotic-subdeps false && \
 
 # Copiar el código fuente
 COPY src/ ./src/
+COPY docs/ ./docs/
 COPY tsconfig.json ./
 
 # Compilar el proyecto (esbuild genera dist/app.js)
