@@ -1,85 +1,72 @@
-#
-# Image size ~ 400MB
+# Stage 1: Build stage
 FROM node:22-slim AS builder
 
-
 WORKDIR /app
 
+# Instalar dependencias del sistema necesarias para compilar (sharp, baileys, etc)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 make g++ git ca-certificates poppler-utils && \
+    update-ca-certificates
 
+# Instalar pnpm
 RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 ENV PNPM_HOME=/usr/local/bin
 
+# Copiar configuración de dependencias para aprovechar la cache de Docker
+COPY package.json pnpm-lock.yaml ./
 
+# Configurar pnpm para permitir dependencias exóticas si es necesario y realizar la instalación
+RUN pnpm config set block-exotic-subdeps false && \
+    pnpm install --frozen-lockfile
 
-
-# Copiar archivos de configuración y dependencias primero para aprovechar la cache
-COPY package*.json ./
-COPY *-lock.yaml ./
-COPY rollup.config.js ./
+# Copiar el código fuente
+COPY src/ ./src/
 COPY tsconfig.json ./
 
-# Instalar dependencias del sistema necesarias para build
-RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ git ca-certificates poppler-utils && update-ca-certificates
+# Compilar el proyecto (esbuild genera dist/app.js)
+RUN pnpm run build
 
-# Instalar dependencias node
-RUN pnpm config set block-exotic-subdeps false
-RUN pnpm install
-
-# Copiar el resto del código fuente y carpetas necesarias antes del build
-COPY src/ ./src/
-COPY scripts/ ./scripts/
-COPY docs/ ./docs/
-COPY README.md ./
-COPY nodemon.json ./
-COPY railway.json ./
-
-# Compilar y mostrar el error real en el log de Docker, imprimiendo logs si falla
-RUN pnpm run build || (echo '--- npm-debug.log ---' && cat /app/npm-debug.log || true && echo '--- pnpm-debug.log ---' && cat /app/pnpm-debug.log || true && exit 1)
-
-# Limpiar dependencias de build
-RUN apt-get remove -y python3 make g++ git && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
-
-
-
+# Stage 2: Production stage
 FROM node:22-slim AS deploy
 
-# Instalar poppler-utils y ffmpeg en la imagen final
-RUN apt-get update && apt-get install -y --no-install-recommends poppler-utils ffmpeg && rm -rf /var/lib/apt/lists/*
-
+# Instalar dependencias de runtime necesarias (ffmpeg para audios, poppler para pdfs)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    poppler-utils ffmpeg && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-
-# Asegurar que la carpeta de credenciales exista
-RUN mkdir -p /app/credentials
-
-
-# Copiar los artefactos necesarios desde builder
-COPY --from=builder /app/src/assets ./src/assets
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/scripts ./scripts
-COPY --from=builder /app/docs ./docs
-COPY --from=builder /app/*.json ./
-COPY --from=builder /app/*-lock.yaml ./
-COPY --from=builder /app/README.md ./
-COPY --from=builder /app/nodemon.json ./
-COPY --from=builder /app/railway.json ./
-COPY --from=builder /app/src/html ./src/html
-COPY --from=builder /app/src/js ./src/js
-COPY --from=builder /app/src/style ./src/style
-
-
+# Instalar pnpm en la imagen final
 RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 ENV PNPM_HOME=/usr/local/bin
-RUN mkdir /app/tmp
-# Copiar node_modules funcional del builder (Evita que ffmpeg o scripts binarios se rompan en producción)
+
+# Copiar el código compilado
+COPY --from=builder /app/dist ./dist
+
+# Copiar node_modules (se copian completos del builder para evitar re-instalar y romper binarios)
 COPY --from=builder /app/node_modules ./node_modules
 
-# Parchear la versión de Baileys automáticamente
+# Copiar archivos estáticos y recursos necesarios según la nueva estructura
+# Nota: Según static.routes.ts, el servidor busca en src/backoffice/ y src/assets/
+COPY --from=builder /app/src/backoffice/html ./src/backoffice/html
+COPY --from=builder /app/src/backoffice/js ./src/backoffice/js
+COPY --from=builder /app/src/backoffice/style ./src/backoffice/style
+COPY --from=builder /app/src/assets ./src/assets
+COPY --from=builder /app/package.json ./
+
+# Asegurar que existan las carpetas de persistencia y temporales
+RUN mkdir -p /app/credentials /app/tmp /app/uploads /app/bot_sessions
+
+# Parchear la versión de Baileys automáticamente (Requerido por builderbot/provider-baileys)
 RUN sed -i 's/version: \[[0-9, ]*\]/version: [2, 3000, 1023223821]/' node_modules/@builderbot/provider-baileys/dist/index.cjs
 
+# Configurar usuario no-root para mayor seguridad
 RUN groupadd -g 1001 nodejs && useradd -u 1001 -g nodejs -m nodejs
+RUN chown -R nodejs:nodejs /app
+
+USER nodejs
 
 EXPOSE 8080
 
+# Usar npm start que ejecuta 'node ./dist/app.js'
 CMD ["npm", "start"]
