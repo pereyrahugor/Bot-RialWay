@@ -1595,7 +1595,11 @@ export class HistoryHandler {
                 const { data: masterSettings } = await supabase.from('settings').select('key, value').eq('project_id', MASTER_ID);
                 
                 if (masterSettings && masterSettings.length > 0) {
+                    // Lista de llaves que NUNCA deben clonarse automáticamente desde el maestro
+                    const protectedKeys = ['OPENAI_API_KEY', 'OPENAI_ADMIN_API_KEY', 'OPENAI_API_KEY_TOOLS'];
+
                     const settingsToInsert = masterSettings
+                        .filter(s => !protectedKeys.includes(s.key)) // Protección extra para llaves sensibles
                         .filter(s => !process.env[s.key] || process.env[s.key] === '')
                         .map(s => ({
                             project_id: currentProjectId,
@@ -1664,7 +1668,10 @@ export class HistoryHandler {
                     let finalValue = item.defaultValue;
 
                     // Si el valor en env es 'PENDING', intentamos buscar en el proyecto maestro 'defaul'
-                    if (finalValue === 'PENDING') {
+                    // EXCEPTO para llaves críticas de OpenAI que deben ser únicas por proyecto
+                    const sensitiveKeys = ['OPENAI_API_KEY', 'OPENAI_ADMIN_API_KEY', 'OPENAI_API_KEY_TOOLS'];
+                    
+                    if (finalValue === 'PENDING' && !sensitiveKeys.includes(item.key)) {
                         const { data: masterVal } = await supabase
                             .from('settings')
                             .select('value')
@@ -1715,14 +1722,20 @@ export class HistoryHandler {
             if (data && data.length > 0) {
                 let count = 0;
                 data.forEach(setting => {
-                    if (setting.key && setting.value !== null && setting.value !== undefined) {
-                        // Solo sobreescribir si no está definido en el .env físico o si es una variable dinámica
-                        // O mejor aún, la DB manda para permitir configuración en caliente
-                        process.env[setting.key] = setting.value;
-                        count++;
+                    if (setting.value && setting.value !== 'PENDING') {
+                        // REGLA DE ORO: No sobreescribir si ya existe en el entorno (Railway Panel manda)
+                        if (!process.env[setting.key] || process.env[setting.key] === '') {
+                            process.env[setting.key] = setting.value;
+                            count++;
+                        } else {
+                            // Si el valor es el mismo, no logueamos para no ensuciar, pero si es distinto avisamos
+                            if (process.env[setting.key] !== setting.value) {
+                                console.log(`ℹ️ [HistoryHandler] Manteniendo valor de entorno para '${setting.key}' (ignorando valor DB: ${setting.value.substring(0, 5)}...)`);
+                            }
+                        }
                     }
                 });
-                console.log(`✅ [HistoryHandler] ${count} variables de entorno sincronizadas.`);
+                console.log(`✅ [HistoryHandler] ${count} variables de entorno sincronizadas desde DB.`);
             } else {
                 console.log(`⚠️ [HistoryHandler] No se encontraron settings en DB para el proyecto ${currentProjectId}.`);
             }
