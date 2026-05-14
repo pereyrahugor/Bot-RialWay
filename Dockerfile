@@ -13,7 +13,7 @@ RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 ENV PNPM_HOME=/usr/local/bin
 
 # Copiar configuración de dependencias para aprovechar la cache de Docker
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml .npmrc ./
 
 # Configurar pnpm para permitir dependencias exóticas si es necesario y realizar la instalación
 RUN pnpm config set block-exotic-subdeps false && \
