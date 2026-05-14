@@ -52,6 +52,7 @@ COPY --from=builder /app/src/backoffice/html ./src/backoffice/html
 COPY --from=builder /app/src/backoffice/js ./src/backoffice/js
 COPY --from=builder /app/src/backoffice/style ./src/backoffice/style
 COPY --from=builder /app/src/assets ./src/assets
+COPY --from=builder /app/docs ./docs
 COPY --from=builder /app/package.json ./
 
 # Asegurar que existan las carpetas de persistencia y temporales

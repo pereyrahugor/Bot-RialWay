@@ -1637,13 +1637,8 @@ export class HistoryHandler {
         // Si no está en DB, lo tomamos de Railway (env)
         const envValue = process.env[key] || null;
         
-        // Si lo encontramos en Railway pero no estaba en DB, lo persistimos para el futuro
-        // (Esto cumple la regla: "en caso de que el repositorio ya exista pero le falte algunas variables...")
-        if (envValue && !projectId) {
-            console.log(`📡 [HistoryHandler] Auto-persistiendo variable faltante en DB: ${key}`);
-            await this.saveSetting(key, envValue);
-        }
-
+        // Si lo encontramos en Railway pero no estaba en DB, lo retornamos pero NO lo persistimos automáticamente
+        // para evitar sobreescrituras accidentales de la configuración base.
         return envValue;
     }
 

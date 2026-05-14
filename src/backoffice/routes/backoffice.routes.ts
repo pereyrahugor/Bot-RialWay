@@ -585,17 +585,6 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     });
 
     // --- NUEVO: IMPORTACIÓN DE CONTACTOS ---
-    app.get('/api/backoffice/chats/:id', backofficeAuth, async (req: any, res: any) => {
-        try {
-            const { id } = req.params;
-            const chat = await depsHistoryHandler.getChat(id);
-            if (!chat) return res.status(404).json({ success: false, error: 'Chat not found' });
-            res.json(chat);
-        } catch (err: any) {
-            res.status(500).json({ success: false, error: err.message });
-        }
-    });
-
     app.get('/api/backoffice/chats/import-template', backofficeAuth, (req: any, res: any) => {
         try {
             const data = [
@@ -612,6 +601,17 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             res.end(buf);
         } catch (error: any) {
             res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
+    app.get('/api/backoffice/chats/:id', backofficeAuth, async (req: any, res: any) => {
+        try {
+            const { id } = req.params;
+            const chat = await depsHistoryHandler.getChat(id);
+            if (!chat) return res.status(404).json({ success: false, error: 'Chat not found' });
+            res.json(chat);
+        } catch (err: any) {
+            res.status(500).json({ success: false, error: err.message });
         }
     });
 
@@ -2157,23 +2157,24 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         try {
             const rootDir = process.cwd();
             const docsPath = path.join(rootDir, 'docs', 'INSTRUCCIONES_USO.md');
+            const distDocsPath = path.join(rootDir, 'dist', 'docs', 'INSTRUCCIONES_USO.md');
+            const altPath = path.join(path.dirname(url.fileURLToPath(import.meta.url)), '..', '..', 'docs', 'INSTRUCCIONES_USO.md');
             
-            console.log(`📂 [Docs] Intentando cargar: ${docsPath}`);
+            console.log(`📂 [Docs] Buscando en: ${docsPath}, ${distDocsPath}, ${altPath}`);
 
             let content = '';
             if (fs.existsSync(docsPath)) {
                 content = fs.readFileSync(docsPath, 'utf8');
-            } else {
-                const altPath = path.join(path.dirname(url.fileURLToPath(import.meta.url)), '..', '..', 'docs', 'INSTRUCCIONES_USO.md');
-                if (fs.existsSync(altPath)) {
-                    content = fs.readFileSync(altPath, 'utf8');
-                }
+            } else if (fs.existsSync(distDocsPath)) {
+                content = fs.readFileSync(distDocsPath, 'utf8');
+            } else if (fs.existsSync(altPath)) {
+                content = fs.readFileSync(altPath, 'utf8');
             }
 
             if (content) {
                 return res.json({ success: true, content });
             } else {
-                return res.status(404).json({ success: false, error: `Archivo no encontrado en root o alt. Path: ${docsPath}` });
+                return res.status(404).json({ success: false, error: `Archivo no encontrado. Intentado en: ${docsPath} y rutas alternativas.` });
             }
         } catch (error: any) {
             console.error('❌ [Docs] Error:', error.message);
