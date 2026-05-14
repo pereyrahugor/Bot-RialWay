@@ -685,6 +685,64 @@ export class HistoryHandler {
     }
 
     /**
+     * Asegura que un tag exista para un proyecto y devuelve su ID.
+     */
+    static async ensureTagExists(tagName: string, projectId: string): Promise<string | null> {
+        try {
+            // 1. Buscar si ya existe
+            const { data: existingTag } = await supabase
+                .from('tags')
+                .select('id')
+                .eq('project_id', projectId)
+                .eq('name', tagName)
+                .maybeSingle();
+
+            if (existingTag) return existingTag.id;
+
+            // 2. Si no existe, crearlo
+            const { data: newTag, error } = await supabase
+                .from('tags')
+                .insert({ project_id: projectId, name: tagName })
+                .select('id')
+                .single();
+
+            if (error) throw error;
+            return newTag.id;
+        } catch (err) {
+            console.error(`❌ [HistoryHandler] Error en ensureTagExists (${tagName}):`, err);
+            return null;
+        }
+    }
+
+    /**
+     * Asigna una lista de etiquetas a un contacto, evitando duplicados.
+     */
+    static async assignTagsToContact(rawChatId: string, tagsList: string[], projectId: string) {
+        if (!tagsList || tagsList.length === 0) return;
+        
+        const chatId = this.normalizeId(rawChatId);
+        try {
+            for (const tagName of tagsList) {
+                const tagId = await this.ensureTagExists(tagName, projectId);
+                if (tagId) {
+                    // Intentar insertar en la tabla intermedia (join table)
+                    // Usamos upsert o simplemente insert ignorando errores de duplicado
+                    await supabase
+                        .from('chat_tags')
+                        .upsert({ 
+                            chat_id: chatId, 
+                            tag_id: tagId, 
+                            project_id: projectId 
+                        }, { onConflict: 'chat_id,tag_id,project_id' });
+                }
+            }
+            console.log(`🏷️ [HistoryHandler] ${tagsList.length} etiquetas procesadas para ${chatId}`);
+        } catch (err) {
+            console.error(`❌ [HistoryHandler] Error asignando etiquetas a ${chatId}:`, err);
+        }
+    }
+
+    /**
      * Crea un lead manualmente desde la interfaz (sin necesidad de chat previo)
      */
     static async createNewLeadManual(chatId: string, details: any) {

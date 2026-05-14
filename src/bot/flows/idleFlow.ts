@@ -125,9 +125,14 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                 const cleanNombre = (data.Nombre || data.nombre || data.contactName || '').trim();
                 const cleanEmail = (data.Correo || data.correo || data.Email || data.email || '').trim();
                 const cleanSource = (data.Origen || data.origen || data.Source || data.source || 'Asistente AI').trim();
+                
+                // Extraer Estado y Etiquetas (o sinónimos)
+                const cleanStatus = (data.Estado || data.estado || data.Status || data.status || '').trim();
+                const rawTags = (data.Etiqueta || data.etiqueta || data.Tags || data.tag || data.Etiquetas || data.etiquetas || '').trim();
+                const tagsList = rawTags ? rawTags.split(',').map(t => t.trim()).filter(t => t !== '' && t !== '-') : [];
 
                 // 1. Actualizar detalles del contacto en el CRM
-                if (cleanNombre || cleanEmail || resumen) {
+                if (cleanNombre || cleanEmail || resumen || cleanStatus || tagsList.length > 0) {
                     console.log(`[idleFlow] 📝 Actualizando contacto ${userId} en CRM. Project: ${dynamicProjectId}`);
                     
                     // Intentar obtener notas previas para no sobreescribir (evitar data loss)
@@ -144,9 +149,10 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                     };
 
                     // Solo actualizamos si tenemos datos nuevos, para no borrar lo existente
-                    if (cleanNombre) updateData.name = cleanNombre;
-                    if (cleanEmail) updateData.email = cleanEmail;
-                    if (cleanSource) updateData.source = cleanSource;
+                    if (cleanNombre && cleanNombre !== '-') updateData.name = cleanNombre;
+                    if (cleanEmail && cleanEmail !== '-') updateData.email = cleanEmail;
+                    if (cleanSource && cleanSource !== '-') updateData.source = cleanSource;
+                    if (cleanStatus && cleanStatus !== '-') updateData.crm_status = cleanStatus.toUpperCase();
 
                     const updateResult = await HistoryHandler.updateContactDetails(userId, updateData, dynamicProjectId);
                     
@@ -154,6 +160,11 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                         console.error(`❌ Error actualizando contacto en CRM:`, updateResult.error);
                     } else {
                         console.log(`✅ CRM Actualizado para ${userId} | Proyecto: ${dynamicProjectId}`);
+                        
+                        // 1.1 Asignar etiquetas si existen
+                        if (tagsList.length > 0) {
+                            await HistoryHandler.assignTagsToContact(userId, tagsList, dynamicProjectId);
+                        }
                     }
 
                     // 2. Crear Ticket de "Nuevo Lead" automáticamente
