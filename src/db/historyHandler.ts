@@ -1577,8 +1577,13 @@ export class HistoryHandler {
     private static async bootstrapConfig() {
         try {
             const currentProjectId = this.PROJECT_IDENTIFIER;
-            const MASTER_ID = "defaul"; // Según requerimiento del usuario
+            const MASTER_ID = "defaul"; 
             console.log(`[Bootstrap] 🚀 Iniciando Bootstrap para: ${currentProjectId}`);
+
+            if (currentProjectId === MASTER_ID || currentProjectId === "default_project") {
+                console.log(`ℹ️ [Bootstrap] Saltando clonación para proyecto maestro o por defecto.`);
+                return;
+            }
 
             // 1. Verificar si el proyecto actual tiene configuración
             const { data: currentSettings } = await supabase.from('settings').select('key').eq('project_id', currentProjectId).limit(1);
@@ -1590,14 +1595,16 @@ export class HistoryHandler {
                 const { data: masterSettings } = await supabase.from('settings').select('key, value').eq('project_id', MASTER_ID);
                 
                 if (masterSettings && masterSettings.length > 0) {
-                    const settingsToInsert = masterSettings.map(s => ({
-                        project_id: currentProjectId,
-                        key: s.key,
-                        value: s.value,
-                        updated_at: new Date().toISOString()
-                    }));
+                    const settingsToInsert = masterSettings
+                        .filter(s => !process.env[s.key] || process.env[s.key] === '')
+                        .map(s => ({
+                            project_id: currentProjectId,
+                            key: s.key,
+                            value: s.value,
+                            updated_at: new Date().toISOString()
+                        }));
 
-                    const { error: cloneErr } = await supabase.from('settings').upsert(settingsToInsert, { onConflict: 'project_id,key' });
+                    const { error: cloneErr } = await supabase.from('settings').insert(settingsToInsert);
                     
                     if (cloneErr) {
                         console.error(`❌ [Bootstrap] Error al clonar desde '${MASTER_ID}':`, cloneErr);
@@ -1630,8 +1637,9 @@ export class HistoryHandler {
                 });
             }
 
-            // 4. Asegurar existencia de variables obligatorias (pueden ser nuevas en el código)
+            // 4. Asegurar existencia de variables obligatorias (priorizando ENV > DB_MASTER)
             const mandatoryKeys = [
+                { key: 'OPENAI_API_KEY', defaultValue: process.env.OPENAI_API_KEY || 'PENDING' },
                 { key: 'OPENAI_ADMIN_API_KEY', defaultValue: process.env.OPENAI_ADMIN_API_KEY || 'PENDING' },
                 { key: 'OPENAI_API_KEY_TOOLS', defaultValue: process.env.OPENAI_API_KEY_TOOLS || 'PENDING' },
                 { key: 'ASSISTANT_NAME', defaultValue: process.env.ASSISTANT_NAME || 'Bot' },
