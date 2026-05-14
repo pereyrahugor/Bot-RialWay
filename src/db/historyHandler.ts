@@ -1650,7 +1650,9 @@ export class HistoryHandler {
                 { key: 'SHEET_ID_UPDATE', defaultValue: 'PENDING' },
                 { key: 'DOCX_ID_UPDATE', defaultValue: 'PENDING' },
                 { key: 'GOOGLE_PRIVATE_KEY', defaultValue: 'PENDING' },
-                { key: 'GOOGLE_CLIENT_EMAIL', defaultValue: 'PENDING' }
+                { key: 'GOOGLE_CLIENT_EMAIL', defaultValue: 'PENDING' },
+                { key: 'SHEET_ID_RESUMEN', defaultValue: 'PENDING' },
+                { key: 'SHEET_RESUMEN_RANGE', defaultValue: 'Hoja1!A1' }
             ];
 
 

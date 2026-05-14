@@ -12,12 +12,22 @@ const SHEET_ID = process.env.SHEET_ID_RESUMEN ?? "";
 /**
  * Función para agregar datos genéricos a Google Sheets
  * @param {GenericResumenData} data - Datos dinámicos que se enviarán a Sheets
+ * @param {string} spreadsheetId - ID opcional de la hoja (si no se pasa, usa process.env)
+ * @param {string} customRange - Rango opcional (si no se pasa, usa process.env o Hoja1!A1)
  */
-export const addToSheet = async (data: GenericResumenData): Promise<void> => {
+export const addToSheet = async (data: GenericResumenData, spreadsheetId?: string, customRange?: string): Promise<void> => {
     try {
         const auth = createGoogleAuth(["https://www.googleapis.com/auth/spreadsheets"]);
         const sheets = google.sheets({ version: "v4", auth });
 
+        // Determinar ID y Rango (Prioridad: Argumento > Env)
+        const targetSheetId = spreadsheetId || process.env.SHEET_ID_RESUMEN || "";
+        if (!targetSheetId || targetSheetId === 'PENDING') {
+            console.warn("⚠️ [SheetsResumen] No se ha definido SHEET_ID_RESUMEN.");
+            return;
+        }
+
+        const targetRange = customRange || process.env.SHEET_RESUMEN_RANGE || "Hoja1!A1";
 
         // Obtener la fecha y hora actual
         const fechaHora: string = moment().format("YYYY-MM-DD HH:mm:ss");
@@ -27,21 +37,15 @@ export const addToSheet = async (data: GenericResumenData): Promise<void> => {
         // Excluir linkWS de los datos extra
         const keys = Object.keys(data).filter(key => key !== 'linkWS');
         const values = [[fechaHora, linkWS, ...keys.map(key => data[key])]];
-        // Insertar en Google Sheets
-
-        // Usar un rango por defecto si no está definido en el entorno
-        const range = process.env.SHEET_RESUMEN_RANGE && process.env.SHEET_RESUMEN_RANGE.trim() !== ""
-            ? process.env.SHEET_RESUMEN_RANGE
-            : "Hoja1!A1";
 
         await sheets.spreadsheets.values.append({
-            spreadsheetId: SHEET_ID,
-            range,
+            spreadsheetId: targetSheetId,
+            range: targetRange,
             valueInputOption: "RAW",
             requestBody: { values },
         });
 
-        // console.log("✅ Datos enviados a Google Sheets con éxito.");
+        console.log(`✅ [SheetsResumen] Datos enviados a Google Sheets: ${targetSheetId}`);
     } catch (error: any) {
         console.error("❌ Error al enviar datos a Google Sheets:", error?.message || error);
     }

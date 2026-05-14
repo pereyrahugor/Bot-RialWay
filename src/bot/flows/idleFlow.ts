@@ -96,6 +96,8 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
             const ASSISTANT_ID = await HistoryHandler.getConfig('ASSISTANT_ID', dynamicProjectId) || '';
             const ID_GRUPO_RESUMEN = await HistoryHandler.getConfig('ID_GRUPO_RESUMEN', dynamicProjectId) || '';
             const ID_GRUPO_RESUMEN_2 = await HistoryHandler.getConfig('ID_GRUPO_RESUMEN_2', dynamicProjectId) || '';
+            const sheetId = await HistoryHandler.getConfig('SHEET_ID_RESUMEN', dynamicProjectId);
+            const sheetRange = await HistoryHandler.getConfig('SHEET_RESUMEN_RANGE', dynamicProjectId);
             // const msjCierre = await HistoryHandler.getConfig('msjCierre', dynamicProjectId) || '';
 
             const targetAssistantId = state.get('assignedAssistantId') || ASSISTANT_ID;
@@ -199,14 +201,14 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                     await state.update({ lastVideo: null });
                 }
 
-                await addToSheet(data);
+                await addToSheet(data, sheetId, sheetRange);
                 return endFlow(); //("BNI, cambiando la forma en que el mundo hace negocios\nGracias por su contacto.");
             } else if (tipo === 'NO_REPORTAR_SEGUIR') {
                 // Solo este activa seguimiento
                 console.log('NO_REPORTAR_SEGUIR: Se realiza seguimiento, pero no se envía resumen al grupo.');
                 
                 data.linkWS = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
-                await addToSheet(data); // Enviamos a sheets siempre antes del seguimiento
+                await addToSheet(data, sheetId, sheetRange); // Enviamos a sheets siempre antes del seguimiento
 
                 const reconFlow = new ReconectionFlow({
                     ctx,
@@ -254,7 +256,7 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                     console.error(`❌ SI_REPORTAR_SEGUIR Error:`, err?.message || err);
                 }
 
-                await addToSheet(data);
+                await addToSheet(data, sheetId, sheetRange);
 
                 const reconFlow = new ReconectionFlow({
                     ctx,
@@ -302,7 +304,7 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                     console.error(`❌ SI_RESUMEN_G2 Error:`, err?.message || err);
                 }
 
-                await addToSheet(data);
+                await addToSheet(data, sheetId, sheetRange);
                 return;
 
             } else if (tipo === 'SI_RESUMEN') {
@@ -324,7 +326,7 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                     console.error(`❌ SI_RESUMEN Error:`, err?.message || err);
                 }
 
-                await addToSheet(data);
+                await addToSheet(data, sheetId, sheetRange);
                 return;
 
             } else {
@@ -347,7 +349,7 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                     console.error(`❌ DEFAULT Error:`, err?.message || err);
                 }
 
-                await addToSheet(data);
+                await addToSheet(data, sheetId, sheetRange);
                 return;
             }
         } catch (error: any) {
