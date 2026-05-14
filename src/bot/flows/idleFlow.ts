@@ -204,6 +204,10 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
             } else if (tipo === 'NO_REPORTAR_SEGUIR') {
                 // Solo este activa seguimiento
                 console.log('NO_REPORTAR_SEGUIR: Se realiza seguimiento, pero no se envía resumen al grupo.');
+                
+                data.linkWS = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
+                await addToSheet(data); // Enviamos a sheets siempre antes del seguimiento
+
                 const reconFlow = new ReconectionFlow({
                     ctx,
                     state,
@@ -224,8 +228,7 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                         }
                     },
                     onFail: async () => {
-                        data.linkWS = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
-                        await addToSheet(data);
+                        console.log('NO_REPORTAR_SEGUIR: No se obtuvo respuesta luego del seguimiento (ya reportado a sheets).');
                     }
                 });
                 return await reconFlow.start();
