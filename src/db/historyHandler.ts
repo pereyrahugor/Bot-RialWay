@@ -645,9 +645,20 @@ export class HistoryHandler {
         try {
             await supabase
                 .from('chats')
-                .update({ assigned_agent: agentName })
+                .update({ 
+                    assigned_agent: agentName,
+                    bot_enabled: true // Si asignamos un agente bot, nos aseguramos que el bot esté ON
+                })
                 .eq('id', chatId)
                 .eq('project_id', currentProjectId);
+
+            // Emitir evento para refrescar la UI en tiempo real
+            historyEvents.emit('bot_toggled', { 
+                chatId, 
+                enabled: true, 
+                assigned_agent: agentName,
+                project_id: currentProjectId
+            });
         } catch (err) {
             console.error('[HistoryHandler] Error en setAssignedAgent:', err);
         }
@@ -1912,6 +1923,14 @@ export class HistoryHandler {
                 .eq('id', chatId)
                 .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
             if (error) throw error;
+
+            // Emitir evento para actualización en tiempo real
+            historyEvents.emit('contact_updated', { 
+                chatId, 
+                project_id: HistoryHandler.PROJECT_IDENTIFIER, 
+                details: { assigned_to: userId } 
+            });
+
             return { success: true };
         } catch (err: any) {
             console.error('[HistoryHandler] Error en assignChatToUser:', err);

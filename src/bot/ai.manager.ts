@@ -84,16 +84,17 @@ export class AiManager {
         const lower = respuesta.toLowerCase();
         
         // Regex robusto: (derivar|derivando) [a] asistente [1-5]
-        const matchAsistente = lower.match(/(?:derivar|derivando)(?:\s+a)?\s+asistente\s*([1-5])\b/i);
+        // Soporta puntos, comas o fin de línea tras el número.
+        const matchAsistente = lower.match(/(?:derivar|derivando)(?:\s+a)?\s+asistente\s*([1-5])(?:\.|\b|$)/i);
         if (matchAsistente) {
             const num = matchAsistente[1];
             console.log(`[AiManager] 🎯 Comando de derivación detectado: asistente${num}`);
             return `asistente${num}`;
         }
 
-        if (/(?:derivar|derivando)(?:\s+a)?\s+asesor\s*humano\b/i.test(lower)) {
+        if (/(?:derivar|derivando)(?:\s+a)?\s+(?:asesor|agente|humano|atencion|soporte)\s+humano\b/i.test(lower)) {
             console.log(`[AiManager] 🎯 Comando de derivación detectado: asesor humano`);
-            return 'asistente_humano'; // O el identificador que uses para humano
+            return 'asistente_humano';
         }
 
         return null;
@@ -219,6 +220,13 @@ export class AiManager {
             const resumen = this.extraerResumenRecepcionista(response);
             
             if (destino) {
+                if (destino === 'asistente_humano') {
+                    console.log(`🚀 [MultiAgent] Handover a HUMANO: Apagando bot para ${ctx.from}`);
+                    await HistoryHandler.toggleBot(ctx.from, false);
+                    // Notificar al CRM que el bot se apagó por derivación
+                    return state;
+                }
+
                 const targetAssistantId = currentAssistantMap[destino];
                 if (!targetAssistantId) {
                     console.warn(`⚠️ [MultiAgent] Handover fallido: No hay Assistant ID configurado para '${destino}' en el proyecto ${dynamicProjectId}.`);

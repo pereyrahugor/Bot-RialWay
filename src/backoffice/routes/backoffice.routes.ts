@@ -1993,6 +1993,41 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
+    /**
+     * Endpoint para derivar chats entre agentes (Humanos o Bot)
+     */
+    app.post('/api/backoffice/chat/assign', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
+        const { chatId, agentId, userId } = req.body;
+        // agentId: 'asistente1', 'asistente2'... (Lógica del Bot)
+        // userId: uuid del usuario humano (Lógica CRM)
+        
+        if (!chatId) return res.status(400).json({ success: false, error: 'chatId is required' });
+
+        try {
+            console.log(`[BACKOFFICE] Reasignando chat ${chatId}: agentId=${agentId}, userId=${userId}`);
+            
+            // 1. Si se especifica un agente del bot, lo asignamos y activamos el bot
+            if (agentId) {
+                await depsHistoryHandler.setAssignedAgent(chatId, agentId);
+            }
+            
+            // 2. Si se especifica un usuario humano (o se limpia con null), actualizamos assigned_to
+            if (userId !== undefined) {
+                await depsHistoryHandler.assignChatToUser(chatId, userId);
+                
+                // Si se asignó a un humano, desactivamos el bot automáticamente para no interferir
+                if (userId) {
+                    await depsHistoryHandler.toggleBot(chatId, false);
+                }
+            }
+
+            res.json({ success: true });
+        } catch (error: any) {
+            console.error('❌ Error en /api/backoffice/chat/assign:', error);
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
     app.get('/api/backoffice/crm/config', backofficeAuth, async (req: any, res: any) => {
         try {
             const config = await depsHistoryHandler.getSetting('CRM_CONFIG');
