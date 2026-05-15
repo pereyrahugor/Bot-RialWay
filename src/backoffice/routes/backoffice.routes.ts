@@ -7,6 +7,7 @@ import axios from 'axios';
 import * as XLSX from 'xlsx';
 import { backofficeAuth, systemConfigAuth } from "../middleware/auth";
 import { supabase, HistoryHandler as HistoryHandlerClass } from "../db/historyHandler";
+import { getOpenAI } from "../../apis/openai/openaiHelper";
 
 // Caché para fotos de perfil (chatId -> {url, timestamp})
 const profilePicCache = new Map<string, { url: string, expires: number }>();
@@ -75,7 +76,7 @@ export const processSendMessage = async (
 
         // 3. Inyectar en thread OpenAI (silencioso)
         depsHistoryHandler.getThreadId(chatId).then((threadId: string) => {
-            if (threadId && (message || file)) {
+            if (threadId && (message || file) && openaiMain) {
                 openaiMain.beta.threads.messages.create(threadId, {
                     role: 'assistant',
                     content: `[Mensaje enviado por operador humano]: ${message || '[Media]'}`
@@ -1870,7 +1871,11 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
         try {
             console.log(`📡 [SYNC] Obteniendo instrucciones para el asistente: ${assistantId}`);
-            const assistant = await openaiMain.beta.assistants.retrieve(assistantId);
+            const dynamicOpenAI = await getOpenAI();
+            if (!dynamicOpenAI) {
+                return res.status(400).json({ success: false, error: 'OpenAI API Key no configurada. Por favor, guarde la configuración con una clave válida primero.' });
+            }
+            const assistant = await dynamicOpenAI.beta.assistants.retrieve(assistantId);
             
             if (assistant) {
                 res.json({ 
