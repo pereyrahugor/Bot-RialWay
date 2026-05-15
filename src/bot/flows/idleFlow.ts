@@ -215,6 +215,8 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                 }
 
                 await addToSheet(data, sheetId, sheetRange);
+                // Resetear al asistente 1 al cerrar la conversación
+                await HistoryHandler.setAssignedAgent(userId, 'asistente1', dynamicProjectId);
                 return endFlow(); //("BNI, cambiando la forma en que el mundo hace negocios\nGracias por su contacto.");
             } else if (tipo === 'NO_REPORTAR_SEGUIR') {
                 // Solo este activa seguimiento
@@ -318,6 +320,8 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                 }
 
                 await addToSheet(data, sheetId, sheetRange);
+                // Resetear al asistente 1 al cerrar la conversación
+                await HistoryHandler.setAssignedAgent(userId, 'asistente1', dynamicProjectId);
                 return;
 
             } else if (tipo === 'SI_RESUMEN') {
@@ -340,6 +344,8 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                 }
 
                 await addToSheet(data, sheetId, sheetRange);
+                // Resetear al asistente 1 al cerrar la conversación
+                await HistoryHandler.setAssignedAgent(userId, 'asistente1', dynamicProjectId);
                 return;
 
             } else {
@@ -363,10 +369,16 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                 }
 
                 await addToSheet(data, sheetId, sheetRange);
+                // Resetear al asistente 1 al cerrar la conversación por inactividad
+                await HistoryHandler.setAssignedAgent(userId, 'asistente1', dynamicProjectId);
                 return;
             }
         } catch (error: any) {
             console.error("Error al obtener el resumen de OpenAI:", error);
+            // Asegurar reset incluso en error
+            const userId = ctx.from;
+            const dynamicProjectId = state.get('dynamicProjectId') || process.env.RAILWAY_PROJECT_ID;
+            await HistoryHandler.setAssignedAgent(userId, 'asistente1', dynamicProjectId);
             return endFlow();
         }
     });

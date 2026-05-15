@@ -123,7 +123,24 @@ export class AiManager {
         // Ruteo Multitenant Dinámico
         const botPhoneNumber = provider?.phoneNumber || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
         const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || HistoryHandler.PROJECT_IDENTIFIER;
-        const assigned = await HistoryHandler.getAssignedAgent(ctx.from, dynamicProjectId);
+        
+        // Determinar el agente asignado. 
+        // Si no hay agente en el 'state' (redeploy/reset), forzamos asistente1
+        let assigned = state.get('assignedAgent');
+        if (!assigned) {
+            console.log(`[AiManager] 🔄 Sesión fresca o redeploy detectado para ${ctx.from}. Forzando asistente1.`);
+            assigned = 'asistente1';
+            await HistoryHandler.setAssignedAgent(ctx.from, 'asistente1', dynamicProjectId);
+            await state.update({ assignedAgent: 'asistente1' });
+        } else {
+            // Si ya hay en state, verificar que coincida con DB (opcional, pero seguro)
+            const dbAssigned = await HistoryHandler.getAssignedAgent(ctx.from, dynamicProjectId);
+            if (dbAssigned !== assigned) {
+                assigned = dbAssigned;
+                await state.update({ assignedAgent: dbAssigned });
+            }
+        }
+
         const assistantMap = await this.getAssistantMap(dynamicProjectId);
         let assignedAssistantId = assistantMap[assigned] || this.assistantId;
 
@@ -141,8 +158,10 @@ export class AiManager {
         // --- COMANDO DE REINICIO ---
         if (ctx.body && ctx.body.trim().toUpperCase() === '#RESET#') {
             const chatId = ctx.from;
-            console.log(`[AiManager] ♻️ Reiniciando historial para ${chatId} (Local Only)`);
-            return await flowDynamic("✅ Historial de conversación reiniciado localmente. El asistente ya no recordará los mensajes anteriores en la próxima consulta.");
+            console.log(`[AiManager] ♻️ Reiniciando historial y agente para ${chatId}`);
+            await HistoryHandler.setAssignedAgent(chatId, 'asistente1', dynamicProjectId);
+            await state.update({ assignedAgent: 'asistente1' });
+            return await flowDynamic("✅ Historial de conversación y asignación de asistente reiniciados.");
         }
         
         await typing(ctx, provider);
@@ -262,8 +281,9 @@ export class AiManager {
                     } else {
                         console.log(`🚀 [MultiAgent] Handover detectado: ${assigned} -> ${nextAgentName} (User: ${ctx.from})`);
                         
-                        // 1. Persistir el cambio de agente en la DB
+                        // 1. Persistir el cambio de agente en la DB y State
                         await HistoryHandler.setAssignedAgent(ctx.from, nextAgentName, dynamicProjectId);
+                        await state.update({ assignedAgent: nextAgentName });
 
                         // 2. Procesar respuesta del agente saliente (limpieza interna en Processor)
                         await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
