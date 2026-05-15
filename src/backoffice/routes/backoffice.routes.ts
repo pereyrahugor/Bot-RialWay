@@ -2159,27 +2159,35 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         try {
             const settingKey = idx === '1' ? 'ASSISTANT_PROMPT' : `ASSISTANT_PROMPT_${idx}`;
             const envKey = idx === '1' ? 'ASSISTANT_ID' : `ASSISTANT_${idx}`;
-            const assistantId = process.env[envKey];
+            
+            // Prioridad: 1. DB, 2. Env
+            const assistantId = await depsHistoryHandler.getConfig(envKey) || process.env[envKey];
 
             console.log(`📡 [HOT-UPDATE] Actualizando prompt para Asistente ${idx} en base de datos...`);
             await depsHistoryHandler.saveSetting(settingKey, prompt);
 
             // Sincronizar hacia OpenAI (Empujar cambio al dashboard de OpenAI)
             const { getOpenAI } = await import("../../apis/openai/openaiHelper");
-            const dynamicOpenai = await getOpenAI();
+            const dynamicOpenAI = await getOpenAI();
 
-            if (assistantId && dynamicOpenai) {
-                console.log(`📡 [SYNC] Empujando nuevo prompt hacia OpenAI Assistant: ${assistantId}`);
-                await dynamicOpenai.beta.assistants.update(assistantId, {
-                    instructions: prompt
-                });
-                
-                // CRITICAL FIX: Después de actualizar instrucciones, volvemos a sincronizar las tools
-                // para evitar que queden vacías si el update sobreescribió el objeto.
-                const { syncAssistantTools } = await import("../../apis/openai/openaiHelper");
-                await syncAssistantTools(assistantId);
-                
-                console.log(`✅ [SYNC] Prompt y Herramientas de Asistente ${idx} actualizados en OpenAI exitosamente.`);
+            if (assistantId && dynamicOpenAI) {
+                try {
+                    console.log(`📡 [SYNC] Empujando nuevo prompt hacia OpenAI Assistant: ${assistantId}`);
+                    await dynamicOpenAI.beta.assistants.update(assistantId, {
+                        instructions: prompt
+                    });
+                    
+                    // CRITICAL FIX: Después de actualizar instrucciones, volvemos a sincronizar las tools
+                    // para evitar que queden vacías si el update sobreescribió el objeto.
+                    const { syncAssistantTools } = await import("../../apis/openai/openaiHelper");
+                    await syncAssistantTools(assistantId);
+                    
+                    console.log(`✅ [SYNC] Prompt y Herramientas de Asistente ${idx} actualizados en OpenAI exitosamente.`);
+                } catch (apiError: any) {
+                    console.error(`⚠️ [HOT-UPDATE-SYNC-ERROR] Falló sincronización con OpenAI para ${assistantId}:`, apiError.message);
+                }
+            } else if (!dynamicOpenAI) {
+                console.warn(`⚠️ [HOT-UPDATE] No se pudo obtener instancia de OpenAI. El prompt se guardó solo localmente.`);
             }
 
             res.json({ 

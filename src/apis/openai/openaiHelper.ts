@@ -14,8 +14,10 @@ let _lastVisionKey: string | null = null;
 export async function getOpenAI(): Promise<OpenAI | null> {
     const { HistoryHandler } = await import("../../db/historyHandler");
     const key = await HistoryHandler.getConfig('OPENAI_API_KEY');
-    
-    if (!key) return null;
+    if (!key) {
+        console.warn(`📡 [OpenAI] ⚠️ No se pudo obtener OPENAI_API_KEY del config. getOpenAI() retornará null.`);
+        return null;
+    }
     if (key !== _lastKey) {
         console.log(`📡 [OpenAI] Inicializando nueva instancia con Hot-update Key: ${key.slice(0, 8)}...`);
         _openai = new OpenAI({ apiKey: key });
@@ -103,7 +105,7 @@ export async function syncAssistantTools(assistantId: string): Promise<boolean> 
     }
 }
 
-export const askWithFunctions = async (assistantId: string, message: string, state: any, userId: string = 'unknown', forceDb: boolean = false, projectId: string | null = null, directMode: boolean = true): Promise<string> => {
+export const askWithFunctions = async (assistantId: string, message: string, state: any, userId: string = 'unknown', forceDb: boolean = false, projectId: string | null = null, directMode: boolean = true, agentName?: string): Promise<string> => {
     const openai = await getOpenAI();
     if (!openai) {
         console.warn("⚠️ OPENAI_API_KEY no detectada. El asistente de IA está desactivado.");
@@ -121,8 +123,21 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
         console.log(`[openaiHelper] 📜 Historial recuperado para ${userId}: ${history.length} mensajes (Limit: ${historyLimit}) | Project: ${projectId}`);
         
         // 2. Preparar el prompt del sistema
-        // Intentar obtener un prompt específico para este asistente, si no, usar el genérico
-        let systemPrompt = await HistoryHandler.getSetting(`ASSISTANT_PROMPT_${assistantId}`, projectId);
+        // Intentar obtener un prompt específico para este asistente usando su nombre lógico (asistente1, asistente2...)
+        let promptKey = 'ASSISTANT_PROMPT';
+        if (agentName && agentName !== 'asistente1') {
+            const num = agentName.replace('asistente', '');
+            promptKey = `ASSISTANT_PROMPT_${num}`;
+        }
+
+        let systemPrompt = await HistoryHandler.getSetting(promptKey, projectId);
+        
+        // Fallback: si no hay por nombre lógico, intentar por Assistant ID (legacy)
+        if (!systemPrompt) {
+            systemPrompt = await HistoryHandler.getSetting(`ASSISTANT_PROMPT_${assistantId}`, projectId);
+        }
+
+        // Segundo Fallback: usar el genérico 'ASSISTANT_PROMPT'
         if (!systemPrompt) {
             const dbPrompt = await HistoryHandler.getSetting('ASSISTANT_PROMPT', projectId);
             systemPrompt = dbPrompt || await HistoryHandler.getConfig('ASSISTANT_PROMPT') || "Eres un asistente servicial.";
@@ -287,7 +302,8 @@ export const safeToAsk = async (
     maxRetries = 3,
     forceDb = false,
     projectId: string | null = null,
-    directMode: boolean = true
+    directMode: boolean = true,
+    agentName?: string
 ) => {
     const SAFE_TIMEOUT = 120000;
     
@@ -296,7 +312,7 @@ export const safeToAsk = async (
             let attempt = 0;
             while (attempt < maxRetries) {
                 try {
-                    return await askWithFunctions(assistantId, message, state, userId, forceDb, projectId, directMode);
+                    return await askWithFunctions(assistantId, message, state, userId, forceDb, projectId, directMode, agentName);
                 } catch (err: any) {
                     attempt++;
                     console.error(`[openaiHelper] Intento ${attempt} fallido:`, err.message);

@@ -63,7 +63,7 @@ function limpiarBloquesJSON(texto: string): string {
     // 2e. Filtrar bloques técnicos de derivación y resumen (procedentes de AiManager)
     limpio = limpio.replace(/GET_RESUMEN[\s\S]+/gi, "");
     // Regex más flexible: busca "derivar a asistente X" o "derivar a asesor humano" en cualquier parte, opcionalmente con punto final.
-    limpio = limpio.replace(/(?:derivar|derivando)(?:\s+a)?\s+(?:asistente\s*[1-5]|asesor humano)\.?/gim, "");
+    limpio = limpio.replace(/(?:derivar|derivando|derivo)(?:\s+(?:a|al|el|a\s+la))?\s+(?:asistente\s*[1-5]|asesor\s+humano|agente\s+humano|atencion\s+humano|soporte\s+humano)\.?/gim, "");
     limpio = limpio.replace(/\[Enviando.*$/gim, "");
 
 
@@ -101,6 +101,7 @@ export class AssistantResponseProcessor {
         gotoFlow: any,
         getAssistantResponse: Function,
         ASSISTANT_ID: string,
+        agentName?: string,
         recursionDepth: number = 0,
         projectId?: string
     ) {
@@ -202,7 +203,7 @@ export class AssistantResponseProcessor {
                     if (err?.message?.includes('active')) {
                         // console.log("[AssistantResponseProcessor] Re-intentando tras detectar run activo residual (API)...");
                         await new Promise(resolve => setTimeout(resolve, 5000));
-                        newResponse = await getAssistantResponse(ASSISTANT_ID, feedbackMsg, state, "Error procesando resultado API.", ctx?.from, threadId);
+                        newResponse = await getAssistantResponse(ASSISTANT_ID, feedbackMsg, state, "Error procesando resultado API.", ctx?.from, threadId, projectId, agentName);
                     } else {
                         // console.error("Error al obtener respuesta recursiva tras API:", err);
                         if (unblockUser) unblockUser();
@@ -214,7 +215,7 @@ export class AssistantResponseProcessor {
 
                 // Recursión: procesar la respuesta final del asistente
                 await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
-                    newResponse, ctx, flowDynamic, state, provider, gotoFlow, getAssistantResponse, ASSISTANT_ID, recursionDepth + 1, projectId
+                    newResponse, ctx, flowDynamic, state, provider, gotoFlow, getAssistantResponse, ASSISTANT_ID, agentName, recursionDepth + 1, projectId
                 );
                 return;
             }
@@ -267,12 +268,12 @@ export class AssistantResponseProcessor {
             let threadId = ctx?.thread_id;
             if (!threadId && state?.get) threadId = state.get('thread_id');
             
-            let assistantApiResponse = await getAssistantResponse(ASSISTANT_ID, 'ok', state, undefined, ctx.from, threadId);
+            let assistantApiResponse = await getAssistantResponse(ASSISTANT_ID, 'ok', state, undefined, ctx.from, threadId, projectId, agentName);
             // Si la respuesta contiene (ID: ...), no la envíes al usuario, espera 10s y vuelve a enviar ok
             while (assistantApiResponse && /(ID:\s*\w+)/.test(assistantApiResponse)) {
                 // console.log('[Debug] Respuesta contiene ID de reserva, esperando 10s y reenviando ok...');
                 await new Promise(res => setTimeout(res, 10000));
-                assistantApiResponse = await getAssistantResponse(ASSISTANT_ID, 'ok', state, undefined, ctx.from, threadId);
+                assistantApiResponse = await getAssistantResponse(ASSISTANT_ID, 'ok', state, undefined, ctx.from, threadId, projectId, agentName);
             }
             // Cuando la respuesta no contiene el ID, envíala al usuario
             if (assistantApiResponse) {

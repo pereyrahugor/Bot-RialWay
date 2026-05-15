@@ -41,7 +41,7 @@ export class AiManager {
         return map[assigned] || this.assistantId;
     }
 
-    public getAssistantResponse = async (assistantId: string, message: string, state: any, fallbackMessage: string | undefined, userId: string, thread_id: string | null = null, projectId: string | null = null) => {
+    public getAssistantResponse = async (assistantId: string, message: string, state: any, fallbackMessage: string | undefined, userId: string, thread_id: string | null = null, projectId: string | null = null, agentName?: string) => {
         if (this.userTimeouts.has(userId)) {
             clearTimeout(this.userTimeouts.get(userId)!);
             this.userTimeouts.delete(userId);
@@ -56,7 +56,7 @@ export class AiManager {
             const isWhatsApp = !!(userId && userId.includes('@s.whatsapp.net'));
             const targetProjectId = projectId || HistoryHandler.PROJECT_IDENTIFIER;
 
-            safeToAsk(assistantId, message, state, userId, this.errorReporter, 5, isWhatsApp, targetProjectId, false)
+            safeToAsk(assistantId, message, state, userId, this.errorReporter, 5, isWhatsApp, targetProjectId, false, agentName)
                 .then(result => {
                     if (this.userTimeouts.has(userId)) {
                         clearTimeout(this.userTimeouts.get(userId)!);
@@ -83,16 +83,16 @@ export class AiManager {
         if (!respuesta || typeof respuesta !== 'string') return null;
         const lower = respuesta.toLowerCase();
         
-        // Regex robusto: (derivar|derivando) [a] asistente [1-5]
+        // Regex robusto: (derivar|derivando|derivo) [a|al|el|a la] asistente [1-5]
         // Soporta puntos, comas o fin de línea tras el número.
-        const matchAsistente = lower.match(/(?:derivar|derivando)(?:\s+a)?\s+asistente\s*([1-5])(?:\.|\b|$)/i);
+        const matchAsistente = lower.match(/(?:derivar|derivando|derivo)(?:\s+(?:a|al|el|a\s+la))?\s+asistente\s*([1-5])(?:\.|\b|$)/i);
         if (matchAsistente) {
             const num = matchAsistente[1];
             console.log(`[AiManager] 🎯 Comando de derivación detectado: asistente${num}`);
             return `asistente${num}`;
         }
 
-        if (/(?:derivar|derivando)(?:\s+a)?\s+(?:asesor|agente|humano|atencion|soporte)\s+humano\b/i.test(lower)) {
+        if (/(?:derivar|derivando|derivo)(?:\s+(?:a|al|el|a\s+la))?\s+(?:asesor|agente|humano|atencion|soporte)\s+humano\b/i.test(lower)) {
             console.log(`[AiManager] 🎯 Comando de derivación detectado: asesor humano`);
             return 'asistente_humano';
         }
@@ -210,7 +210,7 @@ export class AiManager {
             const currentAssistantMap = await this.getAssistantMap(dynamicProjectId);
             const currentAssistantId = currentAssistantMap[assigned] || this.assistantId;
 
-            const response = (await this.getAssistantResponse(currentAssistantId, ctx.body, state, undefined, ctx.from, ctx.thread_id, dynamicProjectId)) as string;
+            const response = (await this.getAssistantResponse(assignedAssistantId, ctx.body, state, undefined, ctx.from, ctx.thread_id, dynamicProjectId, assigned)) as string;
 
             if (!response) return state;
 
@@ -245,25 +245,25 @@ export class AiManager {
                 // 1. Procesar respuesta del agente saliente (limpieza interna en Processor)
                 await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
                     response, ctx, flowDynamic, state, provider, gotoFlow,
-                    this.getAssistantResponse.bind(this), currentAssistantId, 0, dynamicProjectId
+                    this.getAssistantResponse.bind(this), assignedAssistantId, assigned, 0, dynamicProjectId
                 );
 
                 // 2. Transición inmediata: Consultar al nuevo agente con el resumen
                 const nextAssistantId = await this.getAssignedAssistantId(ctx.from, dynamicProjectId);
                 const resumenContextual = `RESUMEN DE LA CONVERSACIÓN PREVIA (PARA TU CONTEXTO):\n\n${resumen}`;
-                const nextResponseRaw = (await this.getAssistantResponse(nextAssistantId, resumenContextual, state, undefined, ctx.from, ctx.thread_id, dynamicProjectId)) as string;
+                const nextResponseRaw = (await this.getAssistantResponse(nextAssistantId, resumenContextual, state, undefined, ctx.from, ctx.thread_id, dynamicProjectId, destino)) as string;
                 
                 if (nextResponseRaw) {
                     await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
                         nextResponseRaw, ctx, flowDynamic, state, provider, gotoFlow,
-                        this.getAssistantResponse.bind(this), nextAssistantId, 0, dynamicProjectId
+                        this.getAssistantResponse.bind(this), nextAssistantId, destino, 0, dynamicProjectId
                     );
                 }
             } else {
                 // Sin transferencia: flujo normal
                 await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
                     response, ctx, flowDynamic, state, provider, gotoFlow,
-                    this.getAssistantResponse.bind(this), currentAssistantId, 0, dynamicProjectId
+                    this.getAssistantResponse.bind(this), assignedAssistantId, assigned, 0, dynamicProjectId
                 );
             }
 

@@ -1035,20 +1035,36 @@ export class HistoryHandler {
         }
     }
 
-    static async addTagToChat(chatId: string, tagId: string) {
+    static async addTagToChat(rawChatId: string, tagId: string) {
         try {
+            const chatId = this.normalizeId(rawChatId);
+            
+            // Aseguramos que el chat base existe antes de vincular la etiqueta
+            // para evitar fallos de clave foránea si el chat no ha sido persistido aún.
+            await this.getOrCreateChat(chatId, 'whatsapp');
+
             const { error } = await supabase
                 .from('chat_tags')
-                .insert({ chat_id: chatId, tag_id: tagId, project_id: HistoryHandler.PROJECT_IDENTIFIER });
-            if (error) throw error;
+                .insert({ 
+                    chat_id: chatId, 
+                    tag_id: tagId, 
+                    project_id: HistoryHandler.PROJECT_IDENTIFIER 
+                });
+            
+            if (error) {
+                if (error.code === '23505') return { success: true }; // Ya existe
+                throw error;
+            }
             return { success: true };
         } catch (err: any) {
+            console.error('[HistoryHandler] Error en addTagToChat:', err);
             return { success: false, error: err.message };
         }
     }
 
-    static async removeTagFromChat(chatId: string, tagId: string) {
+    static async removeTagFromChat(rawChatId: string, tagId: string) {
         try {
+            const chatId = this.normalizeId(rawChatId);
             const { error } = await supabase
                 .from('chat_tags')
                 .delete()
@@ -1058,19 +1074,21 @@ export class HistoryHandler {
             if (error) throw error;
             return { success: true };
         } catch (err: any) {
+            console.error('[HistoryHandler] Error en removeTagFromChat:', err);
             return { success: false, error: err.message };
         }
     }
 
-    static async getChatTags(chatId: string) {
+    static async getChatTags(rawChatId: string) {
         try {
+            const chatId = this.normalizeId(rawChatId);
             const { data, error } = await supabase
                 .from('chat_tags')
                 .select('tag_id, tags(*)')
                 .eq('chat_id', chatId)
                 .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
             if (error) throw error;
-            return (data || []).map((item: any) => item.tags);
+            return (data || []).map((item: any) => item.tags).filter((t: any) => t !== null);
         } catch (err) {
             console.error('[HistoryHandler] Error en getChatTags:', err);
             return [];
@@ -1388,13 +1406,13 @@ export class HistoryHandler {
      */
     static async listEditedLeads(limit: number = 50, offset: number = 0) {
         try {
-            // Filtramos para obtener solo chats marcados como leads (is_lead = true)
-            // Esto asegura que la Agenda/Contactos solo tenga contactos generados o validados por alguien.
+            // Filtramos para obtener chats marcados como leads O que tengan algún estado CRM/etiquetas
+            // Esto permite gestionar contactos que aún no son "leads" oficiales pero necesitan seguimiento.
             const { data, error } = await supabase
                 .from('chats')
                 .select('*, chat_tags(tag_id, tags(*))')
                 .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER)
-                .eq('is_lead', true)
+                .or('is_lead.eq.true,crm_status.not.is.null')
                 .order('last_human_message_at', { ascending: false })
                 .range(offset, offset + limit - 1);
 
