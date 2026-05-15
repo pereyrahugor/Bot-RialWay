@@ -1131,6 +1131,7 @@ function handleDrop(e) {
 // --- Tasks Dashboard Logic ---
 
 // --- Real-time Updates via Socket.IO ---
+/* global io */
 if (typeof io !== 'undefined') {
     const socket = io();
     console.log('📡 [Socket] Conectado para actualizaciones en tiempo real');

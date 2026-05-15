@@ -6,310 +6,7 @@
     <title>Preview - Premium Backoffice</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Manrope:wght@400;600;800&family=Inter:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        :root {
-            /* Design System Tokens */
-            --bg-base: #f7f9fb;
-            --surface-low: #f2f4f6;
-            --surface-lowest: #ffffff;
-            --primary: #2563EB;
-            --primary-glow: rgba(37, 99, 235, 0.4);
-            --text-main: #191c1e;
-            --text-muted: #45464d;
-            --accent-blue: #497cff;
-            --radius-lg: 24px;
-            --radius-md: 16px;
-            --glass-bg: rgba(255, 255, 255, 0.7);
-            --glass-blur: blur(20px);
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Inter', sans-serif;
-        }
-
-        body {
-            background-color: var(--bg-base);
-            color: var(--text-main);
-            height: 100vh;
-            display: flex;
-            overflow: hidden;
-        }
-
-        h1, h2, h3, .display-text {
-            font-family: 'Manrope', sans-serif;
-            font-weight: 800;
-        }
-
-        /* --- Navbar (Glass Sidebar) --- */
-        #navbar {
-            width: 80px;
-            background: var(--surface-low);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 20px 0;
-            gap: 15px;
-            z-index: 100;
-        }
-
-        .nav-item {
-            width: 50px;
-            height: 50px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 14px;
-            color: var(--text-muted);
-            cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            position: relative;
-            font-size: 1.2rem;
-        }
-
-        .nav-item:hover {
-            color: var(--primary);
-            background: rgba(37, 99, 235, 0.05);
-            transform: scale(1.05);
-        }
-
-        .nav-item.active {
-            color: var(--primary);
-            background: var(--surface-lowest);
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
-        }
-
-        .nav-item.active::before {
-            content: '';
-            position: absolute;
-            left: -15px;
-            width: 4px;
-            height: 20px;
-            background: var(--primary);
-            border-radius: 0 4px 4px 0;
-            box-shadow: 0 0 10px var(--primary-glow);
-        }
-
-        /* --- Sidebar (Chats) --- */
-        #sidebar {
-            width: 350px;
-            background: var(--surface-low);
-            display: flex;
-            flex-direction: column;
-            padding: 20px;
-        }
-
-        .sidebar-header {
-            margin-bottom: 25px;
-        }
-
-        .sidebar-title {
-            font-size: 1.8rem;
-            letter-spacing: -0.02em;
-            margin-bottom: 15px;
-        }
-
-        .search-container {
-            background: var(--surface-lowest);
-            border-radius: var(--radius-md);
-            padding: 12px 15px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .search-container input {
-            border: none;
-            outline: none;
-            background: transparent;
-            width: 100%;
-            font-size: 0.9rem;
-        }
-
-        .chat-list {
-            flex: 1;
-            overflow-y: auto;
-            margin-top: 10px;
-        }
-
-        .chat-item {
-            padding: 15px;
-            border-radius: var(--radius-md);
-            margin-bottom: 8px;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
-            gap: 12px;
-            align-items: center;
-        }
-
-        .chat-item:hover {
-            background: rgba(255, 255, 255, 0.5);
-        }
-
-        .chat-item.active {
-            background: var(--surface-lowest);
-            box-shadow: 0 2px 10px rgba(0,0,0,0.02);
-        }
-
-        .avatar {
-            width: 48px;
-            height: 48px;
-            background: #e2e8f0;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 600;
-            color: #64748b;
-        }
-
-        .chat-info {
-            flex: 1;
-        }
-
-        .chat-name {
-            font-weight: 700;
-            font-size: 0.95rem;
-            margin-bottom: 2px;
-        }
-
-        .chat-preview {
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 180px;
-        }
-
-        /* --- Main Content --- */
-        #main-content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            background: var(--surface-lowest);
-            margin: 15px;
-            border-radius: var(--radius-lg);
-            box-shadow: 0 10px 40px rgba(0,0,0,0.03);
-            overflow: hidden;
-        }
-
-        .chat-header {
-            padding: 20px 30px;
-            border-bottom: 1px solid rgba(0,0,0,0.03);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .messages-area {
-            flex: 1;
-            padding: 30px;
-            background: #fafbfc;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-
-        .message {
-            max-width: 60%;
-            padding: 12px 18px;
-            border-radius: 18px;
-            font-size: 0.95rem;
-            line-height: 1.5;
-        }
-
-        .message.received {
-            background: white;
-            align-self: flex-start;
-            border-bottom-left-radius: 4px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.02);
-        }
-
-        .message.sent {
-            background: var(--primary);
-            color: white;
-            align-self: flex-end;
-            border-bottom-right-radius: 4px;
-        }
-
-        .input-area {
-            padding: 20px 30px;
-            display: flex;
-            gap: 15px;
-            align-items: center;
-        }
-
-        .input-box {
-            flex: 1;
-            background: var(--surface-low);
-            border-radius: 30px;
-            padding: 12px 25px;
-            border: none;
-            outline: none;
-        }
-
-        /* --- Right Panel (Lead Info) --- */
-        #right-panel {
-            width: 380px;
-            padding: 25px;
-            overflow-y: auto;
-        }
-
-        .panel-section {
-            background: var(--surface-lowest);
-            border-radius: var(--radius-md);
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 15px rgba(0,0,0,0.02);
-        }
-
-        .section-title {
-            font-size: 1rem;
-            margin-bottom: 15px;
-            color: var(--primary);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .lead-field {
-            margin-bottom: 12px;
-        }
-
-        .lead-field label {
-            display: block;
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 4px;
-        }
-
-        .lead-field .value {
-            font-weight: 600;
-            font-size: 0.9rem;
-        }
-
-        .tag-container {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            margin-top: 10px;
-        }
-
-        .tag {
-            background: var(--surface-low);
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            color: var(--text-muted);
-        }
-    </style>
+    <link rel="stylesheet" href="/style/backoffice-preview.css">
 </head>
 <body>
 
@@ -321,10 +18,10 @@
         <div class="nav-item" title="CRM"><i class="fas fa-id-card-clip"></i></div>
         <div class="nav-item" title="Contactos"><i class="fas fa-user-group"></i></div>
         <div class="nav-item" title="Tickets"><i class="fas fa-clipboard-check"></i></div>
-        
-        <div style="flex:1"></div>
-        
-        <div class="nav-item" title="Meta" style="color: #0668E1;"><i class="fab fa-meta"></i></div>
+
+        <div class="nav-spacer"></div>
+
+        <div class="nav-item nav-meta" title="Meta"><i class="fab fa-meta"></i></div>
         <div class="nav-item" title="Configuración"><i class="fas fa-gears"></i></div>
     </div>
 
@@ -332,7 +29,7 @@
         <div class="sidebar-header">
             <h2 class="sidebar-title">Mensajes</h2>
             <div class="search-container">
-                <i class="fas fa-search" style="color: #cbd5e1;"></i>
+                <i class="fas fa-search search-icon"></i>
                 <input type="text" placeholder="Buscar conversaciones...">
             </div>
         </div>
@@ -344,40 +41,40 @@
                     <div class="chat-name">Juan Delgado</div>
                     <div class="chat-preview">Hola, quisiera saber el precio de...</div>
                 </div>
-                <i class="fab fa-whatsapp" style="color: #25D366;"></i>
+                <i class="fab fa-whatsapp icon-wa"></i>
             </div>
             <div class="chat-item">
-                <div class="avatar" style="background:#fae8ff; color:#a855f7;">MA</div>
+                <div class="avatar avatar-purple">MA</div>
                 <div class="chat-info">
                     <div class="chat-name">Maria Amazonas</div>
                     <div class="chat-preview">¿Tienen envíos a CABA?</div>
                 </div>
-                <i class="fab fa-instagram" style="color: #E4405F;"></i>
+                <i class="fab fa-instagram icon-ig"></i>
             </div>
             <div class="chat-item">
-                <div class="avatar" style="background:#dcfce7; color:#16a34a;">PL</div>
+                <div class="avatar avatar-green">PL</div>
                 <div class="chat-info">
                     <div class="chat-name">Pablo Lopez</div>
                     <div class="chat-preview">Gracias por la atención!</div>
                 </div>
-                <i class="fab fa-facebook-messenger" style="color: #0084FF;"></i>
+                <i class="fab fa-facebook-messenger icon-fb"></i>
             </div>
         </div>
     </div>
 
     <div id="main-content">
         <div class="chat-header">
-            <div style="display:flex; align-items:center; gap:15px;">
+            <div class="chat-header-left">
                 <div class="avatar">JD</div>
                 <div>
-                    <div class="chat-name" style="font-size:1.1rem;">Juan Delgado</div>
-                    <div style="font-size:0.8rem; color:#22c55e;"><i class="fas fa-circle" style="font-size:8px;"></i> En línea</div>
+                    <div class="chat-name chat-header-name">Juan Delgado</div>
+                    <div class="chat-status-online"><i class="fas fa-circle chat-status-dot"></i> En línea</div>
                 </div>
             </div>
-            <div style="display:flex; gap:10px;">
-                <button style="background:none; border:none; color:var(--text-muted); cursor:pointer;"><i class="fas fa-phone"></i></button>
-                <button style="background:none; border:none; color:var(--text-muted); cursor:pointer;"><i class="fas fa-video"></i></button>
-                <button style="background:none; border:none; color:var(--text-muted); cursor:pointer;"><i class="fas fa-ellipsis-v"></i></button>
+            <div class="chat-header-actions">
+                <button class="btn-icon-plain"><i class="fas fa-phone"></i></button>
+                <button class="btn-icon-plain"><i class="fas fa-video"></i></button>
+                <button class="btn-icon-plain"><i class="fas fa-ellipsis-v"></i></button>
             </div>
         </div>
 
@@ -394,17 +91,17 @@
         </div>
 
         <div class="input-area">
-            <i class="fas fa-paperclip" style="color:var(--text-muted); cursor:pointer;"></i>
+            <i class="fas fa-paperclip attach-icon"></i>
             <input type="text" class="input-box" placeholder="Escribe un mensaje aquí...">
-            <div style="width:45px; height:45px; background:var(--primary); border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; cursor:pointer;">
+            <div class="send-btn-circle">
                 <i class="fas fa-paper-plane"></i>
             </div>
         </div>
     </div>
 
     <div id="right-panel">
-        <h2 class="display-text" style="font-size: 1.4rem; margin-bottom: 25px;">Información del Lead</h2>
-        
+        <h2 class="display-text panel-title">Información del Lead</h2>
+
         <div class="panel-section">
             <div class="section-title"><i class="fas fa-user-circle"></i> Perfil</div>
             <div class="lead-field">
@@ -413,15 +110,15 @@
             </div>
             <div class="lead-field">
                 <label>Estado CRM</label>
-                <div class="value" style="color:var(--primary); background:rgba(37, 99, 235, 0.1); display:inline-block; padding:2px 8px; border-radius:4px;">Negociación</div>
+                <div class="value crm-status-badge">Negociación</div>
             </div>
         </div>
 
         <div class="panel-section">
             <div class="section-title"><i class="fas fa-tags"></i> Etiquetas</div>
             <div class="tag-container">
-                <div class="tag" style="background:#dcfce7; color:#16a34a;">Cliente VIP</div>
-                <div class="tag" style="background:#fee2e2; color:#ef4444;">Preventa</div>
+                <div class="tag tag-vip">Cliente VIP</div>
+                <div class="tag tag-preventa">Preventa</div>
                 <div class="tag">Interesado</div>
             </div>
         </div>

@@ -1,0 +1,356 @@
+/* ===================================================
+   CONEXION.CSS — Estilos exclusivos de conexion.html
+   Depende de: crm-common.css, backoffice.css, dashboard.css
+   =================================================== */
+
+/* ---------------------------------------------------
+   Modal de confirmación de reinicio de sesión
+   --------------------------------------------------- */
+.modal {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    backdrop-filter: blur(5px);
+}
+
+.modal.hidden { display: none; }
+
+.modal-content {
+    background: #1f2937;
+    padding: 30px 40px;
+    border-radius: 16px;
+    text-align: center;
+    color: #fff;
+    max-width: 400px;
+    border: 1px solid rgba(255,255,255,0.1);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+.modal-content h3 {
+    margin-top: 0;
+    color: #f87171;
+    font-size: 1.5rem;
+}
+
+.modal-content p {
+    margin: 15px 0 25px 0;
+    color: #9ca3af;
+    line-height: 1.5;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+}
+
+.modal-actions button {
+    padding: 10px 24px;
+    border-radius: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+#confirmSi {
+    background: #ef4444;
+    color: white;
+    border: none;
+}
+
+#confirmSi:hover {
+    background: #dc2626;
+    transform: scale(1.05);
+}
+
+#confirmNo {
+    background: #4b5563;
+    color: white;
+    border: none;
+}
+
+#confirmNo:hover { background: #374151; }
+
+/* ---------------------------------------------------
+   Toggle switch (control global del bot)
+   --------------------------------------------------- */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 28px;
+}
+
+.switch input { opacity: 0; width: 0; height: 0; }
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #cbd5e1;
+    transition: .4s;
+    border-radius: 34px;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 20px;
+    width: 20px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+}
+
+input:checked + .slider { background-color: #3b82f6; }
+input:focus  + .slider  { box-shadow: 0 0 1px #3b82f6; }
+input:checked + .slider:before { transform: translateX(22px); }
+
+/* ---------------------------------------------------
+   Migrated inline styles — conexion.html
+   --------------------------------------------------- */
+
+/* Layout wrapper inside .dashboard-container */
+.conexion-content {
+    max-width: 800px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* QR / status card */
+.conexion-card-centered {
+    text-align: center;
+    padding: 40px;
+}
+
+/* Section title h2 */
+.section-title {
+    margin-bottom: 20px;
+}
+
+/* Session status row */
+.session-status-row {
+    font-size: 1.2rem;
+    margin-bottom: 25px;
+}
+
+/* Session status value span */
+#session-status {
+    font-weight: 700;
+    color: var(--accent);
+}
+
+/* Group connection container (hidden by default, shown via JS) */
+#group-connection-container {
+    display: none;
+    font-size: 1.1rem;
+    margin-bottom: 25px;
+    padding: 15px;
+    background: rgba(0,0,0,0.03);
+    border-radius: 12px;
+}
+
+/* Group session status label */
+.group-label {
+    margin-bottom: 10px;
+    opacity: 0.8;
+    font-weight: 600;
+}
+
+/* Group session status value */
+.group-status-value {
+    font-weight: 700;
+}
+
+/* QR section (hidden by default) */
+#qr-section {
+    display: none;
+    margin-top: 20px;
+}
+
+/* White box wrapping the QR image */
+.qr-box {
+    background: white;
+    padding: 20px;
+    border-radius: 20px;
+    display: inline-block;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+}
+
+/* QR section heading */
+.qr-title {
+    color: #334155;
+    margin-bottom: 15px;
+    font-size: 1rem;
+}
+
+/* QR image */
+.qr-image {
+    width: 250px;
+    height: 250px;
+    border-radius: 10px;
+}
+
+/* QR error / loading message */
+.qr-error-msg {
+    display: none;
+    color: orange;
+    padding: 20px;
+}
+
+/* Instruction text below QR */
+.qr-instruction {
+    margin-top: 20px;
+    opacity: 0.7;
+}
+
+/* Session info (connected state, hidden by default) */
+#session-info {
+    display: none;
+    font-size: 1.1rem;
+    color: #10b981;
+    font-weight: 600;
+}
+
+/* WhatsApp link container (hidden by default) */
+#whatsapp-link-container {
+    display: none;
+    margin-top: 25px;
+}
+
+/* WhatsApp link button */
+#whatsapp-link {
+    background: #25D366;
+    color: white;
+    border: none;
+    padding: 12px 25px;
+    border-radius: 10px;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+/* Control center card */
+.card-control-center {
+    border-left: 4px solid #3b82f6;
+    padding: 30px;
+}
+
+/* Section h2 with bottom margin */
+.section-h2 {
+    margin-bottom: 20px;
+}
+
+/* Controls vertical list */
+.controls-list {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* Blue-tinted control row */
+.control-row-blue {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 15px;
+    background: rgba(59, 130, 246, 0.05);
+    border-radius: 12px;
+    border: 1px solid rgba(59, 130, 246, 0.1);
+}
+
+/* Text group inside a control row */
+.control-label-group {
+    text-align: left;
+}
+
+/* Control row title (blue) */
+.control-title {
+    font-weight: 700;
+    color: #1e293b;
+}
+
+/* Control row description (blue) */
+.control-desc {
+    font-size: 0.85rem;
+    color: #64748b;
+}
+
+/* Green-tinted control row */
+.control-row-green {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 15px;
+    background: rgba(16, 185, 129, 0.05);
+    border-radius: 12px;
+    border: 1px solid rgba(16, 185, 129, 0.1);
+}
+
+/* Control row title (green) */
+.control-title-green {
+    font-weight: 700;
+    color: #064e3b;
+}
+
+/* Control row description (green) */
+.control-desc-green {
+    font-size: 0.85rem;
+    color: #065f46;
+}
+
+/* System reload button */
+#system-reload-btn {
+    background: #10b981;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Danger zone card */
+.card-danger-zone {
+    border-top: 4px solid #f87171;
+    text-align: center;
+    padding: 30px;
+}
+
+/* Danger zone heading */
+.text-danger-title {
+    color: #f87171;
+}
+
+/* Danger zone info paragraph */
+.danger-info {
+    margin: 15px 0;
+}
+
+/* Reset session button */
+#go-reset {
+    background: #f87171;
+    border: none;
+    padding: 12px 30px;
+    border-radius: 10px;
+    font-weight: 700;
+    color: white;
+    cursor: pointer;
+}
+
+/* Modal warning icon */
+.modal-warning-icon {
+    font-size: 3rem;
+    color: #ef4444;
+    margin-bottom: 20px;
+}

@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="/style/crm-common.css">
     <link rel="stylesheet" href="/style/dashboard.css">
+    <link rel="stylesheet" href="/style/conexion.css">
 </head>
 <body data-theme="light">
     <!-- Navbar -->
@@ -23,68 +24,68 @@
         <div class="nav-item" title="Tickets" onclick="toggleTicketsPanel(event)">
             <i class="fas fa-clipboard-check"></i>
             <span class="nav-label">Tickets</span>
-            <span class="badge" id="tickets-badge" style="display:none;">0</span>
+            <span class="badge" id="tickets-badge">0</span>
         </div>
 
-        <div style="flex:1"></div>
+        <div class="nav-spacer"></div>
 
         <div class="nav-item" title="Configuración" onclick="window.location.href='/system-config'"><i class="fas fa-gears"></i><span class="nav-label">Configuración</span></div>
         <div class="nav-item" title="Manual" onclick="window.location.href='/docs'"><i class="fas fa-book"></i><span class="nav-label">Manual</span></div>
-        <div class="nav-item" title="Conexión Meta" id="nav-meta-btn" onclick="toggleMetaPanel(event)" style="color: #0668E1; font-size: 1.4rem;">
+        <div class="nav-item" title="Conexión Meta" id="nav-meta-btn" onclick="toggleMetaPanel(event)">
             <i class="fab fa-meta"></i>
             <span class="nav-label">Meta Info</span>
         </div>
         <div class="nav-item" id="theme-toggle" title="Cambiar Tema"><i class="fas fa-adjust"></i><span class="nav-label">Tema</span></div>
-        <div class="nav-item" onclick="logout()" title="Cerrar Sesión" style="color:#f87171;"><i class="fas fa-power-off"></i><span class="nav-label">Salir</span></div>
+        <div class="nav-item nav-item-logout" onclick="logout()" title="Cerrar Sesión"><i class="fas fa-power-off"></i><span class="nav-label">Salir</span></div>
     </div>
 
     <div class="crm-main-container">
         <h1 class="animate-fade">🔗 Conexión del Bot {{BOT_NAME}}</h1>
-    
-        <div class="dashboard-container" style="max-width: 800px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px;">
+
+        <div class="conexion-content">
             <!-- Estado y QR -->
-            <div class="card" style="text-align: center; padding: 40px;">
-                <h2 style="margin-bottom: 20px;">📡 Estado de la Vinculación</h2>
-                <div style="font-size: 1.2rem; margin-bottom: 25px;">
-                    Estado de Sesión: <span class="status" id="session-status" style="font-weight: 700; color: var(--accent);">Cargando...</span>
+            <div class="card conexion-card-centered">
+                <h2 class="section-title">📡 Estado de la Vinculación</h2>
+                <div class="session-status-row">
+                    Estado de Sesión: <span class="status" id="session-status">Cargando...</span>
                 </div>
 
                 <!-- Estado de Grupos (Solo visible en modo Meta) -->
-                <div id="group-connection-container" style="display:none; font-size: 1.1rem; margin-bottom: 25px; padding: 15px; background: rgba(0,0,0,0.03); border-radius: 12px;">
-                    <div style="margin-bottom: 10px; opacity: 0.8; font-weight: 600;">Estado de conexión grupos:</div>
-                    <span id="group-session-status" class="status" style="font-weight: 700;">No configurado</span>
+                <div id="group-connection-container">
+                    <div class="group-label">Estado de conexión grupos:</div>
+                    <span id="group-session-status" class="status group-status-value">No configurado</span>
                 </div>
-                
+
                 <div id="session-error"></div>
 
-                <div id="qr-section" style="display:none; margin-top: 20px;">
-                    <div class="qr-container" style="background: white; padding: 20px; border-radius: 20px; display: inline-block; box-shadow: 0 10px 25px rgba(0,0,0,0.05);">
-                        <h3 style="color:#334155; margin-bottom:15px; font-size: 1rem;">Escanea con WhatsApp</h3>
-                        <img src="/qr.png" class="qr" alt="Cargando QR..." style="width: 250px; height: 250px; border-radius: 10px;" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
-                        <p style="display:none; color:orange; padding: 20px;">Generando QR... por favor espera.</p>
+                <div id="qr-section">
+                    <div class="qr-box">
+                        <h3 class="qr-title">Escanea con WhatsApp</h3>
+                        <img src="/qr.png" class="qr qr-image" alt="Cargando QR..." onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+                        <p class="qr-error-msg">Generando QR... por favor espera.</p>
                     </div>
-                    <p class="info-text" style="margin-top: 20px; opacity: 0.7;">La página se actualizará automáticamente cuando estés vinculado.</p>
+                    <p class="info-text qr-instruction">La página se actualizará automáticamente cuando estés vinculado.</p>
                 </div>
 
-                <div id="session-info" class="info-text" style="display:none; font-size: 1.1rem; color: #10b981; font-weight: 600;"></div>
-                
-                <div id="whatsapp-link-container" style="display:none; margin-top: 25px;">
-                    <a id="whatsapp-link" href="#" target="_blank" class="btn" style="background: #25D366; color: white; border: none; padding: 12px 25px; border-radius: 10px; text-decoration: none; font-weight: 600;">
+                <div id="session-info" class="info-text"></div>
+
+                <div id="whatsapp-link-container">
+                    <a id="whatsapp-link" href="#" target="_blank" class="btn">
                         <i class="fab fa-whatsapp"></i> Abrir en WhatsApp
                     </a>
                 </div>
             </div>
 
             <!-- Centro de Control Maestro -->
-            <div class="card" style="border-left: 4px solid #3b82f6; padding: 30px;">
-                <h2 style="margin-bottom: 20px;"><i class="fas fa-sliders-h"></i> Centro de Control Maestro</h2>
-                
-                <div style="display: flex; flex-direction: column; gap: 20px;">
+            <div class="card card-control-center">
+                <h2 class="section-h2"><i class="fas fa-sliders-h"></i> Centro de Control Maestro</h2>
+
+                <div class="controls-list">
                     <!-- Toggle Bot Global -->
-                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 15px; background: rgba(59, 130, 246, 0.05); border-radius: 12px; border: 1px solid rgba(59, 130, 246, 0.1);">
-                        <div style="text-align: left;">
-                            <div style="font-weight: 700; color: #1e293b;">Estado Global del Bot (IA)</div>
-                            <div style="font-size: 0.85rem; color: #64748b;">Cuando está desactivado, el bot no responderá a ningún mensaje (Modo Humano).</div>
+                    <div class="control-row-blue">
+                        <div class="control-label-group">
+                            <div class="control-title">Estado Global del Bot (IA)</div>
+                            <div class="control-desc">Cuando está desactivado, el bot no responderá a ningún mensaje (Modo Humano).</div>
                         </div>
                         <label class="switch">
                             <input type="checkbox" id="global-bot-toggle" checked>
@@ -93,12 +94,12 @@
                     </div>
 
                     <!-- Botón Hot Reload -->
-                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 15px; background: rgba(16, 185, 129, 0.05); border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.1);">
-                        <div style="text-align: left;">
-                            <div style="font-weight: 700; color: #064e3b;">Recargar Motor del Bot</div>
-                            <div style="font-size: 0.85rem; color: #065f46;">Aplica cambios de Meta o Google Sheets sin entrar a Railway. (Downtime: 30-45s)</div>
+                    <div class="control-row-green">
+                        <div class="control-label-group">
+                            <div class="control-title-green">Recargar Motor del Bot</div>
+                            <div class="control-desc-green">Aplica cambios de Meta o Google Sheets sin entrar a Railway. (Downtime: 30-45s)</div>
                         </div>
-                        <button id="system-reload-btn" class="btn" style="background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                        <button id="system-reload-btn" class="btn">
                             <i class="fas fa-sync-alt"></i> Reiniciar
                         </button>
                     </div>
@@ -106,10 +107,10 @@
             </div>
 
             <!-- Zona de Peligro -->
-            <div class="card" style="border-top: 4px solid #f87171; text-align: center; padding: 30px;">
-                <h2 style="color: #f87171;">⚠️ Zona de Peligro</h2>
-                <p class="info-text" style="margin: 15px 0;">Si el bot no responde o falla la conexión, puedes forzar un cierre de sesión para generar un nuevo QR.</p>
-                <button id="go-reset" class="btn btn-danger" style="background: #f87171; border: none; padding: 12px 30px; border-radius: 10px; font-weight: 700; color: white; cursor: pointer;">
+            <div class="card card-danger-zone">
+                <h2 class="text-danger-title">⚠️ Zona de Peligro</h2>
+                <p class="info-text danger-info">Si el bot no responde o falla la conexión, puedes forzar un cierre de sesión para generar un nuevo QR.</p>
+                <button id="go-reset" class="btn btn-danger">
                     <i class="fas fa-trash-alt"></i> Reiniciar Sesión COMPLETAMENTE
                 </button>
             </div>
@@ -139,80 +140,10 @@
         updateAuthUI();
     </script>
 
-    <style>
-        /* Estilos del Modal de Confirmación */
-        .modal {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.85);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 9999;
-            backdrop-filter: blur(5px);
-        }
-        .modal.hidden { display: none; }
-        .modal-content {
-            background: #1f2937;
-            padding: 30px 40px;
-            border-radius: 16px;
-            text-align: center;
-            color: #fff;
-            max-width: 400px;
-            border: 1px solid rgba(255,255,255,0.1);
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-        }
-        .modal-content h3 { margin-top: 0; color: #f87171; font-size: 1.5rem; }
-        .modal-content p { margin: 15px 0 25px 0; color: #9ca3af; line-height: 1.5; }
-        .modal-actions { display: flex; gap: 15px; justify-content: center; }
-        .modal-actions button {
-            padding: 10px 24px;
-            border-radius: 10px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        #confirmSi { background: #ef4444; color: white; border: none; }
-        #confirmSi:hover { background: #dc2626; transform: scale(1.05); }
-        #confirmNo { background: #4b5563; color: white; border: none; }
-        #confirmNo:hover { background: #374151; }
-
-        /* The switch - the box around the slider */
-        .switch {
-            position: relative;
-            display: inline-block;
-            width: 50px;
-            height: 28px;
-        }
-        .switch input { opacity: 0; width: 0; height: 0; }
-        .slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background-color: #cbd5e1;
-            transition: .4s;
-            border-radius: 34px;
-        }
-        .slider:before {
-            position: absolute;
-            content: "";
-            height: 20px;
-            width: 20px;
-            left: 4px;
-            bottom: 4px;
-            background-color: white;
-            transition: .4s;
-            border-radius: 50%;
-        }
-        input:checked + .slider { background-color: #3b82f6; }
-        input:focus + .slider { box-shadow: 0 0 1px #3b82f6; }
-        input:checked + .slider:before { transform: translateX(22px); }
-    </style>
-
     <!-- Modal de Confirmación de Reinicio -->
     <div id="resetModal" class="modal hidden">
         <div class="modal-content">
-            <i class="fas fa-exclamation-triangle" style="font-size: 3rem; color: #ef4444; margin-bottom: 20px;"></i>
+            <i class="fas fa-exclamation-triangle modal-warning-icon"></i>
             <h3>¿Estás seguro?</h3>
             <p>Se borrarán las credenciales actuales y el bot se reiniciará completamente. Tendrás que escanear el QR de nuevo.</p>
             <div class="modal-actions">
