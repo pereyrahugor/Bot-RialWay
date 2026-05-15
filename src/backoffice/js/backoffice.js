@@ -481,10 +481,20 @@ async function selectChat(id) {
     updateBotStatusText(chat.bot_enabled);
     updateInputState(chat.bot_enabled);
 
+    // Habilitar botones de acción independientes
+    const tagsBtn = document.getElementById('open-tags-btn');
+    const crmBtn = document.getElementById('open-crm-btn');
+    if (tagsBtn) tagsBtn.disabled = false;
+    if (crmBtn) crmBtn.disabled = false;
+
     renderActiveChatTags();
     populateCRMFields(chat);
     
+    // Refrescar paneles si están abiertos
     if (document.getElementById('crm-panel').classList.contains('active')) {
+        populateCRMFields(chat);
+    }
+    if (document.getElementById('tags-panel')?.classList.contains('active')) {
         renderTagManager();
     }
 
@@ -759,14 +769,39 @@ async function sendMessage() {
 }
 
 // CRM & Tag Management Functions
-function toggleCRMPanel() {
+function closeAllPanels(exceptId) {
+    const panels = ['crm-panel', 'tags-panel', 'leads-panel', 'tickets-panel', 'meta-panel'];
+    panels.forEach(id => {
+        if (id !== exceptId) {
+            const el = document.getElementById(id);
+            if (el) el.classList.remove('active');
+        }
+    });
+}
+
+function toggleCRMPanel(e) {
+    if (e && e.stopPropagation) e.stopPropagation();
     const panel = document.getElementById('crm-panel');
-    panel.classList.toggle('active');
-    if (panel.classList.contains('active')) {
+    const isOpening = !panel.classList.contains('active');
+    
+    if (isOpening) {
+        closeAllPanels('crm-panel');
         const chat = chats.find(c => c.id === activeChatId);
         if (chat) populateCRMFields(chat);
+    }
+    panel.classList.toggle('active');
+}
+
+function toggleTagsPanel(e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    const panel = document.getElementById('tags-panel');
+    const isOpening = !panel.classList.contains('active');
+    
+    if (isOpening) {
+        closeAllPanels('tags-panel');
         renderTagManager();
     }
+    panel.classList.toggle('active');
 }
 
 async function loadCRMJump(chatId) {
@@ -1357,14 +1392,9 @@ function realToggleLeads(e) {
     console.log('🔘 [PANEL] Intentando abrir panel de Leads...');
     
     const leadsPanel = document.getElementById('leads-panel');
-    const ticketsPanel = document.getElementById('tickets-panel');
-    const metaPanel = document.getElementById('meta-panel');
-    const crmPanel = document.getElementById('crm-panel');
     
     // Cerrar otros explícitamente
-    if (ticketsPanel) ticketsPanel.classList.remove('active');
-    if (metaPanel) metaPanel.classList.remove('active');
-    if (crmPanel) crmPanel.classList.remove('active');
+    closeAllPanels('leads-panel');
     
     if (leadsPanel) {
         leadsPanel.classList.toggle('active');
@@ -1382,14 +1412,9 @@ function realToggleTickets(e) {
     console.log('🔘 [PANEL] Intentando abrir panel de Tickets...');
     
     const ticketsPanel = document.getElementById('tickets-panel');
-    const leadsPanel = document.getElementById('leads-panel');
-    const metaPanel = document.getElementById('meta-panel');
-    const crmPanel = document.getElementById('crm-panel');
     
     // Cerrar otros explícitamente
-    if (leadsPanel) leadsPanel.classList.remove('active');
-    if (metaPanel) metaPanel.classList.remove('active');
-    if (crmPanel) crmPanel.classList.remove('active');
+    closeAllPanels('tickets-panel');
     
     if (ticketsPanel) {
         ticketsPanel.classList.toggle('active');
@@ -1407,14 +1432,9 @@ function toggleMetaPanel(e) {
     
     console.log('🔘 [PANEL] Toggle Meta Panel initiated...');
     const metaPanel = document.getElementById('meta-panel');
-    const leadsPanel = document.getElementById('leads-panel');
-    const ticketsPanel = document.getElementById('tickets-panel');
-    const crmPanel = document.getElementById('crm-panel');
 
     // Cerrar otros paneles explícitamente para evitar solapamientos
-    if (leadsPanel) leadsPanel.classList.remove('active');
-    if (ticketsPanel) ticketsPanel.classList.remove('active');
-    if (crmPanel) crmPanel.classList.remove('active');
+    closeAllPanels('meta-panel');
 
     if (metaPanel) {
         metaPanel.classList.toggle('active');

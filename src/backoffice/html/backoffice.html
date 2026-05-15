@@ -97,6 +97,14 @@
 
             <div class="switch-container">
                 <div class="header-actions-group">
+                    <button class="btn-icon" id="open-tags-btn" onclick="toggleTagsPanel()" title="Gestionar Etiquetas" disabled>
+                        <i class="fas fa-tags"></i>
+                    </button>
+                    
+                    <button class="btn-icon" id="open-crm-btn" onclick="toggleCRMPanel()" title="Ficha del Cliente" disabled>
+                        <i class="fas fa-user-pen"></i>
+                    </button>
+
                     <button class="btn-icon" id="open-ticket-btn" onclick="openTicketModal()" title="Generar Ticket">
                         <i class="fas fa-plus-circle"></i>
                     </button>
@@ -243,10 +251,18 @@
                 </button>
             </div>
 
-            <div class="crm-divider"></div>
+        </div>
+    </div>
 
+    <!-- Panel Etiquetas Lateral -->
+    <div id="tags-panel" class="tickets-panel">
+        <div class="crm-header">
+            <button class="btn-icon" onclick="toggleTagsPanel()"><i class="fas fa-times"></i></button>
+            <h3>Gestionar Etiquetas</h3>
+        </div>
+        <div class="crm-content">
             <div class="crm-section">
-                <h4 class="crm-tags-heading"><i class="fas fa-tags icon-mr"></i> Etiquetas</h4>
+                <h4 class="crm-tags-heading"><i class="fas fa-tags icon-mr"></i> Etiquetas del Chat</h4>
                 <div id="current-chat-tags-section">
                     <div id="available-tags-to-assign"></div>
                 </div>
