@@ -55,3 +55,18 @@ button {
 }
 button:hover { transform: translateY(-2px); opacity: 0.9; }
 .error { color: #f87171; margin-top: 1rem; font-size: 0.9rem; display: none; }
+
+.login-form-section {
+    text-align: left;
+    width: 100%;
+}
+
+.login-form-section label {
+    font-size: 0.8rem;
+    opacity: 0.7;
+    margin-left: 5px;
+    display: block;
+    margin-bottom: 4px;
+}
+
+button { margin-top: 20px; }

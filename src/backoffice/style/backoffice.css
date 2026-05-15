@@ -1225,6 +1225,77 @@ input:checked + .slider:before { transform: translateX(20px); background-color: 
 /* --- Global Sidebar/Navbar Overrides for Backoffice --- */
 /* Navbar styles are now managed in crm-common.css for consistency and animations */
 
+/* ===================================================
+   PLATFORM TABS (sidebar de plataformas)
+   =================================================== */
+.platform-tabs {
+    display: flex;
+    background: var(--bg-header);
+    padding: 4px;
+    border-radius: 12px;
+    margin: 0 15px 15px 15px;
+    gap: 4px;
+    border: 1px solid var(--border-color);
+}
+
+.platform-tab {
+    flex: 1;
+    padding: 8px;
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: center;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.platform-tab:hover {
+    background: rgba(99, 102, 241, 0.05);
+    color: var(--text-main);
+}
+
+.platform-tab.active {
+    background: var(--accent);
+    color: white;
+    box-shadow: 0 4px 10px rgba(99, 102, 241, 0.4);
+}
+
+.platform-tab i {
+    font-size: 1rem;
+}
+
+/* Ícono de plataforma superpuesto sobre el avatar del chat */
+.platform-icon-overlay {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    background: var(--bg-card);
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    z-index: 5;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+[data-theme="dark"] .platform-icon-overlay { background: #202c33; }
+
+/* Colores de marca por plataforma */
+.platform-whatsapp  { color: #25D366 !important; }
+.platform-instagram { color: #E1306C !important; }
+.platform-messenger { color: #0084FF !important; }
+
+/* Animación para el spinner del modal de sincronización */
+@keyframes spin { to { transform: rotate(360deg); } }
+
 /* --- Chat Header Structure --- */
 #chat-header {
     height: 60px;
@@ -1260,3 +1331,829 @@ input:checked + .slider:before { transform: translateX(20px); background-color: 
 }
 
 
+/* ============================================================
+   NAVBAR – already-handled items (crm-common.css integration)
+   ============================================================ */
+
+/* nav-spacer: flex:1 spacer in navbar */
+.nav-spacer {
+    flex: 1;
+}
+
+/* nav-meta-btn: blue Meta icon */
+#nav-meta-btn {
+    color: #0668E1;
+    font-size: 1.4rem;
+}
+
+/* logout nav-item */
+.nav-item-logout {
+    color: #f87171;
+}
+
+/* tickets-badge: hidden by default, shown by JS */
+#tickets-badge {
+    display: none;
+}
+
+
+/* ============================================================
+   SIDEBAR – filter wrapper & tag select
+   ============================================================ */
+
+.filter-wrapper {
+    margin-top: 10px;
+}
+
+.filter-select-compact {
+    margin-bottom: 0;
+    padding: 6px 10px;
+    font-size: 0.8rem;
+    height: 32px;
+    border-radius: 8px;
+}
+
+/* platform tabs: hidden until JS activates them */
+#tab-instagram,
+#tab-messenger,
+#tab-all {
+    display: none;
+}
+
+
+/* ============================================================
+   IMPORT BUTTON (green variant)
+   ============================================================ */
+
+#btn-import-extern {
+    background: #10b981;
+    color: white;
+}
+
+
+/* ============================================================
+   CHAT HEADER – phone/name labels, tags row, actions group
+   ============================================================ */
+
+.chat-header-phone {
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.chat-header-name {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+#active-chat-tags {
+    display: flex;
+    gap: 4px;
+    margin-top: 2px;
+}
+
+.header-actions-group {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-right: 15px;
+}
+
+/* Ticket button accent color */
+#open-ticket-btn {
+    color: var(--accent);
+}
+
+/* Send button WhatsApp accent */
+#send-btn {
+    color: var(--wa-accent);
+}
+
+/* Hidden file input */
+#file-input {
+    display: none;
+}
+
+
+/* ============================================================
+   CRM JUMP CONTAINER
+   ============================================================ */
+
+#crm-jump-container {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 10px;
+    border-radius: 10px;
+    background: #1e293b;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+.crm-jump-icon {
+    font-size: 0.8rem;
+    color: var(--accent);
+}
+
+.crm-jump-select {
+    width: 160px;
+    margin: 0;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background: transparent;
+    border: none;
+    color: white !important;
+    cursor: pointer;
+}
+
+
+/* ============================================================
+   WELCOME SCREEN icon
+   ============================================================ */
+
+.welcome-icon {
+    font-size: 5rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+
+/* ============================================================
+   CRM PANEL – fields container, field ordering, save button
+   ============================================================ */
+
+.crm-header h3 {
+    margin: 0;
+}
+
+#crm-fields-container {
+    display: flex;
+    flex-direction: column;
+}
+
+[data-field="crm-ticket-title"] { order: 0; }
+[data-field="crm-name"]         { order: 1; }
+[data-field="crm-phone"]        { order: 2; }
+[data-field="crm-cuit"]         { order: 3; }
+[data-field="crm-email"]        { order: 4; }
+[data-field="crm-address"]      { order: 5; }
+[data-field="crm-tax-status"]   { order: 6; }
+[data-field="crm-product"]      { order: 7; }
+[data-field="crm-source"]       { order: 8; }
+[data-field="crm-notes"]        { order: 9; }
+[data-field="crm-due-date"]     { order: 10; }
+[data-field="crm-priority"]     { order: 11; }
+[data-field="crm-status"]       { order: 12; }
+
+.crm-save-btn {
+    width: 100%;
+    margin-top: 10px;
+    order: 100;
+}
+
+/* Icon spacing inside buttons/labels */
+.icon-mr {
+    margin-right: 8px;
+}
+
+/* Phone row inside CRM panel */
+.crm-phone-row {
+    display: flex;
+    gap: 8px;
+}
+
+/* WhatsApp direct-call button */
+#btn-whatsapp-direct-side {
+    color: #25d366;
+}
+
+
+/* ============================================================
+   CRM PANEL – tags section
+   ============================================================ */
+
+.crm-tags-heading {
+    margin: 0 0 10px 0;
+}
+
+#available-tags-to-assign {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.tag-create-box {
+    margin-top: 20px;
+    padding: 15px;
+    background: var(--bg-sidebar);
+    border-radius: 12px;
+    border: 1px dashed var(--border-color);
+}
+
+.tag-create-box h5 {
+    margin: 0 0 10px 0;
+}
+
+.tag-create-row {
+    display: flex;
+    gap: 8px;
+}
+
+#new-tag-name {
+    margin: 0;
+}
+
+#new-tag-color {
+    height: 35px;
+    width: 35px;
+    border: none;
+    padding: 0;
+    background: none;
+    cursor: pointer;
+}
+
+#tag-list-editor {
+    margin-top: 20px;
+}
+
+
+/* ============================================================
+   TICKET MODAL – two-column row & full-width button
+   ============================================================ */
+
+.ticket-modal-row {
+    display: flex;
+    gap: 10px;
+}
+
+.ticket-modal-col {
+    flex: 1;
+}
+
+.btn-full-mt {
+    width: 100%;
+    margin-top: 10px;
+}
+
+
+/* ============================================================
+   BULK MODAL (Meta Templates) – tab bar & meta bar
+   ============================================================ */
+
+.meta-tabs-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 24px;
+}
+
+#tab-my-templates {
+    margin: 0;
+}
+
+.meta-badge-bar {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    border: 2px solid #0668e133;
+    padding: 6px 18px;
+    border-radius: 14px;
+    background: rgba(6, 104, 225, 0.02);
+}
+
+.meta-badge-title {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #00B2FF;
+    letter-spacing: 0.5px;
+}
+
+.meta-link-item {
+    text-decoration: none;
+    color: var(--text-main);
+    font-size: 0.9rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+}
+
+.meta-link-item:hover {
+    opacity: 1;
+}
+
+.meta-link-item i {
+    font-size: 0.8rem;
+}
+
+/* templates loader */
+#my-templates-loader {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 40px;
+    opacity: 0.5;
+}
+
+.loader-sync-text {
+    margin-top: 10px;
+}
+
+
+/* ============================================================
+   TEMPLATE DETAIL VIEW
+   ============================================================ */
+
+#view-template-detail {
+    display: none;
+    padding: 40px;
+}
+
+.tpl-detail-back-btn {
+    margin-bottom: 20px;
+}
+
+.tpl-detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+}
+
+.tpl-preview-col {
+    border-radius: 20px;
+    border: 1px solid var(--border);
+}
+
+/* WhatsApp double-check color */
+.wa-check-icon {
+    color: #53bdeb;
+}
+
+.tpl-name-header {
+    margin: 0;
+    font-size: 1.8rem;
+}
+
+.tpl-name-row {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+#btn-edit-in-meta {
+    display: none;
+    text-decoration: none;
+    background: #0668E1;
+    color: white;
+    padding: 6px 14px;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    align-items: center;
+    gap: 8px;
+    transition: 0.2s;
+    box-shadow: 0 4px 12px rgba(6, 104, 225, 0.2);
+}
+
+#btn-edit-in-meta:hover {
+    transform: translateY(-2px);
+    background: #0556b8;
+}
+
+.tpl-detail-badges {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    align-items: center;
+}
+
+#detail-tpl-status {
+    position: static;
+    display: inline-block;
+}
+
+.tpl-info-badge {
+    font-size: 0.7rem;
+    background: rgba(0, 0, 0, 0.1);
+    padding: 4px 8px;
+    border-radius: 10px;
+    color: var(--text-muted);
+}
+
+
+/* ============================================================
+   LIBRARY ADOPT SECTION
+   ============================================================ */
+
+#library-adopt-section {
+    display: none;
+    border-top: 1px solid var(--border);
+    padding-top: 20px;
+    margin-top: 20px;
+}
+
+.library-adopt-heading {
+    margin-bottom: 10px;
+    color: var(--text-main);
+}
+
+.library-adopt-desc {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 15px;
+}
+
+.btn-adopt {
+    width: 100%;
+    background: #0668E1;
+}
+
+
+/* ============================================================
+   BULK ACTIONS SECTION
+   ============================================================ */
+
+#bulk-actions-section {
+    display: none;
+    border-top: 1px solid var(--border);
+    padding-top: 20px;
+}
+
+.bulk-actions-heading {
+    margin-bottom: 15px;
+    color: var(--text-main);
+}
+
+.bulk-actions-desc {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.bulk-actions-body {
+    margin-top: 20px;
+}
+
+.bulk-filter-section {
+    background: rgba(0, 0, 0, 0.03);
+    padding: 12px;
+    border-radius: 12px;
+    margin-bottom: 12px;
+    border: 1px solid var(--border);
+}
+
+.bulk-filter-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+    display: block;
+}
+
+.bulk-filter-date-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.bulk-filter-sublabel {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+}
+
+.bulk-filter-input {
+    margin-bottom: 0;
+    font-size: 0.8rem;
+    padding: 6px;
+}
+
+.bulk-upload-section {
+    margin-top: 20px;
+    border-top: 1px solid var(--border);
+    padding-top: 20px;
+}
+
+.bulk-upload-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.bulk-upload-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+#bulk-progress {
+    display: none;
+    margin-top: 20px;
+}
+
+.bulk-progress-track {
+    height: 8px;
+    width: 100%;
+    background: #eee;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.bulk-progress-bar {
+    height: 100%;
+    background: #0668E1;
+    transition: width 0.3s;
+}
+
+.bulk-status-text {
+    font-size: 0.75rem;
+    margin-top: 8px;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+/* Green download Excel button */
+.btn-download-excel {
+    width: 100%;
+    background: #10b981;
+    margin-bottom: 12px;
+}
+
+/* Bulk file input */
+#bulk-file-input {
+    margin-bottom: 0;
+}
+
+
+/* ============================================================
+   TICKETS / LEADS PANELS – loading placeholders
+   ============================================================ */
+
+.panel-loading-placeholder {
+    text-align: center;
+    padding: 20px;
+    opacity: 0.5;
+}
+
+#leads-list {
+    padding: 15px;
+}
+
+
+/* ============================================================
+   META PANEL (Onboarding)
+   ============================================================ */
+
+.meta-panel-content {
+    padding: 30px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    text-align: center;
+    gap: 24px;
+}
+
+.meta-panel-icon {
+    color: #0668E1;
+    font-size: 4.5rem;
+    margin: 40px 0 10px 0;
+}
+
+.meta-panel-heading {
+    /* wrapper div, no extra styles needed */
+}
+
+.meta-panel-heading h2 {
+    margin: 0;
+    color: var(--text-main);
+    font-size: 1.6rem;
+    font-weight: 700;
+}
+
+.meta-panel-accent-bar {
+    height: 3px;
+    width: 50px;
+    background: #0668E1;
+    margin: 10px auto;
+    border-radius: 10px;
+}
+
+.meta-panel-desc {
+    color: var(--text-muted);
+    font-size: 1rem;
+    margin-top: 15px;
+    line-height: 1.6;
+}
+
+.meta-panel-features {
+    background: var(--bg-header, rgba(0, 0, 0, 0.05));
+    padding: 24px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    width: 100%;
+    text-align: left;
+}
+
+.meta-panel-features-title {
+    margin: 0 0 15px 0;
+    color: #0668E1;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-weight: 700;
+}
+
+.meta-panel-list {
+    font-size: 0.9rem;
+    padding-left: 20px;
+    color: var(--text-main);
+    line-height: 2.2;
+}
+
+.meta-onboarding-btn {
+    width: 100%;
+    height: 45px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: #0668E1;
+    border: none;
+    border-radius: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    color: white;
+    margin-top: 20px;
+}
+
+/* Meta icon in panel header */
+.meta-panel-header-icon {
+    color: #0668E1;
+    margin-right: 8px;
+}
+
+
+/* ============================================================
+   SYNC MODAL
+   ============================================================ */
+
+#sync-modal .modal-content {
+    max-width: 400px;
+}
+
+.sync-modal-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+}
+
+.sync-modal-body {
+    text-align: center;
+    padding: 40px 20px;
+}
+
+.sync-loading-section {
+    /* container for spinner state */
+}
+
+.spinner {
+    margin: 0 auto 20px auto;
+    width: 40px;
+    height: 40px;
+    border: 4px solid rgba(0, 0, 0, 0.1);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.sync-loading-title {
+    font-weight: 600;
+    margin-bottom: 5px;
+}
+
+.sync-loading-desc {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+#sync-result {
+    display: none;
+}
+
+.sync-success-icon {
+    font-size: 3rem;
+    color: #25d366;
+    margin-bottom: 15px;
+}
+
+.sync-success-heading {
+    margin-bottom: 10px;
+}
+
+#sync-summary {
+    font-size: 0.9rem;
+    margin-bottom: 20px;
+}
+
+.btn-sync-close {
+    width: 100%;
+}
+
+
+/* ============================================================
+   IMPORT MODAL (Excel)
+   ============================================================ */
+
+#import-modal .modal-content {
+    max-width: 450px;
+}
+
+.import-modal-header h3 {
+    margin: 0;
+}
+
+.import-modal-body {
+    padding: 25px;
+}
+
+.import-modal-desc {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin-bottom: 20px;
+}
+
+.import-template-section {
+    background: rgba(16, 185, 129, 0.05);
+    border: 1px dashed #10b981;
+    padding: 15px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.import-template-heading {
+    margin: 0 0 10px 0;
+    font-size: 0.9rem;
+}
+
+.btn-download-template {
+    background: #10b981;
+    border: none;
+}
+
+.import-upload-section {
+    padding: 15px;
+    background: var(--bg-header);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+}
+
+.import-upload-heading {
+    margin: 0 0 10px 0;
+    font-size: 0.9rem;
+}
+
+#import-file-input {
+    margin-bottom: 15px;
+}
+
+#btn-execute-import {
+    width: 100%;
+}
+
+#import-progress {
+    display: none;
+    margin-top: 20px;
+}
+
+.import-progress-track {
+    height: 8px;
+    width: 100%;
+    background: var(--border-color);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.import-progress-bar {
+    height: 100%;
+    background: #10b981;
+    transition: width 0.3s;
+}
+
+.import-status-text {
+    font-size: 0.75rem;
+    margin-top: 8px;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+/* Excel icon green color in import header */
+.icon-excel {
+    color: #10b981;
+}
+
+/* Bulk filter tags multi-select */
+#bulk-filter-tags {
+    margin-bottom: 0;
+    font-size: 0.8rem;
+    min-height: 80px;
+    padding: 6px;
+}

@@ -765,3 +765,298 @@ input[type="date"].crm-input::-webkit-calendar-picker-indicator {
         height: calc(100vh - 60px);
     }
 }
+
+/* ===================================================
+   SORTABLE LIST — configuración de campos CRM
+   (modal "Configurar Campos" en crm.html)
+   =================================================== */
+.sortable-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.sortable-item {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    padding: 12px 15px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    cursor: grab;
+    transition: all 0.2s;
+    user-select: none;
+}
+
+.sortable-item:hover { border-color: var(--primary); }
+
+.sortable-item.dragging {
+    opacity: 0.5;
+    background: var(--bg);
+    border: 2px dashed var(--primary);
+}
+
+.sort-handle {
+    color: var(--text-muted);
+    cursor: grab;
+    font-size: 1.1rem;
+}
+
+/* ========================================================
+   MIGRATED INLINE STYLES — crm.html
+   ======================================================== */
+
+/* Navbar spacer */
+.nav-spacer { flex: 1; }
+
+/* Navbar logout item */
+.nav-item-logout { color: #f87171; }
+
+/* Kanban header icon */
+.kanban-header-icon {
+    color: var(--accent);
+    margin-right: 12px;
+}
+
+/* btn-new-user hidden by default (JS shows it) */
+#btn-new-user { display: none; }
+
+/* Tasks loading placeholder */
+.loading-placeholder {
+    text-align: center;
+    padding: 20px;
+    opacity: 0.5;
+}
+
+/* ---- card-modal / Lead detail modal ---- */
+
+/* Narrow modal (500px) */
+.modal-content-md { max-width: 500px; }
+
+/* Modal header with flex top-alignment */
+.modal-header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+/* h3 margin reset inside modal header */
+.modal-h3-reset { margin: 0; }
+
+/* Icon inside modal h3 */
+.modal-h3-icon {
+    color: var(--accent);
+    margin-right: 10px;
+}
+
+/* Ticket ref line */
+#modal-ticket-ref {
+    font-size: 0.8rem;
+    font-family: monospace;
+    color: var(--text-muted);
+    margin-left: 32px;
+    margin-top: 5px;
+}
+
+/* CRM fields container */
+#crm-fields-container {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Field order — scoped to #card-modal to avoid conflicts */
+#card-modal [data-field="crm-ticket-title"] { order: 0; }
+#card-modal .modal-grid:nth-of-type(1)       { order: 1; }
+
+/* Phone field wrapper */
+.input-with-action {
+    display: flex;
+    gap: 8px;
+}
+
+/* Additional notes list */
+#additional-notes-list {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* Add note button */
+.btn-add-note {
+    width: 100%;
+    margin: 15px 0;
+    border: 1px dashed var(--primary);
+    background: transparent;
+    color: var(--primary);
+    border-radius: 10px;
+}
+
+/* Alert status info */
+#alert-status-info { margin-top: 10px; }
+
+/* Assignee section (hidden by default, JS shows it) */
+#assignee-section {
+    display: none;
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px dashed var(--border);
+}
+
+/* Assignee label icon */
+.assignee-icon { color: var(--accent); }
+
+/* Tags section separator */
+.modal-tags-section {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+}
+
+/* Tags section h4 */
+.modal-tags-title { margin: 0 0 10px 0; }
+
+/* Tags h4 icon */
+.modal-tags-icon { margin-right: 8px; }
+
+/* Current lead tags row */
+#current-lead-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 15px;
+}
+
+/* Tag management box */
+.tag-mgmt-box {
+    padding: 15px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 12px;
+    border: 1px dashed var(--border);
+}
+
+/* Tag management title h5 */
+.tag-mgmt-title {
+    margin: 0 0 10px 0;
+    font-size: 0.85rem;
+    opacity: 0.7;
+}
+
+/* Available tags container */
+#available-tags-to-assign {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/* Save lead button */
+.btn-save-lead {
+    width: 100%;
+    margin-top: 20px;
+}
+
+/* Save lead button icon */
+.btn-save-icon { margin-right: 8px; }
+
+/* ---- column-modal ---- */
+
+/* Small modal (400px) */
+.modal-content-sm { max-width: 400px; }
+
+/* Action row with flex + gap */
+.modal-action-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+/* Flex utility: 1 part */
+.btn-flex-1 { flex: 1; }
+
+/* Flex utility: 2 parts */
+.btn-flex-2 { flex: 2; }
+
+/* ---- closed-leads-modal ---- */
+
+/* Large modal */
+.modal-content-lg {
+    max-width: 800px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+/* ---- new-lead-modal ---- */
+
+/* Medium-small modal (450px) */
+.modal-content-sm-plus { max-width: 450px; }
+
+/* Form action buttons row */
+.form-actions-row {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+}
+
+/* ---- modal-users (team) ---- */
+
+/* User register box */
+.user-register-box {
+    background: rgba(99, 102, 241, 0.05);
+    padding: 15px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+}
+
+/* Register title h4 */
+.user-register-title {
+    margin-bottom: 10px;
+    font-size: 0.9rem;
+    color: var(--accent);
+}
+
+/* Input margin bottom utility */
+.mb-10 { margin-bottom: 10px; }
+.mb-15 { margin-bottom: 15px; }
+
+/* Full-width tall button */
+.btn-full-tall {
+    width: 100%;
+    height: 44px;
+}
+
+/* Team list title h4 */
+.team-list-title {
+    margin-bottom: 10px;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+/* Team list container */
+#team-list-container {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+/* ---- crm-config-modal ---- */
+
+/* Config modal title */
+.modal-config-title {
+    margin: 0;
+    font-size: 1.1rem;
+}
+
+/* Config modal description */
+.modal-config-desc {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 20px;
+}
+
+/* Config modal action row */
+.modal-config-actions {
+    margin-top: 30px;
+    display: flex;
+    gap: 10px;
+}

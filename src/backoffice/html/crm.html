@@ -26,25 +26,25 @@
         <div class="nav-item" title="Tickets" onclick="toggleTicketsPanel(event)">
             <i class="fas fa-clipboard-check"></i>
             <span class="nav-label">Tickets</span>
-            <span class="badge" id="tickets-badge" style="display:none;">0</span>
+            <span class="badge" id="tickets-badge">0</span>
         </div>
 
-        <div style="flex:1"></div>
+        <div class="nav-spacer"></div>
 
         <div class="nav-item" title="Configuración" onclick="window.location.href='/system-config'"><i class="fas fa-gears"></i><span class="nav-label">Configuración</span></div>
         <div class="nav-item" title="Manual" onclick="window.location.href='/docs'"><i class="fas fa-book"></i><span class="nav-label">Manual</span></div>
-        <div class="nav-item" title="Conexión Meta" id="nav-meta-btn" onclick="toggleMetaPanel(event)" style="color: #0668E1; font-size: 1.4rem;">
+        <div class="nav-item" title="Conexión Meta" id="nav-meta-btn" onclick="toggleMetaPanel(event)">
             <i class="fab fa-meta"></i>
             <span class="nav-label">Meta Info</span>
         </div>
         <div class="nav-item" id="theme-toggle" title="Cambiar Tema"><i class="fas fa-adjust"></i><span class="nav-label">Tema</span></div>
-        <div class="nav-item" onclick="logout()" title="Cerrar Sesión" style="color:#f87171;"><i class="fas fa-power-off"></i><span class="nav-label">Salir</span></div>
+        <div class="nav-item nav-item-logout" onclick="logout()" title="Cerrar Sesión"><i class="fas fa-power-off"></i><span class="nav-label">Salir</span></div>
     </div>
 
     <div class="crm-main-container">
         <div class="kanban-header animate-fade">
             <div class="header-info">
-                <h1><i class="fas fa-layer-group" style="color:var(--accent); margin-right:12px;"></i> CRM {{BOT_NAME}}</h1>
+                <h1><i class="fas fa-layer-group kanban-header-icon"></i> CRM {{BOT_NAME}}</h1>
                 <p>Gestión visual de oportunidades y seguimiento de clientes.</p>
             </div>
             <div class="header-actions">
@@ -57,7 +57,7 @@
                 <button class="btn btn-primary" onclick="openClosedLeadsModal()">
                     <i class="fas fa-archive"></i> Leads Cerrados
                 </button>
-                <button id="btn-new-user" class="btn btn-primary" style="display:none;" onclick="window.openNewUserModal()" title="Gestionar Equipo">
+                <button id="btn-new-user" class="btn btn-primary" onclick="window.openNewUserModal()" title="Gestionar Equipo">
                     <i class="fas fa-users"></i> Nuevo Usuario
                 </button>
 
@@ -77,7 +77,7 @@
                 <button class="btn-icon" onclick="toggleTasksDashboard()"><i class="fas fa-times"></i></button>
             </div>
             <div class="tasks-content" id="tasks-list-content">
-                <div style="text-align:center; padding:20px; opacity:0.5;"><i class="fas fa-spinner fa-spin"></i> Cargando tareas...</div>
+                <div class="loading-placeholder"><i class="fas fa-spinner fa-spin"></i> Cargando tareas...</div>
             </div>
         </div>
 
@@ -91,34 +91,34 @@
 
     <!-- Modal Editar Tarjeta -->
     <div id="card-modal" class="modal-overlay">
-        <div class="modal-content animate-pop" style="max-width: 500px;">
-            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: flex-start;">
+        <div class="modal-content animate-pop modal-content-md">
+            <div class="modal-header modal-header-top">
                 <div>
-                    <h3 style="margin: 0;"><i class="fas fa-clipboard-list" style="color:var(--accent); margin-right:10px;"></i> Detalle del Lead</h3>
-                    <div id="modal-ticket-ref" style="font-size: 0.8rem; font-family: monospace; color: var(--text-muted); margin-left: 32px; margin-top: 5px;"></div>
+                    <h3><i class="fas fa-clipboard-list modal-h3-icon"></i> Detalle del Lead</h3>
+                    <div id="modal-ticket-ref"></div>
                 </div>
                 <button class="btn-close-modal" onclick="closeCardModal()"><i class="fas fa-times"></i></button>
             </div>
             <div class="modal-body">
                 <form id="card-edit-form">
                     <input type="hidden" id="edit-lead-id">
-                    
-                    <div id="crm-fields-container" style="display: flex; flex-direction: column;">
+
+                    <div id="crm-fields-container">
                         <!-- Campos del Lead se inyectarán aquí según la configuración -->
-                        
-                        <div class="modal-section" data-field="crm-ticket-title" style="order: 0;">
+
+                        <div class="modal-section" data-field="crm-ticket-title">
                             <label><i class="fas fa-envelope-open-text"></i> Titulo del Ticket</label>
                             <input type="text" id="edit-ticket-title" class="crm-input" placeholder="Ej: Consulta por preventa">
                         </div>
 
-                        <div class="modal-grid" style="order: 1;">
+                        <div class="modal-grid">
                             <div class="modal-section" data-field="crm-name">
                                 <label><i class="fas fa-user"></i> Nombre Completo / Razón Social</label>
                                 <input type="text" id="edit-lead-name" class="crm-input" placeholder="Nombre completo...">
                             </div>
                             <div class="modal-section" data-field="crm-phone">
                                 <label><i class="fas fa-phone"></i> Teléfono</label>
-                                <div style="display:flex; gap:8px;">
+                                <div class="input-with-action">
                                     <input type="text" id="edit-lead-phone" class="crm-input" readonly>
                                     <button type="button" class="btn-action btn-action-primary" onclick="openWhatsAppDirect()" title="Enviar WhatsApp">
                                         <i class="fab fa-whatsapp"></i>
@@ -201,38 +201,38 @@
                         </div>
                     </div>
 
-                    <div id="additional-notes-list" style="margin-top: 10px; display: flex; flex-direction: column; gap: 10px;">
+                    <div id="additional-notes-list">
                         <!-- Aquí se inyectarán las notas dinámicas -->
                     </div>
 
-                    <button type="button" class="btn btn-action-primary" style="width: 100%; margin: 15px 0; border: 1px dashed var(--primary); background: transparent; color: var(--primary); border-radius: 10px;" onclick="addNewNoteUI()">
+                    <button type="button" class="btn btn-add-note" onclick="addNewNoteUI()">
                         <i class="fas fa-plus-circle"></i> Agregar Nota con Fecha
                     </button>
 
-                    <div id="alert-status-info" style="margin-top:10px;"></div>
+                    <div id="alert-status-info"></div>
 
-                    <div id="assignee-section" class="modal-section" style="display:none; margin-top: 15px; padding-top: 15px; border-top: 1px dashed var(--border);">
-                        <label><i class="fas fa-user-tag" style="color:var(--accent);"></i> Asignar Lead a:</label>
+                    <div id="assignee-section" class="modal-section">
+                        <label><i class="fas fa-user-tag assignee-icon"></i> Asignar Lead a:</label>
                         <select id="edit-lead-assignee" class="crm-input">
                             <option value="">Sin asignar (Libre)</option>
                             <!-- Se llena dinámicamente -->
                         </select>
                     </div>
 
-                    <div class="modal-section" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border);">
-                        <h4 style="margin:0 0 10px 0;"><i class="fas fa-tags" style="margin-right:8px;"></i> Etiquetas</h4>
-                        <div id="current-lead-tags" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:15px;"></div>
-                        
-                        <div style="padding: 15px; background: rgba(255,255,255,0.03); border-radius: 12px; border: 1px dashed var(--border);">
-                            <h5 style="margin:0 0 10px 0; font-size: 0.85rem; opacity: 0.7;">Gestionar Etiquetas</h5>
-                            <div id="available-tags-to-assign" style="display:flex; flex-wrap:wrap; gap:8px;">
+                    <div class="modal-section modal-tags-section">
+                        <h4 class="modal-tags-title"><i class="fas fa-tags modal-tags-icon"></i> Etiquetas</h4>
+                        <div id="current-lead-tags"></div>
+
+                        <div class="tag-mgmt-box">
+                            <h5 class="tag-mgmt-title">Gestionar Etiquetas</h5>
+                            <div id="available-tags-to-assign">
                                 <!-- Se llena dinámicamente -->
                             </div>
                         </div>
                     </div>
 
-                    <button type="submit" class="btn btn-primary" style="width:100%; margin-top:20px;">
-                        <i class="fas fa-save" style="margin-right:8px;"></i> Guardar y Sincronizar
+                    <button type="submit" class="btn btn-primary btn-save-lead">
+                        <i class="fas fa-save btn-save-icon"></i> Guardar y Sincronizar
                     </button>
                 </form>
             </div>
@@ -241,18 +241,18 @@
 
     <!-- Modal Editar Nombre Columna -->
     <div id="column-modal" class="modal-overlay">
-        <div class="modal-content animate-pop" style="max-width: 400px;">
+        <div class="modal-content animate-pop modal-content-sm">
             <div class="modal-header">
                 <h3>✏️ Editar Estado</h3>
                 <button class="btn-close-modal" onclick="closeColumnModal()"><i class="fas fa-times"></i></button>
             </div>
             <div class="modal-body">
                 <input type="text" id="column-name-input" class="crm-input" placeholder="Nombre del estado...">
-                <div style="display:flex; gap:10px; margin-top:15px;">
-                    <button class="btn btn-danger" onclick="deleteCurrentColumn()" id="btn-delete-col" style="flex:1;">
+                <div class="modal-action-row">
+                    <button class="btn btn-danger btn-flex-1" onclick="deleteCurrentColumn()" id="btn-delete-col">
                         <i class="fas fa-trash-alt"></i> Eliminar
                     </button>
-                    <button class="btn btn-primary" onclick="saveColumnName()" style="flex:2;">
+                    <button class="btn btn-primary btn-flex-2" onclick="saveColumnName()">
                         <i class="fas fa-check"></i> Guardar
                     </button>
                 </div>
@@ -262,9 +262,9 @@
 
     <!-- Modal Leads Cerrados -->
     <div id="closed-leads-modal" class="modal-overlay">
-        <div class="modal-content animate-pop" style="max-width: 800px; max-height: 80vh; overflow-y: auto;">
+        <div class="modal-content animate-pop modal-content-lg">
             <div class="modal-header">
-                <h3><i class="fas fa-check-double" style="color:var(--accent); margin-right:10px;"></i> Histórico de Leads Cerrados</h3>
+                <h3><i class="fas fa-check-double modal-h3-icon"></i> Histórico de Leads Cerrados</h3>
                 <button class="btn-close-modal" onclick="closeClosedLeadsModal()"><i class="fas fa-times"></i></button>
             </div>
             <div class="modal-body">
@@ -278,9 +278,9 @@
 
     <!-- Modal Crear Nuevo Lead -->
     <div id="new-lead-modal" class="modal-overlay">
-        <div class="modal-content animate-pop" style="max-width: 450px;">
+        <div class="modal-content animate-pop modal-content-sm-plus">
             <div class="modal-header">
-                <h3><i class="fas fa-user-plus" style="color:var(--accent); margin-right:10px;"></i> Crear Nuevo Lead</h3>
+                <h3><i class="fas fa-user-plus modal-h3-icon"></i> Crear Nuevo Lead</h3>
                 <button class="btn-close-modal" onclick="closeNewLeadModal()"><i class="fas fa-times"></i></button>
             </div>
             <form id="new-lead-form">
@@ -298,9 +298,9 @@
                         <input type="text" id="new-lead-product" class="crm-input" placeholder="Seguro, Plan, etc...">
                     </div>
                 </div>
-                <div style="display:flex; gap:12px; margin-top:20px;">
-                    <button type="button" class="btn btn-secondary" style="flex:1" onclick="closeNewLeadModal()">Cancelar</button>
-                    <button type="submit" class="btn btn-primary" style="flex:2">
+                <div class="form-actions-row">
+                    <button type="button" class="btn btn-secondary btn-flex-1" onclick="closeNewLeadModal()">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-flex-2">
                         <i class="fas fa-plus"></i> Crear Card
                     </button>
                 </div>
@@ -310,30 +310,30 @@
 
     <!-- Modal Equipo (Gestionar Usuarios) -->
     <div id="modal-users" class="modal-overlay">
-        <div class="modal-content animate-pop" style="max-width: 500px;">
+        <div class="modal-content animate-pop modal-content-md">
             <div class="modal-header">
-                <h3><i class="fas fa-users-cog" style="color:var(--accent); margin-right:10px;"></i> Gestión de Equipo</h3>
+                <h3><i class="fas fa-users-cog modal-h3-icon"></i> Gestión de Equipo</h3>
                 <button class="btn-close-modal" onclick="document.getElementById('modal-users').classList.remove('active')"><i class="fas fa-times"></i></button>
             </div>
             <div class="modal-body">
-                <div style="background: rgba(99, 102, 241, 0.05); padding: 15px; border-radius: 12px; margin-bottom: 20px;">
-                    <h4 style="margin-bottom:10px; font-size:0.9rem; color:var(--accent);">REGISTRAR NUEVO SUB-USUARIO</h4>
+                <div class="user-register-box">
+                    <h4 class="user-register-title">REGISTRAR NUEVO SUB-USUARIO</h4>
                     <div class="modal-section">
-                        <input type="text" id="new-user-name" class="crm-input" placeholder="Nombre completo" style="margin-bottom:10px;">
-                        <input type="text" id="new-user-user" class="crm-input" placeholder="Usuario (Ej: juan_vendedor)" style="margin-bottom:10px;">
-                        <input type="password" id="new-user-pass" class="crm-input" placeholder="Contraseña" style="margin-bottom:10px;">
-                        <select id="new-user-role" class="crm-input" style="margin-bottom:15px;">
+                        <input type="text" id="new-user-name" class="crm-input mb-10" placeholder="Nombre completo">
+                        <input type="text" id="new-user-user" class="crm-input mb-10" placeholder="Usuario (Ej: juan_vendedor)">
+                        <input type="password" id="new-user-pass" class="crm-input mb-10" placeholder="Contraseña">
+                        <select id="new-user-role" class="crm-input mb-15">
                             <option value="subuser">Vendedor / Operador (Limitado)</option>
                             <option value="admin">Administrador (Total)</option>
                         </select>
-                        <button class="btn btn-primary" style="width:100%; height:44px;" onclick="window.saveNewUser()">
+                        <button class="btn btn-primary btn-full-tall" onclick="window.saveNewUser()">
                             <i class="fas fa-user-plus"></i> Crear Usuario
                         </button>
                     </div>
                 </div>
 
-                <h4 style="margin-bottom:10px; font-size:0.9rem; color:var(--text-muted); text-transform:uppercase;">Usuarios en el equipo</h4>
-                <div id="team-list-container" style="max-height: 200px; overflow-y: auto;">
+                <h4 class="team-list-title">Usuarios en el equipo</h4>
+                <div id="team-list-container">
                 </div>
             </div>
         </div>
@@ -342,22 +342,22 @@
 
     <!-- MODAL DE CONFIGURACIÓN CRM -->
     <div id="crm-config-modal" class="modal-overlay">
-        <div class="modal-content animate-pop" style="max-width: 500px;">
+        <div class="modal-content animate-pop modal-content-md">
             <div class="modal-header">
-                <h3 style="margin:0; font-size:1.1rem;"><i class="fas fa-cog"></i> Configuración de Campos CRM</h3>
+                <h3 class="modal-config-title"><i class="fas fa-cog"></i> Configuración de Campos CRM</h3>
                 <button class="btn-icon" onclick="toggleCRMConfigModal()"><i class="fas fa-times"></i></button>
             </div>
             <div class="modal-body">
-                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px;">
+                <p class="modal-config-desc">
                     Arrastra los campos para cambiar su orden de visualización en el panel de detalles del Lead. Marca o desmarca para mostrar u ocultar.
                 </p>
-                
+
                 <div id="crm-fields-list" class="sortable-list">
                     <!-- Campos generados por JS -->
                 </div>
 
-                <div style="margin-top: 30px; display: flex; gap: 10px;">
-                    <button class="btn btn-primary" style="flex: 1;" onclick="saveCRMConfig()">
+                <div class="modal-config-actions">
+                    <button class="btn btn-primary btn-flex-1" onclick="saveCRMConfig()">
                         <i class="fas fa-save"></i> Guardar Configuración
                     </button>
                     <button class="btn btn-secondary" onclick="toggleCRMConfigModal()">Cancelar</button>
@@ -365,29 +365,6 @@
             </div>
         </div>
     </div>
-
-    <style>
-        .sortable-list {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        .sortable-item {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            padding: 12px 15px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            cursor: grab;
-            transition: all 0.2s;
-            user-select: none;
-        }
-        .sortable-item:hover { border-color: var(--primary); }
-        .sortable-item.dragging { opacity: 0.5; background: var(--bg); border: 2px dashed var(--primary); }
-        .sort-handle { color: var(--text-muted); cursor: grab; font-size: 1.1rem; }
-    </style>
 
     <script src="/js/crm-common.js"></script>
     <script src="/js/crm.js"></script>

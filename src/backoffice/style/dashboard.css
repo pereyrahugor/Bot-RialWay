@@ -1,4 +1,5 @@
 /* Los estilos base y el layout (sidebar) ahora los proporciona crm-common.css */
+/* dashboard.css cubre: conexion.html (layout general) y dashboard.html (KPIs / gráficos) */
 
 .dashboard-container {
     display: grid;
@@ -80,11 +81,173 @@ img.qr {
 
 .info-text { color: var(--text-muted); font-size: 15px; line-height: 1.6; margin-bottom: 20px; }
 
-.error-box { 
-    background: rgba(239, 68, 68, 0.1); 
-    color: var(--danger); 
-    border: 1px solid rgba(239, 68, 68, 0.2); 
-    padding: 15px; 
-    border-radius: 12px; 
-    margin-bottom: 20px; 
+.error-box {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--danger);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    padding: 15px;
+    border-radius: 12px;
+    margin-bottom: 20px;
 }
+
+/* ===================================================
+   KPI DASHBOARD — tarjetas y gráficos (dashboard.html)
+   =================================================== */
+.kpi-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.kpi-card {
+    background: var(--bg-card);
+    padding: 25px;
+    border-radius: 20px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+    text-align: center;
+    border: 1px solid var(--border);
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.kpi-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+    z-index: 1000;
+}
+
+.kpi-value {
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: var(--primary);
+    margin: 10px 0;
+}
+
+.kpi-label {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 600;
+}
+
+.kpi-icon {
+    font-size: 1.4rem;
+    color: var(--accent);
+    margin-bottom: 12px;
+    opacity: 0.8;
+}
+
+/* ---------------------------------------------------
+   Tooltip informativo en KPI cards
+   --------------------------------------------------- */
+.tooltip {
+    position: relative;
+    display: inline-block;
+    cursor: help;
+}
+
+.tooltip .tooltiptext {
+    visibility: hidden;
+    width: 200px;
+    background-color: var(--bg-main);
+    color: var(--text-main);
+    text-align: center;
+    border-radius: 12px;
+    padding: 12px;
+    position: absolute;
+    z-index: 999;
+    bottom: 125%;
+    left: 50%;
+    margin-left: -100px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    font-size: 0.75rem;
+    line-height: 1.4;
+    border: 1px solid var(--border);
+    pointer-events: none;
+}
+
+.tooltip:hover .tooltiptext {
+    visibility: visible;
+    opacity: 1;
+}
+
+.info-badge {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    opacity: 0.3;
+    transition: opacity 0.3s;
+    cursor: help;
+}
+
+.kpi-card:hover .info-badge,
+.chart-card:hover .info-badge { opacity: 1; }
+
+/* ---------------------------------------------------
+   Grilla de gráficos (Chart.js)
+   --------------------------------------------------- */
+.charts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 30px;
+    margin-top: 40px;
+}
+
+.chart-card {
+    background: var(--bg-card);
+    padding: 30px;
+    border-radius: 24px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+    border: 1px solid var(--border);
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.chart-card:hover {
+    z-index: 1000;
+    box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+}
+
+.chart-header {
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.chart-header i { color: var(--accent); }
+
+@media (max-width: 768px) {
+    .charts-grid { grid-template-columns: 1fr; }
+}
+
+/* ===================================================
+   DASHBOARD – header row and subtitle
+   =================================================== */
+.dashboard-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+#last-update {
+    font-size: 0.8rem;
+    opacity: 0.5;
+}
+
+.dashboard-subtitle {
+    opacity: 0.7;
+    margin-bottom: 30px;
+}
+
+/* Chart canvas wrapper */
+.chart-canvas-wrapper { height: 300px; }

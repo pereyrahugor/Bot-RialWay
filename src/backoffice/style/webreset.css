@@ -86,3 +86,6 @@ button#reiniciarBtn:hover {
 #confirmNo:hover {
   background: #333;
 }
+
+/* Theme toggle spacing in this page's older navbar */
+#theme-toggle { margin-bottom: 10px; }

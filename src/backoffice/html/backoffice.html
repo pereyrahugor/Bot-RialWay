@@ -10,62 +10,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="/style/crm-common.css">
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-    <style>
-        .platform-tabs {
-            display: flex;
-            background: var(--bg-header);
-            padding: 4px;
-            border-radius: 12px;
-            margin: 0 15px 15px 15px;
-            gap: 4px;
-            border: 1px solid var(--border-color);
-        }
-        .platform-tab {
-            flex: 1;
-            padding: 8px;
-            border-radius: 8px;
-            cursor: pointer;
-            text-align: center;
-            font-size: 0.9rem;
-            color: var(--text-muted);
-            transition: all 0.2s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-        }
-        .platform-tab:hover {
-            background: rgba(99, 102, 241, 0.05);
-            color: var(--text-main);
-        }
-        .platform-tab.active {
-            background: var(--accent);
-            color: white;
-            box-shadow: 0 4px 10px rgba(99, 102, 241, 0.4);
-        }
-        .platform-icon-overlay {
-            position: absolute;
-            bottom: -2px;
-            right: -2px;
-            background: var(--bg-card);
-            border-radius: 50%;
-            width: 18px;
-            height: 18px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 10px;
-            z-index: 5;
-            border: 1px solid var(--border-color);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .platform-whatsapp { color: #25D366 !important; }
-        .platform-instagram { color: #E1306C !important; }
-        .platform-messenger { color: #0084FF !important; }
-        .platform-tab i {
-            font-size: 1rem;
-        }
-    </style>
 </head>
 <body data-theme="light">
     <div id="navbar">
@@ -78,19 +22,19 @@
         <div class="nav-item" title="Tickets" onclick="toggleTicketsPanel(event)">
             <i class="fas fa-clipboard-check"></i>
             <span class="nav-label">Tickets</span>
-            <span class="badge" id="tickets-badge" style="display:none;">0</span>
+            <span class="badge" id="tickets-badge">0</span>
         </div>
 
-        <div style="flex:1"></div>
+        <div class="nav-spacer"></div>
 
         <div class="nav-item" title="Configuración" onclick="window.location.href='/system-config'"><i class="fas fa-gears"></i><span class="nav-label">Configuración</span></div>
         <div class="nav-item" title="Manual" onclick="window.location.href='/docs'"><i class="fas fa-book"></i><span class="nav-label">Manual</span></div>
-        <div class="nav-item" title="Conexión Meta" id="nav-meta-btn" onclick="toggleMetaPanel(event)" style="color: #0668E1; font-size: 1.4rem;">
+        <div class="nav-item" title="Conexión Meta" id="nav-meta-btn" onclick="toggleMetaPanel(event)">
             <i class="fab fa-meta"></i>
             <span class="nav-label">Meta Info</span>
         </div>
         <div class="nav-item" id="theme-toggle" title="Cambiar Tema"><i class="fas fa-adjust"></i><span class="nav-label">Tema</span></div>
-        <div class="nav-item" onclick="logout()" title="Cerrar Sesión" style="color:#f87171;"><i class="fas fa-power-off"></i><span class="nav-label">Salir</span></div>
+        <div class="nav-item nav-item-logout" onclick="logout()" title="Cerrar Sesión"><i class="fas fa-power-off"></i><span class="nav-label">Salir</span></div>
     </div>
 
     <div id="sidebar">
@@ -100,7 +44,7 @@
                 <button class="btn-icon-wa" title="Sincronizar Contactos y Etiquetas" onclick="startContactSync()" id="btn-sync-baileys">
                     <i class="fas fa-sync-alt"></i>
                 </button>
-                <button class="btn-icon-wa" title="Importar Contactos (Excel)" onclick="toggleImportModal()" id="btn-import-extern" style="background: #10b981; color: white;">
+                <button class="btn-icon-wa" title="Importar Contactos (Excel)" onclick="toggleImportModal()" id="btn-import-extern">
                     <i class="fas fa-file-import"></i>
                 </button>
             </div>
@@ -110,13 +54,13 @@
             <div class="platform-tab active" id="tab-whatsapp" onclick="switchPlatform('whatsapp')" title="WhatsApp">
                 <i class="fab fa-whatsapp"></i>
             </div>
-            <div class="platform-tab" id="tab-instagram" onclick="switchPlatform('instagram')" title="Instagram" style="display:none;">
+            <div class="platform-tab" id="tab-instagram" onclick="switchPlatform('instagram')" title="Instagram">
                 <i class="fab fa-instagram"></i>
             </div>
-            <div class="platform-tab" id="tab-messenger" onclick="switchPlatform('messenger')" title="Messenger" style="display:none;">
+            <div class="platform-tab" id="tab-messenger" onclick="switchPlatform('messenger')" title="Messenger">
                 <i class="fab fa-facebook-messenger"></i>
             </div>
-            <div class="platform-tab" id="tab-all" onclick="switchPlatform('all')" title="Todos" style="display:none;">
+            <div class="platform-tab" id="tab-all" onclick="switchPlatform('all')" title="Todos">
                 <i class="fas fa-list-ul"></i>
             </div>
         </div>
@@ -126,8 +70,8 @@
                 <i class="fas fa-search search-icon"></i>
                 <input type="text" id="search-input" class="search-input" placeholder="Busca un chat o inicia uno nuevo" oninput="handleSearch()">
             </div>
-            <div class="filter-wrapper" style="margin-top: 10px;">
-                <select id="filter-tag" class="crm-input" style="margin-bottom: 0; padding: 6px 10px; font-size: 0.8rem; height: 32px; border-radius: 8px;" onchange="fetchChats(true)">
+            <div class="filter-wrapper">
+                <select id="filter-tag" class="crm-input filter-select-compact" onchange="fetchChats(true)">
                     <option value="">Todas las etiquetas</option>
                 </select>
             </div>
@@ -144,23 +88,22 @@
             <div class="header-user">
                 <div class="chat-avatar" id="active-chat-avatar"></div>
                 <div>
-                    <div style="font-weight:600; font-size: 1rem;" id="active-chat-phone">Seleccione un chat</div>
-                    <div style="font-size:0.8rem; color:var(--text-muted);" id="active-chat-name"></div>
-                    <div id="active-chat-tags" style="display:flex; gap:4px; margin-top:2px;"></div>
+                    <div class="chat-header-phone" id="active-chat-phone">Seleccione un chat</div>
+                    <div class="chat-header-name" id="active-chat-name"></div>
+                    <div id="active-chat-tags"></div>
                 </div>
             </div>
 
 
             <div class="switch-container">
-                <div style="display:flex; gap:12px; align-items:center; margin-right: 15px;">
-                    <button class="btn-icon" onclick="openTicketModal()" title="Generar Ticket" style="color: var(--accent);">
+                <div class="header-actions-group">
+                    <button class="btn-icon" id="open-ticket-btn" onclick="openTicketModal()" title="Generar Ticket">
                         <i class="fas fa-plus-circle"></i>
                     </button>
-                    
-                    <div id="crm-jump-container" style="display:none; align-items:center; gap:8px; padding: 4px 10px; border-radius: 10px; background: #1e293b; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 4px 10px rgba(0,0,0,0.2);">
-                        <i class="fas fa-rocket" style="font-size: 0.8rem; color: var(--accent);"></i>
-                        <select id="crm-lead-jump" class="search-input" style="width:160px; margin:0; font-size:0.75rem; font-weight:600; background: transparent; border: none; color: white !important; cursor:pointer;" 
-                                onchange="jumpToCRM(this.value)">
+
+                    <div id="crm-jump-container">
+                        <i class="fas fa-rocket crm-jump-icon"></i>
+                        <select id="crm-lead-jump" class="search-input crm-jump-select" onchange="jumpToCRM(this.value)">
                             <option value="" style="background: #1e293b; color: white;">🚀 Ver en CRM...</option>
                         </select>
                     </div>
@@ -176,7 +119,7 @@
 
         <div id="messages">
             <div class="welcome-container">
-                <i class="fas fa-comments" style="font-size:5rem; margin-bottom:1rem; opacity: 0.5;"></i>
+                <i class="fas fa-comments welcome-icon"></i>
                 <h2>Bienvenido al panel de control</h2>
                 <p>Selecciona un chat a la izquierda para comenzar.</p>
             </div>
@@ -186,14 +129,14 @@
             <button class="btn-icon" id="attach-btn" title="Adjuntar archivo" disabled onclick="document.getElementById('file-input').click()">
                 <i class="fas fa-paperclip"></i>
             </button>
-            <input type="file" id="file-input" style="display:none;" onchange="handleFileSelect(this)">
+            <input type="file" id="file-input" onchange="handleFileSelect(this)">
             
             <div class="input-wrapper">
                 <input type="text" id="message-input" placeholder="Escribe un mensaje aquí" disabled
                        onkeydown="if(event.key === 'Enter') sendMessage()">
             </div>
             
-            <button class="btn-icon" id="send-btn" title="Enviar mensaje" onclick="sendMessage()" disabled style="color: var(--wa-accent);">
+            <button class="btn-icon" id="send-btn" title="Enviar mensaje" onclick="sendMessage()" disabled>
                 <i class="fas fa-paper-plane"></i>
             </button>
         </div>
@@ -203,45 +146,45 @@
     <div id="crm-panel">
         <div class="crm-header">
             <button class="btn-icon" onclick="toggleCRMPanel()"><i class="fas fa-times"></i></button>
-            <h3 style="margin:0;">Información del Lead</h3>
+            <h3>Información del Lead</h3>
         </div>
         
         <div class="crm-content">
-            <div class="crm-section" id="crm-fields-container" style="display: flex; flex-direction: column;">
-                <div data-field="crm-ticket-title" style="order: 0;">
+            <div class="crm-section" id="crm-fields-container">
+                <div data-field="crm-ticket-title">
                     <label><i class="fas fa-ticket-alt"></i> Título del Lead / Ticket</label>
                     <input type="text" id="crm-ticket-title" class="crm-input" placeholder="Título...">
                 </div>
 
-                <div data-field="crm-name" style="order: 1;">
+                <div data-field="crm-name">
                     <label>Nombre del Contacto</label>
                     <input type="text" id="crm-name" class="crm-input" placeholder="Nombre completo">
                 </div>
 
-                <div data-field="crm-phone" style="order: 2;">
+                <div data-field="crm-phone">
                     <label><i class="fas fa-phone"></i> Teléfono</label>
-                    <div style="display:flex; gap:8px;">
+                    <div class="crm-phone-row">
                         <input type="text" id="crm-phone-side" class="crm-input" readonly>
-                        <button class="btn-icon" onclick="openWhatsAppDirectSide()" style="color:#25d366;"><i class="fab fa-whatsapp"></i></button>
+                        <button class="btn-icon" id="btn-whatsapp-direct-side" onclick="openWhatsAppDirectSide()"><i class="fab fa-whatsapp"></i></button>
                     </div>
                 </div>
-                
-                <div data-field="crm-email" style="order: 4;">
+
+                <div data-field="crm-email">
                     <label>Correo Electrónico</label>
                     <input type="email" id="crm-email" class="crm-input" placeholder="ejemplo@correo.com">
                 </div>
-                
-                <div data-field="crm-cuit" style="order: 3;">
+
+                <div data-field="crm-cuit">
                     <label><i class="fas fa-id-card"></i> Cuil / Cuit / DNI</label>
                     <input type="text" id="crm-cuit" class="crm-input" placeholder="00-00000000-0">
                 </div>
 
-                <div data-field="crm-address" style="order: 5;">
+                <div data-field="crm-address">
                     <label><i class="fas fa-map-marker-alt"></i> Domicilio</label>
                     <input type="text" id="crm-address" class="crm-input" placeholder="Calle, Nro, Localidad...">
                 </div>
 
-                <div data-field="crm-tax-status" style="order: 6;">
+                <div data-field="crm-tax-status">
                     <label><i class="fas fa-file-invoice-dollar"></i> Situación Impositiva</label>
                     <select id="crm-tax-status" class="crm-input">
                         <option value="Cons. Final">Cons. Final</option>
@@ -251,12 +194,12 @@
                     </select>
                 </div>
 
-                <div data-field="crm-product" style="order: 7;">
+                <div data-field="crm-product">
                     <label><i class="fas fa-shopping-bag"></i> Producto Ofrecido</label>
                     <input type="text" id="crm-product" class="crm-input" placeholder="Servicio/Producto...">
                 </div>
-                
-                <div data-field="crm-source" style="order: 8;">
+
+                <div data-field="crm-source">
                     <label><i class="fas fa-bullhorn"></i> Fuente / Canal</label>
                     <select id="crm-source" class="crm-input">
                         <option value="">Desconocida</option>
@@ -269,17 +212,17 @@
                     </select>
                 </div>
 
-                <div data-field="crm-notes" style="order: 9;">
+                <div data-field="crm-notes">
                     <label><i class="fas fa-sticky-note"></i> Historial de Notas / Observaciones</label>
                     <textarea id="crm-notes" class="crm-input" rows="4" placeholder="Observaciones y comentarios..."></textarea>
                 </div>
 
-                <div data-field="crm-due-date" style="order: 10;">
+                <div data-field="crm-due-date">
                     <label><i class="fas fa-calendar-alt"></i> Fecha de Seguimiento</label>
                     <input type="date" id="crm-due-date" class="crm-input">
                 </div>
 
-                <div data-field="crm-priority" style="order: 11;">
+                <div data-field="crm-priority">
                     <label><i class="fas fa-flag"></i> Prioridad</label>
                     <select id="crm-priority" class="crm-input">
                         <option value="Baja">Baja</option>
@@ -288,34 +231,34 @@
                     </select>
                 </div>
 
-                <div data-field="crm-status" style="order: 12;">
+                <div data-field="crm-status">
                     <label><i class="fas fa-tasks"></i> Estado del Lead (CRM)</label>
                     <select id="crm-status-select-side" class="crm-input">
                         <!-- Opciones generadas dinámicamente -->
                     </select>
                 </div>
-                
-                <button class="btn-primary" onclick="saveCRMDetails()" style="width:100%; margin-top:10px; order: 100;">
-                    <i class="fas fa-save" style="margin-right:8px;"></i> Guardar Ficha de Cliente
+
+                <button class="btn-primary crm-save-btn" onclick="saveCRMDetails()">
+                    <i class="fas fa-save icon-mr"></i> Guardar Ficha de Cliente
                 </button>
             </div>
 
             <div class="crm-divider"></div>
 
             <div class="crm-section">
-                <h4 style="margin:0 0 10px 0;"><i class="fas fa-tags" style="margin-right:8px;"></i> Etiquetas</h4>
+                <h4 class="crm-tags-heading"><i class="fas fa-tags icon-mr"></i> Etiquetas</h4>
                 <div id="current-chat-tags-section">
-                    <div id="available-tags-to-assign" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+                    <div id="available-tags-to-assign"></div>
                 </div>
-                <div style="margin-top:20px; padding: 15px; background: var(--bg-sidebar); border-radius: 12px; border: 1px dashed var(--border-color);">
-                    <h5 style="margin:0 0 10px 0;">Crear Nueva Etiqueta</h5>
-                    <div style="display:flex; gap:8px;">
-                        <input type="text" id="new-tag-name" class="crm-input" style="margin:0;" placeholder="Nombre...">
-                        <input type="color" id="new-tag-color" value="#6366f1" style="height:35px; width:35px; border:none; padding:0; background:none; cursor:pointer;">
+                <div class="tag-create-box">
+                    <h5>Crear Nueva Etiqueta</h5>
+                    <div class="tag-create-row">
+                        <input type="text" id="new-tag-name" class="crm-input" placeholder="Nombre...">
+                        <input type="color" id="new-tag-color" value="#6366f1">
                         <button class="btn-icon" onclick="createTag()"><i class="fas fa-plus"></i></button>
                     </div>
                 </div>
-                <div id="tag-list-editor" style="margin-top:20px;"></div>
+                <div id="tag-list-editor"></div>
             </div>
         </div>
     </div>
@@ -330,8 +273,8 @@
             <div class="modal-body">
                 <label>Título del Ticket</label>
                 <input type="text" id="ticket-title" class="crm-input" placeholder="Ej: Problema con el pago">
-                <div style="display:flex; gap:10px;">
-                    <div style="flex:1">
+                <div class="ticket-modal-row">
+                    <div class="ticket-modal-col">
                         <label>Tipo</label>
                         <select id="ticket-type" class="crm-input">
                             <option value="Soporte">Soporte</option>
@@ -341,7 +284,7 @@
                             <option value="Otro">Otro</option>
                         </select>
                     </div>
-                    <div style="flex:1">
+                    <div class="ticket-modal-col">
                         <label>Prioridad</label>
                         <select id="ticket-priority" class="crm-input">
                             <option value="Baja">Baja</option>
@@ -352,8 +295,8 @@
                 </div>
                 <label>Descripción</label>
                 <textarea id="ticket-desc" class="crm-input" rows="4" placeholder="Detalles de la incidencia..."></textarea>
-                <button class="btn-primary" onclick="createTicket()" style="width:100%; margin-top:10px;">
-                    <i class="fas fa-save" style="margin-right:8px;"></i> Crear Ticket
+                <button class="btn-primary btn-full-mt" onclick="createTicket()">
+                    <i class="fas fa-save icon-mr"></i> Crear Ticket
                 </button>
             </div>
         </div>
@@ -363,25 +306,25 @@
         <div class="modal-content meta-modal-content animate-pop">
             <div class="modal-header">
                 <div>
-                    <h3 style="margin:0;"><i class="fab fa-whatsapp" style="color:#25D366;"></i> Centro de Plantillas Meta</h3>
+                    <h3><i class="fab fa-whatsapp platform-whatsapp mr-8"></i> Centro de Plantillas Meta</h3>
                 </div>
                 <button class="btn-icon" onclick="toggleBulkModal()"><i class="fas fa-times"></i></button>
             </div>
             
-            <div class="meta-tabs" style="display:flex; align-items:center; justify-content:space-between; padding: 10px 24px;">
-                <div id="tab-my-templates" class="meta-tab active" onclick="switchMetaTab('my')" style="margin:0;">
+            <div class="meta-tabs meta-tabs-bar">
+                <div id="tab-my-templates" class="meta-tab active" onclick="switchMetaTab('my')">
                     <i class="fas fa-list"></i> Mis Plantillas
                 </div>
-                
-                <div style="display:flex; align-items:center; gap:20px; border: 2px solid #0668e133; padding: 6px 18px; border-radius: 14px; background: rgba(6,104,225,0.02);">
-                    <span style="font-size: 0.9rem; font-weight: 700; color: #00B2FF; letter-spacing: 0.5px;">Ver en META</span>
-                    
-                    <a id="link-meta-library" href="https://business.facebook.com/latest/whatsapp_manager/template_library" target="_blank" style="text-decoration:none; color:var(--text-main); font-size:0.9rem; font-weight:600; display:flex; align-items:center; gap:8px; opacity:0.8; transition:0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'">
-                        <i class="fas fa-book" style="font-size:0.8rem;"></i> Biblioteca Meta <span class="meta-library-badge">SDK</span>
+
+                <div class="meta-badge-bar">
+                    <span class="meta-badge-title">Ver en META</span>
+
+                    <a id="link-meta-library" href="https://business.facebook.com/latest/whatsapp_manager/template_library" target="_blank" class="meta-link-item">
+                        <i class="fas fa-book"></i> Biblioteca Meta <span class="meta-library-badge">SDK</span>
                     </a>
-                    
-                    <a id="link-meta-new" href="https://business.facebook.com/latest/whatsapp_manager/message_templates" target="_blank" style="text-decoration:none; color:var(--text-main); font-size:0.9rem; font-weight:600; display:flex; align-items:center; gap:8px; opacity:0.8; transition:0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'">
-                        <i class="fas fa-plus" style="font-size:0.8rem;"></i> Nueva Plantilla
+
+                    <a id="link-meta-new" href="https://business.facebook.com/latest/whatsapp_manager/message_templates" target="_blank" class="meta-link-item">
+                        <i class="fas fa-plus"></i> Nueva Plantilla
                     </a>
                 </div>
             </div>
@@ -389,97 +332,97 @@
             <div class="meta-scroll-area">
                 <!-- Mis Plantillas -->
                 <div id="view-my-templates" class="meta-grid">
-                    <div id="my-templates-loader" style="grid-column: 1/-1; text-align:center; padding:40px; opacity:0.5;">
+                    <div id="my-templates-loader">
                         <i class="fas fa-circle-notch fa-spin fa-2x"></i>
-                        <p style="margin-top:10px;">Sincronizando con Meta Cloud...</p>
+                        <p class="loader-sync-text">Sincronizando con Meta Cloud...</p>
                     </div>
                 </div>
-                
+
                 <!-- Detalle / Bulk Sending -->
-                <div id="view-template-detail" style="display:none; padding:40px;">
-                    <button class="btn-icon" onclick="switchMetaTab('my')" style="margin-bottom:20px;"><i class="fas fa-arrow-left"></i> Volver al listado</button>
-                    
-                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:40px;">
-                        <div class="meta-preview-overlay" style="border-radius:20px; border:1px solid var(--border);">
+                <div id="view-template-detail">
+                    <button class="btn-icon tpl-detail-back-btn" onclick="switchMetaTab('my')"><i class="fas fa-arrow-left"></i> Volver al listado</button>
+
+                    <div class="tpl-detail-grid">
+                        <div class="meta-preview-overlay tpl-preview-col">
                             <div class="wa-preview-bubble">
                                 <div id="wa-preview-text-final" class="wa-preview-text">...</div>
-                                <div class="wa-preview-time">12:00 <i class="fas fa-check-double" style="color:#53bdeb;"></i></div>
+                                <div class="wa-preview-time">12:00 <i class="fas fa-check-double wa-check-icon"></i></div>
                             </div>
                         </div>
 
                         <div>
-                            <div style="display:flex; align-items:center; gap:15px; margin-bottom:15px;">
-                                <h2 id="detail-tpl-name" style="margin:0; font-size:1.8rem;">Nombre de Plantilla</h2>
-                                <a id="btn-edit-in-meta" href="#" target="_blank" style="display:none; text-decoration:none; background:#0668E1; color:white; padding:6px 14px; border-radius:10px; font-size:0.85rem; font-weight:700; align-items:center; gap:8px; transition:0.2s; box-shadow: 0 4px 12px rgba(6,104,225,0.2);" onmouseover="this.style.transform='translateY(-2px)'; this.style.background='#0556b8';" onmouseout="this.style.transform='translateY(0)'; this.style.background='#0668E1';">
+                            <div class="tpl-name-row">
+                                <h2 id="detail-tpl-name" class="tpl-name-header">Nombre de Plantilla</h2>
+                                <a id="btn-edit-in-meta" href="#" target="_blank">
                                     <i class="fab fa-facebook"></i> Editar en META
                                 </a>
                             </div>
-                            <div id="detail-badges" style="display:flex; gap:10px; margin-bottom:20px; align-items:center;">
-                                <div id="detail-tpl-status" class="meta-card-tag" style="position:static; display:inline-block;">ESTADO</div>
-                                <span id="detail-tpl-lang-badge" style="font-size:0.7rem; background:rgba(0,0,0,0.1); padding:4px 8px; border-radius:10px; color:var(--text-muted);">
+                            <div id="detail-badges" class="tpl-detail-badges">
+                                <div id="detail-tpl-status" class="meta-card-tag">ESTADO</div>
+                                <span id="detail-tpl-lang-badge" class="tpl-info-badge">
                                     <i class="fas fa-globe"></i> ES
                                 </span>
-                                <span id="detail-tpl-cat-badge" style="font-size:0.7rem; background:rgba(0,0,0,0.1); padding:4px 8px; border-radius:10px; color:var(--text-muted);">
+                                <span id="detail-tpl-cat-badge" class="tpl-info-badge">
                                     <i class="fas fa-tag"></i> CATEGORIA
                                 </span>
                             </div>
-                            
+
                             <!-- Botón para adoptar plantilla de librería -->
-                            <div id="library-adopt-section" style="display: none; border-top: 1px solid var(--border); padding-top: 20px; margin-top: 20px;">
-                                <h4 style="margin-bottom: 10px; color: var(--text-main);"><i class="fas fa-copy"></i> ¿Te gusta esta plantilla?</h4>
-                                <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom: 15px;">Puedes usarla como base para crear la tuya propia en tu cuenta.</p>
-                                <button class="btn-primary" onclick="useTemplateAsBase()" style="width:100%; background: #0668E1;">
+                            <div id="library-adopt-section">
+                                <h4 class="library-adopt-heading"><i class="fas fa-copy"></i> ¿Te gusta esta plantilla?</h4>
+                                <p class="library-adopt-desc">Puedes usarla como base para crear la tuya propia en tu cuenta.</p>
+                                <button class="btn-primary btn-adopt" onclick="useTemplateAsBase()">
                                     <i class="fas fa-magic"></i> Usar como Base
                                 </button>
                             </div>
 
-                                <!-- Panel de Acciones Masivas (Se muestra al seleccionar plantilla) -->
-                            <div id="bulk-actions-section" class="bulk-template-actions" style="display: none; border-top: 1px solid var(--border); padding-top: 20px;">
-                                <h4 style="margin-bottom: 15px; color: var(--text-main);"><i class="fas fa-play"></i> Ejecutar Envío Masivo</h4>
-                                <p style="font-size:0.85rem; color:var(--text-muted);">Configura el archivo Excel para iniciar el envío masivo.</p>
-                                
-                                <div style="margin-top:20px;">
-                                    <div style="background: rgba(0,0,0,0.03); padding: 12px; border-radius: 12px; margin-bottom: 12px; border: 1px solid var(--border);">
-                                        <label style="font-size:0.75rem; font-weight:700; margin-bottom: 8px; display:block;"><i class="fas fa-filter"></i> Filtros de Descarga</label>
-                                        
-                                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                            <!-- Panel de Acciones Masivas -->
+                            <div id="bulk-actions-section" class="bulk-template-actions">
+                                <h4 class="bulk-actions-heading"><i class="fas fa-play"></i> Ejecutar Envío Masivo</h4>
+                                <p class="bulk-actions-desc">Configura el archivo Excel para iniciar el envío masivo.</p>
+
+                                <div class="bulk-actions-body">
+                                    <div class="bulk-filter-section">
+                                        <label class="bulk-filter-label"><i class="fas fa-filter"></i> Filtros de Descarga</label>
+
+                                        <div class="bulk-filter-date-grid">
                                             <div>
-                                                <label style="font-size:0.65rem; color:var(--text-muted);">Último mensaje desde:</label>
-                                                <input type="date" id="bulk-filter-start" class="crm-input" style="margin-bottom:0; font-size:0.8rem; padding: 6px;">
+                                                <label class="bulk-filter-sublabel">Último mensaje desde:</label>
+                                                <input type="date" id="bulk-filter-start" class="crm-input bulk-filter-input">
                                             </div>
                                             <div>
-                                                <label style="font-size:0.65rem; color:var(--text-muted);">Hasta:</label>
-                                                <input type="date" id="bulk-filter-end" class="crm-input" style="margin-bottom:0; font-size:0.8rem; padding: 6px;">
+                                                <label class="bulk-filter-sublabel">Hasta:</label>
+                                                <input type="date" id="bulk-filter-end" class="crm-input bulk-filter-input">
                                             </div>
                                         </div>
-                                        
+
                                         <div>
-                                            <label style="font-size:0.65rem; color:var(--text-muted);">Etiquetas (Ctrl/Cmd + Clic para varias, dejar vacío para todas)</label>
-                                            <select id="bulk-filter-tags" class="crm-input" multiple style="margin-bottom:0; font-size:0.8rem; min-height: 80px; padding: 6px;">
+                                            <label class="bulk-filter-sublabel">Etiquetas (Ctrl/Cmd + Clic para varias, dejar vacío para todas)</label>
+                                            <select id="bulk-filter-tags" class="crm-input" multiple>
                                                 <!-- Opciones llenadas por JS -->
                                             </select>
                                         </div>
                                     </div>
 
-                                    <button class="btn-primary" onclick="downloadBulkExcel()" style="width:100%; background: #10b981; margin-bottom:12px;">
+                                    <button class="btn-primary btn-download-excel" onclick="downloadBulkExcel()">
                                         <i class="fas fa-file-excel"></i> 1. Descargar Formato Excel
                                     </button>
-                                    
-                                    <div style="margin-top:20px; border-top:1px solid var(--border); padding-top:20px;">
-                                        <label style="font-size:0.75rem; font-weight:700;">2. Subir Excel Completado</label>
-                                        <div style="display:flex; gap:10px; margin-top:8px;">
-                                            <input type="file" id="bulk-file-input" class="crm-input" accept=".xlsx, .xls" style="margin-bottom:0;">
+
+                                    <div class="bulk-upload-section">
+                                        <label class="bulk-upload-label">2. Subir Excel Completado</label>
+                                        <div class="bulk-upload-row">
+                                            <input type="file" id="bulk-file-input" class="crm-input" accept=".xlsx, .xls">
                                             <button class="btn-primary" onclick="startBulkSend()" id="send-bulk-btn">
                                                 <i class="fas fa-paper-plane"></i> Enviar
                                             </button>
                                         </div>
                                     </div>
 
-                                    <div id="bulk-progress" style="display:none; margin-top:20px;">
-                                        <div style="height:8px; width:100%; background:#eee; border-radius:4px; overflow:hidden;">
-                                            <div id="bulk-progress-bar" style="height:100%; width:0%; background:#0668E1; transition: width 0.3s;"></div>
+                                    <div id="bulk-progress">
+                                        <div class="bulk-progress-track">
+                                            <div id="bulk-progress-bar" class="bulk-progress-bar"></div>
                                         </div>
-                                        <p id="bulk-status-text" style="font-size:0.75rem; margin-top:8px; text-align:center; color:var(--text-muted);"></p>
+                                        <p id="bulk-status-text" class="bulk-status-text"></p>
                                     </div>
                                 </div>
                             </div>
@@ -501,7 +444,7 @@
             <button id="tab-closed" class="tab-btn" onclick="setTicketsFilter('Cerrado')">Cerrados</button>
         </div>
         <div id="tickets-list" class="tickets-list">
-            <div style="text-align:center; padding:20px; opacity:0.5;">Cargando tickets...</div>
+            <div class="panel-loading-placeholder">Cargando tickets...</div>
         </div>
     </div>
 
@@ -510,35 +453,35 @@
             <h3><i class="fas fa-address-book"></i> Leads Editados</h3>
             <button class="btn-icon" onclick="toggleLeadsPanel(event)"><i class="fas fa-times"></i></button>
         </div>
-        <div id="leads-list" class="tickets-list" style="padding: 15px;">
-            <div style="text-align:center; padding:20px; opacity:0.5;">Cargando leads...</div>
+        <div id="leads-list" class="tickets-list">
+            <div class="panel-loading-placeholder">Cargando leads...</div>
         </div>
     </div>
 
     <div id="meta-panel" class="tickets-panel">
         <div class="panel-header">
-            <h3><i class="fab fa-meta" style="color:#0668E1; margin-right:8px;"></i> Onboarding Meta</h3>
+            <h3><i class="fab fa-meta meta-panel-header-icon"></i> Onboarding Meta</h3>
             <button class="btn-icon" onclick="toggleMetaPanel(event)"><i class="fas fa-times"></i></button>
         </div>
-        <div class="tickets-list" style="padding: 30px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; text-align: center; gap: 24px;">
-            <i class="fas fa-infinity" style="color: #0668E1; font-size: 4.5rem; margin: 40px 0 10px 0;"></i>
-            <div>
-                <h2 style="margin: 0; color: var(--text-main); font-size: 1.6rem; font-weight: 700;">Conexión Oficial</h2>
-                <div style="height: 3px; width: 50px; background: #0668E1; margin: 10px auto; border-radius: 10px;"></div>
-                <p style="color: var(--text-muted); font-size: 1rem; margin-top: 15px; line-height: 1.6;">
+        <div class="tickets-list meta-panel-content">
+            <i class="fas fa-infinity meta-panel-icon"></i>
+            <div class="meta-panel-heading">
+                <h2>Conexión Oficial</h2>
+                <div class="meta-panel-accent-bar"></div>
+                <p class="meta-panel-desc">
                     Conecta tu cuenta de <strong>WhatsApp Business</strong> oficial para habilitar funciones profesionales de envío masivo y gestión avanzada.
                 </p>
             </div>
-            <div style="background: var(--bg-header, rgba(0,0,0,0.05)); padding: 24px; border-radius: 20px; border: 1px solid var(--border); width: 100%; text-align: left;">
-                <h4 style="margin: 0 0 15px 0; color: #0668E1; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700;">Beneficios activos:</h4>
-                <ul style="font-size: 0.9rem; padding-left: 20px; color: var(--text-main); line-height: 2.2;">
+            <div class="meta-panel-features">
+                <h4 class="meta-panel-features-title">Beneficios activos:</h4>
+                <ul class="meta-panel-list">
                     <li>Integración por <strong>Coexistencia</strong> (Usa tu App y el Bot).</li>
                     <li>Registro instantáneo vía <strong>Popup de Facebook</strong>.</li>
                     <li>Envío de <strong>Mensajes Masivos (HSM)</strong>.</li>
                     <li>Soporte para <strong>Imágenes y Audios</strong> oficiales.</li>
                 </ul>
             </div>
-            <button class="btn-primary" onclick="launchMetaOnboarding()" style="width:100%; height:45px; display:flex; align-items:center; justify-content:center; gap:10px; background:#0668E1; border:none; border-radius:12px; font-weight:600; cursor:pointer; color:white; margin-top: 20px;">
+            <button class="btn-primary meta-onboarding-btn" onclick="launchMetaOnboarding()">
                 <i class="fab fa-meta"></i> Vincular con Meta Cloud API
             </button>
         </div>
@@ -567,81 +510,60 @@
     </script>
     <!-- MODAL DE IMPORTACIÓN (BAILEYS) -->
     <div id="sync-modal" class="modal-overlay">
-        <div class="modal-content animate-pop" style="max-width: 400px;">
-            <div class="modal-header">
-                <h3 style="margin:0; font-size:1.1rem;"><i class="fas fa-sync-alt"></i> Sincronizando</h3>
+        <div class="modal-content animate-pop">
+            <div class="modal-header sync-modal-header">
+                <h3><i class="fas fa-sync-alt"></i> Sincronizando</h3>
             </div>
-            <div class="modal-body" style="text-align: center; padding: 40px 20px;">
+            <div class="modal-body sync-modal-body">
                 <div id="sync-loading">
-                    <div class="spinner" style="margin: 0 auto 20px auto; width: 40px; height: 40px; border: 4px solid rgba(0,0,0,0.1); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                    <p style="font-weight: 600; margin-bottom: 5px;">Importando datos desde WhatsApp...</p>
-                    <p style="font-size: 0.85rem; color: var(--text-muted);">Esto puede demorar unos minutos dependiendo de la cantidad de contactos y etiquetas.</p>
+                    <div class="spinner"></div>
+                    <p class="sync-loading-title">Importando datos desde WhatsApp...</p>
+                    <p class="sync-loading-desc">Esto puede demorar unos minutos dependiendo de la cantidad de contactos y etiquetas.</p>
                 </div>
-                <div id="sync-result" style="display: none;">
-                    <div style="font-size: 3rem; color: #25d366; margin-bottom: 15px;">
+                <div id="sync-result">
+                    <div class="sync-success-icon">
                         <i class="fas fa-check-circle"></i>
                     </div>
-                    <h4 style="margin-bottom: 10px;">¡Sincronización Completada!</h4>
-                    <p id="sync-summary" style="font-size: 0.9rem; margin-bottom: 20px;"></p>
-                    <button class="btn-primary" style="width: 100%;" onclick="closeSyncModal()">Entendido</button>
+                    <h4 class="sync-success-heading">¡Sincronización Completada!</h4>
+                    <p id="sync-summary"></p>
+                    <button class="btn-primary btn-sync-close" onclick="closeSyncModal()">Entendido</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <style>
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .platform-instagram { color: #E1306C; }
-        .platform-messenger { color: #0084FF; }
-        .platform-icon-overlay {
-            position: absolute;
-            bottom: -2px;
-            right: -2px;
-            background: white;
-            border-radius: 50%;
-            width: 18px;
-            height: 18px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 10px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-        }
-        [data-theme="dark"] .platform-icon-overlay { background: #202c33; }
-    </style>
-
     <!-- MODAL DE IMPORTACIÓN EXTERNA (EXCEL) -->
     <div id="import-modal" class="modal-overlay">
-        <div class="modal-content animate-pop" style="max-width: 450px;">
-            <div class="modal-header">
-                <h3 style="margin:0;"><i class="fas fa-file-excel" style="color:#10b981;"></i> Importar Contactos</h3>
+        <div class="modal-content animate-pop">
+            <div class="modal-header import-modal-header">
+                <h3><i class="fas fa-file-excel icon-excel mr-8"></i> Importar Contactos</h3>
                 <button class="btn-icon" onclick="toggleImportModal()"><i class="fas fa-times"></i></button>
             </div>
-            <div class="modal-body" style="padding: 25px;">
-                <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 20px;">
+            <div class="modal-body import-modal-body">
+                <p class="import-modal-desc">
                     Carga múltiples contactos a la vez usando una plantilla de Excel.
                 </p>
-                
-                <div style="background: rgba(16,185,129,0.05); border: 1px dashed #10b981; padding: 15px; border-radius: 12px; margin-bottom: 20px; text-align: center;">
-                    <h4 style="margin: 0 0 10px 0; font-size: 0.9rem;">1. Descarga la plantilla</h4>
-                    <button class="btn-primary" onclick="downloadImportTemplate()" style="background: #10b981; border: none;">
+
+                <div class="import-template-section">
+                    <h4 class="import-template-heading">1. Descarga la plantilla</h4>
+                    <button class="btn-primary btn-download-template" onclick="downloadImportTemplate()">
                         <i class="fas fa-download"></i> Descargar Plantilla .xlsx
                     </button>
                 </div>
 
-                <div style="padding: 15px; background: var(--bg-header); border-radius: 12px; border: 1px solid var(--border-color);">
-                    <h4 style="margin: 0 0 10px 0; font-size: 0.9rem;">2. Sube tu archivo completado</h4>
-                    <input type="file" id="import-file-input" class="crm-input" accept=".xlsx, .xls" style="margin-bottom: 15px;">
-                    <button class="btn-primary" onclick="startImportExcel()" id="btn-execute-import" style="width: 100%;">
+                <div class="import-upload-section">
+                    <h4 class="import-upload-heading">2. Sube tu archivo completado</h4>
+                    <input type="file" id="import-file-input" class="crm-input" accept=".xlsx, .xls">
+                    <button class="btn-primary" onclick="startImportExcel()" id="btn-execute-import">
                         <i class="fas fa-upload"></i> Iniciar Importación
                     </button>
                 </div>
 
-                <div id="import-progress" style="display:none; margin-top:20px;">
-                    <div style="height:8px; width:100%; background:var(--border-color); border-radius:4px; overflow:hidden;">
-                        <div id="import-progress-bar" style="height:100%; width:0%; background:#10b981; transition: width 0.3s;"></div>
+                <div id="import-progress">
+                    <div class="import-progress-track">
+                        <div id="import-progress-bar" class="import-progress-bar"></div>
                     </div>
-                    <p id="import-status-text" style="font-size:0.75rem; margin-top:8px; text-align:center; color:var(--text-muted);">Procesando...</p>
+                    <p id="import-status-text" class="import-status-text">Procesando...</p>
                 </div>
             </div>
         </div>
