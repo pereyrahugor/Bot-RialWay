@@ -23,13 +23,18 @@ export class AiManager {
      */
     private async getAssistantMap(projectId: string | null = null): Promise<Record<string, string | undefined>> {
         const assistant1 = await HistoryHandler.getConfig('ASSISTANT_1', projectId) || await HistoryHandler.getConfig('ASSISTANT_ID', projectId);
-        return {
+        const map = {
             asistente1: assistant1 || this.assistantId,
             asistente2: await HistoryHandler.getConfig('ASSISTANT_2', projectId) || undefined,
             asistente3: await HistoryHandler.getConfig('ASSISTANT_3', projectId) || undefined,
             asistente4: await HistoryHandler.getConfig('ASSISTANT_4', projectId) || undefined,
             asistente5: await HistoryHandler.getConfig('ASSISTANT_5', projectId) || undefined,
         };
+
+        // Log de diagnóstico silencioso para debug interno si se necesita
+        // console.log(`[AiManager] Assistant Map [${projectId || 'global'}]:`, Object.keys(map).filter(k => map[k]).join(', '));
+        
+        return map;
     }
 
     /**
@@ -38,7 +43,13 @@ export class AiManager {
     public async getAssignedAssistantId(userId: string, forcedProjectId?: string): Promise<string> {
         const assigned = await HistoryHandler.getAssignedAgent(userId, forcedProjectId) || 'asistente1';
         const map = await this.getAssistantMap(forcedProjectId || null);
-        return map[assigned] || this.assistantId;
+        
+        const assistantId = map[assigned];
+        if (!assistantId) {
+            console.warn(`⚠️ [AiManager] No se encontró Assistant ID para '${assigned}'. Reconvirtiendo a asistente1.`);
+            return map['asistente1'] || this.assistantId;
+        }
+        return assistantId;
     }
 
     public getAssistantResponse = async (assistantId: string, message: string, state: any, fallbackMessage: string | undefined, userId: string, thread_id: string | null = null, projectId: string | null = null, agentName?: string) => {
@@ -216,6 +227,7 @@ export class AiManager {
 
             // No necesitamos guardar threadId en Chat Completions
 
+            // --- LÓGICA DE DERIVACIÓN (HANDOVER) ---
             const destino = this.analizarDestinoRecepcionista(response);
             const resumen = this.extraerResumenRecepcionista(response);
             
@@ -223,41 +235,54 @@ export class AiManager {
                 if (destino === 'asistente_humano') {
                     console.log(`🚀 [MultiAgent] Handover a HUMANO: Apagando bot para ${ctx.from}`);
                     await HistoryHandler.toggleBot(ctx.from, false);
-                    // Notificar al CRM que el bot se apagó por derivación
+                    
+                    // Procesar respuesta final del bot antes de apagarlo
+                    await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
+                        response, ctx, flowDynamic, state, provider, gotoFlow,
+                        this.getAssistantResponse.bind(this), assignedAssistantId, assigned, 0, dynamicProjectId
+                    );
                     return state;
                 }
 
                 const targetAssistantId = currentAssistantMap[destino];
+                
                 if (!targetAssistantId) {
                     console.warn(`⚠️ [MultiAgent] Handover fallido: No hay Assistant ID configurado para '${destino}' en el proyecto ${dynamicProjectId}.`);
-                } else if (destino === assigned) {
-                    console.log(`[MultiAgent] El destino '${destino}' es el mismo que el actual. Ignorando handover.`);
-                } else {
-                    console.log(`🚀 [MultiAgent] Handover: ${assigned} -> ${destino} (User: ${ctx.from})`);
-                    await HistoryHandler.setAssignedAgent(ctx.from, destino, dynamicProjectId);
-                    // Actualizar el estado con el nuevo agente para el procesamiento
-                    assignedAssistantId = targetAssistantId;
-                }
-            }
-
-            if (destino && currentAssistantMap[destino] && destino !== assigned) {
-
-                // 1. Procesar respuesta del agente saliente (limpieza interna en Processor)
-                await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
-                    response, ctx, flowDynamic, state, provider, gotoFlow,
-                    this.getAssistantResponse.bind(this), assignedAssistantId, assigned, 0, dynamicProjectId
-                );
-
-                // 2. Transición inmediata: Consultar al nuevo agente con el resumen
-                const nextAssistantId = await this.getAssignedAssistantId(ctx.from, dynamicProjectId);
-                const resumenContextual = `RESUMEN DE LA CONVERSACIÓN PREVIA (PARA TU CONTEXTO):\n\n${resumen}`;
-                const nextResponseRaw = (await this.getAssistantResponse(nextAssistantId, resumenContextual, state, undefined, ctx.from, ctx.thread_id, dynamicProjectId, destino)) as string;
-                
-                if (nextResponseRaw) {
+                    // Procesamos normal con el agente actual
                     await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
-                        nextResponseRaw, ctx, flowDynamic, state, provider, gotoFlow,
-                        this.getAssistantResponse.bind(this), nextAssistantId, destino, 0, dynamicProjectId
+                        response, ctx, flowDynamic, state, provider, gotoFlow,
+                        this.getAssistantResponse.bind(this), assignedAssistantId, assigned, 0, dynamicProjectId
                     );
+                } else if (destino === assigned) {
+                    console.log(`[MultiAgent] El destino '${destino}' es el mismo que el actual (${assigned}). Ignorando handover.`);
+                    await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
+                        response, ctx, flowDynamic, state, provider, gotoFlow,
+                        this.getAssistantResponse.bind(this), assignedAssistantId, assigned, 0, dynamicProjectId
+                    );
+                } else {
+                    console.log(`🚀 [MultiAgent] Handover detectado: ${assigned} -> ${destino} (User: ${ctx.from})`);
+                    
+                    // 1. Persistir el cambio de agente en la DB
+                    await HistoryHandler.setAssignedAgent(ctx.from, destino, dynamicProjectId);
+
+                    // 2. Procesar respuesta del agente saliente (limpieza interna en Processor)
+                    await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
+                        response, ctx, flowDynamic, state, provider, gotoFlow,
+                        this.getAssistantResponse.bind(this), assignedAssistantId, assigned, 0, dynamicProjectId
+                    );
+
+                    // 3. Transición inmediata: Consultar al nuevo agente con el resumen
+                    const resumenContextual = `RESUMEN DE LA CONVERSACIÓN PREVIA (PARA TU CONTEXTO):\n\n${resumen}`;
+                    console.log(`🚀 [MultiAgent] Iniciando respuesta inmediata del nuevo agente: ${destino}`);
+                    
+                    const nextResponseRaw = (await this.getAssistantResponse(targetAssistantId, resumenContextual, state, undefined, ctx.from, ctx.thread_id, dynamicProjectId, destino)) as string;
+                    
+                    if (nextResponseRaw) {
+                        await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
+                            nextResponseRaw, ctx, flowDynamic, state, provider, gotoFlow,
+                            this.getAssistantResponse.bind(this), targetAssistantId, destino, 0, dynamicProjectId
+                        );
+                    }
                 }
             } else {
                 // Sin transferencia: flujo normal
