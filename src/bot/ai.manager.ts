@@ -227,70 +227,70 @@ export class AiManager {
 
             // No necesitamos guardar threadId en Chat Completions
 
-            // --- LÓGICA DE DERIVACIÓN (HANDOVER) ---
-            const destino = this.analizarDestinoRecepcionista(response);
-            const resumen = this.extraerResumenRecepcionista(response);
-            
-            if (destino) {
-                if (destino === 'asistente_humano') {
-                    console.log(`🚀 [MultiAgent] Handover a HUMANO: Apagando bot para ${ctx.from}`);
-                    await HistoryHandler.toggleBot(ctx.from, false);
-                    
-                    // Procesar respuesta final del bot antes de apagarlo
-                    await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
-                        response, ctx, flowDynamic, state, provider, gotoFlow,
-                        this.getAssistantResponse.bind(this), assignedAssistantId, assigned, 0, dynamicProjectId
-                    );
-                    return state;
-                }
-
-                const targetAssistantId = currentAssistantMap[destino];
+                // --- LÓGICA DE DERIVACIÓN (HANDOVER) ---
+                const nextAgentName = this.analizarDestinoRecepcionista(response);
+                const resumen = this.extraerResumenRecepcionista(response);
                 
-                if (!targetAssistantId) {
-                    console.warn(`⚠️ [MultiAgent] Handover fallido: No hay Assistant ID configurado para '${destino}' en el proyecto ${dynamicProjectId}.`);
-                    // Procesamos normal con el agente actual
-                    await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
-                        response, ctx, flowDynamic, state, provider, gotoFlow,
-                        this.getAssistantResponse.bind(this), assignedAssistantId, assigned, 0, dynamicProjectId
-                    );
-                } else if (destino === assigned) {
-                    console.log(`[MultiAgent] El destino '${destino}' es el mismo que el actual (${assigned}). Ignorando handover.`);
-                    await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
-                        response, ctx, flowDynamic, state, provider, gotoFlow,
-                        this.getAssistantResponse.bind(this), assignedAssistantId, assigned, 0, dynamicProjectId
-                    );
-                } else {
-                    console.log(`🚀 [MultiAgent] Handover detectado: ${assigned} -> ${destino} (User: ${ctx.from})`);
-                    
-                    // 1. Persistir el cambio de agente en la DB
-                    await HistoryHandler.setAssignedAgent(ctx.from, destino, dynamicProjectId);
-
-                    // 2. Procesar respuesta del agente saliente (limpieza interna en Processor)
-                    await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
-                        response, ctx, flowDynamic, state, provider, gotoFlow,
-                        this.getAssistantResponse.bind(this), assignedAssistantId, assigned, 0, dynamicProjectId
-                    );
-
-                    // 3. Transición inmediata: Consultar al nuevo agente con el resumen
-                    const resumenContextual = `RESUMEN DE LA CONVERSACIÓN PREVIA (PARA TU CONTEXTO):\n\n${resumen}`;
-                    console.log(`🚀 [MultiAgent] Iniciando respuesta inmediata del nuevo agente: ${destino}`);
-                    
-                    const nextResponseRaw = (await this.getAssistantResponse(targetAssistantId, resumenContextual, state, undefined, ctx.from, ctx.thread_id, dynamicProjectId, destino)) as string;
-                    
-                    if (nextResponseRaw) {
+                if (nextAgentName) {
+                    if (nextAgentName === 'asistente_humano') {
+                        console.log(`🚀 [MultiAgent] Handover a HUMANO: Apagando bot para ${ctx.from}`);
+                        await HistoryHandler.toggleBot(ctx.from, false);
+                        
+                        // Procesar respuesta final del bot antes de apagarlo
                         await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
-                            nextResponseRaw, ctx, flowDynamic, state, provider, gotoFlow,
-                            this.getAssistantResponse.bind(this), targetAssistantId, destino, 0, dynamicProjectId
+                            response, ctx, flowDynamic, state, provider, gotoFlow,
+                            this.getAssistantResponse.bind(this), assignedAssistantId, assigned, 0, dynamicProjectId
                         );
+                        return state;
                     }
+
+                    const nextAssistantId = currentAssistantMap[nextAgentName];
+                    
+                    if (!nextAssistantId) {
+                        console.warn(`⚠️ [MultiAgent] Handover fallido: No hay Assistant ID configurado para '${nextAgentName}' en el proyecto ${dynamicProjectId}.`);
+                        // Procesamos normal con el agente actual
+                        await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
+                            response, ctx, flowDynamic, state, provider, gotoFlow,
+                            this.getAssistantResponse.bind(this), assignedAssistantId, assigned, 0, dynamicProjectId
+                        );
+                    } else if (nextAgentName === assigned) {
+                        console.log(`[MultiAgent] El destino '${nextAgentName}' es el mismo que el actual (${assigned}). Ignorando handover.`);
+                        await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
+                            response, ctx, flowDynamic, state, provider, gotoFlow,
+                            this.getAssistantResponse.bind(this), assignedAssistantId, assigned, 0, dynamicProjectId
+                        );
+                    } else {
+                        console.log(`🚀 [MultiAgent] Handover detectado: ${assigned} -> ${nextAgentName} (User: ${ctx.from})`);
+                        
+                        // 1. Persistir el cambio de agente en la DB
+                        await HistoryHandler.setAssignedAgent(ctx.from, nextAgentName, dynamicProjectId);
+
+                        // 2. Procesar respuesta del agente saliente (limpieza interna en Processor)
+                        await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
+                            response, ctx, flowDynamic, state, provider, gotoFlow,
+                            this.getAssistantResponse.bind(this), assignedAssistantId, assigned, 0, dynamicProjectId
+                        );
+
+                        // 3. Transición inmediata: Consultar al nuevo agente con el resumen
+                        const resumenContextual = `RESUMEN DE LA CONVERSACIÓN PREVIA (PARA TU CONTEXTO):\n\n${resumen}`;
+                        console.log(`🚀 [MultiAgent] Iniciando respuesta inmediata del nuevo agente: ${nextAgentName}`);
+                        
+                        const nextResponseRaw = (await this.getAssistantResponse(nextAssistantId, resumenContextual, state, undefined, ctx.from, ctx.thread_id, dynamicProjectId, nextAgentName)) as string;
+                        
+                        if (nextResponseRaw) {
+                            await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
+                                nextResponseRaw, ctx, flowDynamic, state, provider, gotoFlow,
+                                this.getAssistantResponse.bind(this), nextAssistantId, nextAgentName, 0, dynamicProjectId
+                            );
+                        }
+                    }
+                } else {
+                    // Sin transferencia: flujo normal
+                    await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
+                        response, ctx, flowDynamic, state, provider, gotoFlow,
+                        this.getAssistantResponse.bind(this), assignedAssistantId, assigned, 0, dynamicProjectId
+                    );
                 }
-            } else {
-                // Sin transferencia: flujo normal
-                await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
-                    response, ctx, flowDynamic, state, provider, gotoFlow,
-                    this.getAssistantResponse.bind(this), assignedAssistantId, assigned, 0, dynamicProjectId
-                );
-            }
 
             const timeoutCierreValue = await HistoryHandler.getConfig('timeOutCierre') || 5;
             const setTime = Number(timeoutCierreValue) * 60 * 1000;
