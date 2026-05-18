@@ -330,29 +330,61 @@ function createCardElement(ticket, lead, metadata) {
     const product = lead?.offered_product || ticket.tipo || '';
     const alertDateStr = metadata.alertDate ? formatDate(metadata.alertDate) : 'Sin alerta';
 
+    // Helper para verificar visibilidad según configuración dinámica
+    const isVisible = (fieldId) => {
+        const f = (window.crmConfig || []).find(x => x.id === fieldId);
+        return f ? f.visible !== false : true;
+    };
+
+    const priorityIndicatorHtml = isVisible('crm-priority') 
+        ? `<div class="priority-indicator" style="background:${getPriorityColor(metadata.priority)}"></div>`
+        : '';
+
+    const productBadgeHtml = isVisible('crm-product')
+        ? `<div class="card-type-badge"><i class="fas fa-shopping-bag"></i> ${product}</div>`
+        : '';
+
+    let titleHtml = '';
+    if (isVisible('crm-ticket-title')) {
+        const cuilSpan = (cuit && isVisible('crm-cuit')) ? ` <span style="font-size:0.7rem; opacity:0.6;">(${cuit})</span>` : '';
+        if (ticket.titulo && ticket.titulo.trim() !== '') {
+            titleHtml = `<div class="card-title">${ticket.titulo}${cuilSpan}</div>`;
+        } else if (cuilSpan) {
+            titleHtml = `<div class="card-title">${cuilSpan}</div>`;
+        }
+    } else if (cuit && isVisible('crm-cuit')) {
+        titleHtml = `<div class="card-title"><span style="font-size:0.7rem; opacity:0.6;">CUIL: ${cuit}</span></div>`;
+    }
+
+    const leadNameHtml = isVisible('crm-name')
+        ? `<div class="card-lead-main"><i class="fas fa-user-circle"></i> ${lead?.name || 'Lead sin nombre'}</div>`
+        : '';
+
+    let detailsHtml = '';
+    const phoneHtml = isVisible('crm-phone') ? `<div class="detail-item"><i class="fas fa-phone"></i> ${phone}</div>` : '';
+    const emailHtml = (email && isVisible('crm-email')) ? `<div class="detail-item"><i class="fas fa-envelope"></i> ${email}</div>` : '';
+    if (phoneHtml || emailHtml) {
+        detailsHtml = `<div class="card-lead-details">${phoneHtml}${emailHtml}</div>`;
+    }
+
+    const alertHtml = isVisible('crm-due-date')
+        ? `<div class="card-alert ${getAlertClass(metadata.alertDate)}" id="alert-card-${ticket.id}"><i class="fas fa-bell"></i> ${alertDateStr}</div>`
+        : '';
+
     card.innerHTML = `
-        <div class="priority-indicator" style="background:${getPriorityColor(metadata.priority)}"></div>
+        ${priorityIndicatorHtml}
         <div style="display:flex; justify-content:space-between; align-items:flex-start;">
             <div class="card-tags">${tags}</div>
             <div style="font-size:0.6rem; font-family:monospace; opacity:0.5; background:var(--bg-header); padding:2px 6px; border-radius:4px; margin-top:8px; margin-right:8px;">
                 REF: ${ticket.id.slice(-8).toUpperCase()}
             </div>
         </div>
-        <div class="card-type-badge">
-            <i class="fas fa-shopping-bag"></i> ${product}
-        </div>
-        <div class="card-title">${ticket.titulo || 'Sin título'} ${cuit ? `<span style="font-size:0.7rem; opacity:0.6;">(${cuit})</span>` : ''}</div>
-        <div class="card-lead-main">
-            <i class="fas fa-user-circle"></i> ${lead?.name || 'Lead sin nombre'}
-        </div>
-        <div class="card-lead-details">
-            <div class="detail-item"><i class="fas fa-phone"></i> ${phone}</div>
-            ${email ? `<div class="detail-item"><i class="fas fa-envelope"></i> ${email}</div>` : ''}
-        </div>
+        ${productBadgeHtml}
+        ${titleHtml}
+        ${leadNameHtml}
+        ${detailsHtml}
         <div class="card-footer">
-            <div class="card-alert ${getAlertClass(metadata.alertDate)}" id="alert-card-${ticket.id}">
-                <i class="fas fa-bell"></i> ${alertDateStr}
-            </div>
+            ${alertHtml}
             <div style="display:flex; gap:8px;">
                 <button class="btn-action btn-action-primary" title="Cerrar Lead" onclick="event.stopPropagation(); confirmCloseTicket('${ticket.id}')">
                     <i class="fas fa-check"></i>
@@ -1052,6 +1084,9 @@ window.saveCRMConfig = async () => {
             showToast('✅ Configuración guardada');
             window.toggleCRMConfigModal();
             window.applyCRMConfig();
+            if (typeof distributeCards === 'function') {
+                distributeCards();
+            }
         }
     } catch (e) {
         console.error(e);

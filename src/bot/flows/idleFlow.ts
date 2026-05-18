@@ -169,21 +169,37 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                         }
                     }
 
-                    // 2. Crear Ticket de "Nuevo Lead" automáticamente
-                    console.log(`[idleFlow] 🎟️ Creando ticket para ${userId}.`);
-                    const ticketResult = await HistoryHandler.createTicket(
-                        userId, 
-                        `Nuevo Lead: ${cleanNombre || chatData?.name || userId}`, 
-                        newSummary, // Usar solo el resumen nuevo en el ticket
-                        'Nuevo Lead', 
-                        'Alta',
-                        dynamicProjectId
-                    );
-
-                    if (!ticketResult.success) {
-                        console.error(`❌ Error creando ticket:`, ticketResult.error);
+                    // 2. Verificar si ya existe un ticket (lead) activo para este contacto
+                    console.log(`[idleFlow] 🔍 Verificando si existe ticket activo para ${userId}`);
+                    const activeTicket = await HistoryHandler.getActiveTicketForContact(userId, dynamicProjectId);
+                    
+                    if (activeTicket) {
+                        console.log(`[idleFlow] 🎟️ Ticket activo encontrado (ID: ${activeTicket.id}). Agregando resumen...`);
+                        const previousDesc = activeTicket.descripcion ? `${activeTicket.descripcion}\n\n---\n\n` : '';
+                        const updatedDesc = previousDesc + newSummary;
+                        
+                        const updateTicketRes = await HistoryHandler.updateTicketDescription(activeTicket.id, updatedDesc, dynamicProjectId);
+                        if (!updateTicketRes.success) {
+                            console.error(`❌ Error al actualizar la descripción del ticket existente:`, updateTicketRes.error);
+                        } else {
+                            console.log(`🚀 Resumen agregado con éxito al ticket activo ${activeTicket.id}`);
+                        }
                     } else {
-                        console.log(`🚀 Ticket "Nuevo Lead" creado automáticamente para ${userId}`);
+                        console.log(`[idleFlow] 🎟️ No hay ticket activo para ${userId}. Creando nuevo ticket de Lead...`);
+                        const ticketResult = await HistoryHandler.createTicket(
+                            userId, 
+                            '', // Dejar vacío el título para que solo tenga nombre/título si se agrega manualmente
+                            newSummary, // Usar solo el resumen nuevo en el ticket
+                            'Nuevo Lead', 
+                            'Alta',
+                            dynamicProjectId
+                        );
+
+                        if (!ticketResult.success) {
+                            console.error(`❌ Error creando ticket:`, ticketResult.error);
+                        } else {
+                            console.log(`🚀 Ticket de Lead creado automáticamente para ${userId}`);
+                        }
                     }
                 }
 

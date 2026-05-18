@@ -779,8 +779,10 @@ export class HistoryHandler {
                 .upsert({
                     id: chatId,
                     project_id: HistoryHandler.PROJECT_IDENTIFIER,
+                    type: details.type || 'whatsapp',
                     ...details,
                     is_lead: true,
+                    last_message_at: new Date().toISOString(),
                     created_at: new Date().toISOString()
                 }, { onConflict: 'id,project_id' });
 
@@ -811,6 +813,11 @@ export class HistoryHandler {
                 .single();
 
             if (ticketErr) throw ticketErr;
+
+            // Emitir eventos para refrescar backoffice y CRM en tiempo real
+            historyEvents.emit('ticket_updated', { chatId, ticket });
+            historyEvents.emit('contact_updated', { chatId, project_id: HistoryHandler.PROJECT_IDENTIFIER });
+
             return { success: true, ticket };
         } catch (err: any) {
             console.error('[HistoryHandler] Error en createNewLeadManual:', err);
@@ -1209,6 +1216,57 @@ export class HistoryHandler {
     }
 
     /**
+     * Obtiene el ticket activo (no Cerrado) para un contacto específico
+     */
+    static async getActiveTicketForContact(rawChatId: string, forcedProjectId?: string) {
+        const chatId = this.normalizeId(rawChatId);
+        const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+        try {
+            const { data, error } = await supabase
+                .from('tickets')
+                .select('*')
+                .eq('chat_id', chatId)
+                .eq('project_id', currentProjectId)
+                .neq('estado', 'Cerrado')
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            if (error) throw error;
+            return data || null;
+        } catch (err) {
+            console.error('[HistoryHandler] Error en getActiveTicketForContact:', err);
+            return null;
+        }
+    }
+
+    /**
+     * Actualiza la descripción de un ticket específico
+     */
+    static async updateTicketDescription(ticketId: string, descripcion: string, forcedProjectId?: string) {
+        const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+        try {
+            const { data, error } = await supabase
+                .from('tickets')
+                .update({ descripcion, updated_at: new Date().toISOString() })
+                .eq('id', ticketId)
+                .eq('project_id', currentProjectId)
+                .select()
+                .single();
+
+            if (error) throw error;
+            
+            // Emitir evento para WebSockets
+            historyEvents.emit('ticket_updated', { chatId: data.chat_id, ticket: data });
+            
+            return { success: true, ticket: data };
+        } catch (err: any) {
+            console.error('[HistoryHandler] Error en updateTicketDescription:', err);
+            return { success: false, error: err.message };
+        }
+    }
+
+    /**
      * Lista los tickets del proyecto
      */
     static async listTickets(limit: number = 50, offset: number = 0, estado?: string, tipo?: string, chatId?: string, ticketId?: string) {
@@ -1413,7 +1471,7 @@ export class HistoryHandler {
                 .select('*, chat_tags(tag_id, tags(*))')
                 .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER)
                 .or('is_lead.eq.true,crm_status.not.is.null')
-                .order('last_human_message_at', { ascending: false })
+                .order('last_message_at', { ascending: false })
                 .range(offset, offset + limit - 1);
 
             if (error) throw error;
