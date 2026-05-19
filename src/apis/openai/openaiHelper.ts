@@ -122,6 +122,10 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
         const history = await HistoryHandler.getMessages(userId, historyLimit, 0, projectId);
         console.log(`[openaiHelper] 📜 Historial recuperado para ${userId}: ${history.length} mensajes (Limit: ${historyLimit}) | Project: ${projectId}`);
         
+        // Cargar datos del chat para obtener el último resultado de BD
+        const chatData = await HistoryHandler.getChat(userId, projectId);
+        const lastDbResult = chatData?.last_db_result;
+        
         // 2. Preparar el prompt del sistema
         // Intentar obtener un prompt específico para este asistente usando su nombre lógico (asistente1, asistente2...)
         let promptKey = 'ASSISTANT_PROMPT';
@@ -185,6 +189,11 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
         // Inyectar fecha y hora actual en el system prompt o como mensaje adicional
         const currentDatetimeArg = getArgentinaDatetimeString();
         messages[0].content += `\n\nFecha/Hora Actual (Argentina): ${currentDatetimeArg}\nID de Usuario: ${userId}\nProject ID: ${projectId}`;
+        
+        // Inyectar el último resultado de base de datos si existe en la base de datos
+        if (lastDbResult) {
+            messages[0].content += `\n\n[ÚLTIMO RESULTADO DE BASE DE DATOS CACHEADO]:\n${lastDbResult}\n(Usa esta información de máquinas/preguntas anteriores si el usuario se refiere a ella o te pregunta al respecto, para responder de inmediato sin necesidad de volver a ejecutar la consulta query_database a menos que sea estrictamente necesario)`;
+        }
 
         // 3. Preparar Herramientas (Tools)
         let tools: any[] = [];
@@ -260,6 +269,9 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
                             const safeDato = dato.replace(/'/g, "''");
                             const sql = `SELECT * FROM "${tabla}" WHERE "${tabla}"::text ~* '${safeDato}' LIMIT 25;`;
                             toolResult = await executeDbQuery(sql);
+                            
+                            // Persistir el resultado para que esté disponible en futuros turnos del contexto
+                            await HistoryHandler.updateLastDbResult(userId, toolResult, projectId);
                         }
                     } else {
                         toolResult = JSON.stringify({ error: `Function ${funcName} not implemented.` });

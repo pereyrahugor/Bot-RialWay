@@ -327,6 +327,13 @@ export class HistoryHandler {
                             console.log(`🔧 Agregando columna assigned_to a chats...`);
                             await supabase.rpc('exec_sql', { query: `ALTER TABLE chats ADD COLUMN IF NOT EXISTS assigned_to uuid REFERENCES users(id);` });
                         }
+
+                        // Migración para last_db_result
+                        const { error: lastDbResultErr } = await supabase.from('chats').select('last_db_result').limit(1);
+                        if (lastDbResultErr && lastDbResultErr.code === '42703') {
+                            console.log(`🔧 Agregando columna last_db_result a chats...`);
+                            await supabase.rpc('exec_sql', { query: `ALTER TABLE chats ADD COLUMN IF NOT EXISTS last_db_result TEXT;` });
+                        }
                     }
 
                     // Migración para owner_id en meta_onboarding
@@ -402,6 +409,29 @@ export class HistoryHandler {
         } catch (err) {
             console.error('[HistoryHandler] Error en getChat:', err);
             return null;
+        }
+    }
+
+    /**
+     * Actualiza el último resultado de base de datos para un chat
+     */
+    static async updateLastDbResult(rawChatId: string, result: string, forcedProjectId?: string): Promise<boolean> {
+        const chatId = this.normalizeId(rawChatId);
+        const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+        try {
+            const { error } = await supabase
+                .from('chats')
+                .update({ last_db_result: result })
+                .eq('id', chatId)
+                .eq('project_id', currentProjectId);
+            if (error) {
+                console.error("[HistoryHandler] Error actualizando last_db_result en chats:", error.message);
+                return false;
+            }
+            return true;
+        } catch (err: any) {
+            console.error('[HistoryHandler] Excepción en updateLastDbResult:', err.message);
+            return false;
         }
     }
 
