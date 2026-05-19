@@ -258,7 +258,7 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
                             toolResult = JSON.stringify({ error: `Acceso denegado a la tabla ${tabla}.`, success: false });
                         } else {
                             const safeDato = dato.replace(/'/g, "''");
-                            const sql = `SELECT * FROM "${tabla}" WHERE "${tabla}"::text ~* '${safeDato}' LIMIT 10;`;
+                            const sql = `SELECT * FROM "${tabla}" WHERE "${tabla}"::text ~* '${safeDato}' LIMIT 25;`;
                             toolResult = await executeDbQuery(sql);
                         }
                     } else {

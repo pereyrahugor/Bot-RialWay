@@ -142,7 +142,7 @@ export class AiManager {
         }
 
         const assistantMap = await this.getAssistantMap(dynamicProjectId);
-        let assignedAssistantId = assistantMap[assigned] || this.assistantId;
+        const assignedAssistantId = assistantMap[assigned] || this.assistantId;
 
         // Guardar contexto en el state para uso en flujos (como idleFlow o reconectionFlow)
         if (state && state.update) {
