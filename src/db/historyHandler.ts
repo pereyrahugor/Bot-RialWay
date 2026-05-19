@@ -673,12 +673,17 @@ export class HistoryHandler {
         const chatId = this.normalizeId(rawChatId);
         const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
         try {
+            const updateObj: any = { 
+                assigned_agent: agentName,
+                bot_enabled: true // Si asignamos un agente bot, nos aseguramos que el bot esté ON
+            };
+            if (agentName === 'asistente1') {
+                updateObj.last_db_result = null;
+            }
+
             await supabase
                 .from('chats')
-                .update({ 
-                    assigned_agent: agentName,
-                    bot_enabled: true // Si asignamos un agente bot, nos aseguramos que el bot esté ON
-                })
+                .update(updateObj)
                 .eq('id', chatId)
                 .eq('project_id', currentProjectId);
 
@@ -1430,11 +1435,15 @@ export class HistoryHandler {
                 
                 if (upChatErr) throw upChatErr;
                 
-                // Si el estado es cerrado, aplicar lógica de reset de bot
+                // Si el estado es cerrado, aplicar lógica de reset de bot y limpiar caché de BD
                 if (ticketUpdate.estado === 'Cerrado') {
                     await supabase
                         .from('chats')
-                        .update({ assigned_agent: 'asistente1', bot_enabled: true })
+                        .update({ 
+                            assigned_agent: 'asistente1', 
+                            bot_enabled: true,
+                            last_db_result: null
+                        })
                         .eq('id', ticket.chat_id)
                         .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
                     
@@ -1464,14 +1473,15 @@ export class HistoryHandler {
 
             if (error) throw error;
             
-            // Si el ticket se cierra, reseteamos el agente en el chat asociado
+            // Si el ticket se cierra, reseteamos el agente en el chat asociado y limpiamos caché de BD
             if (nuevoEstado === 'Cerrado' && data?.chat_id) {
-                console.log(`[HistoryHandler] Ticket ${ticketId} cerrado. Reseteando agente para chat ${data.chat_id} a asistente1`);
+                console.log(`[HistoryHandler] Ticket ${ticketId} cerrado. Reseteando agente para chat ${data.chat_id} a asistente1 y limpiando caché de BD`);
                 await supabase
                     .from('chats')
                     .update({ 
                         assigned_agent: 'asistente1',
-                        bot_enabled: true // Re-activamos bot por defecto al cerrar thread
+                        bot_enabled: true, // Re-activamos bot por defecto al cerrar thread
+                        last_db_result: null
                     })
                     .eq('id', data.chat_id)
                     .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
