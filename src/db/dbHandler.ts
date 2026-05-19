@@ -71,8 +71,8 @@ export async function executeDbQuery(sqlQuery: string): Promise<string> {
 
             // Ya no ordenamos en JS para evitar picos de memoria/IO.
             // Confiamos en que la Query SQL ya venga con el LIMIT y ORDER BY deseado.
-            // Si el resultado es muy grande, mostramos solo los primeros 10 por seguridad de respuesta.
-            const resultData = data.slice(0, 10);
+            // Si el resultado es muy grande, mostramos solo los primeros 25 por seguridad de respuesta.
+            const resultData = data.slice(0, 25);
 
             return JSON.stringify(resultData, null, 2);
 
