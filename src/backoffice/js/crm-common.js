@@ -31,7 +31,8 @@ function highlightActiveNav() {
         
         if (path === '/backoffice' && onclick.includes('/backoffice')) item.classList.add('active');
         if (path === '/dashboard' && onclick.includes('/dashboard')) item.classList.add('active');
-        if (path === '/crm' && onclick.includes('/crm')) item.classList.add('active');
+        if (path === '/crm' && onclick.includes("'/crm'")) item.classList.add('active');
+        if (path === '/crm-tareas' && onclick.includes("'/crm-tareas'")) item.classList.add('active');
         if (path === '/webchat' && onclick.includes('/webchat')) item.classList.add('active');
         if (path === '/system-config' && onclick.includes('/system-config')) item.classList.add('active');
     });

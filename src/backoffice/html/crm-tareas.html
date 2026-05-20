@@ -3,7 +3,7 @@
 <head>
     <script src="/js/auth-check.js"></script>
     <meta charset="UTF-8">
-    <title>Tablero CRM | {{BOT_NAME}}</title>
+    <title>Dashboard de Tareas CRM | {{BOT_NAME}}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/style/backoffice.css">
@@ -13,6 +13,52 @@
     <!-- SortableJS for Drag and Drop -->
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
+    <style>
+        /* Specific enhancements for CRM Tareas */
+        .kanban-column[data-id="overdue"] {
+            border-top: 4px solid #ef4444;
+        }
+        .kanban-column[data-id="today"] {
+            border-top: 4px solid #f59e0b;
+        }
+        .kanban-column[data-id="tomorrow"] {
+            border-top: 4px solid #3b82f6;
+        }
+        .kanban-column[data-id="week"] {
+            border-top: 4px solid #10b981;
+        }
+        .kanban-column[data-id="later"] {
+            border-top: 4px solid #8b5cf6;
+        }
+        .kanban-column[data-id="nodate"] {
+            border-top: 4px solid #6b7280;
+        }
+        
+        .kanban-column[data-id="overdue"] .column-badge {
+            background-color: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+        .kanban-column[data-id="today"] .column-badge {
+            background-color: rgba(245, 158, 11, 0.2);
+            color: #f59e0b;
+        }
+        .kanban-column[data-id="tomorrow"] .column-badge {
+            background-color: rgba(59, 130, 246, 0.2);
+            color: #3b82f6;
+        }
+        .kanban-column[data-id="week"] .column-badge {
+            background-color: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+        }
+        .kanban-column[data-id="later"] .column-badge {
+            background-color: rgba(139, 92, 246, 0.2);
+            color: #8b5cf6;
+        }
+        .kanban-column[data-id="nodate"] .column-badge {
+            background-color: rgba(107, 114, 128, 0.2);
+            color: #9ca3af;
+        }
+    </style>
 </head>
 <body data-theme="light">
     <!-- Navbar -->
@@ -21,8 +67,8 @@
         <div class="nav-item" title="Dashboard" onclick="window.location.href='/dashboard'"><i class="fas fa-chart-simple"></i><span class="nav-label">Dashboard</span></div>
         <div class="nav-item" title="Conexión" onclick="window.location.href='/conexion'"><i class="fas fa-plug-circle-bolt"></i><span class="nav-label">Conexión</span></div>
         <div class="nav-item" title="Webchat" onclick="window.location.href='/webchat'"><i class="fas fa-headset"></i><span class="nav-label">Webchat</span></div>
-        <div class="nav-item active" title="CRM" onclick="window.location.href='/crm'"><i class="fas fa-id-card-clip"></i><span class="nav-label">CRM</span></div>
-        <div class="nav-item" title="Tareas" onclick="window.location.href='/crm-tareas'"><i class="fas fa-calendar-check"></i><span class="nav-label">Tareas</span></div>
+        <div class="nav-item {{SHOW_CRM_STYLE}}" title="CRM" onclick="window.location.href='/crm'"><i class="fas fa-id-card-clip"></i><span class="nav-label">CRM</span></div>
+        <div class="nav-item active {{SHOW_CRM_STYLE}}" title="Tareas" onclick="window.location.href='/crm-tareas'"><i class="fas fa-calendar-check"></i><span class="nav-label">Tareas</span></div>
         <div class="nav-item" title="Contactos" onclick="toggleLeadsPanel(event)"><i class="fas fa-user-group"></i><span class="nav-label">Contactos</span></div>
         <div class="nav-item" title="Tickets" onclick="toggleTicketsPanel(event)">
             <i class="fas fa-clipboard-check"></i>
@@ -45,23 +91,19 @@
     <div class="crm-main-container">
         <div class="kanban-header animate-fade">
             <div class="header-info">
-                <h1><i class="fas fa-layer-group kanban-header-icon"></i> CRM {{BOT_NAME}}</h1>
-                <p>Gestión visual de oportunidades y seguimiento de clientes.</p>
+                <h1><i class="fas fa-calendar-check kanban-header-icon" style="color: var(--primary);"></i> Tareas y Vencimientos {{BOT_NAME}}</h1>
+                <p>Monitoreo y agenda de contactos clasificados por fecha de alerta/seguimiento.</p>
             </div>
             <div class="header-actions">
-                <button class="btn btn-primary" onclick="toggleTasksDashboard()" id="btn-tasks-dashboard" title="Ver Tareas Pendientes">
-                    <i class="fas fa-calendar-check"></i> Dashboard Tareas
-                </button>
-                <button class="btn btn-primary" onclick="addNewColumn()">
-                    <i class="fas fa-plus"></i> Nuevo Estado
+                <button class="btn btn-primary" onclick="window.location.href='/crm'" title="Volver al Tablero CRM Principal">
+                    <i class="fas fa-columns"></i> Volver a CRM
                 </button>
                 <button class="btn btn-primary" onclick="openClosedLeadsModal()">
                     <i class="fas fa-archive"></i> Leads Cerrados
                 </button>
-                <button id="btn-new-user" class="btn btn-primary" onclick="window.openNewUserModal()" title="Gestionar Equipo">
+                <button id="btn-new-user" class="btn btn-primary" style="display:none;" onclick="window.openNewUserModal()" title="Gestionar Equipo">
                     <i class="fas fa-users"></i> Nuevo Usuario
                 </button>
-
                 <button class="btn btn-primary" onclick="toggleCRMConfigModal()" title="Configurar Campos">
                     <i class="fas fa-cog"></i> Configurar Campos
                 </button>
@@ -71,21 +113,82 @@
             </div>
         </div>
 
-        <!-- Tasks Dashboard Panel -->
-        <div id="tasks-dashboard" class="tasks-dashboard-panel">
-            <div class="tasks-header">
-                <h3><i class="fas fa-calendar-day"></i> Tareas del Día</h3>
-                <button class="btn-icon" onclick="toggleTasksDashboard()"><i class="fas fa-times"></i></button>
-            </div>
-            <div class="tasks-content" id="tasks-list-content">
-                <div class="loading-placeholder"><i class="fas fa-spinner fa-spin"></i> Cargando tareas...</div>
-            </div>
-        </div>
-
-        <!-- Kanban Board Area -->
+        <!-- Kanban Board Area structured chronologically -->
         <div id="kanban-board" class="kanban-scroll-area">
             <div class="kanban-board-inner" id="kanban-board-inner">
-                <!-- Las columnas se renderizan dinámicamente desde crm.js -->
+                
+                <!-- Vencidas -->
+                <div class="kanban-column overdue-column animate-fade" data-id="overdue">
+                    <div class="column-header">
+                        <div class="column-title-group">
+                            <i class="fas fa-calendar-times" style="color:#ef4444;"></i>
+                            <span class="column-title">Vencidas</span>
+                        </div>
+                        <span class="column-badge" id="badge-overdue">0</span>
+                    </div>
+                    <div class="kanban-cards" id="cards-overdue"></div>
+                </div>
+
+                <!-- Hoy -->
+                <div class="kanban-column today-column animate-fade" data-id="today">
+                    <div class="column-header">
+                        <div class="column-title-group">
+                            <i class="fas fa-calendar-day" style="color:#f59e0b;"></i>
+                            <span class="column-title">Hoy</span>
+                        </div>
+                        <span class="column-badge" id="badge-today">0</span>
+                    </div>
+                    <div class="kanban-cards" id="cards-today"></div>
+                </div>
+
+                <!-- Mañana -->
+                <div class="kanban-column tomorrow-column animate-fade" data-id="tomorrow">
+                    <div class="column-header">
+                        <div class="column-title-group">
+                            <i class="fas fa-calendar-minus" style="color:#3b82f6;"></i>
+                            <span class="column-title">Mañana</span>
+                        </div>
+                        <span class="column-badge" id="badge-tomorrow">0</span>
+                    </div>
+                    <div class="kanban-cards" id="cards-tomorrow"></div>
+                </div>
+
+                <!-- Esta Semana -->
+                <div class="kanban-column week-column animate-fade" data-id="week">
+                    <div class="column-header">
+                        <div class="column-title-group">
+                            <i class="fas fa-calendar-week" style="color:#10b981;"></i>
+                            <span class="column-title">Esta Semana</span>
+                        </div>
+                        <span class="column-badge" id="badge-week">0</span>
+                    </div>
+                    <div class="kanban-cards" id="cards-week"></div>
+                </div>
+
+                <!-- Más adelante -->
+                <div class="kanban-column later-column animate-fade" data-id="later">
+                    <div class="column-header">
+                        <div class="column-title-group">
+                            <i class="fas fa-calendar-plus" style="color:#8b5cf6;"></i>
+                            <span class="column-title">Más Adelante</span>
+                        </div>
+                        <span class="column-badge" id="badge-later">0</span>
+                    </div>
+                    <div class="kanban-cards" id="cards-later"></div>
+                </div>
+
+                <!-- Sin Fecha -->
+                <div class="kanban-column nodate-column animate-fade" data-id="nodate">
+                    <div class="column-header">
+                        <div class="column-title-group">
+                            <i class="fas fa-calendar-xmark" style="color:#6b7280;"></i>
+                            <span class="column-title">Sin Fecha</span>
+                        </div>
+                        <span class="column-badge" id="badge-nodate">0</span>
+                    </div>
+                    <div class="kanban-cards" id="cards-nodate"></div>
+                </div>
+
             </div>
         </div>
     </div>
@@ -105,8 +208,6 @@
                     <input type="hidden" id="edit-lead-id">
 
                     <div id="crm-fields-container">
-                        <!-- Campos del Lead se inyectarán aquí según la configuración -->
-
                         <div class="modal-section" data-field="crm-ticket-title">
                             <label><i class="fas fa-envelope-open-text"></i> Titulo del Ticket</label>
                             <input type="text" id="edit-ticket-title" class="crm-input" placeholder="Ej: Consulta por preventa">
@@ -196,8 +297,8 @@
 
                         <div class="modal-section" data-field="crm-status">
                             <label><i class="fas fa-tasks"></i> Estado del Lead (CRM)</label>
-                            <select id="edit-lead-status" class="crm-input" onchange="syncStatusToColumn(this.value)">
-                                <!-- Opciones generadas dinámicamente según las columnas -->
+                            <select id="edit-lead-status" class="crm-input">
+                                <!-- Se llena dinámicamente -->
                             </select>
                         </div>
                     </div>
@@ -212,7 +313,7 @@
 
                     <div id="alert-status-info"></div>
 
-                    <div id="assignee-section" class="modal-section">
+                    <div id="assignee-section" class="modal-section" style="display:none;">
                         <label><i class="fas fa-user-tag assignee-icon"></i> Asignar Lead a:</label>
                         <select id="edit-lead-assignee" class="crm-input">
                             <option value="">Sin asignar (Libre)</option>
@@ -240,27 +341,6 @@
         </div>
     </div>
 
-    <!-- Modal Editar Nombre Columna -->
-    <div id="column-modal" class="modal-overlay">
-        <div class="modal-content animate-pop modal-content-sm">
-            <div class="modal-header">
-                <h3>✏️ Editar Estado</h3>
-                <button class="btn-close-modal" onclick="closeColumnModal()"><i class="fas fa-times"></i></button>
-            </div>
-            <div class="modal-body">
-                <input type="text" id="column-name-input" class="crm-input" placeholder="Nombre del estado...">
-                <div class="modal-action-row">
-                    <button class="btn btn-danger btn-flex-1" onclick="deleteCurrentColumn()" id="btn-delete-col">
-                        <i class="fas fa-trash-alt"></i> Eliminar
-                    </button>
-                    <button class="btn btn-primary btn-flex-2" onclick="saveColumnName()">
-                        <i class="fas fa-check"></i> Guardar
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- Modal Leads Cerrados -->
     <div id="closed-leads-modal" class="modal-overlay">
         <div class="modal-content animate-pop modal-content-lg">
@@ -275,7 +355,6 @@
             </div>
         </div>
     </div>
-
 
     <!-- Modal Crear Nuevo Lead -->
     <div id="new-lead-modal" class="modal-overlay">
@@ -340,7 +419,6 @@
         </div>
     </div>
 
-
     <!-- MODAL DE CONFIGURACIÓN CRM -->
     <div id="crm-config-modal" class="modal-overlay">
         <div class="modal-content animate-pop modal-content-md">
@@ -368,6 +446,6 @@
     </div>
 
     <script src="/js/crm-common.js"></script>
-    <script src="/js/crm.js"></script>
+    <script src="/js/crm-tareas.js"></script>
 </body>
 </html>

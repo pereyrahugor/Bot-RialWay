@@ -1422,7 +1422,8 @@ export class HistoryHandler {
                     tax_status: details.contact.tax_status,
                     offered_product: details.contact.offered_product,
                     crm_status: details.contact.crm_status,
-                    notes: details.notas // Sincronizar notas también en el chat si se desea
+                    notes: details.notas, // Sincronizar notas también en el chat si se desea
+                    crm_due_date: details.contact.crm_due_date
                 };
 
                 if (details.contact.source) chatUpdate.source = details.contact.source;

@@ -107,6 +107,7 @@ export const registerStaticRoutes = (app: any, { __dirname, provider, groupProvi
     serveHtmlPage("/backoffice", "backoffice.html");
     serveHtmlPage("/backoffice-preview", "backoffice-preview.html");
     serveHtmlPage("/crm", "crm.html");
+    serveHtmlPage("/crm-tareas", "crm-tareas.html");
     serveHtmlPage("/documentacion", "docs.html");
     serveHtmlPage("/docs", "docs.html");
 
