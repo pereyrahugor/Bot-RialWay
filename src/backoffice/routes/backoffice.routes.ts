@@ -2203,12 +2203,13 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     // --- GET README / INSTRUCTIONS ---
     app.get('/api/backoffice/get-docs', backofficeAuth, async (req: any, res: any) => {
         try {
+            const docType = req.query.type === 'api' ? 'INSTRUCCIONES_API.md' : 'INSTRUCCIONES_USO.md';
             const rootDir = process.cwd();
-            const docsPath = path.join(rootDir, 'docs', 'INSTRUCCIONES_USO.md');
-            const distDocsPath = path.join(rootDir, 'dist', 'docs', 'INSTRUCCIONES_USO.md');
-            const altPath = path.join(path.dirname(url.fileURLToPath(import.meta.url)), '..', '..', 'docs', 'INSTRUCCIONES_USO.md');
+            const docsPath = path.join(rootDir, 'docs', docType);
+            const distDocsPath = path.join(rootDir, 'dist', 'docs', docType);
+            const altPath = path.join(path.dirname(url.fileURLToPath(import.meta.url)), '..', '..', 'docs', docType);
             
-            console.log(`📂 [Docs] Buscando en: ${docsPath}, ${distDocsPath}, ${altPath}`);
+            console.log(`📂 [Docs] Buscando (${docType}) en: ${docsPath}, ${distDocsPath}, ${altPath}`);
 
             let content = '';
             if (fs.existsSync(docsPath)) {

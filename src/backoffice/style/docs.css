@@ -119,10 +119,61 @@ body {
 }
 
 /* ---------------------------------------------------
+   Pestañas de navegación de manuales
+   --------------------------------------------------- */
+.docs-tabs {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 30px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 20px;
+}
+
+.tab-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 12px 24px;
+    border-radius: 12px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.95rem;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tab-btn:hover {
+    background: rgba(37, 99, 235, 0.05);
+    color: var(--primary);
+    border-color: var(--primary);
+}
+
+.tab-btn.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
+}
+
+[data-theme="dark"] .tab-btn.active {
+    background: var(--nav-active-bg);
+    border-color: var(--nav-active-bg);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+}
+
+[data-theme="dark"] .tab-btn:hover {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--nav-icon-color);
+    border-color: var(--nav-icon-color);
+}
+
+/* ---------------------------------------------------
    Estilos de impresión / PDF
    --------------------------------------------------- */
 @media print {
-    #navbar, .btn-print, .doc-header { display: none !important; }
+    #navbar, .btn-print, .doc-header, .docs-tabs { display: none !important; }
     body { background: white !important; height: auto !important; overflow: visible !important; }
     .docs-container { padding: 0 !important; overflow: visible !important; }
     .docs-card {
