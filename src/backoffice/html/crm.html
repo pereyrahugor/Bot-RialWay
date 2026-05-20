@@ -49,9 +49,6 @@
                 <p>Gestión visual de oportunidades y seguimiento de clientes.</p>
             </div>
             <div class="header-actions">
-                <button class="btn btn-primary" onclick="toggleTasksDashboard()" id="btn-tasks-dashboard" title="Ver Tareas Pendientes">
-                    <i class="fas fa-calendar-check"></i> Dashboard Tareas
-                </button>
                 <button class="btn btn-primary" onclick="addNewColumn()">
                     <i class="fas fa-plus"></i> Nuevo Estado
                 </button>
@@ -68,17 +65,6 @@
                 <button class="btn btn-primary" onclick="window.openNewLeadModal()" title="Crear Lead">
                     <i class="fas fa-plus-circle"></i> Crear Lead Card
                 </button>
-            </div>
-        </div>
-
-        <!-- Tasks Dashboard Panel -->
-        <div id="tasks-dashboard" class="tasks-dashboard-panel">
-            <div class="tasks-header">
-                <h3><i class="fas fa-calendar-day"></i> Tareas del Día</h3>
-                <button class="btn-icon" onclick="toggleTasksDashboard()"><i class="fas fa-times"></i></button>
-            </div>
-            <div class="tasks-content" id="tasks-list-content">
-                <div class="loading-placeholder"><i class="fas fa-spinner fa-spin"></i> Cargando tareas...</div>
             </div>
         </div>
 

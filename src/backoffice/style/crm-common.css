@@ -17,6 +17,10 @@
     --shadow-ambient: 0 10px 40px rgba(0,0,0,0.02);
     --danger: #ef4444;
     --sidebar-width: 70px;
+    --nav-icon-color: #2563EB;
+    --nav-active-bg: #2563EB;
+    --nav-active-color: #ffffff;
+    --nav-hover-bg: rgba(37, 99, 235, 0.08);
 }
 
 [data-theme="dark"] {
@@ -29,6 +33,10 @@
     --glass-bg: rgba(17, 27, 33, 0.75);
     --glass-border: rgba(255, 255, 255, 0.08);
     --sidebar-width: 70px;
+    --nav-icon-color: #10b981;
+    --nav-active-bg: #10b981;
+    --nav-active-color: #ffffff;
+    --nav-hover-bg: rgba(16, 185, 129, 0.1);
 }
 
 /* Custom Scrollbar - Diseño Minimalista y Premium */
@@ -123,7 +131,7 @@ body {
     justify-content: flex-start;
     border-radius: 12px;
     cursor: pointer;
-    color: var(--text-muted);
+    color: var(--nav-icon-color);
     font-size: 1.2rem;
     transition: all 0.2s ease;
     white-space: nowrap;
@@ -135,6 +143,8 @@ body {
     text-align: center;
     flex-shrink: 0;
     font-size: 1.2rem;
+    color: var(--nav-icon-color);
+    transition: color 0.2s ease;
 }
 
 .nav-label {
@@ -142,6 +152,7 @@ body {
     margin-left: 12px;
     font-size: 0.95rem;
     font-weight: 600;
+    color: var(--nav-icon-color);
     opacity: 0;
     transform: translateX(-15px);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -159,14 +170,28 @@ body {
 }
 
 .nav-item:hover {
-    background: rgba(37, 99, 235, 0.08);
-    color: var(--primary);
+    background: var(--nav-hover-bg);
 }
 
 .nav-item.active {
-    background: var(--primary);
-    color: white;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+    background: var(--nav-active-bg);
+    color: var(--nav-active-color);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
+}
+
+.nav-item.active i,
+.nav-item.active .nav-label {
+    color: var(--nav-active-color) !important;
+}
+
+/* Mantener el logout de color rojo de peligro para mejor UX */
+.nav-item.nav-item-logout i,
+.nav-item.nav-item-logout .nav-label {
+    color: #ef4444 !important;
+}
+
+.nav-item.nav-item-logout:hover {
+    background: rgba(239, 68, 68, 0.1) !important;
 }
 
 /* Main Content Container */
