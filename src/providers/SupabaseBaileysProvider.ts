@@ -35,6 +35,14 @@ export class SupabaseBaileysProvider extends BaileysProvider {
     }
 
     /**
+     * Anula el marcado automático como leído de BuilderBot
+     */
+    public sendSeen = async (number: string): Promise<any> => {
+        // No-op para evitar que el bot marque los mensajes como leídos de forma automática
+        return null;
+    }
+
+    /**
      * BuilderBot define initVendor como una propiedad asignada a una función.
      * Debemos seguir el mismo patrón para evitar conflictos de tipos.
      */

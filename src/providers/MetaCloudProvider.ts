@@ -28,6 +28,14 @@ class MetaCloudProvider extends ProviderClass {
     }
 
     /**
+     * Anula el marcado automático como leído de BuilderBot
+     */
+    public sendSeen = async (number: string): Promise<any> => {
+        // No-op para evitar que el bot marque los mensajes como leídos de forma automática
+        return null;
+    }
+
+    /**
      * Descarga y guarda archivos multimedia recibidos por webhook
      */
     public async saveFile(ctx: any, options: { path?: string } = {}): Promise<string> {
