@@ -109,7 +109,7 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
     const openai = await getOpenAI();
     if (!openai) {
         console.warn("⚠️ OPENAI_API_KEY no detectada. El asistente de IA está desactivado.");
-        return "Lo siento, el asistente de IA no está configurado actualmente.";
+        return "";
     }
 
     try {
