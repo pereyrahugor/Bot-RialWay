@@ -52,6 +52,19 @@ export class HistoryHandler {
     static readonly PROJECT_ID = process.env.RAILWAY_PROJECT_ID || "default_project";
     static initialized = false;
 
+    // In-memory caches to optimize database performance and avoid Disk I/O exhaustion (Supabase Best Practice)
+    private static settingsCache = new Map<string, { value: string | null, timestamp: number }>();
+    private static chatCache = new Map<string, { data: any, timestamp: number }>();
+    private static readonly CACHE_TTL_MS = 60 * 1000; // Settings cache: 1 minute
+    private static readonly CHAT_CACHE_TTL_MS = 15 * 1000; // Chat cache: 15 seconds
+
+    private static invalidateChatCache(rawChatId: string, projectId?: string) {
+        const chatId = this.normalizeId(rawChatId);
+        const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
+        const cacheKey = `${currentProjectId}:${chatId}`;
+        this.chatCache.delete(cacheKey);
+    }
+
     static getSupabase() {
         return supabase;
     }
@@ -393,6 +406,15 @@ export class HistoryHandler {
     static async getChat(rawChatId: string, forcedProjectId?: string): Promise<any | null> {
         const chatId = this.normalizeId(rawChatId);
         const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+        const cacheKey = `${currentProjectId}:${chatId}`;
+        const now = Date.now();
+
+        // 1. Intentar obtener desde cache en memoria
+        const cached = this.chatCache.get(cacheKey);
+        if (cached && (now - cached.timestamp < this.CHAT_CACHE_TTL_MS)) {
+            return cached.data;
+        }
+
         try {
             const { data, error } = await supabase
                 .from('chats')
@@ -405,6 +427,9 @@ export class HistoryHandler {
             if (data) {
                 data.tags = data.chat_tags ? data.chat_tags.map((ct: any) => ct.tags).filter((t: any) => t !== null) : [];
             }
+
+            // 2. Guardar en cache antes de retornar
+            this.chatCache.set(cacheKey, { data, timestamp: now });
             return data;
         } catch (err) {
             console.error('[HistoryHandler] Error en getChat:', err);
@@ -418,6 +443,10 @@ export class HistoryHandler {
     static async updateLastDbResult(rawChatId: string, result: string, forcedProjectId?: string): Promise<boolean> {
         const chatId = this.normalizeId(rawChatId);
         const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+        
+        // Invalidar cache del chat
+        this.invalidateChatCache(chatId, currentProjectId);
+
         try {
             const { error } = await supabase
                 .from('chats')
@@ -480,6 +509,7 @@ export class HistoryHandler {
                 // Si lo encontramos por Phone pero no tiene el user_id (BSUID) guardado, lo actualizamos
                 if (data && userId && !data.user_id) {
                     console.log(`[HistoryHandler] 🔗 Mapeando BSUID ${userId} al chat existente ${chatId}`);
+                    this.invalidateChatCache(chatId, currentProjectId);
                     await supabase.from('chats')
                         .update({ user_id: userId })
                         .eq('id', chatId)
@@ -490,6 +520,7 @@ export class HistoryHandler {
 
             // 3. Si sigue sin existir, lo creamos
             if (!data) {
+                this.invalidateChatCache(chatId, currentProjectId);
                 const { data: newData, error: insertError } = await supabase
                     .from('chats')
                     .insert({
@@ -513,6 +544,7 @@ export class HistoryHandler {
 
             // Actualizar nombre si es null y ahora tenemos uno
             if (name && !data.name) {
+                this.invalidateChatCache(chatId, currentProjectId);
                 await supabase.from('chats').update({ name }).eq('id', chatId).eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
             }
 
@@ -629,6 +661,8 @@ export class HistoryHandler {
                 .eq('id', chatId)
                 .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
 
+            this.invalidateChatCache(chatId);
+
             // Emitir evento para WebSockets (esto actualiza la UI en tiempo real)
             historyEvents.emit('new_message', { 
                 chat_id: chatId, 
@@ -644,22 +678,10 @@ export class HistoryHandler {
         }
     }
 
-    /**
-     * Obtiene el asistente asignado al chat
-     */
     static async getAssignedAgent(rawChatId: string, forcedProjectId?: string): Promise<string> {
-        const chatId = this.normalizeId(rawChatId);
-        const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
         try {
-            const { data, error } = await supabase
-                .from('chats')
-                .select('assigned_agent')
-                .eq('id', chatId)
-                .eq('project_id', currentProjectId)
-                .maybeSingle();
-            
-            if (error || !data || !data.assigned_agent) return 'asistente1';
-            return data.assigned_agent;
+            const chat = await this.getChat(rawChatId, forcedProjectId);
+            return chat && chat.assigned_agent ? chat.assigned_agent : 'asistente1';
         } catch (err) {
             console.error('[HistoryHandler] Error en getAssignedAgent:', err);
             return 'asistente1';
@@ -672,6 +694,10 @@ export class HistoryHandler {
     static async setAssignedAgent(rawChatId: string, agentName: string, forcedProjectId?: string) {
         const chatId = this.normalizeId(rawChatId);
         const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+        
+        // Invalidar cache
+        this.invalidateChatCache(chatId, currentProjectId);
+
         try {
             const updateObj: any = { 
                 assigned_agent: agentName,
@@ -715,6 +741,10 @@ export class HistoryHandler {
         const chatId = this.normalizeId(rawChatId);
         const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
         if (details.name === '[-]') details.name = undefined;
+
+        // Invalidar cache
+        this.invalidateChatCache(chatId, currentProjectId);
+
         try {
             const { error } = await supabase
                 .from('chats')
@@ -775,6 +805,10 @@ export class HistoryHandler {
         if (!tagsList || tagsList.length === 0) return;
         
         const chatId = this.normalizeId(rawChatId);
+        
+        // Invalidar cache
+        this.invalidateChatCache(chatId, projectId);
+
         try {
             for (const tagName of tagsList) {
                 const tagId = await this.ensureTagExists(tagName, projectId);
@@ -808,6 +842,9 @@ export class HistoryHandler {
      */
     static async createNewLeadManual(chatId: string, details: any) {
         try {
+            // Invalidar cache
+            this.invalidateChatCache(chatId);
+
             // 1. Crear o actualizar el chat (Lead)
             const { error: chatErr } = await supabase
                 .from('chats')
@@ -864,18 +901,9 @@ export class HistoryHandler {
      * Verifica si el bot está habilitado para un usuario
      */
     static async isBotEnabled(rawChatId: string): Promise<boolean> {
-        const chatId = this.normalizeId(rawChatId);
         try {
-            const { data, error } = await supabase
-                .from('chats')
-                .select('bot_enabled')
-                .eq('id', chatId)
-                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER)
-                    .maybeSingle();
-
-            if (error) throw error;
-            // Si no hay datos, o bot_enabled es null, asumimos que está habilitado (true)
-            return data ? (data.bot_enabled !== false) : true;
+            const chat = await this.getChat(rawChatId);
+            return chat ? (chat.bot_enabled !== false) : true;
         } catch (err) {
             console.error('[HistoryHandler] Error en isBotEnabled:', err);
             return true;
@@ -887,6 +915,10 @@ export class HistoryHandler {
      */
     static async toggleBot(rawChatId: string, enabled: boolean) {
         const chatId = this.normalizeId(rawChatId);
+        
+        // Invalidar cache
+        this.invalidateChatCache(chatId);
+
         try {
             const updateData: any = { bot_enabled: enabled };
             if (enabled === false) {
@@ -919,6 +951,10 @@ export class HistoryHandler {
      */
     static async updateLastHumanMessage(rawChatId: string) {
         const chatId = this.normalizeId(rawChatId);
+        
+        // Invalidar cache
+        this.invalidateChatCache(chatId);
+
         try {
             await supabase
                 .from('chats')
@@ -1081,6 +1117,9 @@ export class HistoryHandler {
         try {
             const chatId = this.normalizeId(rawChatId);
             
+            // Invalidar cache
+            this.invalidateChatCache(chatId);
+
             // Aseguramos que el chat base existe antes de vincular la etiqueta
             // para evitar fallos de clave foránea si el chat no ha sido persistido aún.
             await this.getOrCreateChat(chatId, 'whatsapp');
@@ -1107,6 +1146,10 @@ export class HistoryHandler {
     static async removeTagFromChat(rawChatId: string, tagId: string) {
         try {
             const chatId = this.normalizeId(rawChatId);
+            
+            // Invalidar cache
+            this.invalidateChatCache(chatId);
+
             const { error } = await supabase
                 .from('chat_tags')
                 .delete()
@@ -1123,14 +1166,8 @@ export class HistoryHandler {
 
     static async getChatTags(rawChatId: string) {
         try {
-            const chatId = this.normalizeId(rawChatId);
-            const { data, error } = await supabase
-                .from('chat_tags')
-                .select('tag_id, tags(*)')
-                .eq('chat_id', chatId)
-                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
-            if (error) throw error;
-            return (data || []).map((item: any) => item.tags).filter((t: any) => t !== null);
+            const chat = await this.getChat(rawChatId);
+            return chat && chat.tags ? chat.tags : [];
         } catch (err) {
             console.error('[HistoryHandler] Error en getChatTags:', err);
             return [];
@@ -1139,11 +1176,12 @@ export class HistoryHandler {
 
 
 
-    /**
-     * Guarda el thread_id de OpenAI en el metadata del chat
-     */
     static async saveThreadId(chatId: string, threadId: string, forcedProjectId?: string) {
         const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+        
+        // Invalidar cache
+        this.invalidateChatCache(chatId, currentProjectId);
+
         try {
             // Primero obtenemos metadata actual
             const { data } = await supabase
@@ -1151,7 +1189,7 @@ export class HistoryHandler {
                 .select('metadata')
                 .eq('id', chatId)
                 .eq('project_id', currentProjectId)
-                    .maybeSingle();
+                .maybeSingle();
 
             const currentMetadata = data?.metadata || {};
             const updatedMetadata = { ...currentMetadata, thread_id: threadId };
@@ -1170,16 +1208,9 @@ export class HistoryHandler {
      * Obtiene el thread_id de OpenAI del metadata del chat
      */
     static async getThreadId(chatId: string, forcedProjectId?: string): Promise<string | null> {
-        const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
         try {
-            const { data } = await supabase
-                .from('chats')
-                .select('metadata')
-                .eq('id', chatId)
-                .eq('project_id', currentProjectId)
-                    .maybeSingle();
-
-            return data?.metadata?.thread_id || null;
+            const chat = await this.getChat(chatId, forcedProjectId);
+            return chat?.metadata?.thread_id || null;
         } catch (err) {
             console.error('[HistoryHandler] Error en getThreadId:', err);
             return null;
@@ -1436,8 +1467,11 @@ export class HistoryHandler {
                 
                 if (upChatErr) throw upChatErr;
                 
+                this.invalidateChatCache(ticket.chat_id);
+                
                 // Si el estado es cerrado, aplicar lógica de reset de bot y limpiar caché de BD
                 if (ticketUpdate.estado === 'Cerrado') {
+                    this.invalidateChatCache(ticket.chat_id);
                     await supabase
                         .from('chats')
                         .update({ 
@@ -1477,6 +1511,7 @@ export class HistoryHandler {
             // Si el ticket se cierra, reseteamos el agente en el chat asociado y limpiamos caché de BD
             if (nuevoEstado === 'Cerrado' && data?.chat_id) {
                 console.log(`[HistoryHandler] Ticket ${ticketId} cerrado. Reseteando agente para chat ${data.chat_id} a asistente1 y limpiando caché de BD`);
+                this.invalidateChatCache(data.chat_id);
                 await supabase
                     .from('chats')
                     .update({ 
@@ -1701,6 +1736,11 @@ export class HistoryHandler {
     static async saveSetting(key: string, value: string, projectId: string | null = null) {
         if (!supabase) return;
         const targetProjectId = projectId || HistoryHandler.PROJECT_IDENTIFIER;
+        
+        // Invalidar cache en memoria
+        const cacheKey = `${targetProjectId}:${key}`;
+        this.settingsCache.delete(cacheKey);
+
         const { error } = await supabase
             .from('settings')
             .upsert({ 
@@ -1713,6 +1753,11 @@ export class HistoryHandler {
         if (error) {
             console.error(`❌ [HistoryHandler] Error guardando setting ${key}:`, error);
         } else {
+            // Sincronizar en process.env para que el bot actualice su comportamiento de inmediato (Hot-update)
+            if (targetProjectId === HistoryHandler.PROJECT_IDENTIFIER && value !== 'PENDING') {
+                process.env[key] = value;
+            }
+
             // --- PASO ADICIONAL: Si configuramos IDs de Meta, registrar en la routing_table para triangulación ---
             if ((key === 'FACEBOOK_PAGE_ID' || key === 'INSTAGRAM_BUSINESS_ID') && value) {
                 const publicDomain = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PROJECT_URL;
@@ -1738,7 +1783,15 @@ export class HistoryHandler {
     static async getSetting(key: string, projectId: string | null = null): Promise<string | null> {
         if (!supabase) return null;
         const targetProjectId = projectId || HistoryHandler.PROJECT_IDENTIFIER;
-        // console.log(`[HistoryHandler] 🔍 Fetching setting: ${key} for project: ${targetProjectId}`);
+        const cacheKey = `${targetProjectId}:${key}`;
+        const now = Date.now();
+
+        // 1. Intentar obtener desde cache en memoria
+        const cached = this.settingsCache.get(cacheKey);
+        if (cached && (now - cached.timestamp < this.CACHE_TTL_MS)) {
+            return cached.value;
+        }
+
         const { data, error } = await supabase
             .from('settings')
             .select('value')
@@ -1749,7 +1802,13 @@ export class HistoryHandler {
         if (error && error.code !== 'PGRST116') {
             console.error(`❌ [HistoryHandler] Error obteniendo setting ${key}:`, error);
         }
-        return data ? data.value : null;
+
+        const value = data ? data.value : null;
+
+        // 2. Guardar en cache antes de retornar
+        this.settingsCache.set(cacheKey, { value, timestamp: now });
+
+        return value;
     }
 
     /**
