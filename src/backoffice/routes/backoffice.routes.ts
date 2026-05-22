@@ -305,12 +305,19 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                                 const duration = parseFloat(durationStr);
                                 
                                 if (!isNaN(duration) && duration > 0) {
-                                    // 2. Calcular bitrate para ~14.5MB (margen de seguridad)
-                                    const targetBitrate = Math.floor((14.5 * 1024 * 1024 * 8) / duration);
+                                    // 2. Calcular bitrate contemplando video + audio + margen de seguridad (14MB total)
+                                    const maxTotalSizeBytes = 14.0 * 1024 * 1024; // 14MB para estar seguros bajo los 16MB
+                                    const totalTargetBitrate = Math.floor((maxTotalSizeBytes * 8) / duration);
                                     
-                                    // 3. Ejecutar ffmpeg
-                                    console.log(`🎬 [BULK] Comprimiendo a ${targetBitrate} bps (Duración: ${durationStr}s)`);
-                                    execSync(`ffmpeg -i "${dest}" -b:v ${targetBitrate} -vcodec libx264 -preset fast -acodec aac -movflags +faststart -y "${compressedDest}"`);
+                                    const audioBitrate = 64000; // 64 kbps es ideal y de excelente calidad para audio comprimido en WhatsApp
+                                    let videoBitrate = totalTargetBitrate - audioBitrate;
+                                    if (videoBitrate < 150000) {
+                                        videoBitrate = 150000; // Bitrate mínimo de video de seguridad para evitar mala calidad extrema
+                                    }
+                                    
+                                    // 3. Ejecutar ffmpeg especificando bitrates de video y audio
+                                    console.log(`🎬 [BULK] Comprimiendo: Video a ${videoBitrate} bps, Audio a ${audioBitrate} bps (Duración: ${durationStr}s)`);
+                                    execSync(`ffmpeg -i "${dest}" -b:v ${videoBitrate} -vcodec libx264 -preset fast -acodec aac -b:a ${audioBitrate} -movflags +faststart -y "${compressedDest}"`);
                                     
                                     // 4. Cambiar a la versión comprimida
                                     finalUrl = `${baseUrl.replace(/\/$/, '')}/uploads/${compressedFilename}`;
