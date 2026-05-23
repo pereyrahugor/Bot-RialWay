@@ -33,6 +33,10 @@ export async function updateAllDocs() {
         .filter(Boolean);
 
     for (const DOCX_FILE_ID of DOCX_FILE_IDS) {
+        if (DOCX_FILE_ID === "default" || DOCX_FILE_ID === "PENDING" || DOCX_FILE_ID.startsWith("default_")) {
+            console.log(`ℹ️ [GoogleDocs] Saltando ID de doc marcador de posición: "${DOCX_FILE_ID}"`);
+            continue;
+        }
 
         await processDocById(DOCX_FILE_ID);
     }

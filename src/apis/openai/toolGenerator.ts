@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 import { HistoryHandler } from "../../db/historyHandler";
 import { syncAssistantTools } from "./openaiHelper";
+import { vault } from "../../db/vault";
 
 /**
  * Genera automáticamente la definición de herramientas (Tools) y actualiza la configuración del bot
@@ -16,8 +17,8 @@ export async function autoUpdateBotAbilities(tableNames: string[]) {
     }
 
     try {
-        const supabaseUrl = process.env.SUPABASE_URL;
-        const supabaseKey = process.env.SUPABASE_KEY;
+        const supabaseUrl = process.env.SUPABASE_URL || vault.supabaseUrl;
+        const supabaseKey = process.env.SUPABASE_KEY || vault.supabaseKey;
         
         // Intentar obtener la clave específica para el generador, fallback a la principal
         const openaiKey = await HistoryHandler.getConfig('OPENAI_API_KEY_TOOLS') || await HistoryHandler.getConfig('OPENAI_API_KEY');

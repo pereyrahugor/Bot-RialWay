@@ -44,7 +44,10 @@ export async function updateAllSheets(options: { forceRecreate?: boolean } = {})
     const sheets = getSheetsClient();
     const tableNames: string[] = [];
     for (const SHEET_ID of SHEET_IDS) {
-
+        if (SHEET_ID === "default" || SHEET_ID === "PENDING" || SHEET_ID.startsWith("default_")) {
+            console.log(`ℹ️ [GoogleSheets] Saltando ID de hoja marcador de posición: "${SHEET_ID}"`);
+            continue;
+        }
 
         const tableName = await processSheetById(SHEET_ID, options);
 
