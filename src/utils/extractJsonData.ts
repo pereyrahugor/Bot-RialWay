@@ -14,10 +14,14 @@ const extraerDatosResumen = (resumen: string): GenericResumenData => {
             const key = match[1].trim().replace(/^[-–—\s]+/, '');
             const value = match[2].trim();
             data[key] = value;
-            // Si la clave es 'Tipo', 'Type' o similar, normalizar a 'tipo'
             const lowerKey = key.toLowerCase();
+            // Si la clave es 'Tipo', 'Type' o similar, normalizar a 'tipo'
             if (lowerKey === 'tipo' || lowerKey === 'type') {
                 data['tipo'] = value;
+            }
+            // Si la clave es 'Tag', 'Tags', 'Etiqueta', 'Etiquetas' o similar, normalizar a 'tag'
+            if (lowerKey === 'tag' || lowerKey === 'tags' || lowerKey === 'etiqueta' || lowerKey === 'etiquetas') {
+                data['tag'] = value;
             }
         }
     }

@@ -1052,6 +1052,62 @@ function handleDrop(e) {
 }
 
 // --- Tasks Dashboard Logic ---
+window.toggleTasksDashboard = () => {
+    const panel = document.getElementById('tasks-dashboard');
+    panel.classList.toggle('active');
+    if (panel.classList.contains('active')) {
+        loadTasksDashboard();
+    }
+};
+
+async function loadTasksDashboard() {
+    const container = document.getElementById('tasks-list-content');
+    if (!container) return;
+
+    try {
+        const res = await fetch(`/api/backoffice/crm/tasks?token=${activeToken}`);
+        const tasks = await res.json();
+
+        if (!tasks || tasks.length === 0) {
+            container.innerHTML = '<div class="tasks-empty">No hay tareas pendientes para los próximos días.</div>';
+            return;
+        }
+
+        const todayStr = new Date().toISOString().split('T')[0];
+
+        container.innerHTML = tasks.map(t => {
+            const dateStr = t.crm_due_date ? t.crm_due_date.split('T')[0] : '';
+            const isToday = dateStr === todayStr;
+            const isOverdue = dateStr < todayStr;
+            const statusClass = isToday ? 'today' : (isOverdue ? 'overdue' : '');
+            
+            return `
+                <div class="task-item ${statusClass}" onclick="openCardModalFromTask('${t.id}')">
+                    <div class="task-date">${formatDate(dateStr)} ${isToday ? '(HOY)' : (isOverdue ? '(VENCIDO)' : '')}</div>
+                    <div class="task-title">${t.name || 'Lead sin nombre'}</div>
+                    <div class="task-lead"><i class="fas fa-tasks"></i> Estado: ${t.crm_status || 'NUEVO'}</div>
+                    <div style="font-size:0.7rem; opacity:0.6; margin-top:5px;">ID: ${t.id.split('@')[0]}</div>
+                </div>
+            `;
+        }).join('');
+    } catch (e) {
+        console.error('[Tasks] Error:', e);
+        container.innerHTML = '<div class="tasks-empty" style="color:#ef4444;">Error al cargar tareas.</div>';
+    }
+}
+
+async function openCardModalFromTask(chatId) {
+    // Buscar el ticket asociado a este chat
+    const ticket = allTickets.find(t => t.chat_id === chatId);
+    if (ticket) {
+        openCardModal(ticket.id);
+    } else {
+        // Si no hay ticket abierto en el tablero, saltar al backoffice
+        localStorage.setItem('activeChat', chatId);
+        window.location.href = '/backoffice';
+    }
+}
+window.openCardModalFromTask = openCardModalFromTask;
 
 // --- Real-time Updates via Socket.IO ---
 /* global io */

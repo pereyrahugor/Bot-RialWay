@@ -128,7 +128,7 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                 
                 // Extraer Estado y Etiquetas (o sinónimos)
                 const cleanStatus = (data.Estado || data.estado || data.Status || data.status || '').trim();
-                const rawTags = (data.Etiqueta || data.etiqueta || data.Tags || data.tag || data.Etiquetas || data.etiquetas || '').trim();
+                const rawTags = (data.Etiqueta || data.etiqueta || data.Etiquetas || data.etiquetas || data.Tag || data.tag || data.Tags || data.tags || '').trim();
                 const tagsList = rawTags ? rawTags.split(',').map(t => t.trim()).filter(t => t !== '' && t !== '-') : [];
 
                 // 1. Actualizar detalles del contacto en el CRM

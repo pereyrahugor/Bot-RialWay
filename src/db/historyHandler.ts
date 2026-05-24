@@ -756,7 +756,8 @@ export class HistoryHandler {
         const chatId = this.normalizeId(rawChatId);
         const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
         if (process.env.STORAGE_MODE === "local") {
-            return LocalHistoryStore.updateContactDetails(chatId, details as any, currentProjectId);
+            const success = await LocalHistoryStore.updateContactDetails(chatId, details as any, currentProjectId);
+            return { success };
         }
         if (details.name === '[-]') details.name = undefined;
 
