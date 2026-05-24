@@ -1846,6 +1846,77 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
+    app.post('/api/backoffice/whatsapp/unlink-meta', systemConfigAuth, async (req: any, res: any) => {
+        const projectId = req.query.projectId || process.env.RAILWAY_PROJECT_ID || "default";
+        console.log(`📡 [UNLINK-META] Iniciando desvinculación de Meta para Proyecto: ${projectId}`);
+        try {
+            // 1. Obtener datos de onboarding actuales de la base de datos
+            const config = await depsHistoryHandler.getMetaOnboardingData(projectId);
+            if (config) {
+                const token = config.access_token || config.whatsappToken;
+                const phoneId = config.phone_number_id || config.whatsappNumberId;
+                const wabaId = config.waba_id || config.whatsappBusinessId;
+
+                if (token && token !== 'PENDING') {
+                    // 2. Llamada a la API de Meta para desvincular (Deregister del teléfono y DELETE de subscribed_apps)
+                    try {
+                        if (phoneId && phoneId !== 'PENDING') {
+                            console.log(`📡 [UNLINK-META] Ejecutando deregister para Phone ID: ${phoneId}...`);
+                            await axios.post(`https://graph.facebook.com/v22.0/${phoneId}/deregister`, 
+                                {}, 
+                                { headers: { 'Authorization': `Bearer ${token}` } }
+                            );
+                            console.log(`✅ [UNLINK-META] Phone ID deregistered exitosamente.`);
+                        }
+                    } catch (metaPhoneErr: any) {
+                        console.warn(`⚠️ [UNLINK-META] Error desregistrando número en Meta (puede estar ya desregistrado):`, metaPhoneErr.response?.data || metaPhoneErr.message);
+                    }
+
+                    try {
+                        if (wabaId && wabaId !== 'PENDING') {
+                            console.log(`📡 [UNLINK-META] Eliminando suscripción de app para WABA ID: ${wabaId}...`);
+                            await axios.delete(`https://graph.facebook.com/v22.0/${wabaId}/subscribed_apps`, 
+                                { headers: { 'Authorization': `Bearer ${token}` } }
+                            );
+                            console.log(`✅ [UNLINK-META] App unsubscribed de WABA exitosamente.`);
+                        }
+                    } catch (metaWabaErr: any) {
+                        console.warn(`⚠️ [UNLINK-META] Error eliminando suscripción en Meta (puede estar ya eliminada):`, metaWabaErr.response?.data || metaWabaErr.message);
+                    }
+                }
+            }
+
+            // 3. Eliminar onboarding de la base de datos para este proyecto
+            console.log(`🧹 [UNLINK-META] Eliminando registro onboarding de la DB...`);
+            const { error: errOnboard } = await supabase
+                .from('meta_onboarding')
+                .delete()
+                .eq('project_id', projectId);
+            if (errOnboard) throw errOnboard;
+
+            // 4. Eliminar rutas de routing_table de la base de datos para este proyecto
+            console.log(`🧹 [UNLINK-META] Eliminando registros de rutas en routing_table de la DB...`);
+            const { error: errRoutes } = await supabase
+                .from('routing_table')
+                .delete()
+                .eq('project_id', projectId);
+            if (errRoutes) throw errRoutes;
+
+            console.log(`✅ [UNLINK-META] Desvinculación de Meta completada para el proyecto ${projectId}.`);
+
+            // 5. Programar reinicio automático del bot para limpiar caché y revertir motor a por defecto
+            setTimeout(() => {
+                console.log('🔄 [SYSTEM] Reiniciando bot automáticamente para aplicar desvinculación...');
+                process.exit(1);
+            }, 3000);
+
+            res.json({ success: true });
+        } catch (error: any) {
+            console.error('❌ [UNLINK-META] Error crítico:', error);
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
     app.post('/api/backoffice/whatsapp/onboard', systemConfigAuth, bodyParser.json(), async (req: any, res: any) => {
         const { code } = req.body;
         if (!code) return res.status(400).json({ success: false, error: 'Code is required' });

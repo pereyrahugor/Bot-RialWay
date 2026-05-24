@@ -220,6 +220,14 @@
                         <input type="password" name="ADMIN_PASS" id="ADMIN_PASS" autocomplete="new-password">
                     </div>
                     <div class="variable-group">
+                        <h3>STORAGE_MODE (Destino de Datos)</h3>
+                        <p class="description">Elige dónde se guardan los mensajes, chats y tickets.</p>
+                        <select name="STORAGE_MODE" id="STORAGE_MODE">
+                            <option value="db">Base de Datos (Supabase)</option>
+                            <option value="local">Guardado Local (JSON)</option>
+                        </select>
+                    </div>
+                    <div class="variable-group">
                         <h3>WHATSAPP_VISIBLE</h3>
                         <select name="WHATSAPP_VISIBLE" id="WHATSAPP_VISIBLE">
                             <option value="true">ON</option>

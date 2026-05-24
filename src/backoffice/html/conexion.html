@@ -110,9 +110,12 @@
             <!-- Zona de Peligro -->
             <div class="card card-danger-zone">
                 <h2 class="text-danger-title">⚠️ Zona de Peligro</h2>
-                <p class="info-text danger-info">Si el bot no responde o falla la conexión, puedes forzar un cierre de sesión para generar un nuevo QR.</p>
+                <p class="info-text danger-info">Si el bot no responde o falla la conexión, puedes forzar un cierre de sesión para generar un QR, o bien desvincular Meta por completo.</p>
                 <button id="go-reset" class="btn btn-danger">
                     <i class="fas fa-trash-alt"></i> Reiniciar Sesión COMPLETAMENTE
+                </button>
+                <button id="go-unlink-meta" class="btn btn-danger" style="margin-top: 10px; background-color: #dc2626; border-color: #dc2626;">
+                    <i class="fab fa-meta"></i> Desvincular Meta (Deregister & Clean)
                 </button>
             </div>
         </div>
@@ -150,6 +153,19 @@
             <div class="modal-actions">
                 <button id="confirmNo">Cancelar</button>
                 <button id="confirmSi">SÍ, REINICIAR</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Confirmación de Desvinculación de Meta -->
+    <div id="unlinkMetaModal" class="modal hidden">
+        <div class="modal-content" style="border-top: 5px solid #ef4444;">
+            <i class="fab fa-meta modal-warning-icon" style="color: #ef4444; font-size: 3rem; margin-bottom: 15px;"></i>
+            <h3>¿Desvincular Meta?</h3>
+            <p>Se desvinculará permanentemente el número de teléfono y la app en los servidores de Meta, y se limpiará el onboarding y las rutas en la base de datos. El bot se reiniciará automáticamente.</p>
+            <div class="modal-actions">
+                <button id="confirmUnlinkNo">Cancelar</button>
+                <button id="confirmUnlinkSi" style="background-color: #ef4444; color: white;">SÍ, DESVINCULAR</button>
             </div>
         </div>
     </div>

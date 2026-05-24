@@ -1,10 +1,16 @@
 /* global logout */
+let currentProjectId = 'default';
+
 async function fetchStatus() {
     const token = localStorage.getItem('backoffice_token');
     try {
         const res = await fetch(`/api/dashboard-status?token=${token}`);
         if (res.status === 401) return logout();
         const data = await res.json();
+        
+        if (data && data.metaOnboarding && data.metaOnboarding.project_id) {
+            currentProjectId = data.metaOnboarding.project_id;
+        }
         
         const statusEl = document.getElementById('session-status');
         const qrSection = document.getElementById('qr-section');
@@ -234,6 +240,65 @@ if (confirmSi) {
             alert("Hubo un error: " + err.message);
             confirmSi.disabled = false;
             confirmSi.innerText = 'SÍ, REINICIAR';
+        }
+    });
+}
+
+// --- DESVINCULAR META ---
+const goUnlinkBtn = document.getElementById('go-unlink-meta');
+const unlinkModal = document.getElementById('unlinkMetaModal');
+const confirmUnlinkSi = document.getElementById('confirmUnlinkSi');
+const confirmUnlinkNo = document.getElementById('confirmUnlinkNo');
+
+if (goUnlinkBtn) {
+    goUnlinkBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        unlinkModal.classList.remove('hidden');
+    });
+}
+
+if (confirmUnlinkNo) {
+    confirmUnlinkNo.addEventListener('click', () => {
+        unlinkModal.classList.add('hidden');
+    });
+}
+
+if (confirmUnlinkSi) {
+    confirmUnlinkSi.addEventListener('click', async () => {
+        confirmUnlinkSi.disabled = true;
+        confirmUnlinkSi.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Desvinculando...';
+        
+        try {
+            const token = localStorage.getItem('backoffice_token');
+            console.log(`📡 Solicitando desvinculación de Meta para el proyecto: ${currentProjectId}`);
+            
+            const res = await fetch(`/api/backoffice/whatsapp/unlink-meta?projectId=${currentProjectId}&token=${token}`, {
+                method: 'POST'
+            });
+            
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.error || "Error al desvincular de Meta en el servidor");
+            }
+            
+            // Éxito
+            unlinkModal.innerHTML = `
+                <div class="modal-content" style="border-top: 5px solid #25d366;">
+                    <i class="fas fa-check-circle" style="font-size: 3rem; color: #25d366; margin-bottom: 20px;"></i>
+                    <h3>¡Listo!</h3>
+                    <p>La desvinculación se completó correctamente. El bot se está reiniciando y la página se recargará en 5 segundos.</p>
+                </div>
+            `;
+            
+            setTimeout(() => {
+                window.location.reload();
+            }, 5000);
+            
+        } catch (err) {
+            console.error(err);
+            alert("Hubo un error al desvincular Meta: " + err.message);
+            confirmUnlinkSi.disabled = false;
+            confirmUnlinkSi.innerText = 'SÍ, DESVINCULAR';
         }
     });
 }

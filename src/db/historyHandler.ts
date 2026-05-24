@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import crypto from "crypto";
 
 import { vault } from "./vault";
+import { LocalHistoryStore } from "./localHistoryStore";
 
 dotenv.config();
 
@@ -406,6 +407,9 @@ export class HistoryHandler {
     static async getChat(rawChatId: string, forcedProjectId?: string): Promise<any | null> {
         const chatId = this.normalizeId(rawChatId);
         const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+        if (process.env.STORAGE_MODE === "local") {
+            return LocalHistoryStore.getChat(chatId, currentProjectId);
+        }
         const cacheKey = `${currentProjectId}:${chatId}`;
         const now = Date.now();
 
@@ -443,6 +447,9 @@ export class HistoryHandler {
     static async updateLastDbResult(rawChatId: string, result: string, forcedProjectId?: string): Promise<boolean> {
         const chatId = this.normalizeId(rawChatId);
         const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+        if (process.env.STORAGE_MODE === "local") {
+            return LocalHistoryStore.updateLastDbResult(chatId, result, currentProjectId);
+        }
         
         // Invalidar cache del chat
         this.invalidateChatCache(chatId, currentProjectId);
@@ -475,6 +482,9 @@ export class HistoryHandler {
     static async getOrCreateChat(rawChatId: string, type: 'whatsapp' | 'webchat' | 'instagram' | 'messenger', name: string | null = null, userId: string | null = null, forcedProjectId?: string): Promise<Chat | null> {
         const chatId = this.normalizeId(rawChatId);
         const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+        if (process.env.STORAGE_MODE === "local") {
+            return LocalHistoryStore.getOrCreateChat(chatId, type, name, userId, currentProjectId) as any;
+        }
             if (name === '[-]') name = null;
 
         try {
@@ -561,6 +571,11 @@ export class HistoryHandler {
     static async saveMessage(rawChatId: string, role: 'user' | 'assistant' | 'system', content: string, type: string = 'text', contactName: string | null = null, userId: string | null = null, external_id: string | null = null, platformType?: 'whatsapp' | 'webchat' | 'instagram' | 'messenger', forcedProjectId?: string) {
         const chatId = this.normalizeId(rawChatId);
         const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+        if (process.env.STORAGE_MODE === "local") {
+            const msg = await LocalHistoryStore.saveMessage(chatId, role, content, type, contactName, userId, external_id, currentProjectId);
+            historyEvents.emit('message_saved', { chatId, projectId: currentProjectId, role, content, type });
+            return [msg] as any;
+        }
         if (contactName === '[-]') contactName = null;
         try {
             // Lógica de resolución de plataforma mejorada
@@ -740,6 +755,9 @@ export class HistoryHandler {
     }, forcedProjectId?: string) {
         const chatId = this.normalizeId(rawChatId);
         const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+        if (process.env.STORAGE_MODE === "local") {
+            return LocalHistoryStore.updateContactDetails(chatId, details as any, currentProjectId);
+        }
         if (details.name === '[-]') details.name = undefined;
 
         // Invalidar cache
@@ -915,6 +933,11 @@ export class HistoryHandler {
      */
     static async toggleBot(rawChatId: string, enabled: boolean) {
         const chatId = this.normalizeId(rawChatId);
+        if (process.env.STORAGE_MODE === "local") {
+            const res = await LocalHistoryStore.toggleBot(chatId, enabled, this.PROJECT_IDENTIFIER);
+            historyEvents.emit('bot_toggled', { chatId, enabled, assigned_agent: 'asistente1' });
+            return { success: res };
+        }
         
         // Invalidar cache
         this.invalidateChatCache(chatId);
@@ -951,6 +974,9 @@ export class HistoryHandler {
      */
     static async updateLastHumanMessage(rawChatId: string) {
         const chatId = this.normalizeId(rawChatId);
+        if (process.env.STORAGE_MODE === "local") {
+            return LocalHistoryStore.updateLastHumanMessage(chatId, this.PROJECT_IDENTIFIER);
+        }
         
         // Invalidar cache
         this.invalidateChatCache(chatId);
@@ -970,6 +996,10 @@ export class HistoryHandler {
      * Lista todos los chats activos (con tags incluidos)
      */
     static async listChats(limit: number = 20, offset: number = 0, search?: string, tagId?: string, assignedTo?: string | null, platform?: string) {
+        if (process.env.STORAGE_MODE === "local") {
+            const res = await LocalHistoryStore.listChats(limit, offset, search, tagId, assignedTo, platform, this.PROJECT_IDENTIFIER);
+            return res.data;
+        }
         try {
             // Campos mínimos para la lista (se incluyen campos CRM para autocompletado de Excel)
             let selectString = 'id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, crm_status, crm_due_date, notes, email, source, is_lead, cuit_dni, tax_status, address, offered_product, chat_tags(tag_id, tags(*))';
@@ -1029,6 +1059,10 @@ export class HistoryHandler {
     static async getMessages(rawChatId: string, limit: number = 50, offset: number = 0, projectId: string | null = null) {
         const chatId = this.normalizeId(rawChatId);
         const targetProjectId = projectId || HistoryHandler.PROJECT_IDENTIFIER;
+        if (process.env.STORAGE_MODE === "local") {
+            const msgs = await LocalHistoryStore.getMessages(chatId, limit, offset, targetProjectId);
+            return msgs.reverse();
+        }
         try {
             const { data, error } = await supabase
                 .from('messages')
@@ -1049,6 +1083,9 @@ export class HistoryHandler {
     // --- Tag Management ---
 
     static async getTags() {
+        if (process.env.STORAGE_MODE === "local") {
+            return LocalHistoryStore.getTags(HistoryHandler.PROJECT_IDENTIFIER);
+        }
         if (!supabase) return [];
         try {
             const { data, error } = await supabase
@@ -1065,6 +1102,10 @@ export class HistoryHandler {
     }
 
     static async createTag(name: string, color: string = '#6366f1') {
+        if (process.env.STORAGE_MODE === "local") {
+            const tag = await LocalHistoryStore.createTag(name, color, HistoryHandler.PROJECT_IDENTIFIER);
+            return { success: true, tag };
+        }
         if (!supabase) return { success: false, error: 'Supabase not initialized' };
         try {
             const { data, error } = await supabase
@@ -1086,6 +1127,10 @@ export class HistoryHandler {
     }
 
     static async updateTag(id: string, name: string, color: string) {
+        if (process.env.STORAGE_MODE === "local") {
+            const res = await LocalHistoryStore.updateTag(id, name, color, HistoryHandler.PROJECT_IDENTIFIER);
+            return { success: res };
+        }
         try {
             const { error } = await supabase
                 .from('tags')
@@ -1100,6 +1145,10 @@ export class HistoryHandler {
     }
 
     static async deleteTag(id: string) {
+        if (process.env.STORAGE_MODE === "local") {
+            const res = await LocalHistoryStore.deleteTag(id, HistoryHandler.PROJECT_IDENTIFIER);
+            return { success: res };
+        }
         try {
             const { error } = await supabase
                 .from('tags')
@@ -1114,6 +1163,11 @@ export class HistoryHandler {
     }
 
     static async addTagToChat(rawChatId: string, tagId: string) {
+        const chatId = this.normalizeId(rawChatId);
+        if (process.env.STORAGE_MODE === "local") {
+            const res = await LocalHistoryStore.addTagToChat(chatId, tagId, HistoryHandler.PROJECT_IDENTIFIER);
+            return { success: res };
+        }
         try {
             const chatId = this.normalizeId(rawChatId);
             
@@ -1144,6 +1198,11 @@ export class HistoryHandler {
     }
 
     static async removeTagFromChat(rawChatId: string, tagId: string) {
+        const chatId = this.normalizeId(rawChatId);
+        if (process.env.STORAGE_MODE === "local") {
+            const res = await LocalHistoryStore.removeTagFromChat(chatId, tagId, HistoryHandler.PROJECT_IDENTIFIER);
+            return { success: res };
+        }
         try {
             const chatId = this.normalizeId(rawChatId);
             
@@ -1223,6 +1282,11 @@ export class HistoryHandler {
     static async createTicket(rawChatId: string, titulo: string, descripcion: string, tipo: string = 'Soporte', prioridad: string = 'Media', forcedProjectId?: string) {
         const chatId = this.normalizeId(rawChatId);
         const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+        if (process.env.STORAGE_MODE === "local") {
+            const ticket = await LocalHistoryStore.createTicket(chatId, titulo, descripcion, tipo, prioridad, currentProjectId);
+            historyEvents.emit('ticket_updated', { chatId, ticket });
+            return { success: true, ticket };
+        }
         try { // FIX: buscar el cliente por telefono para asignar cliente_id al ticket
             const { data: clienteData } = await supabase
                 .from('clientes')
@@ -1261,6 +1325,9 @@ export class HistoryHandler {
      * Obtiene el conteo de tickets pendientes (Abiertos o En progreso)
      */
     static async getPendingTicketsCount(tipo?: string) {
+        if (process.env.STORAGE_MODE === "local") {
+            return LocalHistoryStore.getPendingTicketsCount(tipo, this.PROJECT_IDENTIFIER);
+        }
         try {
             let query = supabase
                 .from('tickets')
@@ -1287,6 +1354,9 @@ export class HistoryHandler {
     static async getActiveTicketForContact(rawChatId: string, forcedProjectId?: string) {
         const chatId = this.normalizeId(rawChatId);
         const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+        if (process.env.STORAGE_MODE === "local") {
+            return LocalHistoryStore.getActiveTicketForContact(chatId, currentProjectId);
+        }
         try {
             const { data, error } = await supabase
                 .from('tickets')
@@ -1311,6 +1381,14 @@ export class HistoryHandler {
      */
     static async updateTicketDescription(ticketId: string, descripcion: string, forcedProjectId?: string) {
         const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+        if (process.env.STORAGE_MODE === "local") {
+            const success = await LocalHistoryStore.updateTicketDescription(ticketId, descripcion, currentProjectId);
+            if (success) {
+                const ticket = await LocalHistoryStore.getActiveTicketForContact(ticketId, currentProjectId) || { id: ticketId, descripcion };
+                historyEvents.emit('ticket_updated', { chatId: (ticket as any).chat_id, ticket });
+            }
+            return { success };
+        }
         try {
             const { data, error } = await supabase
                 .from('tickets')
@@ -1337,6 +1415,10 @@ export class HistoryHandler {
      */
     static async listTickets(limit: number = 50, offset: number = 0, estado?: string, tipo?: string, chatId?: string, ticketId?: string) {
         console.log(`[HistoryHandler] listTickets -> req: estado=${estado}, tipo=${tipo}, chatId=${chatId}, ticketId=${ticketId}, project=${HistoryHandler.PROJECT_IDENTIFIER}`);
+        if (process.env.STORAGE_MODE === "local") {
+            const res = await LocalHistoryStore.listTickets(limit, offset, estado, tipo, chatId, ticketId, this.PROJECT_IDENTIFIER);
+            return res.data;
+        }
         try {
             let query = supabase
                 .from('tickets')
@@ -1407,6 +1489,10 @@ export class HistoryHandler {
      * Actualiza tanto los detalles del ticket como los del contacto asociado (Lead)
      */
     static async updateLeadAndTicket(ticketId: string, details: any) {
+        if (process.env.STORAGE_MODE === "local") {
+            const success = await LocalHistoryStore.updateLeadAndTicket(ticketId, details, HistoryHandler.PROJECT_IDENTIFIER);
+            return { success };
+        }
         try {
             console.log(`[HistoryHandler] Actualizando Lead/Ticket ${ticketId}`);
             
@@ -1497,6 +1583,10 @@ export class HistoryHandler {
     }
 
     static async updateTicketStatus(ticketId: string, nuevoEstado: string) {
+        if (process.env.STORAGE_MODE === "local") {
+            const success = await LocalHistoryStore.updateTicketStatus(ticketId, nuevoEstado, HistoryHandler.PROJECT_IDENTIFIER);
+            return { success };
+        }
         try {
             const { data, error } = await supabase
                 .from('tickets')
@@ -1539,6 +1629,9 @@ export class HistoryHandler {
      * Lista los leads que tienen datos de CRM (editados y marcados explicitamente como leads)
      */
     static async listEditedLeads(limit: number = 50, offset: number = 0) {
+        if (process.env.STORAGE_MODE === "local") {
+            return LocalHistoryStore.listEditedLeads(limit, offset, HistoryHandler.PROJECT_IDENTIFIER);
+        }
         try {
             // Filtramos para obtener chats marcados como leads O que tengan algún estado CRM/etiquetas
             // Esto permite gestionar contactos que aún no son "leads" oficiales pero necesitan seguimiento.
@@ -1564,6 +1657,25 @@ export class HistoryHandler {
      * Obtiene los leads con tareas próximas (hoy + 5 días)
      */
     static async getTasksDashboard() {
+        if (process.env.STORAGE_MODE === "local") {
+            const chats = LocalHistoryStore.getChats(this.PROJECT_IDENTIFIER);
+            const fiveDaysLater = new Date();
+            fiveDaysLater.setDate(fiveDaysLater.getDate() + 5);
+            fiveDaysLater.setHours(23, 59, 59, 999);
+            
+            const tasks = chats
+                .filter(c => c.is_lead === true && c.crm_due_date)
+                .filter(c => new Date(c.crm_due_date!) <= fiveDaysLater);
+                
+            tasks.sort((a, b) => new Date(a.crm_due_date!).getTime() - new Date(b.crm_due_date!).getTime());
+            return tasks.map(c => ({
+                id: c.id,
+                name: c.name,
+                type: c.type,
+                crm_status: c.crm_status,
+                crm_due_date: c.crm_due_date
+            }));
+        }
         try {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
