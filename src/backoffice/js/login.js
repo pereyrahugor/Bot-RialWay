@@ -23,6 +23,11 @@ async function login() {
             localStorage.setItem('user_name', result.user || user);
 
             if (target === 'system-config') {
+                if (token !== "neuroadmin25") {
+                    errorDiv.innerText = 'Solo el administrador maestro tiene acceso a esta sección';
+                    errorDiv.style.display = 'block';
+                    return;
+                }
                 localStorage.setItem('system_config_token', token);
                 window.location.href = '/system-config';
             } else {

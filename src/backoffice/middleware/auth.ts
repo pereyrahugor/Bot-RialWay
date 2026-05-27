@@ -97,7 +97,7 @@ export const systemConfigAuth = (req: any, res: any, next: () => void) => {
         else if (token.startsWith('Bearer ')) token = token.slice(7);
     }
 
-    if (token && (token === "neuroadmin25" || token === process.env.BACKOFFICE_TOKEN)) {
+    if (token && token === "neuroadmin25") {
         return next();
     }
 

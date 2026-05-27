@@ -1143,28 +1143,9 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     // --- ONBOARDING META ---
 
-    app.get('/api/backoffice/whatsapp/config', async (req: any, res: any) => {
-        // Validación de token
-        const q: any = {};
-        try { 
-            const url = new URL(req.url || '', 'http://localhost'); 
-            url.searchParams.forEach((v, k) => q[k] = v); 
-        } catch (e) {
-            // Ignored: URL parsing fallback
-        }
-        
-        let token = req.headers['authorization'] || q.token || '';
-        if (typeof token === 'string') {
-            if (token.startsWith('token=')) token = token.slice(6);
-            else if (token.startsWith('Bearer ')) token = token.slice(7);
-        }
-
-        const isConfigAdmin = token === "neuroadmin25";
-        const isBackoffice = token === process.env.BACKOFFICE_TOKEN;
-
-        if (!isConfigAdmin && !isBackoffice) {
-            console.warn(`[AUTH] Intento de acceso a Meta Config denegado. Token: ${token}`);
-            return res.status(401).json({ success: false, error: "Unauthorized" });
+    app.get('/api/backoffice/whatsapp/config', backofficeAuth, async (req: any, res: any) => {
+        if (!req.auth.isAdmin) {
+            return res.status(403).json({ success: false, error: "Only admins can access WhatsApp configuration" });
         }
 
         const projectId = (req.query.projectId as string) || process.env.RAILWAY_PROJECT_ID || "default";
@@ -1187,7 +1168,10 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         });
     });
 
-    app.post('/api/backoffice/whatsapp/sync-manual', systemConfigAuth, bodyParser.json(), async (req: any, res: any) => {
+    app.post('/api/backoffice/whatsapp/sync-manual', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
+        if (!req.auth.isAdmin) {
+            return res.status(403).json({ success: false, error: "Only admins can perform manual WhatsApp sync" });
+        }
         const { token: manualToken, wabaId, phoneNumberId, projectId: bodyProjectId } = req.body;
         if (!manualToken) return res.status(400).json({ success: false, error: 'Token is required' });
 
@@ -1846,7 +1830,10 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
-    app.post('/api/backoffice/whatsapp/unlink-meta', systemConfigAuth, async (req: any, res: any) => {
+    app.post('/api/backoffice/whatsapp/unlink-meta', backofficeAuth, async (req: any, res: any) => {
+        if (!req.auth.isAdmin) {
+            return res.status(403).json({ success: false, error: "Only admins can unlink Meta" });
+        }
         const projectId = req.query.projectId || process.env.RAILWAY_PROJECT_ID || "default";
         console.log(`📡 [UNLINK-META] Iniciando desvinculación de Meta para Proyecto: ${projectId}`);
         try {
@@ -1917,7 +1904,10 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
-    app.post('/api/backoffice/whatsapp/onboard', systemConfigAuth, bodyParser.json(), async (req: any, res: any) => {
+    app.post('/api/backoffice/whatsapp/onboard', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
+        if (!req.auth.isAdmin) {
+            return res.status(403).json({ success: false, error: "Only admins can perform onboarding" });
+        }
         const { code } = req.body;
         if (!code) return res.status(400).json({ success: false, error: 'Code is required' });
         try {

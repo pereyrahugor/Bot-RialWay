@@ -10,8 +10,8 @@
     // 2. Protección de Configuración Crítica (Dashboard de Configuración)
     if (path.startsWith('/system-config')) {
         const configToken = localStorage.getItem('system_config_token');
-        if (!configToken) {
-            // Si no hay token de config, enviar a login pero indicando que es para config
+        if (!configToken || configToken !== "neuroadmin25") {
+            // Si no es el token maestro, forzar login
             window.location.href = '/login?target=system-config';
         }
     }
