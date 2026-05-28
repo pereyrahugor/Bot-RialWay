@@ -33,7 +33,7 @@ export class RailwayApi {
   private static async fetchRailway(query: string, variables: any): Promise<any> {
     const config = getRailwayConfig();
     if (!config.token) {
-        throw new Error("No se puede realizar la petición a Railway: RAILWAY_TOKEN no configurado.");
+      throw new Error("No se puede realizar la petición a Railway: RAILWAY_TOKEN no configurado.");
     }
     const body = JSON.stringify({ query, variables });
 
@@ -247,5 +247,55 @@ export class RailwayApi {
       return { success: false, error: err.message };
     }
   }
+
+  //   /**
+  //    * Registra un dominio personalizado en el servicio de Railway de forma programática.
+  //    * Utilizado para asignar urls tipo 'clientex.clientesneurolinks.com' automáticamente.
+  //    */
+  //   static async createCustomDomain(domainName: string): Promise<{ success: boolean; data?: any; error?: string }> {
+  //     const mutation = `
+  //       mutation customDomainCreate($input: CustomDomainCreateInput!) {
+  //         customDomainCreate(input: $input) {
+  //           id
+  //           domain
+  //           status {
+  //             verificationToken
+  //             dnsRecords {
+  //               type
+  //               name
+  //               value
+  //             }
+  //           }
+  //         }
+  //       }
+  //     `;
+
+  //     const config = getRailwayConfig();
+  //     const variables = {
+  //       input: {
+  //         projectId: config.projectId,
+  //         environmentId: config.environmentId,
+  //         serviceId: config.serviceId,
+  //         domain: domainName,
+  //       }
+  //     };
+
+  //     try {
+  //       console.log(`[RailwayApi] Registrando dominio personalizado: ${domainName}...`);
+  //       const res = await this.fetchRailway(mutation, variables);
+
+  //       if (res.errors?.length) {
+  //         console.error("[RailwayApi] Error registrando dominio:", res.errors);
+  //         const errorMsg = res.errors.map((e: any) => e.message).join("; ");
+  //         return { success: false, error: errorMsg };
+  //       }
+
+  //       return { success: true, data: res.data?.customDomainCreate };
+  //     } catch (err: any) {
+  //       console.error("[RailwayApi] Error en createCustomDomain:", err.message);
+  //       return { success: false, error: err.message };
+  //     }
+  //   }
 }
+
 

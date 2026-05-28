@@ -1043,10 +1043,69 @@ export class HistoryHandler {
             
             if (error) throw error;
             
-            return (data || []).map((chat: any) => ({
+            let finalChats = (data || []).map((chat: any) => ({
                 ...chat,
                 tags: chat.chat_tags ? chat.chat_tags.map((ct: any) => ct.tags).filter((t: any) => t !== null) : []
             }));
+
+            // --- LÓGICA DE ANCLAJE (PINNED CHATS) ---
+            // Solo si estamos en la primera página (offset === 0) y no hay filtros o búsquedas activas
+            const hasNoFilters = !search && !tagId && (!platform || platform === 'all') && !assignedTo;
+            
+            if (offset === 0 && hasNoFilters) {
+                const groupResumenId = await this.getConfig('ID_GRUPO_RESUMEN') || '';
+                const groupResumenId2 = await this.getConfig('ID_GRUPO_RESUMEN_2') || '';
+                
+                const groupIds = [groupResumenId, groupResumenId2]
+                    .map(id => this.normalizeId(id))
+                    .filter(id => id !== '');
+                
+                if (groupIds.length > 0) {
+                    const pinnedChats: any[] = [];
+                    const normalChats: any[] = [];
+                    
+                    finalChats.forEach(chat => {
+                        if (groupIds.includes(chat.id)) {
+                            pinnedChats.push(chat);
+                        } else {
+                            normalChats.push(chat);
+                        }
+                    });
+                    
+                    // Si algún grupo configurado existe en DB pero no estaba en la primera página, lo buscamos
+                    const missingGroupIds = groupIds.filter(id => !pinnedChats.some(pc => pc.id === id));
+                    
+                    if (missingGroupIds.length > 0) {
+                        const { data: missingGroups } = await supabase
+                            .from('chats')
+                            .select(selectString)
+                            .eq('project_id', this.PROJECT_IDENTIFIER)
+                            .in('id', missingGroupIds);
+                            
+                        if (missingGroups && missingGroups.length > 0) {
+                            missingGroups.forEach((g: any) => {
+                                pinnedChats.push({
+                                    ...g,
+                                    tags: g.chat_tags ? g.chat_tags.map((ct: any) => ct.tags).filter((t: any) => t !== null) : [],
+                                    isPinned: true
+                                });
+                            });
+                        }
+                    }
+                    
+                    pinnedChats.forEach(c => c.isPinned = true);
+                    
+                    // Re-ensamblar la lista: Pinned al principio, luego los normales
+                    finalChats = [...pinnedChats, ...normalChats];
+                    
+                    // Si al re-ensamblar nos pasamos del límite de la página, cortamos para no romper paginación
+                    if (finalChats.length > limit) {
+                        finalChats = finalChats.slice(0, limit);
+                    }
+                }
+            }
+
+            return finalChats;
         } catch (err) {
             console.error('[HistoryHandler] Error en listChats:', err);
             return [];

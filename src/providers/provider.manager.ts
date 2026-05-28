@@ -56,37 +56,53 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
 
     provider.on('qr', handleQR);
     provider.on('require_action', handleQR);
-    provider.on('auth_require', handleQR);
-    
-    // Solo registrar eventos de procesamiento de mensajes si NO es el proveedor de grupos
-    // El proveedor de grupos solo se utiliza para enviar mensajes (backoffice)
-    if (!isGroupProvider) {
-        provider.on('message', async (ctx: any) => {
+    provider.on('auth_require', handleQR);    // Registrar eventos de procesamiento de mensajes (tanto para proveedor normal como de grupos)
+    provider.on('message', async (ctx: any) => {
         try {
-            console.log(`${prefix} 📩 Mensaje entrante - Tipo: ${ctx.type}, De: ${ctx.from}`);
+            const from = ctx.from || '';
+            const isGroup = from.includes('@g.us');
+
+            if (isGroup) {
+                // Filtro estricto: solo procedemos si es uno de los grupos de reportes oficiales
+                const groupResumenId = process.env.ID_GRUPO_RESUMEN || '';
+                const groupResumenId2 = process.env.ID_GRUPO_RESUMEN_2 || '';
+                const cleanFrom = from.includes('@') ? from : `${from}@g.us`;
+                
+                if (cleanFrom !== groupResumenId && cleanFrom !== groupResumenId2) {
+                    return; // Ignorar cualquier otro grupo
+                }
+            }
+
+            console.log(`${prefix} 📩 Mensaje entrante - Tipo: ${ctx.type}, De: ${from}`);
             
             // Si el mensaje es una nota de voz, forzamos el log específico para confirmar detección
             if (ctx.type === 'voice') {
                 console.log(`${prefix} 🎙️ NOTA DE VOZ DETECTADA. Enviando a los flujos...`);
             }
 
-            // Opcional: Guardar en el historial de Supabase si no es un comando de sistema
+            // Guardar en el historial de Supabase si no es un comando de sistema
             if (ctx.body && !ctx.body.startsWith('_event_')) {
                 const { HistoryHandler } = await import('../db/historyHandler');
-                const chatId = ctx.from?.includes('@') ? ctx.from.split('@')[0] : ctx.from;
                 
-                // Extraer un ID único del mensaje para evital duplicados (external_id)
+                // Si es grupo, mantenemos el JID completo. Si es chat privado, extraemos el número.
+                const chatId = isGroup ? (from.includes('@') ? from : `${from}@g.us`) : (from.includes('@') ? from.split('@')[0] : from);
                 const externalId = ctx.key?.id || ctx.payload?.id || ctx.id;
+                
+                let contactName = null;
+                if (isGroup) {
+                    const groupResumenId = process.env.ID_GRUPO_RESUMEN || '';
+                    contactName = (chatId === groupResumenId) ? 'Grupo de Reportes 1' : 'Grupo de Reportes 2';
+                }
                 
                 await HistoryHandler.saveMessage(
                     chatId, 
                     'user', 
                     ctx.body, 
                     ctx.type || 'text', 
-                    null, 
+                    contactName, 
                     ctx.userId,
                     externalId,
-                    ctx.platform // 'whatsapp', 'instagram' or 'messenger'
+                    ctx.platform || 'whatsapp'
                 );
             }
         } catch (err) {
@@ -94,25 +110,39 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
         }
     });
 
-    // --- CAPTURA DE MENSAJES SALIENTES MANUALES ---
-    // Escuchamos el evento especial para guardar lo que el usuario envía desde el celular
-    // Incluye: echos de Baileys (message_from_me) y smb_message_echoes de Meta Cloud API
+    // --- CAPTURA DE MENSAJES SALIENTES ---
     provider.on('message_from_me', async (ctx: any) => {
         try {
+            const from = ctx.from || '';
+            const isGroup = from.includes('@g.us');
+
+            if (isGroup) {
+                // Filtro estricto: solo procedemos si es uno de los grupos de reportes oficiales
+                const groupResumenId = process.env.ID_GRUPO_RESUMEN || '';
+                const groupResumenId2 = process.env.ID_GRUPO_RESUMEN_2 || '';
+                const cleanFrom = from.includes('@') ? from : `${from}@g.us`;
+                
+                if (cleanFrom !== groupResumenId && cleanFrom !== groupResumenId2) {
+                    return; // Ignorar cualquier otro grupo
+                }
+            }
+
             const isManual = ctx.isManualIntervention;
-            console.log(`${prefix} 📤 Mensaje saliente manual detectado. ID: ${ctx.from}. Body: ${ctx.body}${isManual ? ' [INTERVENCIÓN DESDE APP WHATSAPP]' : ''}`);
+            console.log(`${prefix} 📤 Mensaje saliente manual detectado. ID: ${from}. Body: ${ctx.body}${isManual ? ' [INTERVENCIÓN DESDE APP WHATSAPP]' : ''}`);
             const { HistoryHandler } = await import('../db/historyHandler');
             
-            // Limpiamos el ID si viene con sufijo de Baileys
-            const chatId = ctx.from?.includes('@') ? ctx.from.split('@')[0] : ctx.from;
-            
-            // Extraer un ID único del mensaje para evital duplicados (external_id)
+            const chatId = isGroup ? (from.includes('@') ? from : `${from}@g.us`) : (from.includes('@') ? from.split('@')[0] : from);
             const externalId = ctx.key?.id || ctx.payload?.id || ctx.id;
 
             // DEDUPLICACIÓN: Si el ID está en el caché, es un eco de algo que enviamos desde el backoffice
             if (externalId && sentMessageCache.has(externalId)) {
-                // console.log(`${prefix} ⏩ Ignorando eco de mensaje enviado desde backoffice (ID: ${externalId})`);
                 return;
+            }
+
+            let contactName = null;
+            if (isGroup) {
+                const groupResumenId = process.env.ID_GRUPO_RESUMEN || '';
+                contactName = (chatId === groupResumenId) ? 'Grupo de Reportes 1' : 'Grupo de Reportes 2';
             }
 
             // Guardamos como 'assistant' para que aparezca en el lado derecho del chat en el backoffice
@@ -121,15 +151,15 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
                 'assistant', 
                 ctx.body, 
                 ctx.type || 'text', 
-                null, 
+                contactName, 
                 null,
                 externalId,
                 ctx.platform || 'whatsapp'
             );
 
-            // Si fue una intervención manual desde la app de WhatsApp (smb_message_echoes),
-            // activar automáticamente el modo "Atención Humana" para este chat
-            if (isManual) {
+            // Si fue una intervención manual desde la app de WhatsApp (y no es grupo),
+            // activar automáticamente el modo "Atención Humana"
+            if (isManual && !isGroup) {
                 console.log(`${prefix} 🛑 Activando modo Atención Humana para ${chatId} (operador escribió desde la app)`);
                 await HistoryHandler.toggleBot(chatId, false);
                 await HistoryHandler.updateLastHumanMessage(chatId);
