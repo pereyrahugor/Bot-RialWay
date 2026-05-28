@@ -103,7 +103,21 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
                     contactName = (chatId === cleanGroupResumenId) ? 'Grupo de Reportes 1' : 'Grupo de Reportes 2';
                 }
                 
-                const contentToSave = ctx.type === 'voice' ? (ctx.localPath || ctx.body) : ctx.body;
+                let contentToSave = ctx.type === 'voice' ? (ctx.localPath || ctx.body) : ctx.body;
+                
+                // Normalizar rutas absolutas del sistema de archivos a URLs relativas web para el navegador
+                if (contentToSave && typeof contentToSave === 'string') {
+                    const normalized = contentToSave.replace(/\\/g, '/');
+                    const tmpIdx = normalized.toLowerCase().indexOf('/tmp/');
+                    if (tmpIdx !== -1) {
+                        contentToSave = normalized.substring(tmpIdx);
+                    } else {
+                        const uploadsIdx = normalized.toLowerCase().indexOf('/uploads/');
+                        if (uploadsIdx !== -1) {
+                            contentToSave = normalized.substring(uploadsIdx);
+                        }
+                    }
+                }
                 
                 await HistoryHandler.saveMessage(
                     chatId, 
@@ -184,11 +198,25 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
                 contactName = (chatId === cleanGroupResumenId) ? 'Grupo de Reportes 1' : 'Grupo de Reportes 2';
             }
 
+            let bodyToSave = ctx.body;
+            if (bodyToSave && typeof bodyToSave === 'string') {
+                const normalized = bodyToSave.replace(/\\/g, '/');
+                const tmpIdx = normalized.toLowerCase().indexOf('/tmp/');
+                if (tmpIdx !== -1) {
+                    bodyToSave = normalized.substring(tmpIdx);
+                } else {
+                    const uploadsIdx = normalized.toLowerCase().indexOf('/uploads/');
+                    if (uploadsIdx !== -1) {
+                        bodyToSave = normalized.substring(uploadsIdx);
+                    }
+                }
+            }
+
             // Guardamos como 'assistant' para que aparezca en el lado derecho del chat en el backoffice
             await HistoryHandler.saveMessage(
                 chatId, 
                 'assistant', 
-                ctx.body, 
+                bodyToSave, 
                 ctx.type || 'text', 
                 contactName, 
                 null,
