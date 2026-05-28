@@ -51,11 +51,8 @@ export const welcomeFlowVoice = addKeyword<any, any>(EVENTS.VOICE_NOTE)
             console.log("📂 Carpeta 'tmp/voiceNote' creada.");
         }
 
-        // Guardar el archivo de audio localmente (o reutilizarlo si ya se descargó en el webhook)
-        let localPath = ctx.localPath;
-        if (!localPath || !fs.existsSync(localPath)) {
-            localPath = await provider.saveFile(ctx, { path: "./tmp/voiceNote/" });
-        }
+        // Descargar el archivo de audio internamente en el flujo para garantizar su integridad y correcta transcripción
+        const localPath = await provider.saveFile(ctx, { path: "./tmp/voiceNote/" });
         console.log(`📂 Ruta del archivo de audio: ${localPath}`);
 
         // Transcribir el audio antes de procesarlo
