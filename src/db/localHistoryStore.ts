@@ -578,7 +578,7 @@ export class LocalHistoryStore {
     static async assignTagsToContact(chatId: string, tagsList: string[], projectId: string) {
         // Clear old tags
         const chatTags = this.getChatTagsForProject(projectId);
-        let filtered = chatTags.filter(ct => ct.chat_id !== chatId);
+        const filtered = chatTags.filter(ct => ct.chat_id !== chatId);
 
         // Add new tags
         for (const tagName of tagsList) {

@@ -192,7 +192,6 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
             console.error(`❌ ${prefix} Error en sincronización de contactos:`, err);
         }
     });
-    }
 
     provider.on('ready', () => {
         console.log(`✅ ${prefix} READY: El proveedor está conectado.`);
