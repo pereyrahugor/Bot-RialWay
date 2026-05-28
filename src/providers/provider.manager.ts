@@ -64,11 +64,15 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
 
             if (isGroup) {
                 // Filtro estricto: solo procedemos si es uno de los grupos de reportes oficiales
-                const groupResumenId = process.env.ID_GRUPO_RESUMEN || '';
-                const groupResumenId2 = process.env.ID_GRUPO_RESUMEN_2 || '';
+                const { HistoryHandler } = await import('../db/historyHandler');
+                const groupResumenId = await HistoryHandler.getConfig('ID_GRUPO_RESUMEN') || '';
+                const groupResumenId2 = await HistoryHandler.getConfig('ID_GRUPO_RESUMEN_2') || '';
                 const cleanFrom = from.includes('@') ? from : `${from}@g.us`;
                 
-                if (cleanFrom !== groupResumenId && cleanFrom !== groupResumenId2) {
+                const cleanGroupResumenId = groupResumenId.includes('@') ? groupResumenId : (groupResumenId ? `${groupResumenId}@g.us` : '');
+                const cleanGroupResumenId2 = groupResumenId2.includes('@') ? groupResumenId2 : (groupResumenId2 ? `${groupResumenId2}@g.us` : '');
+
+                if (cleanFrom !== cleanGroupResumenId && cleanFrom !== cleanGroupResumenId2) {
                     return; // Ignorar cualquier otro grupo
                 }
             }
@@ -90,8 +94,9 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
                 
                 let contactName = null;
                 if (isGroup) {
-                    const groupResumenId = process.env.ID_GRUPO_RESUMEN || '';
-                    contactName = (chatId === groupResumenId) ? 'Grupo de Reportes 1' : 'Grupo de Reportes 2';
+                    const groupResumenId = await HistoryHandler.getConfig('ID_GRUPO_RESUMEN') || '';
+                    const cleanGroupResumenId = groupResumenId.includes('@') ? groupResumenId : (groupResumenId ? `${groupResumenId}@g.us` : '');
+                    contactName = (chatId === cleanGroupResumenId) ? 'Grupo de Reportes 1' : 'Grupo de Reportes 2';
                 }
                 
                 await HistoryHandler.saveMessage(
@@ -116,19 +121,22 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
             const from = ctx.from || '';
             const isGroup = from.includes('@g.us');
 
+            const { HistoryHandler, recentBotSentMessages, normalizeTextForCache } = await import('../db/historyHandler');
+
             if (isGroup) {
                 // Filtro estricto: solo procedemos si es uno de los grupos de reportes oficiales
-                const groupResumenId = process.env.ID_GRUPO_RESUMEN || '';
-                const groupResumenId2 = process.env.ID_GRUPO_RESUMEN_2 || '';
+                const groupResumenId = await HistoryHandler.getConfig('ID_GRUPO_RESUMEN') || '';
+                const groupResumenId2 = await HistoryHandler.getConfig('ID_GRUPO_RESUMEN_2') || '';
                 const cleanFrom = from.includes('@') ? from : `${from}@g.us`;
                 
-                if (cleanFrom !== groupResumenId && cleanFrom !== groupResumenId2) {
+                const cleanGroupResumenId = groupResumenId.includes('@') ? groupResumenId : (groupResumenId ? `${groupResumenId}@g.us` : '');
+                const cleanGroupResumenId2 = groupResumenId2.includes('@') ? groupResumenId2 : (groupResumenId2 ? `${groupResumenId2}@g.us` : '');
+
+                if (cleanFrom !== cleanGroupResumenId && cleanFrom !== cleanGroupResumenId2) {
                     return; // Ignorar cualquier otro grupo
                 }
             }
 
-            const { HistoryHandler, recentBotSentMessages, normalizeTextForCache } = await import('../db/historyHandler');
-            
             // Si el mensaje está en el caché de enviados por el bot/asistente, no es una intervención manual
             const normalizedBody = normalizeTextForCache(ctx.body || '');
             let isBotSent = recentBotSentMessages.has(normalizedBody);
@@ -161,8 +169,9 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
 
             let contactName = null;
             if (isGroup) {
-                const groupResumenId = process.env.ID_GRUPO_RESUMEN || '';
-                contactName = (chatId === groupResumenId) ? 'Grupo de Reportes 1' : 'Grupo de Reportes 2';
+                const groupResumenId = await HistoryHandler.getConfig('ID_GRUPO_RESUMEN') || '';
+                const cleanGroupResumenId = groupResumenId.includes('@') ? groupResumenId : (groupResumenId ? `${groupResumenId}@g.us` : '');
+                contactName = (chatId === cleanGroupResumenId) ? 'Grupo de Reportes 1' : 'Grupo de Reportes 2';
             }
 
             // Guardamos como 'assistant' para que aparezca en el lado derecho del chat en el backoffice
