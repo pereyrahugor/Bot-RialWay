@@ -1011,11 +1011,20 @@ async function saveCRMDetails() {
                 contact: details
             };
 
-            await fetch(`/api/backoffice/crm/ticket/${activeTicketId}?token=${token}`, {
+            const res = await fetch(`/api/backoffice/crm/ticket/${activeTicketId}?token=${token}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(ticketData)
             });
+
+            if (!res.ok) {
+                const text = await res.text();
+                throw new Error(text || `Error ${res.status} al guardar ticket`);
+            }
+            const resJson = await res.json();
+            if (resJson.success === false) {
+                throw new Error(resJson.error || 'Error al guardar detalles de ticket');
+            }
 
             // Sincronizar Metadatos (Columna)
             const col = crmColumns.find(c => c.id === details.crm_status || c.title === details.crm_status);
@@ -1025,19 +1034,28 @@ async function saveCRMDetails() {
                 crmData[activeTicketId].priority = details.priority;
                 crmData[activeTicketId].alertDate = details.crm_due_date;
                 
-                await fetch(`/api/backoffice/save-setting?token=${token}`, {
+                const resSet = await fetch(`/api/backoffice/save-setting?token=${token}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ key: 'CRM_METADATA', value: JSON.stringify(crmData) })
                 });
+                if (!resSet.ok) console.warn('No se pudo guardar la configuración CRM_METADATA');
             }
         } else {
             // Si no hay ticket, solo actualizar contacto
-            await fetch(`/api/backoffice/chat/${activeChatId}/contact?token=${token}`, {
+            const res = await fetch(`/api/backoffice/chat/${activeChatId}/contact?token=${token}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(details)
             });
+            if (!res.ok) {
+                const text = await res.text();
+                throw new Error(text || `Error ${res.status} al guardar contacto`);
+            }
+            const resJson = await res.json();
+            if (resJson.success === false) {
+                throw new Error(resJson.error || 'Error al guardar contacto');
+            }
         }
 
         const chat = chats.find(c => c.id === activeChatId);
@@ -1051,7 +1069,7 @@ async function saveCRMDetails() {
         showToast('✅ Cambios guardados y sincronizados');
     } catch (e) {
         console.error('[saveCRMDetails] Error:', e);
-        showToast('Error al guardar cambios', 'error');
+        showToast('Error al guardar: ' + e.message, 'error');
     }
 }
 

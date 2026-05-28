@@ -802,17 +802,31 @@ export class HistoryHandler {
         crm_due_date?: string | null
     }, forcedProjectId?: string) {
         const chatId = this.normalizeId(rawChatId);
-        const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+        let currentProjectId = forcedProjectId;
         if (process.env.STORAGE_MODE === "local") {
-            const success = await LocalHistoryStore.updateContactDetails(chatId, details as any, currentProjectId);
+            const success = await LocalHistoryStore.updateContactDetails(chatId, details as any, currentProjectId || HistoryHandler.PROJECT_IDENTIFIER);
             return { success };
         }
         if (details.name === '[-]') details.name = undefined;
 
-        // Invalidar cache
-        this.invalidateChatCache(chatId, currentProjectId);
-
         try {
+            // Resolver el project_id real buscando el chat en base de datos si no fue provisto
+            if (!currentProjectId) {
+                const { data: chatData, error: lookupErr } = await supabase
+                    .from('chats')
+                    .select('project_id')
+                    .eq('id', chatId)
+                    .limit(1);
+                if (!lookupErr && chatData && chatData.length > 0) {
+                    currentProjectId = chatData[0].project_id;
+                } else {
+                    currentProjectId = this.PROJECT_IDENTIFIER;
+                }
+            }
+
+            // Invalidar cache
+            this.invalidateChatCache(chatId, currentProjectId);
+
             const { error } = await supabase
                 .from('chats')
                 .update(details)
@@ -1604,15 +1618,15 @@ export class HistoryHandler {
         try {
             console.log(`[HistoryHandler] Actualizando Lead/Ticket ${ticketId}`);
             
-            // 1. Obtener el ticket para saber el chat_id
+            // 1. Obtener el ticket para saber el chat_id y el project_id real de forma única (UUID)
             const { data: ticket, error: tError } = await supabase
                 .from('tickets')
-                .select('chat_id')
+                .select('chat_id, project_id')
                 .eq('id', ticketId)
-                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER)
                 .single();
             
             if (tError || !ticket) throw new Error('Ticket no encontrado');
+            const currentProjectId = ticket.project_id || HistoryHandler.PROJECT_IDENTIFIER;
 
             // 2. Actualizar Ticket
             const ticketUpdate: any = { updated_at: new Date().toISOString() };
@@ -1633,7 +1647,7 @@ export class HistoryHandler {
                 .from('tickets')
                 .update(ticketUpdate)
                 .eq('id', ticketId)
-                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
+                .eq('project_id', currentProjectId);
             
             if (upTicketErr) throw upTicketErr;
 
@@ -1657,15 +1671,15 @@ export class HistoryHandler {
                     .from('chats')
                     .update(chatUpdate)
                     .eq('id', ticket.chat_id)
-                    .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
+                    .eq('project_id', currentProjectId);
                 
                 if (upChatErr) throw upChatErr;
                 
-                this.invalidateChatCache(ticket.chat_id);
+                this.invalidateChatCache(ticket.chat_id, currentProjectId);
                 
                 // Si el estado es cerrado, aplicar lógica de reset de bot y limpiar caché de BD
                 if (ticketUpdate.estado === 'Cerrado') {
-                    this.invalidateChatCache(ticket.chat_id);
+                    this.invalidateChatCache(ticket.chat_id, currentProjectId);
                     await supabase
                         .from('chats')
                         .update({ 
@@ -1674,7 +1688,7 @@ export class HistoryHandler {
                             last_db_result: null
                         })
                         .eq('id', ticket.chat_id)
-                        .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
+                        .eq('project_id', currentProjectId);
                     
                     historyEvents.emit('bot_toggled', { chatId: ticket.chat_id, enabled: true, assigned_agent: 'asistente1' });
                 }
