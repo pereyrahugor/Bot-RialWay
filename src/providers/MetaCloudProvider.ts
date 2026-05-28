@@ -665,7 +665,7 @@ class MetaCloudProvider extends ProviderClass {
     /**
      * Procesa el Webhook entrante de Meta
      */
-    public handleWebhook = (req: any, res: any) => {
+    public handleWebhook = async (req: any, res: any) => {
         try {
             const body = req.body;
             
@@ -673,6 +673,24 @@ class MetaCloudProvider extends ProviderClass {
             if (!res.headersSent) {
                 res.statusCode = 200;
                 res.end('OK');
+            }
+
+            // Sincronizar Meta Provider dinámicamente si no hay credenciales activas
+            if (!this.config.access_token || this.config.access_token === 'PENDING') {
+                try {
+                    const { HistoryHandler } = await import('../db/historyHandler');
+                    const metaConfig = await HistoryHandler.getMetaOnboardingData();
+                    if (metaConfig && metaConfig.access_token && metaConfig.access_token !== 'PENDING') {
+                        console.log('📡 [MetaCloudProvider] Sincronizando token de Meta dinámicamente en Webhook...');
+                        this.updateConfig({
+                            access_token: metaConfig.access_token,
+                            phone_number_id: metaConfig.phone_number_id,
+                            waba_id: metaConfig.waba_id
+                        });
+                    }
+                } catch (e: any) {
+                    console.error('⚠️ [MetaCloudProvider] Error cargando config dinámica en Webhook:', e.message);
+                }
             }
 
             // Verificación del Webhook (GET /webhook)
@@ -825,8 +843,8 @@ class MetaCloudProvider extends ProviderClass {
 
                                     if (localPath && localPath !== "no-file") {
                                         formatedMessage.localPath = localPath;
-                                        // Si el cuerpo era solo un evento, lo actualizamos con la ruta para que el HistoryHandler lo guarde
-                                        if (formatedMessage.body && formatedMessage.body.startsWith('_event_')) {
+                                        // Si el cuerpo era solo un evento que no sea de voz, lo actualizamos con la ruta para que el HistoryHandler lo guarde
+                                        if (formatedMessage.body && formatedMessage.body.startsWith('_event_') && formatedMessage.type !== 'voice') {
                                             // Guardamos la ruta relativa para el CRM
                                             formatedMessage.body = localPath; 
                                         }

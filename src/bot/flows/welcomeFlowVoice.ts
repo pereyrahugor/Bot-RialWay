@@ -51,8 +51,11 @@ export const welcomeFlowVoice = addKeyword<any, any>(EVENTS.VOICE_NOTE)
             console.log("📂 Carpeta 'temp/voiceNote' creada.");
         }
 
-        // Guardar el archivo de audio localmente
-        const localPath = await provider.saveFile(ctx, { path: "./temp/voiceNote/" });
+        // Guardar el archivo de audio localmente (o reutilizarlo si ya se descargó en el webhook)
+        let localPath = ctx.localPath;
+        if (!localPath || !fs.existsSync(localPath)) {
+            localPath = await provider.saveFile(ctx, { path: "./temp/voiceNote/" });
+        }
         console.log(`📂 Ruta del archivo de audio: ${localPath}`);
 
         // Transcribir el audio antes de procesarlo
@@ -66,6 +69,28 @@ export const welcomeFlowVoice = addKeyword<any, any>(EVENTS.VOICE_NOTE)
         console.log(`📝 Transcripción: ${transcription}`);
         ctx.body = transcription;
 
+        // Guardar la transcripción en la base de datos como mensaje de texto para visibilidad en el Backoffice
+        try {
+            const { HistoryHandler } = await import("~/db/historyHandler");
+            const botPhoneNumber = provider?.phoneNumber || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
+            const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || HistoryHandler.PROJECT_IDENTIFIER;
+            const chatId = userId;
+            
+            await HistoryHandler.saveMessage(
+                chatId,
+                'user',
+                `🎤 Transcripción de audio: "${transcription}"`,
+                'text',
+                null,
+                ctx.userId,
+                null,
+                ctx.platform || 'whatsapp',
+                dynamicProjectId
+            );
+        } catch (dbErr) {
+            console.error("❌ Error guardando transcripción en base de datos:", dbErr);
+        }
+
         // Enviar la transcripción al asistente
         const queue = userQueues.get(userId);
         queue.push({ ctx, flowDynamic, state, provider, gotoFlow });
@@ -75,11 +100,13 @@ export const welcomeFlowVoice = addKeyword<any, any>(EVENTS.VOICE_NOTE)
         }
 
         // Eliminar el archivo temporal
-        fs.unlink(localPath, (err) => {
-            if (err) {
-                console.error(`❌ Error al eliminar el archivo: ${localPath}`, err);
-            } else {
-                console.log(`🗑️ Archivo eliminado: ${localPath}`);
-            }
-        });
+        if (localPath && localPath !== "no-file") {
+            fs.unlink(localPath, (err) => {
+                if (err) {
+                    console.error(`❌ Error al eliminar el archivo: ${localPath}`, err);
+                } else {
+                    console.log(`🗑️ Archivo eliminado: ${localPath}`);
+                }
+            });
+        }
     });

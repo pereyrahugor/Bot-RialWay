@@ -84,8 +84,8 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
                 console.log(`${prefix} 🎙️ NOTA DE VOZ DETECTADA. Enviando a los flujos...`);
             }
 
-            // Guardar en el historial de Supabase si no es un comando de sistema
-            if (ctx.body && !ctx.body.startsWith('_event_')) {
+            // Guardar en el historial de Supabase si no es un comando de sistema (se permite guardar notas de voz que tengan _event_)
+            if (ctx.body && (!ctx.body.startsWith('_event_') || ctx.type === 'voice')) {
                 const { HistoryHandler } = await import('../db/historyHandler');
                 
                 // Si es grupo, mantenemos el JID completo. Si es chat privado, extraemos el número.
@@ -99,10 +99,12 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
                     contactName = (chatId === cleanGroupResumenId) ? 'Grupo de Reportes 1' : 'Grupo de Reportes 2';
                 }
                 
+                const contentToSave = ctx.type === 'voice' ? (ctx.localPath || ctx.body) : ctx.body;
+                
                 await HistoryHandler.saveMessage(
                     chatId, 
                     'user', 
-                    ctx.body, 
+                    contentToSave, 
                     ctx.type || 'text', 
                     contactName, 
                     ctx.userId,

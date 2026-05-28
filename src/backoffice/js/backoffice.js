@@ -629,7 +629,7 @@ function generateMessageHtml(m) {
     const type = m.type || 'text';
     
     const isImageUrl = type === 'image' || contentHtml.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i) || (contentHtml.includes('/uploads/') && contentHtml.match(/\.(jpeg|jpg|gif|png|webp|svg)/i));
-    const isVideoUrl = type === 'video' || contentHtml.match(/\.(mp4|webm|ogg)$/i) || (contentHtml.includes('/uploads/') && contentHtml.match(/\.(mp4|webm|ogg)/i));
+    const isVideoUrl = type === 'video' || contentHtml.match(/\.(mp4|webm)$/i) || (contentHtml.includes('/uploads/') && contentHtml.match(/\.(mp4|webm)/i));
     const isAudioUrl = type === 'voice' || type === 'audio' || contentHtml.match(/\.(ogg|opus|mp3|wav|aac|m4a)$/i) || (contentHtml.includes('/uploads/') && contentHtml.match(/\.(ogg|opus|mp3|wav|aac|m4a)/i));
     const isFileUrl = type === 'document' || (contentHtml.includes('/uploads/') && !isImageUrl && !isVideoUrl && !isAudioUrl);
 
