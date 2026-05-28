@@ -62,6 +62,10 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
             const from = ctx.from || '';
             const isGroup = from.includes('@g.us');
 
+            if (isGroupProvider && !isGroup) {
+                return; // El proveedor de grupos ignora chats privados para evitar colisiones
+            }
+
             if (isGroup) {
                 // Filtro estricto: solo procedemos si es uno de los grupos de reportes oficiales
                 const { HistoryHandler } = await import('../db/historyHandler');
@@ -122,6 +126,10 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
         try {
             const from = ctx.from || '';
             const isGroup = from.includes('@g.us');
+
+            if (isGroupProvider && !isGroup) {
+                return; // El proveedor de grupos ignora chats privados para evitar colisiones
+            }
 
             const { HistoryHandler, recentBotSentMessages, normalizeTextForCache } = await import('../db/historyHandler');
 

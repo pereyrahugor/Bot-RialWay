@@ -99,14 +99,5 @@ export const welcomeFlowVoice = addKeyword<any, any>(EVENTS.VOICE_NOTE)
             await handleQueue(userId);
         }
 
-        // Eliminar el archivo temporal
-        if (localPath && localPath !== "no-file") {
-            fs.unlink(localPath, (err) => {
-                if (err) {
-                    console.error(`❌ Error al eliminar el archivo: ${localPath}`, err);
-                } else {
-                    console.log(`🗑️ Archivo eliminado: ${localPath}`);
-                }
-            });
-        }
+        // Nota: No eliminamos el archivo localmente para que el reproductor de audio del Backoffice pueda servirlo del disco.
     });
