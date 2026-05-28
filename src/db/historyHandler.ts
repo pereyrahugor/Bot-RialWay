@@ -1631,8 +1631,7 @@ export class HistoryHandler {
             // 2. Actualizar Ticket
             const ticketUpdate: any = { updated_at: new Date().toISOString() };
             if (details.titulo !== undefined) ticketUpdate.titulo = details.titulo;
-            if (details.notas !== undefined) ticketUpdate.notas = details.notas;
-            if (details.vencimiento !== undefined) ticketUpdate.vencimiento = details.vencimiento;
+            if (details.notas !== undefined) ticketUpdate.descripcion = details.notas;
             
             // Soportar tanto priority (frontend) como prioridad (db)
             const priorityVal = details.priority || details.prioridad;

@@ -845,7 +845,7 @@ window.openClosedLeadsModal = async () => {
                 <div class="closed-item" style="display:flex; justify-content:space-between; align-items:center; padding:15px; border-bottom:1px solid var(--border); background:var(--bg-card); border-radius:12px; margin-bottom:10px;">
                     <div>
                         <div style="font-weight:700; color:var(--text-main); font-size:1.1rem;">${t.titulo || 'Sin título'}</div>
-                        <div style="font-size:0.9rem; color:var(--text-muted);"><i class="fas fa-user"></i> ${lead?.name || 'Sin nombre'} | <i class="fas fa-phone"></i> ${t.chat_id?.split('@')[0]}</div>
+                        <div style="font-size:0.9rem; color:var(--text-muted);"><i class="fas fa-user"></i> ${lead?.name || 'Lead sin nombre'} | <i class="fas fa-phone"></i> ${t.chat_id?.split('@')[0]}</div>
                         <div style="font-size:0.8rem; color:var(--accent); margin-top:5px;"><i class="fas fa-calendar-check"></i> Cerrado el: ${closedDate}</div>
                     </div>
                     <div style="display:flex; gap:10px;">
