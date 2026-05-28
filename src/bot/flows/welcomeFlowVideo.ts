@@ -39,12 +39,12 @@ const welcomeFlowVideo = addKeyword(EVENTS.MEDIA).addAction(
         return;
       }
       
-      // Asegurar que la carpeta temp exista
-      if (!fs.existsSync("./temp/")) {
-        fs.mkdirSync("./temp/", { recursive: true });
+      // Asegurar que la carpeta tmp exista
+      if (!fs.existsSync("./tmp/")) {
+        fs.mkdirSync("./tmp/", { recursive: true });
       }
       
-      const localPath = await provider.saveFile(ctx, { path: "./temp/" });
+      const localPath = await provider.saveFile(ctx, { path: "./tmp/" });
       if (!localPath) {
         await flowDynamic("No se pudo guardar el video recibido.");
         return;

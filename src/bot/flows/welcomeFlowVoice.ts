@@ -43,18 +43,18 @@ export const welcomeFlowVoice = addKeyword<any, any>(EVENTS.VOICE_NOTE)
 
 
         // 📌 Definir ruta donde se guardarán los audios
-        const audioFolder = path.join("./temp/voiceNote/");
+        const audioFolder = path.join("./tmp/voiceNote/");
 
         // 📌 Crear la carpeta si no existe
         if (!fs.existsSync(audioFolder)) {
             fs.mkdirSync(audioFolder, { recursive: true });
-            console.log("📂 Carpeta 'temp/voiceNote' creada.");
+            console.log("📂 Carpeta 'tmp/voiceNote' creada.");
         }
 
         // Guardar el archivo de audio localmente (o reutilizarlo si ya se descargó en el webhook)
         let localPath = ctx.localPath;
         if (!localPath || !fs.existsSync(localPath)) {
-            localPath = await provider.saveFile(ctx, { path: "./temp/voiceNote/" });
+            localPath = await provider.saveFile(ctx, { path: "./tmp/voiceNote/" });
         }
         console.log(`📂 Ruta del archivo de audio: ${localPath}`);
 

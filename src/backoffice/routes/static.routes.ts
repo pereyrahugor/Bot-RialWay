@@ -116,8 +116,10 @@ export const registerStaticRoutes = (app: any, { __dirname, provider, groupProvi
     app.use("/style", serve(path.join(process.cwd(), "src", "backoffice", "style")));
     app.use("/assets", serve(path.join(process.cwd(), "src", "assets")));
     app.use("/uploads", serve(path.join(process.cwd(), "uploads")));
-    app.use("/temp", serve(path.join(process.cwd(), "temp")));
-    app.use("/app/temp", serve(path.join(process.cwd(), "temp")));
+    app.use("/temp", serve(path.join(process.cwd(), "tmp")));
+    app.use("/app/temp", serve(path.join(process.cwd(), "tmp")));
+    app.use("/tmp", serve(path.join(process.cwd(), "tmp")));
+    app.use("/app/tmp", serve(path.join(process.cwd(), "tmp")));
 
     // QR genérico / Principal (Con fallback a memoria para evitar 404)
     app.get("/qr.png", async (req: any, res: any) => {

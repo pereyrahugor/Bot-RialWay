@@ -84,13 +84,13 @@ const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
         return;
       }
       
-      // Asegurar que la carpeta temp exista
-      if (!fs.default.existsSync("./temp/")) {
-        fs.default.mkdirSync("./temp/", { recursive: true });
+      // Asegurar que la carpeta tmp exista
+      if (!fs.default.existsSync("./tmp/")) {
+        fs.default.mkdirSync("./tmp/", { recursive: true });
       }
       
-      // Usar ./temp/ en lugar de ./tmp/ para consistencia
-      const localPath = await provider.saveFile(ctx, { path: "./temp/" });
+      // Usar ./tmp/ para consistencia
+      const localPath = await provider.saveFile(ctx, { path: "./tmp/" });
       if (!localPath) {
         await flowDynamic("No se pudo guardar la imagen recibida.");
         return;

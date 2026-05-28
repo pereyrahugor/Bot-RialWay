@@ -37,7 +37,7 @@ export const registerWebchatRoutes = (app: any, {
                     const buffer = Buffer.from(base64Data, 'base64');
                     
                     if (mimetype.startsWith('image/')) {
-                        const localDir = path.join("./temp/");
+                        const localDir = path.join("./tmp/");
                         if (!fs.existsSync(localDir)) fs.mkdirSync(localDir, { recursive: true });
                         const localPath = path.join(localDir, Date.now() + "." + ext);
                         fs.writeFileSync(localPath, buffer);
@@ -64,7 +64,7 @@ export const registerWebchatRoutes = (app: any, {
                         }
 
                     } else if (mimetype.startsWith('audio/') || mimetype.startsWith('video/')) {
-                        const localDir = path.join("./temp/voiceNote/");
+                        const localDir = path.join("./tmp/voiceNote/");
                         if (!fs.existsSync(localDir)) fs.mkdirSync(localDir, { recursive: true });
                         const localPath = path.join(localDir, Date.now() + "." + ext);
                         fs.writeFileSync(localPath, buffer);

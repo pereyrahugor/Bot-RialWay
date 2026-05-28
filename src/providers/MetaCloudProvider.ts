@@ -81,7 +81,7 @@ class MetaCloudProvider extends ProviderClass {
         }
 
         // Preparar destino
-        const outPath = options.path || './temp/';
+        const outPath = options.path || './tmp/';
         if (!fs.existsSync(outPath)) {
             fs.mkdirSync(outPath, { recursive: true });
         }
