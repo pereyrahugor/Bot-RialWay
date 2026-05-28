@@ -17,6 +17,16 @@ export { supabase };
 // Emitter para notificar cambios en tiempo real a otros módulos (como el de WebSockets)
 export const historyEvents = new EventEmitter();
 
+// Cache en memoria para evitar que ecos de mensajes enviados por el bot via Meta Cloud API
+// sean detectados como intervención manual (Atención Humana) por el socket de Baileys.
+export const recentBotSentMessages = new Set<string>();
+
+export const normalizeTextForCache = (text: string): string => {
+    return (text || '')
+        .toLowerCase()
+        .replace(/[\s\p{P}]/gu, ''); // Elimina espacios y puntuación de cualquier tipo
+};
+
 // Identificador único para este bot específico
 // Identificador único para este bot específico (Usamos el UUID para consistencia total)
 const PROJECT_ID = process.env.RAILWAY_PROJECT_ID || "default_project";
@@ -571,6 +581,16 @@ export class HistoryHandler {
     static async saveMessage(rawChatId: string, role: 'user' | 'assistant' | 'system', content: string, type: string = 'text', contactName: string | null = null, userId: string | null = null, external_id: string | null = null, platformType?: 'whatsapp' | 'webchat' | 'instagram' | 'messenger', forcedProjectId?: string) {
         const chatId = this.normalizeId(rawChatId);
         const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+
+        // Registrar en cache si es respuesta del bot/operador para evitar falsas intervenciones manuales
+        if (role === 'assistant' && content) {
+            const normalized = normalizeTextForCache(content);
+            recentBotSentMessages.add(normalized);
+            setTimeout(() => {
+                recentBotSentMessages.delete(normalized);
+            }, 30000); // 30 segundos es tiempo de sobra para recibir el eco del socket
+        }
+
         if (process.env.STORAGE_MODE === "local") {
             const msg = await LocalHistoryStore.saveMessage(chatId, role, content, type, contactName, userId, external_id, currentProjectId);
             historyEvents.emit('message_saved', { chatId, projectId: currentProjectId, role, content, type });
