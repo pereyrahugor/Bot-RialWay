@@ -589,6 +589,21 @@ export class HistoryHandler {
             setTimeout(() => {
                 recentBotSentMessages.delete(normalized);
             }, 30000); // 30 segundos es tiempo de sobra para recibir el eco del socket
+
+            // También registrar los chunks individuales si el mensaje se envía fragmentado (por ejemplo, separado por dos o más saltos de línea)
+            const chunks = content.split(/\n\n+/);
+            if (chunks.length > 1) {
+                for (const chunk of chunks) {
+                    const trimmed = chunk.trim();
+                    if (trimmed.length > 0) {
+                        const normalizedChunk = normalizeTextForCache(trimmed);
+                        recentBotSentMessages.add(normalizedChunk);
+                        setTimeout(() => {
+                            recentBotSentMessages.delete(normalizedChunk);
+                        }, 30000);
+                    }
+                }
+            }
         }
 
         if (process.env.STORAGE_MODE === "local") {
