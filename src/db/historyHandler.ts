@@ -330,6 +330,19 @@ export class HistoryHandler {
                             await supabase.rpc('exec_sql', { query: `ALTER TABLE chats ADD COLUMN IF NOT EXISTS notes TEXT, ADD COLUMN IF NOT EXISTS email TEXT, ADD COLUMN IF NOT EXISTS source TEXT, ADD COLUMN IF NOT EXISTS crm_status TEXT, ADD COLUMN IF NOT EXISTS crm_due_date TIMESTAMPTZ, ADD COLUMN IF NOT EXISTS is_lead BOOLEAN DEFAULT false;` });
                         }
 
+                        // Verificar campos adicionales CRM
+                        const { error: crmExtraErr } = await supabase.from('chats').select('cuit_dni, address, tax_status, offered_product').limit(1);
+                        if (crmExtraErr && crmExtraErr.code === '42703') {
+                            console.log(`🔧 Agregando columnas adicionales CRM a chats...`);
+                            await supabase.rpc('exec_sql', { 
+                                query: `ALTER TABLE chats 
+                                        ADD COLUMN IF NOT EXISTS cuit_dni TEXT, 
+                                        ADD COLUMN IF NOT EXISTS address TEXT, 
+                                        ADD COLUMN IF NOT EXISTS tax_status TEXT, 
+                                        ADD COLUMN IF NOT EXISTS offered_product TEXT;` 
+                            });
+                        }
+
                     // Migración para user_id (Meta BSUID)
                     const { error: bsuidErr } = await supabase.from('chats').select('user_id').limit(1);
                     if (bsuidErr && bsuidErr.code === '42703') {

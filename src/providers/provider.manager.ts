@@ -138,7 +138,9 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
     // --- CAPTURA DE MENSAJES SALIENTES ---
     provider.on('message_from_me', async (ctx: any) => {
         try {
-            const from = ctx.from || '';
+            // En ecos de mensajes salientes (message_from_me), el JID de la conversación es el destinatario.
+            // Para Baileys, ctx.from es el bot y ctx.to o remoteJid es el chat. Para Meta, ctx.from ya es el usuario.
+            const from = ctx.to || ctx.key?.remoteJid || ctx.from || '';
             const isGroup = from.includes('@g.us');
 
             if (isGroupProvider && !isGroup) {

@@ -462,7 +462,7 @@ async function selectChat(id) {
     const chat = chats.find(c => c.id === id);
     
     document.getElementById('active-chat-phone').innerText = chat.id.split('@')[0];
-    const displayName = (chat.name && chat.name !== '[-]') ? chat.name : 'Sin nombre';
+    const displayName = (chat.name && chat.name !== '[-]') ? chat.name : 'Lead sin nombre';
     document.getElementById('active-chat-name').innerText = displayName;
     
     const headerAvatar = document.getElementById('active-chat-avatar');
@@ -1043,7 +1043,7 @@ async function saveCRMDetails() {
         const chat = chats.find(c => c.id === activeChatId);
         if (chat) {
             Object.assign(chat, details);
-            const updatedName = (chat.name && chat.name !== '[-]') ? chat.name : 'Sin nombre';
+            const updatedName = (chat.name && chat.name !== '[-]') ? chat.name : 'Lead sin nombre';
             document.getElementById('active-chat-name').innerText = updatedName;
             renderChatList();
         }
