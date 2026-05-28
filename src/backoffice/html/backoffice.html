@@ -134,11 +134,16 @@
             </div>
         </div>
 
+        <div id="emoji-picker" class="emoji-picker-container" style="display: none;"></div>
         <div id="input-area">
             <button class="btn-icon" id="attach-btn" title="Adjuntar archivo" disabled onclick="document.getElementById('file-input').click()">
                 <i class="fas fa-paperclip"></i>
             </button>
             <input type="file" id="file-input" onchange="handleFileSelect(this)">
+            
+            <button class="btn-icon" id="emoji-btn" title="Emojis" disabled onclick="toggleEmojiPicker(event)">
+                <i class="far fa-smile"></i>
+            </button>
             
             <div class="input-wrapper">
                 <input type="text" id="message-input" placeholder="Escribe un mensaje aquí" disabled
@@ -582,6 +587,19 @@
                     </div>
                     <p id="import-status-text" class="import-status-text">Procesando...</p>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lightbox Modal for Zooming Images -->
+    <div id="lightbox-modal" class="modal-overlay" onclick="closeLightbox()">
+        <div class="lightbox-content" onclick="event.stopPropagation()">
+            <button class="btn-icon lightbox-close-btn" onclick="closeLightbox()"><i class="fas fa-times"></i></button>
+            <img id="lightbox-img" src="" alt="zoom">
+            <div class="lightbox-actions">
+                <a id="lightbox-download-link" href="" download class="btn-primary">
+                    <i class="fas fa-download"></i> Descargar Imagen
+                </a>
             </div>
         </div>
     </div>

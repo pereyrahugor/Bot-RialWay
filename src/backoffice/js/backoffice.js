@@ -540,6 +540,9 @@ function updateInputState(botEnabled) {
     btn.disabled = isBotEnabled;
     attachBtn.disabled = isBotEnabled;
     
+    const emojiBtn = document.getElementById('emoji-btn');
+    if (emojiBtn) emojiBtn.disabled = isBotEnabled;
+    
     if (isBotEnabled) {
         input.parentElement.style.borderColor = 'var(--accent)';
         input.style.opacity = '0.6';
@@ -627,12 +630,39 @@ function generateMessageHtml(m) {
     
     const isImageUrl = type === 'image' || contentHtml.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i) || (contentHtml.includes('/uploads/') && contentHtml.match(/\.(jpeg|jpg|gif|png|webp|svg)/i));
     const isVideoUrl = type === 'video' || contentHtml.match(/\.(mp4|webm|ogg)$/i) || (contentHtml.includes('/uploads/') && contentHtml.match(/\.(mp4|webm|ogg)/i));
-    const isFileUrl = type === 'document' || (contentHtml.includes('/uploads/') && !isImageUrl && !isVideoUrl);
+    const isAudioUrl = type === 'voice' || type === 'audio' || contentHtml.match(/\.(ogg|opus|mp3|wav|aac|m4a)$/i) || (contentHtml.includes('/uploads/') && contentHtml.match(/\.(ogg|opus|mp3|wav|aac|m4a)/i));
+    const isFileUrl = type === 'document' || (contentHtml.includes('/uploads/') && !isImageUrl && !isVideoUrl && !isAudioUrl);
 
     if (isImageUrl && contentHtml) {
-        contentHtml = `<div class="msg-media"><img src="${contentHtml}" alt="imagen"></div>`;
+        contentHtml = `
+            <div class="msg-media image-container">
+                <img src="${contentHtml}" alt="imagen" onclick="openLightbox('${contentHtml}')" class="zoomable-image">
+                <div class="media-actions">
+                    <a href="${contentHtml}" download class="media-action-btn" title="Descargar Imagen">
+                        <i class="fas fa-download"></i>
+                    </a>
+                </div>
+            </div>`;
     } else if (isVideoUrl && contentHtml) {
-        contentHtml = `<div class="msg-media"><video src="${contentHtml}" controls></video></div>`;
+        contentHtml = `
+            <div class="msg-media video-container">
+                <video src="${contentHtml}" controls></video>
+                <div class="media-actions">
+                    <a href="${contentHtml}" download class="media-action-btn" title="Descargar Video">
+                        <i class="fas fa-download"></i>
+                    </a>
+                </div>
+            </div>`;
+    } else if (isAudioUrl && contentHtml) {
+        contentHtml = `
+            <div class="msg-audio">
+                <audio src="${contentHtml}" controls preload="metadata"></audio>
+                <div class="audio-download-row">
+                    <a href="${contentHtml}" download class="media-download-link" title="Descargar Audio">
+                        <i class="fas fa-download"></i> Descargar Audio
+                    </a>
+                </div>
+            </div>`;
     } else if (isFileUrl && contentHtml) {
         const fileName = contentHtml.split('/').pop();
         contentHtml = `<div class="msg-file"><a href="${contentHtml}" target="_blank">📄 Documento adjunto (${fileName})</a></div>`;
@@ -2485,6 +2515,89 @@ window.startImportExcel = startImportExcel;
 
 window.startContactSync = startContactSync;
 window.closeSyncModal = closeSyncModal;
+
+// --- NUEVOS CONTROLADORES PARA EMOJIS Y LIGHTBOX ---
+
+const EMOJI_LIST = [
+    '😀','😃','😄','😁','😆','😅','😂','🤣','😊','😇','🙂','🙃','😉','😌','😍','🥰',
+    '😘','😗','😙','😚','😋','😛','😝','😜','🤪','🤨','🧐','🤓','😎','🤩','🥳','😏',
+    '😒','😞','😔','😟','😕','🙁','☹️','😣','😖','😫','😩','🥺','😢','😭','😤','😠',
+    '😡','🤬','🤯','😳','🥵','🥶','😱','😨','😰','😥','😓','🤗','🤔','🤭','🤫','🤥',
+    '😶','😐','😑','😬','🙄','😯','😦','😧','😮','😲','🥱','😴','🤤','😪','😵','🤐',
+    '🥴','🤢','🤮','🤧','😷','🤒','🤕','🤑','🤠','😈','👿','👹','👺','🤡','💩','👻',
+    '💀','☠️','👽','👾','🤖','🎃','😺','😸','😻','😼','😽','🙀','😿','😾','👋','🤚',
+    '🖐️','✋','🖖','👌','🤏','✌️','🤞','🤟','🤘','🤙','👈','👉','👆','🖕','👇','☝️',
+    '👍','👎','✊','👊','🤛','🤜','👏','🙌','👐','🤲','🤝','🙏','✍️','💅','🤳','💪',
+    '🦾','👂','🦻','👃','🧠','🦷','🦴','👀','👁️','👅','👄','💋','🩸','❤️','🧡','💛',
+    '💚','💙','💜','🖤','🤍','🤎','💔','💖','💗','💓','💞','💕','💟','❣️',
+    '✨','⭐','🌟','💫','🔥','💥','💯','🎉','🎊','🎈','🎂','🎁','🎗️'
+];
+
+function toggleEmojiPicker(event) {
+    if (event) event.stopPropagation();
+    const picker = document.getElementById('emoji-picker');
+    if (!picker) return;
+
+    if (picker.style.display === 'none' || picker.style.display === '') {
+        if (picker.children.length === 0) {
+            picker.innerHTML = EMOJI_LIST.map(emoji => 
+                `<div class="emoji-item" onclick="insertEmoji('${emoji}')">${emoji}</div>`
+            ).join('');
+        }
+        picker.style.display = 'grid';
+    } else {
+        picker.style.display = 'none';
+    }
+}
+
+function insertEmoji(emoji) {
+    const input = document.getElementById('message-input');
+    if (!input) return;
+    
+    const start = input.selectionStart || 0;
+    const end = input.selectionEnd || 0;
+    const text = input.value;
+    
+    input.value = text.substring(0, start) + emoji + text.substring(end);
+    input.focus();
+    
+    const newPos = start + emoji.length;
+    input.setSelectionRange(newPos, newPos);
+}
+
+function openLightbox(src) {
+    const modal = document.getElementById('lightbox-modal');
+    const img = document.getElementById('lightbox-img');
+    const downloadLink = document.getElementById('lightbox-download-link');
+    
+    if (modal && img && downloadLink) {
+        img.src = src;
+        downloadLink.href = src;
+        modal.classList.add('active');
+    }
+}
+
+function closeLightbox() {
+    const modal = document.getElementById('lightbox-modal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+}
+
+// Cierre del picker al hacer clic afuera
+document.addEventListener('click', (e) => {
+    const picker = document.getElementById('emoji-picker');
+    const btn = document.getElementById('emoji-btn');
+    if (picker && picker.style.display === 'grid' && !picker.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
+        picker.style.display = 'none';
+    }
+});
+
+// Registrar funciones en el scope global
+window.toggleEmojiPicker = toggleEmojiPicker;
+window.insertEmoji = insertEmoji;
+window.openLightbox = openLightbox;
+window.closeLightbox = closeLightbox;
 
 console.log('✅ [BACKOFFICE] Cargado Correctamente.');
 
