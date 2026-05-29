@@ -24,7 +24,8 @@ export const welcomeFlowVoice = addKeyword<any, any>(EVENTS.VOICE_NOTE)
         }
 
         // --- FILTRO DE ECO / MENSAJES PROPIOS ---
-        const botNumber = (process.env.YCLOUD_WABA_NUMBER || '').replace(/\D/g, '');
+        const { HistoryHandler } = await import("~/db/historyHandler");
+        const botNumber = (await HistoryHandler.getConfig('YCLOUD_WABA_NUMBER') || '').replace(/\D/g, '');
         const senderNumber = (userId || '').replace(/\D/g, '');
         
         if (ctx.key?.fromMe || (botNumber && senderNumber === botNumber)) {
@@ -33,7 +34,8 @@ export const welcomeFlowVoice = addKeyword<any, any>(EVENTS.VOICE_NOTE)
 
         console.log(`🎙️ Mensaje de voz recibido de ${userId}`);
 
-        const setTime = (Number(process.env.timeOutCierre) || 45) * 60 * 1000;
+        const timeoutCierreValue = await HistoryHandler.getConfig('timeOutCierre') || 45;
+        const setTime = Number(timeoutCierreValue) * 60 * 1000;
         reset(ctx, gotoFlow, setTime);
 
         // Asegurar que userQueues tenga un array inicializado para este usuario

@@ -25,7 +25,9 @@ const welcomeFlowVideo = addKeyword(EVENTS.MEDIA).addAction(
       return;
     }
 
-    const setTime = (Number(process.env.timeOutCierre) || 45) * 60 * 1000;
+    const { HistoryHandler } = await import("../../db/historyHandler");
+    const timeoutCierreValue = await HistoryHandler.getConfig('timeOutCierre') || 45;
+    const setTime = Number(timeoutCierreValue) * 60 * 1000;
     reset(ctx, gotoFlow, setTime);
 
     // Asegurar que userQueues tenga un array inicializado para este usuario

@@ -23,7 +23,9 @@ export const welcomeFlowButton = addKeyword<BaileysProvider, MemoryDB>(EVENTS.AC
         console.log(`🔘 Botón recibido de :${userId}`);
         console.log(`Cuerpo del botón: ${ctx.body}`);
 
-        const setTime = (Number(process.env.timeOutCierre) || 45) * 60 * 1000;
+        const { HistoryHandler } = await import("../db/historyHandler");
+        const timeoutCierreValue = await HistoryHandler.getConfig('timeOutCierre') || 45;
+        const setTime = Number(timeoutCierreValue) * 60 * 1000;
         reset(ctx, gotoFlow, setTime);
 
         // Asegurar que userQueues tenga un array inicializado para este usuario
