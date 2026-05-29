@@ -741,6 +741,50 @@ export class HistoryHandler {
         }
     }
 
+    /**
+     * Elimina un mensaje por su ID o ID externo de la base de datos
+     */
+    static async deleteMessage(messageId: string, rawChatId?: string, forcedProjectId?: string): Promise<boolean> {
+        const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+        if (process.env.STORAGE_MODE === "local") {
+            const success = await LocalHistoryStore.deleteMessage(messageId, currentProjectId);
+            if (success) {
+                historyEvents.emit('message_deleted', { messageId, projectId: currentProjectId, chatId: this.normalizeId(rawChatId || '') });
+            }
+            return success;
+        }
+
+        try {
+            // Eliminar de Supabase por id o external_id
+            const { data, error } = await supabase
+                .from('messages')
+                .delete()
+                .or(`id.eq.${messageId},external_id.eq.${messageId}`)
+                .eq('project_id', currentProjectId)
+                .select();
+
+            if (error) {
+                console.error('[HistoryHandler] Error eliminando mensaje:', error.message);
+                return false;
+            }
+
+            if (data && data.length > 0) {
+                const deletedMsg = data[0];
+                historyEvents.emit('message_deleted', { 
+                    messageId: deletedMsg.id, 
+                    externalId: deletedMsg.external_id, 
+                    chatId: deletedMsg.chat_id,
+                    projectId: currentProjectId 
+                });
+                return true;
+            }
+            return false;
+        } catch (err: any) {
+            console.error('[HistoryHandler] Excepción en deleteMessage:', err.message);
+            return false;
+        }
+    }
+
     static async getAssignedAgent(rawChatId: string, forcedProjectId?: string): Promise<string> {
         try {
             const chat = await this.getChat(rawChatId, forcedProjectId);

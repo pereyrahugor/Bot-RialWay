@@ -22,6 +22,10 @@ export const initSocketIO = (serverInstance: any, { processUserMessage }: any) =
             io.emit('new_message', payload);
         });
 
+        historyEvents.on('message_deleted', (payload) => {
+            io.emit('message_deleted', payload);
+        });
+
         historyEvents.on('bot_toggled', (payload) => {
             io.emit('bot_toggled', payload);
         });

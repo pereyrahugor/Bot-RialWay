@@ -149,6 +149,16 @@ socket.on('bot_toggled', (payload) => {
     renderChatList();
 });
 
+socket.on('message_deleted', (payload) => {
+    console.log('🗑️ Mensaje eliminado por socket:', payload);
+    const mId = payload.messageId;
+    const extId = payload.externalId;
+    allMessages = allMessages.filter(m => m.id !== mId && m.external_id !== extId);
+    if (activeChatId === payload.chatId) {
+        renderMessages();
+    }
+});
+
 // Sistema de Caché para la lista de chats (Persistencia para carga instantánea al refrescar)
 function saveChatsToCache(chatData) {
     try {
@@ -638,6 +648,9 @@ function generateMessageHtml(m) {
             <div class="msg-media image-container">
                 <img src="${contentHtml}" alt="imagen" onclick="openLightbox('${contentHtml}')" class="zoomable-image">
                 <div class="media-actions">
+                    <button onclick="event.stopPropagation(); openForwardModal('${contentHtml}', 'image')" class="media-action-btn" title="Reenviar Imagen" style="background: rgba(0,0,0,0.5); border: none; color: white; border-radius: 4px; padding: 6px 10px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;">
+                        <i class="fas fa-share"></i>
+                    </button>
                     <a href="${contentHtml}" download class="media-action-btn" title="Descargar Imagen">
                         <i class="fas fa-download"></i>
                     </a>
@@ -648,6 +661,9 @@ function generateMessageHtml(m) {
             <div class="msg-media video-container">
                 <video src="${contentHtml}" controls></video>
                 <div class="media-actions">
+                    <button onclick="event.stopPropagation(); openForwardModal('${contentHtml}', 'video')" class="media-action-btn" title="Reenviar Video" style="background: rgba(0,0,0,0.5); border: none; color: white; border-radius: 4px; padding: 6px 10px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;">
+                        <i class="fas fa-share"></i>
+                    </button>
                     <a href="${contentHtml}" download class="media-action-btn" title="Descargar Video">
                         <i class="fas fa-download"></i>
                     </a>
@@ -657,7 +673,10 @@ function generateMessageHtml(m) {
         contentHtml = `
             <div class="msg-audio">
                 <audio src="${contentHtml}" controls preload="metadata"></audio>
-                <div class="audio-download-row">
+                <div class="audio-download-row" style="display: flex; align-items: center; gap: 15px; margin-top: 6px;">
+                    <button onclick="event.stopPropagation(); openForwardModal('${contentHtml}', 'voice')" class="media-download-link" title="Reenviar Audio" style="background: none; border: none; color: var(--accent); cursor: pointer; display: flex; align-items: center; gap: 5px; font-size: 0.85rem; padding: 0;">
+                        <i class="fas fa-share"></i> Reenviar
+                    </button>
                     <a href="${contentHtml}" download class="media-download-link" title="Descargar Audio">
                         <i class="fas fa-download"></i> Descargar Audio
                     </a>
@@ -665,11 +684,26 @@ function generateMessageHtml(m) {
             </div>`;
     } else if (isFileUrl && contentHtml) {
         const fileName = contentHtml.split('/').pop();
-        contentHtml = `<div class="msg-file"><a href="${contentHtml}" target="_blank">📄 Documento adjunto (${fileName})</a></div>`;
+        contentHtml = `
+            <div class="msg-file">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <a href="${contentHtml}" target="_blank">📄 Documento adjunto (${fileName})</a>
+                    <button onclick="event.stopPropagation(); openForwardModal('${contentHtml}', 'document')" class="media-action-btn" title="Reenviar Documento" style="background: none; border: none; color: var(--accent); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; margin-left: 10px; font-size: 1rem;">
+                        <i class="fas fa-share"></i>
+                    </button>
+                </div>
+            </div>`;
     }
     
+    const deleteBtn = m.role === 'assistant' ? `
+        <button class="delete-btn" onclick="event.stopPropagation(); deleteMessage('${m.chat_id || activeChatId}', '${m.id || m.external_id}')" title="Eliminar mensaje">
+            <i class="fas fa-trash-can"></i>
+        </button>
+    ` : '';
+
     return `
-        <div class="msg ${m.role}">
+        <div class="msg ${m.role}" data-id="${m.id || m.external_id}">
+            ${deleteBtn}
             <div class="msg-content">${contentHtml}</div>
             <span class="msg-time">${time}</span>
         </div>
@@ -2611,11 +2645,143 @@ document.addEventListener('click', (e) => {
     }
 });
 
+let forwardMediaUrl = '';
+let forwardMediaType = '';
+
+async function deleteMessage(chatId, messageId) {
+    if (!confirm('¿Estás seguro de que quieres eliminar este mensaje?')) return;
+    
+    try {
+        const res = await fetch(`/api/backoffice/messages/${chatId}/${messageId}?token=${token}`, {
+            method: 'DELETE'
+        });
+        
+        if (res.ok) {
+            const data = await res.json();
+            allMessages = allMessages.filter(m => m.id !== messageId && m.external_id !== messageId);
+            renderMessages();
+            
+            if (data.deletedInWhatsApp) {
+                console.log('Mensaje eliminado del Backoffice y de WhatsApp');
+            } else {
+                console.log(data.message);
+                if (data.message.includes('Nota:')) {
+                    alert(data.message);
+                }
+            }
+        } else {
+            const err = await res.json();
+            alert('Error al eliminar mensaje: ' + (err.error || 'error desconocido'));
+        }
+    } catch (e) {
+        console.error(e);
+        alert('Error al eliminar el mensaje');
+    }
+}
+
+function openForwardModal(mediaUrl, mediaType) {
+    forwardMediaUrl = mediaUrl;
+    forwardMediaType = mediaType;
+    
+    const modal = document.getElementById('forward-modal');
+    if (modal) modal.style.display = 'flex';
+    
+    const searchInput = document.getElementById('forward-search-input');
+    if (searchInput) searchInput.value = '';
+    
+    renderForwardChatsList();
+}
+
+function closeForwardModal() {
+    const modal = document.getElementById('forward-modal');
+    if (modal) modal.style.display = 'none';
+    forwardMediaUrl = '';
+    forwardMediaType = '';
+}
+
+function handleForwardSearch() {
+    renderForwardChatsList();
+}
+
+function renderForwardChatsList() {
+    const listContainer = document.getElementById('forward-chats-list');
+    if (!listContainer) return;
+    
+    const query = (document.getElementById('forward-search-input')?.value || '').toLowerCase();
+    
+    const filteredChats = chats.filter(chat => {
+        const name = (chat.name || '').toLowerCase();
+        const phone = chat.id.toLowerCase();
+        return name.includes(query) || phone.includes(query);
+    });
+    
+    if (filteredChats.length === 0) {
+        listContainer.innerHTML = `<div style="padding: 20px; text-align: center; opacity: 0.5; color: var(--text-muted);">No se encontraron contactos</div>`;
+        return;
+    }
+    
+    listContainer.innerHTML = filteredChats.map(chat => {
+        const displayName = (chat.name && chat.name !== '[-]') ? chat.name : chat.id.split('@')[0];
+        const displayPhone = chat.id.split('@')[0];
+        
+        return `
+            <div class="forward-chat-item">
+                <div style="display: flex; flex-direction: column;">
+                    <span style="font-weight: 600; font-size: 0.9rem;">${displayName}</span>
+                    <span style="font-size: 0.75rem; opacity: 0.6; color: var(--text-muted);">${displayPhone}</span>
+                </div>
+                <button onclick="executeForward('${chat.id}')" class="btn-primary" style="padding: 6px 14px; font-size: 0.8rem; border-radius: 8px;">
+                    <i class="fas fa-paper-plane" style="margin-right: 4px;"></i> Enviar
+                </button>
+            </div>
+        `;
+    }).join('');
+}
+
+async function executeForward(targetChatId) {
+    if (!forwardMediaUrl || !targetChatId) return;
+    
+    console.log(`Reenviando media a ${targetChatId}...`);
+    
+    try {
+        const res = await fetch(`/api/backoffice/forward-message?token=${token}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                chatId: targetChatId,
+                mediaUrl: forwardMediaUrl,
+                mediaType: forwardMediaType
+            })
+        });
+        
+        if (res.ok) {
+            alert('Archivo reenviado correctamente');
+            closeForwardModal();
+            if (targetChatId === activeChatId) {
+                fetchMessages(activeChatId, true);
+            }
+        } else {
+            const err = await res.json();
+            alert('Error al reenviar archivo: ' + (err.error || 'error desconocido'));
+        }
+    } catch (e) {
+        console.error(e);
+        alert('Error al reenviar archivo');
+    }
+}
+
 // Registrar funciones en el scope global
 window.toggleEmojiPicker = toggleEmojiPicker;
 window.insertEmoji = insertEmoji;
 window.openLightbox = openLightbox;
 window.closeLightbox = closeLightbox;
+window.deleteMessage = deleteMessage;
+window.openForwardModal = openForwardModal;
+window.closeForwardModal = closeForwardModal;
+window.handleForwardSearch = handleForwardSearch;
+window.executeForward = executeForward;
 
 console.log('✅ [BACKOFFICE] Cargado Correctamente.');
 

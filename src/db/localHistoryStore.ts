@@ -287,6 +287,16 @@ export class LocalHistoryStore {
         return filtered.slice(offset, offset + limit);
     }
 
+    static async deleteMessage(messageId: string, projectId: string): Promise<boolean> {
+        const messages = this.getMessagesList(projectId);
+        const filtered = messages.filter(m => m.id !== messageId && m.external_id !== messageId);
+        if (filtered.length !== messages.length) {
+            this.saveMessagesList(projectId, filtered);
+            return true;
+        }
+        return false;
+    }
+
     // --- TICKETS METHODS ---
 
     static getTicketsFile(projectId: string): string {

@@ -2370,3 +2370,83 @@ input:checked + .slider:before { transform: translateX(20px); background-color: 
     justify-content: center;
 }
 
+/* ========================================================
+   CUSTOM FORWARD & DELETE BUTTONS STYLE
+   ======================================================== */
+
+.msg.assistant {
+    position: relative;
+}
+
+/* Delete button for assistant messages */
+.msg.assistant .delete-btn {
+    opacity: 0;
+    position: absolute;
+    top: 50%;
+    left: -35px;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #f87171;
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 6px;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.msg.assistant:hover .delete-btn {
+    opacity: 0.8;
+}
+
+.msg.assistant .delete-btn:hover {
+    opacity: 1 !important;
+    color: #ef4444 !important;
+    background: rgba(239, 68, 68, 0.1) !important;
+}
+
+/* Allow multiple media action buttons to sit side-by-side */
+.media-actions {
+    display: flex !important;
+    gap: 8px !important;
+}
+
+/* Forward Modal styles */
+#forward-chats-list {
+    background: var(--bg-sidebar, #f0f2f5);
+    border-color: var(--border, rgba(0, 0, 0, 0.08));
+    display: flex;
+    flex-direction: column;
+}
+
+[data-theme="dark"] #forward-chats-list {
+    background: #0f172a !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.forward-chat-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 15px;
+    border-bottom: 1px solid var(--border, rgba(0, 0, 0, 0.08));
+    transition: background 0.2s ease;
+    color: var(--text-main);
+}
+
+.forward-chat-item:hover {
+    background: var(--bg-hover, rgba(0,0,0,0.02));
+}
+
+[data-theme="dark"] .forward-chat-item {
+    border-bottom-color: rgba(255, 255, 255, 0.05) !important;
+    color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] .forward-chat-item:hover {
+    background: rgba(255,255,255,0.02) !important;
+}
+

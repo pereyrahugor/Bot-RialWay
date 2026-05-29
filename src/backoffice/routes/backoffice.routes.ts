@@ -970,6 +970,151 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         });
     });
 
+    app.delete('/api/backoffice/messages/:chatId/:messageId', backofficeAuth, async (req: any, res: any) => {
+        const { chatId, messageId } = req.params;
+        const currentProjectId = depsHistoryHandler.PROJECT_IDENTIFIER;
+        
+        let messageData: any = null;
+        if (process.env.STORAGE_MODE === "local") {
+            const { LocalHistoryStore } = await import('../../db/localHistoryStore');
+            const messages = await LocalHistoryStore.getMessages(chatId, 1000, 0, currentProjectId);
+            messageData = messages.find((m: any) => m.id === messageId || m.external_id === messageId);
+        } else {
+            const { data, error } = await supabase
+                .from('messages')
+                .select('*')
+                .eq('chat_id', chatId)
+                .eq('project_id', currentProjectId)
+                .or(`id.eq.${messageId},external_id.eq.${messageId}`)
+                .maybeSingle();
+            if (!error && data) {
+                messageData = data;
+            }
+        }
+
+        if (!messageData) {
+            return res.status(404).json({ success: false, error: 'Mensaje no encontrado' });
+        }
+
+        const isGroup = chatId.includes('@g.us');
+        const provider = (isGroup && deps.groupProvider) ? deps.groupProvider : deps.adapterProvider;
+        const isMeta = provider && provider.constructor.name === 'MetaCloudProvider';
+        
+        let deletedInWhatsApp = false;
+        
+        if (!isMeta && provider && messageData.external_id) {
+            try {
+                const vendor = provider.vendor || provider.globalVendorArgs?.sock;
+                if (vendor && typeof vendor.sendMessage === 'function') {
+                    const jid = chatId.includes('@') ? chatId : `${chatId}@s.whatsapp.net`;
+                    await vendor.sendMessage(jid, {
+                        delete: {
+                            remoteJid: jid,
+                            fromMe: messageData.role === 'assistant',
+                            id: messageData.external_id
+                        }
+                    });
+                    deletedInWhatsApp = true;
+                    console.log(`[BACKOFFICE] Mensaje ${messageData.external_id} revocado en WhatsApp (Baileys)`);
+                }
+            } catch (err: any) {
+                console.error('[BACKOFFICE] Error intentando revocar mensaje en WhatsApp (Baileys):', err.message);
+            }
+        }
+
+        // Borrar del historial
+        const success = await depsHistoryHandler.deleteMessage(messageData.id || messageId, chatId, currentProjectId);
+        
+        if (success) {
+            res.json({ 
+                success: true, 
+                deletedInWhatsApp, 
+                message: isMeta ? 'Mensaje eliminado del Backoffice. Nota: Meta Cloud API no admite eliminar/revocar mensajes enviados en la app de WhatsApp.' : 'Mensaje eliminado correctamente.' 
+            });
+        } else {
+            res.status(500).json({ success: false, error: 'No se pudo eliminar el mensaje' });
+        }
+    });
+
+    app.post('/api/backoffice/forward-message', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
+        const { chatId, mediaUrl, mediaType } = req.body;
+        if (!chatId || !mediaUrl) {
+            return res.status(400).json({ success: false, error: 'chatId and mediaUrl are required' });
+        }
+
+        try {
+            const isGroup = chatId.includes('@g.us');
+            const providerToSend = (isGroup && deps.groupProvider) ? deps.groupProvider : adapterProvider;
+
+            if (!providerToSend) {
+                return res.status(503).json({ success: false, error: 'WhatsApp provider not initialized' });
+            }
+
+            console.log(`[FORWARD] Reenviando media a ${chatId}. URL: ${mediaUrl}, Tipo: ${mediaType}`);
+
+            const jid = chatId.includes('@') ? chatId : `${chatId}@s.whatsapp.net`;
+            let providerResponse: any = null;
+
+            // Determinar si la URL es local (del backoffice) o externa
+            let absolutePath = mediaUrl;
+            const isLocal = mediaUrl.startsWith('/uploads/') || mediaUrl.startsWith('uploads/');
+            
+            if (isLocal) {
+                const cleanRelativePath = mediaUrl.startsWith('/') ? mediaUrl.substring(1) : mediaUrl;
+                absolutePath = path.resolve(process.cwd(), cleanRelativePath);
+                
+                if (!fs.existsSync(absolutePath)) {
+                    console.error(`[FORWARD] El archivo local no existe en: ${absolutePath}`);
+                    return res.status(404).json({ success: false, error: 'El archivo local a reenviar no existe en el servidor' });
+                }
+            }
+
+            // Normalizar tipo de media
+            let finalType: 'text' | 'image' | 'video' | 'document' = 'document';
+            if (mediaType === 'image' || mediaUrl.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i)) {
+                finalType = 'image';
+            } else if (mediaType === 'video' || mediaUrl.match(/\.(mp4|webm)$/i)) {
+                finalType = 'video';
+            }
+
+            // Enviar usando el método adecuado del proveedor
+            if (finalType === 'image') {
+                if (typeof providerToSend.sendImage === 'function') {
+                    providerResponse = await providerToSend.sendImage(jid, absolutePath, '');
+                } else {
+                    providerResponse = await providerToSend.sendMessage(jid, '', { media: absolutePath });
+                }
+            } else if (finalType === 'video') {
+                if (typeof providerToSend.sendVideo === 'function') {
+                    providerResponse = await providerToSend.sendVideo(jid, absolutePath, '');
+                } else {
+                    providerResponse = await providerToSend.sendMessage(jid, '', { media: absolutePath });
+                }
+            } else {
+                if (typeof providerToSend.sendFile === 'function') {
+                    providerResponse = await providerToSend.sendFile(jid, absolutePath, path.basename(absolutePath));
+                } else {
+                    providerResponse = await providerToSend.sendMessage(jid, '', { media: absolutePath, fileName: path.basename(absolutePath) });
+                }
+            }
+
+            // Guardar en el historial
+            const externalId = providerResponse?.key?.id || providerResponse?.messages?.[0]?.id || providerResponse?.id;
+            
+            const { trackSentMessage } = await import('../../providers/provider.manager');
+            trackSentMessage(externalId);
+
+            await depsHistoryHandler.saveMessage(chatId, 'assistant', mediaUrl, finalType, null, null, externalId);
+            await depsHistoryHandler.updateLastHumanMessage(chatId);
+            await depsHistoryHandler.toggleBot(chatId, false);
+
+            res.json({ success: true, message: 'Archivo reenviado correctamente' });
+        } catch (e: any) {
+            console.error('❌ Error crítico en reenviar mensaje:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
     app.post('/api/backoffice/toggle-bot', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         const { chatId, enabled } = req.body;
         if (!chatId) return res.status(400).json({ success: false, error: 'chatId is required' });
