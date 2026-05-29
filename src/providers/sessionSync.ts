@@ -7,7 +7,7 @@ import { vault } from '../db/vault';
 
 // Configuración
 const SESSION_DIR = 'bot_sessions';
-const SYNC_INTERVAL_MS = 60 * 60 * 1000; // 1 Hora
+const SYNC_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 Horas
 
 const supabaseUrl = process.env.SUPABASE_URL || vault.supabaseUrl;
 const supabaseKey = process.env.SUPABASE_KEY || vault.supabaseKey;

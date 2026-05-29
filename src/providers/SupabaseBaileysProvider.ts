@@ -95,35 +95,8 @@ export class SupabaseBaileysProvider extends BaileysProvider {
         this.saveCreds = saveCreds;
         this.initialized = true;
 
-        // --- STORE INICIALIZACIÓN ---
-        const sessionsDir = path.join(process.cwd(), 'sessions');
-        if (!fs.existsSync(sessionsDir)) fs.mkdirSync(sessionsDir, { recursive: true });
-        
-        const storeFile = path.join(sessionsDir, `${botName}_store.json`);
-        
-        if (!(this as any).store) {
-            console.log(`[SupabaseBaileysProvider] 📦 Inicializando Store para ${botName}`);
-            const { makeInMemoryStore } = await import('whaileys');
-            const store = makeInMemoryStore({ logger: logger as any });
-            
-            if (fs.existsSync(storeFile)) {
-                try {
-                    console.log(`[SupabaseBaileysProvider] 📥 Cargando Store desde disco...`);
-                    store.readFromFile(storeFile);
-                } catch (e) {
-                    console.warn(`[SupabaseBaileysProvider] ⚠️ No se pudo cargar el store previo:`, e);
-                }
-            }
-            (this as any).store = store;
-
-            // Auto-guardado periódico
-            setInterval(() => {
-                try {
-                    store.writeToFile(storeFile);
-                } catch (e) { /* ignore */ }
-            }, 60000); // Cada 1 minuto
-        }
-        const store = (this as any).store;
+        // --- STORE INICIALIZACIÓN (DESACTIVADO POR RENDIMIENTO) ---
+        (this as any).store = null;
 
         this.vendor = makeWASocket({
             auth: {
@@ -139,12 +112,8 @@ export class SupabaseBaileysProvider extends BaileysProvider {
             ...this.globalVendorArgs
         }) as any;
 
-        // Asignar el store al vendor para fácil acceso desde rutas
-        (this.vendor as any).store = store;
-
-        // Vincular el store al socket
-        console.log(`[SupabaseBaileysProvider] 📦 Vinculando InMemoryStore al socket de ${botName}...`);
-        store.bind(this.vendor.ev as any);
+        // Asignar el store al vendor como null para fácil acceso y compatibilidad
+        (this.vendor as any).store = null;
 
         // Logging de eventos de historial para depuración
         this.vendor.ev.on('messaging-history.set', ({ chats, contacts, messages, isLatest }: any) => {
@@ -254,5 +223,33 @@ export class SupabaseBaileysProvider extends BaileysProvider {
         (this.vendor as any).on = (event: string, handler: any) => this.on(event, handler);
 
         return this.vendor;
+    }
+
+    /**
+     * Detiene la conexión del socket de Baileys y limpia los recursos del motor.
+     */
+    public stopProvider = async (): Promise<void> => {
+        console.log(`[SupabaseBaileysProvider] 🛑 Deteniendo instancia para: ${this.globalVendorArgs.name || 'default'}`);
+        this.initialized = false;
+        this.qrCodeString = null;
+        
+        if (this.vendor) {
+            try {
+                this.vendor.ev.removeAllListeners('connection.update');
+                this.vendor.ev.removeAllListeners('creds.update');
+                this.vendor.ev.removeAllListeners('messages.upsert');
+                this.vendor.end(undefined);
+            } catch (e) {
+                // Ignore close errors
+            }
+            this.vendor = null;
+        }
+        
+        // Limpiar archivo QR local
+        const qrFilename = this.globalVendorArgs.name?.includes('groups') ? 'bot.groups.qr.png' : 'bot.qr.png';
+        const qrPath = path.join(process.cwd(), qrFilename);
+        if (fs.existsSync(qrPath)) {
+            try { fs.unlinkSync(qrPath); } catch (e) { /* ignore */ }
+        }
     }
 }

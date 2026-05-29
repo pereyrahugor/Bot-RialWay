@@ -12,7 +12,7 @@ import { MetaCloudProvider } from "./providers/MetaCloudProvider";
 import { setAdapterProvider, setGroupProvider, getAdapterProvider, getGroupProvider } from "./providers/instances";
 
 // --- Utils & Handlers ---
-import { restoreSessionFromDb, startSessionSync, deleteSessionFromDb } from "./providers/sessionSync";
+import { restoreSessionFromDb, startSessionSync, deleteSessionFromDb, isSessionInDb } from "./providers/sessionSync";
 import { ErrorReporter } from "./bot/errorReporter";
 import { updateMain } from "./apis/google/updateMain";
 import { WebChatManager } from "./webchat/WebChatManager";
@@ -27,6 +27,7 @@ import { registerWebchatRoutes } from "./webchat/routes/webchat.routes";
 import { initSocketIO } from "./sockets/socket.manager";
 import { registerProviderEvents, hasActiveSession } from "./providers/provider.manager";
 import { startHumanInactivityWorker } from "./workers/humanInactivity.worker";
+import { startFileCleanupWorker } from "./workers/fileCleanup.worker";
 import { AiManager } from "./bot/ai.manager";
 import { registerExternalApiRoutes } from "./apis/external/external_api.routes";
 import { syncAssistantTools, getOpenAI, getOpenAIVision } from "./apis/openai/openaiHelper";
@@ -183,17 +184,27 @@ const main = async () => {
     registerProviderEvents(adapterProvider);
 
     // --- INICIALIZACIÓN DE MOTORES ---
-    // Importante: Llamar a initVendor explícitamente solo una vez aquí.
+    // Importante: Llamar a initVendor explícitamente solo una vez aquí si existe una sesión previa en la base de datos.
+    const hasAdapterSession = await isSessionInDb(SESSION_NAME);
     if (adapterProvider.initVendor) {
-        console.log('🚀 [App] Inicializando Motor Principal (Baileys)...');
-        await adapterProvider.initVendor();
+        if (hasAdapterSession) {
+            console.log('🚀 [App] Sesión previa detectada. Inicializando Motor Principal (Baileys)...');
+            await adapterProvider.initVendor();
+        } else {
+            console.log('ℹ️ [App] No se detectó sesión previa en base de datos para el Motor Principal (Baileys). Esperando a que el usuario inicie generación de QR desde el Backoffice.');
+        }
     }
 
     if (groupProvider) {
         registerProviderEvents(groupProvider, true);
+        const hasGroupSession = await isSessionInDb(`${SESSION_NAME}_groups`);
         if (groupProvider.initVendor) {
-            console.log('🚀 [App] Inicializando Motor de Grupos (Baileys Auxiliar)...');
-            await groupProvider.initVendor();
+            if (hasGroupSession) {
+                console.log('🚀 [App] Sesión previa detectada. Inicializando Motor de Grupos (Baileys Auxiliar)...');
+                await groupProvider.initVendor();
+            } else {
+                console.log('ℹ️ [App] No se detectó sesión previa en base de datos para el Motor de Grupos (Baileys Auxiliar). Esperando a que el usuario inicie generación de QR desde el Backoffice.');
+            }
         }
     }
 
@@ -356,6 +367,7 @@ const main = async () => {
     // 10. Workers Initialization
     // Se ajusta a 45 minutos (anteriormente 15) según requerimiento del usuario
     startHumanInactivityWorker(45);
+    startFileCleanupWorker(5);
 
     // 11. Start Server and Sockets
     try {

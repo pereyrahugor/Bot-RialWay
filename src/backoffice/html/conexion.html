@@ -59,6 +59,19 @@
 
                 <div id="session-error"></div>
 
+                <!-- Contenedor del Botón para Generar QR de Baileys -->
+                <div id="baileys-start-container" style="display: none; text-align: center; margin: 20px 0;">
+                    <p class="info-text" style="margin-bottom: 15px;">La conexión de Baileys no está activa. Pulsa el botón para generar el código QR.</p>
+                    <button id="generate-qr-btn" class="btn" style="background: var(--accent); color: white; padding: 12px 24px; border-radius: 12px; font-weight: 600; font-size: 1rem; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-qrcode"></i> Generar QR Baileys
+                    </button>
+                    <!-- Spinner de carga -->
+                    <div id="generate-qr-loading" style="display: none; margin-top: 15px;">
+                        <i class="fas fa-spinner fa-spin fa-2x" style="color: var(--accent);"></i>
+                        <p class="info-text" style="margin-top: 10px;">Iniciando motor de WhatsApp y generando QR... esto tardará unos segundos.</p>
+                    </div>
+                </div>
+
                 <div id="qr-section">
                     <div class="qr-box">
                         <h3 class="qr-title">Escanea con WhatsApp</h3>

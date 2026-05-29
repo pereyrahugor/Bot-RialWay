@@ -28,5 +28,5 @@ export const startHumanInactivityWorker = (timeoutMinutes = 15) => {
         } catch (e) {
             console.error('[WORKER] Error checking human inactivity:', e);
         }
-    }, 60000);
+    }, 15 * 60 * 1000);
 };

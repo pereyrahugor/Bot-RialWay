@@ -1057,10 +1057,31 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
             // Determinar si la URL es local (del backoffice) o externa
             let absolutePath = mediaUrl;
-            const isLocal = mediaUrl.startsWith('/uploads/') || mediaUrl.startsWith('uploads/');
-            
+            let isLocal = false;
+            let cleanRelativePath = '';
+
+            // Si es un URL completo, extraer la parte del path
+            let pathToCheck = mediaUrl;
+            if (mediaUrl.startsWith('http://') || mediaUrl.startsWith('https://')) {
+                try {
+                    const parsed = new URL(mediaUrl);
+                    pathToCheck = parsed.pathname;
+                } catch (e) {
+                    // Ignorar error de parseo y usar original
+                }
+            }
+
+            if (pathToCheck.startsWith('/uploads/') || pathToCheck.startsWith('uploads/') ||
+                pathToCheck.startsWith('/tmp/') || pathToCheck.startsWith('tmp/') ||
+                pathToCheck.startsWith('/temp/') || pathToCheck.startsWith('temp/')) {
+                isLocal = true;
+                cleanRelativePath = pathToCheck.startsWith('/') ? pathToCheck.substring(1) : pathToCheck;
+                if (cleanRelativePath.startsWith('temp/')) {
+                    cleanRelativePath = cleanRelativePath.replace('temp/', 'tmp/');
+                }
+            }
+
             if (isLocal) {
-                const cleanRelativePath = mediaUrl.startsWith('/') ? mediaUrl.substring(1) : mediaUrl;
                 absolutePath = path.resolve(process.cwd(), cleanRelativePath);
                 
                 if (!fs.existsSync(absolutePath)) {
@@ -1112,6 +1133,56 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         } catch (e: any) {
             console.error('❌ Error crítico en reenviar mensaje:', e);
             res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    app.post('/api/backoffice/baileys/start', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
+        const { isGroup } = req.body;
+        const provider = isGroup ? deps.groupProvider : deps.adapterProvider;
+
+        if (!provider) {
+            return res.status(404).json({ success: false, error: 'Proveedor no configurado o no disponible' });
+        }
+
+        const { hasActiveSession } = await import('../../providers/provider.manager');
+        const statusObj = await hasActiveSession(deps.adapterProvider, deps.groupProvider);
+        const providerStatus = isGroup ? statusObj.group : statusObj.adapter;
+        if (providerStatus?.active) {
+            return res.json({ success: true, message: 'El proveedor ya está conectado' });
+        }
+
+        console.log(`[BACKOFFICE] Iniciando generación de QR para Baileys (Grupo: ${!!isGroup})...`);
+
+        try {
+            if (typeof provider.initVendor === 'function') {
+                await provider.initVendor();
+            }
+
+            // Configurar timeout de 5 minutos (300000 ms) para frenar si no se escanea
+            setTimeout(async () => {
+                try {
+                    const currentStatus = await hasActiveSession(deps.adapterProvider, deps.groupProvider);
+                    const currentProvStatus = isGroup ? currentStatus.group : currentStatus.adapter;
+                    
+                    if (currentProvStatus && !currentProvStatus.active) {
+                        console.log(`[TIMEOUT] Pasaron 5 minutos y no se escaneó el QR. Deteniendo proveedor Baileys (Grupo: ${!!isGroup}) para ahorrar recursos.`);
+                        if (typeof provider.stopProvider === 'function') {
+                            await provider.stopProvider();
+                        }
+                        
+                        if ((deps.adapterProvider as any).server?.io) {
+                            (deps.adapterProvider as any).server.io.emit('baileys_stopped', { isGroup });
+                        }
+                    }
+                } catch (e: any) {
+                    console.error('Error en timeout de apagado Baileys:', e.message);
+                }
+            }, 5 * 60 * 1000);
+
+            res.json({ success: true, message: 'Generador de QR iniciado. Expira en 5 minutos si no se escanea.' });
+        } catch (err: any) {
+            console.error('Error al iniciar Baileys:', err);
+            res.status(500).json({ success: false, error: err.message });
         }
     });
 

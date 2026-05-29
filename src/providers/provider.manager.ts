@@ -303,7 +303,8 @@ export const hasActiveSession = async (adapterProvider: any, groupProvider: any 
                 return { active: false, qr: true, qrData: qrString, qrImage, type: 'baileys', message: 'Esperando vinculación' };
             }
 
-            return { active: false, type: 'baileys', message: 'Iniciando motor...' };
+            const isStarting = !!(provider?.vendor);
+            return { active: false, type: 'baileys', message: isStarting ? 'Iniciando motor...' : 'Desconectado' };
         };
 
         const adapterStatus = await getStatus(adapterProvider, false);

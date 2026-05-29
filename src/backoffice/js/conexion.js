@@ -19,12 +19,14 @@ async function fetchStatus() {
         const wsLinkContainer = document.getElementById('whatsapp-link-container');
         const groupContainer = document.getElementById('group-connection-container');
         const groupStatusEl = document.getElementById('group-session-status');
+        const startContainer = document.getElementById('baileys-start-container');
 
         // Limpiar
         qrSection.style.display = 'none';
         sessionInfo.style.display = 'none';
         wsLinkContainer.style.display = 'none';
         groupContainer.style.display = 'none';
+        if (startContainer) startContainer.style.display = 'none';
         sessionError.innerHTML = '';
         sessionInfo.innerHTML = '';
 
@@ -74,9 +76,11 @@ async function fetchStatus() {
             if (data.group.active) {
                 groupStatusEl.textContent = '✅ Grupos: Baileys';
                 groupStatusEl.style.color = '#10b981';
+                if (startContainer) startContainer.style.display = 'none';
             } else if (data.group.qr) {
                 groupStatusEl.textContent = '⏳ Grupos: Esperando vinculación';
                 groupStatusEl.style.color = '#f59e0b';
+                if (startContainer) startContainer.style.display = 'none';
                 
                 // Mostrar el QR para los grupos
                 qrSection.style.display = 'block';
@@ -87,6 +91,13 @@ async function fetchStatus() {
             } else {
                 groupStatusEl.textContent = '⏳ Grupos: ' + (data.group.message || 'Cargando...');
                 groupStatusEl.style.color = '#94a3b8';
+                
+                // Si Meta está activo pero grupos está inactivo, mostrar botón para QR de grupos
+                if (startContainer && !data.group.active) {
+                    startContainer.style.display = 'block';
+                    const btn = document.getElementById('generate-qr-btn');
+                    btn.innerHTML = `<i class="fas fa-qrcode"></i> Generar QR Grupos`;
+                }
             }
         }
     } catch (e) {
@@ -100,16 +111,19 @@ function renderProviderStatus(status, label) {
     const statusEl = document.getElementById('session-status');
     const qrSection = document.getElementById('qr-section');
     const sessionInfo = document.getElementById('session-info');
+    const startContainer = document.getElementById('baileys-start-container');
 
     if (status.active) {
         statusEl.textContent = `✅ ${label}: ${status.message || 'Conectado'}`;
         statusEl.style.color = '#10b981';
         sessionInfo.style.display = 'block';
         sessionInfo.innerHTML += `<div><strong>${label}:</strong> ${status.message || 'Operativo'}</div>`;
+        if (startContainer) startContainer.style.display = 'none';
     } else if (status.qr) {
         statusEl.textContent = `⏳ ${label}: Esperando vinculación`;
         statusEl.style.color = '#f59e0b';
         qrSection.style.display = 'block';
+        if (startContainer) startContainer.style.display = 'none';
         
         const qrImg = document.querySelector('.qr');
         qrImg.src = status.qrImage || '/qr.png';
@@ -117,6 +131,12 @@ function renderProviderStatus(status, label) {
         if (qrImg.nextElementSibling) qrImg.nextElementSibling.style.display = 'none';
     } else {
         statusEl.textContent = `⏳ ${label}: ${status.message || 'Cargando...'}`;
+        // Si no está conectado ni tiene QR, está inactivo/desconectado. Mostramos botón para generar QR.
+        if (startContainer && !status.active) {
+            startContainer.style.display = 'block';
+            const btn = document.getElementById('generate-qr-btn');
+            btn.innerHTML = `<i class="fas fa-qrcode"></i> Generar QR Baileys`;
+        }
     }
 }
 
@@ -299,6 +319,43 @@ if (confirmUnlinkSi) {
             alert("Hubo un error al desvincular Meta: " + err.message);
             confirmUnlinkSi.disabled = false;
             confirmUnlinkSi.innerText = 'SÍ, DESVINCULAR';
+        }
+    });
+}
+
+// --- LOGIC TO GENERATE QR MANUALLY ---
+const generateQrBtn = document.getElementById('generate-qr-btn');
+if (generateQrBtn) {
+    generateQrBtn.addEventListener('click', async () => {
+        const isGroup = !!document.getElementById('group-connection-container').style.display && 
+                        document.getElementById('group-connection-container').style.display !== 'none' &&
+                        document.getElementById('generate-qr-btn').textContent.includes('Grupos');
+        
+        generateQrBtn.style.display = 'none';
+        document.getElementById('generate-qr-loading').style.display = 'block';
+        
+        try {
+            const token = localStorage.getItem('backoffice_token');
+            const res = await fetch(`/api/backoffice/baileys/start?token=${token}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ isGroup })
+            });
+            
+            if (res.ok) {
+                // Sincronizar de inmediato tras una pausa de inicio
+                setTimeout(fetchStatus, 1500);
+            } else {
+                const err = await res.json();
+                alert('Error al iniciar generador de QR: ' + (err.error || 'error desconocido'));
+                generateQrBtn.style.display = 'inline-flex';
+                document.getElementById('generate-qr-loading').style.display = 'none';
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Error al iniciar generador de QR');
+            generateQrBtn.style.display = 'inline-flex';
+            document.getElementById('generate-qr-loading').style.display = 'none';
         }
     });
 }
