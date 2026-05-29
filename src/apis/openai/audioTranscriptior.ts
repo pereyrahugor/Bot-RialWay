@@ -1,9 +1,6 @@
 import fs, { createReadStream } from "fs";
 import OpenAI from "openai";
-
-const openai = process.env.OPENAI_API_KEY ? new OpenAI({ 
-  apiKey: process.env.OPENAI_API_KEY 
-}) : null;
+import { getOpenAI } from "./openaiHelper";
 
 /**
  * Transcribe an audio file using the OpenAI Whisper model.
@@ -11,6 +8,7 @@ const openai = process.env.OPENAI_API_KEY ? new OpenAI({
  * @returns The transcription of the audio.
  */
 export const transcribeAudioFile = async (filePath: string): Promise<string | null> => {
+  const openai = await getOpenAI();
   if (!openai) {
     console.warn("⚠️ IA Desactivada: No se puede transcribir audio sin OPENAI_API_KEY.");
     return null;
