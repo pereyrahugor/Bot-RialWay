@@ -59,7 +59,9 @@ export class ReconectionFlow {
     async start() {
         // Recuperar contexto dinámico del state
         const dynamicProjectId = this.state?.get ? this.state.get('dynamicProjectId') : (this.state?.dynamicProjectId || process.env.RAILWAY_PROJECT_ID);
-        const targetAssistantId = this.state?.get ? this.state.get('assignedAssistantId') : (this.state?.assignedAssistantId || this.ASSISTANT_ID);
+        const targetAssistantId = this.state?.get 
+            ? this.state.get('assignedAssistantId') 
+            : (this.state?.assignedAssistantId || await HistoryHandler.getConfig('ASSISTANT_ID', dynamicProjectId) || this.ASSISTANT_ID);
 
         // 1. Cargar mensajes de seguimiento dinámicamente si no están en process.env
         const msj1 = await HistoryHandler.getConfig('msjSeguimiento1', dynamicProjectId) || "Hola, ¿estás ahí?";

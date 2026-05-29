@@ -18,8 +18,9 @@ import { idleFlow } from "./idleFlow";
 
 // El timeout se calcula dinámicamente dentro de la acción
 
-export async function getAddressFromCoordinates(lat: number, lng: number) {
-    const apiKey = process.env.GOOGLE_MAPS_API_KEY || '';
+export async function getAddressFromCoordinates(lat: number, lng: number, projectId: string | null = null) {
+    const { HistoryHandler } = await import("~/db/historyHandler");
+    const apiKey = await HistoryHandler.getConfig('GOOGLE_MAPS_API_KEY', projectId) || '';
     console.log('API KEY utilizada:', apiKey);
     console.log('Parámetros recibidos:', lat, lng);
     const client = new Client({});
@@ -44,15 +45,19 @@ export async function getAddressFromCoordinates(lat: number, lng: number) {
 
 export const locationFlow = addKeyword(EVENTS.LOCATION).addAction(
     async (ctx, { flowDynamic, provider, gotoFlow, state }) => {
-        const setTime = (Number(process.env.timeOutCierre) || 45) * 60 * 1000;
+        const { HistoryHandler } = await import("~/db/historyHandler");
+        const dynamicProjectId = state?.get ? state.get('dynamicProjectId') : null;
+        
+        const timeoutCierreValue = await HistoryHandler.getConfig('timeOutCierre', dynamicProjectId) || 45;
+        const setTime = Number(timeoutCierreValue) * 60 * 1000;
         reset(ctx, gotoFlow, setTime);
         console.log("📍 Ubicación recibida:", ctx.message);
-    const latitude = ctx.message.location?.degreesLatitude || ctx.message.locationMessage?.degreesLatitude;
-    const longitude = ctx.message.location?.degreesLongitude || ctx.message.locationMessage?.degreesLongitude;
+        const latitude = ctx.message.location?.degreesLatitude || ctx.message.locationMessage?.degreesLatitude;
+        const longitude = ctx.message.location?.degreesLongitude || ctx.message.locationMessage?.degreesLongitude;
         if (latitude && longitude) {
             console.log('Llamando a getAddressFromCoordinates con:', latitude, longitude);
             try {
-                const mapsData = await getAddressFromCoordinates(latitude, longitude);
+                const mapsData = await getAddressFromCoordinates(latitude, longitude, dynamicProjectId);
                 if (mapsData && mapsData.results && mapsData.results.length > 0) {
                     const result = mapsData.results[0];
                     const formatted = result.formatted_address;

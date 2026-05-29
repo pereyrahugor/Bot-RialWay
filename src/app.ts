@@ -314,7 +314,8 @@ const main = async () => {
 
     registerProcessCallback(async (item: any) => {
         const { ctx, flowDynamic, state, provider, gotoFlow } = item;
-        const setTime = (Number(process.env.timeOutCierre) || 15) * 60 * 1000;
+        const timeoutCierreValue = await HistoryHandler.getConfig('timeOutCierre') || 15;
+        const setTime = Number(timeoutCierreValue) * 60 * 1000;
         reset(ctx, gotoFlow, setTime);
         await aiManagerInstance.processUserMessage(ctx, { flowDynamic, state, provider, gotoFlow });
     });

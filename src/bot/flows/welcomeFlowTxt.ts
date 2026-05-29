@@ -20,13 +20,11 @@ export const welcomeFlowTxt = addKeyword<BaileysProvider, MemoryDB>(EVENTS.WELCO
         }
 
         // --- FILTRO DE ECO / MENSAJES PROPIOS ---
-        const { HistoryHandler } = await import("~/db/historyHandler");
-        const botNumber = (await HistoryHandler.getConfig('YCLOUD_WABA_NUMBER') || '').replace(/\D/g, '');
-        const senderNumber = (userId || '').replace(/\D/g, '');
-        
-        if (ctx.key?.fromMe || (botNumber && senderNumber === botNumber)) {
+        if (ctx.key?.fromMe) {
             return;
         }
+
+        const { HistoryHandler } = await import("~/db/historyHandler");
 
         console.log(`📩 Mensaje recibido de :${userId}`);
 

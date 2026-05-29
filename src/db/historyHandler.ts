@@ -2298,19 +2298,21 @@ export class HistoryHandler {
                 let count = 0;
                 data.forEach(setting => {
                     if (setting.value && setting.value !== 'PENDING') {
-                        // REGLA DE ORO: No sobreescribir si ya existe en el entorno (Railway Panel manda)
-                        if (!process.env[setting.key] || process.env[setting.key] === '') {
+                        const isFixed = HistoryHandler.FIXED_KEYS.includes(setting.key);
+                        if (isFixed && process.env[setting.key] && process.env[setting.key] !== '') {
+                            if (process.env[setting.key] !== setting.value) {
+                                console.log(`ℹ️ [HistoryHandler] Manteniendo valor de entorno estático para la llave fija '${setting.key}' (ignorando valor DB: ${setting.value.substring(0, 5)}...)`);
+                            }
+                        } else {
+                            if (process.env[setting.key] !== setting.value) {
+                                console.log(`🔄 [HistoryHandler] Sobreescribiendo '${setting.key}' con valor de Base de Datos (prioridad DB).`);
+                            }
                             process.env[setting.key] = setting.value;
                             count++;
-                        } else {
-                            // Si el valor es el mismo, no logueamos para no ensuciar, pero si es distinto avisamos
-                            if (process.env[setting.key] !== setting.value) {
-                                console.log(`ℹ️ [HistoryHandler] Manteniendo valor de entorno para '${setting.key}' (ignorando valor DB: ${setting.value.substring(0, 5)}...)`);
-                            }
                         }
                     }
                 });
-                console.log(`✅ [HistoryHandler] ${count} variables de entorno sincronizadas desde DB.`);
+                console.log(`✅ [HistoryHandler] ${count} variables de entorno sincronizadas desde DB (prioridad base de datos aplicada).`);
             } else {
                 console.log(`⚠️ [HistoryHandler] No se encontraron settings en DB para el proyecto ${currentProjectId}.`);
             }

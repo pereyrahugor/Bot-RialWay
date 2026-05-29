@@ -121,7 +121,7 @@ export class AiManager {
 
     public processUserMessage = async (ctx: any, { flowDynamic, state, provider, gotoFlow }: any) => {
         // Ruteo Multitenant Dinámico
-        const botPhoneNumber = provider?.phoneNumber || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
+        const botPhoneNumber = provider?.globalVendorArgs?.phone_number_id || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
         const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || HistoryHandler.PROJECT_IDENTIFIER;
         
         // Determinar el agente asignado. 
@@ -188,10 +188,7 @@ export class AiManager {
             }
 
             // Filtro de Eco (Mejorado para BSUID)
-            const botNumber = (await HistoryHandler.getConfig('YCLOUD_WABA_NUMBER') || '').replace(/\D/g, '');
-            const senderNumber = (ctx.from || '').replace(/\D/g, '');
-            // Si el botNumber coincide con el sender o con el userId, lo ignoramos
-            if (ctx.key?.fromMe || (botNumber && (senderNumber === botNumber || ctx.userId === botNumber))) {
+            if (ctx.key?.fromMe) {
                 stop(ctx);
                 return;
             }

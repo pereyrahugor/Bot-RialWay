@@ -24,10 +24,12 @@ function extraerPaginasComoPNG(pdfPath: string, outputDir: string) {
     return files;
 }
 
-const setTime = Number(process.env.timeOutCierre) * 60 * 1000;
-
 export const welcomeFlowDoc = addKeyword<BaileysProvider, MemoryDB>(EVENTS.DOCUMENT)
-    .addAction(async (ctx, { flowDynamic, provider }) => {
+    .addAction(async (ctx, { gotoFlow, flowDynamic, provider }) => {
+        const { HistoryHandler } = await import("~/db/historyHandler");
+        const timeoutCierreValue = await HistoryHandler.getConfig('timeOutCierre') || 45;
+        const setTime = Number(timeoutCierreValue) * 60 * 1000;
+        reset(ctx, gotoFlow, setTime);
         let localPath = null;
         let outputDir = null;
         const imagenesGeneradas = [];

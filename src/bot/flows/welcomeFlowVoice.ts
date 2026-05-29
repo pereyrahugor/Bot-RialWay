@@ -24,13 +24,11 @@ export const welcomeFlowVoice = addKeyword<any, any>(EVENTS.VOICE_NOTE)
         }
 
         // --- FILTRO DE ECO / MENSAJES PROPIOS ---
-        const { HistoryHandler } = await import("~/db/historyHandler");
-        const botNumber = (await HistoryHandler.getConfig('YCLOUD_WABA_NUMBER') || '').replace(/\D/g, '');
-        const senderNumber = (userId || '').replace(/\D/g, '');
-        
-        if (ctx.key?.fromMe || (botNumber && senderNumber === botNumber)) {
+        if (ctx.key?.fromMe) {
             return;
         }
+
+        const { HistoryHandler } = await import("~/db/historyHandler");
 
         console.log(`🎙️ Mensaje de voz recibido de ${userId}`);
 
@@ -71,7 +69,7 @@ export const welcomeFlowVoice = addKeyword<any, any>(EVENTS.VOICE_NOTE)
         // Guardar la transcripción en la base de datos como mensaje de texto para visibilidad en el Backoffice
         try {
             const { HistoryHandler } = await import("~/db/historyHandler");
-            const botPhoneNumber = provider?.phoneNumber || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
+            const botPhoneNumber = provider?.globalVendorArgs?.phone_number_id || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
             const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || HistoryHandler.PROJECT_IDENTIFIER;
             const chatId = userId;
             
