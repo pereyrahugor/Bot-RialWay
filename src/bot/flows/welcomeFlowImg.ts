@@ -25,11 +25,12 @@ import { OpenAI } from "openai";
 import { reset } from "../timeOut";
 import { userQueues, userLocks, handleQueue } from "../queueManager";
 
-const openai = process.env.OPENAI_API_KEY_IMG ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY_IMG }) : null;
 // El timeout se calcula dinámicamente dentro de la acción
 
 const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
   async (ctx, { flowDynamic, provider, gotoFlow, state }) => {
+    const { getOpenAIVision } = await import("../../apis/openai/openaiHelper");
+    const openai = await getOpenAIVision();
     if (!openai) {
       console.warn("⚠️ IA Vision Desactivada: Saltando análisis de imagen en flujo.");
       const caption = ctx.body && !ctx.body.includes('_event_') ? ctx.body : '';
