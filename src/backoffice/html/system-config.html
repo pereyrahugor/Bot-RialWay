@@ -181,14 +181,19 @@
 
                 <!-- SECCIÓN 4: INTEGRACIONES -->
                 <div class="section-header"><h2>📊 Google & Grupos</h2></div>
+                <div style="grid-column: 1 / -1; margin-bottom: 15px; width: 100%;">
+                    <button type="button" id="btn-load-groups" class="btn btn-secondary" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 12px; font-weight: 600;">
+                        <i class="fab fa-whatsapp"></i> <i class="fas fa-spinner fa-spin" id="load-groups-spinner" style="display: none;"></i> <span id="btn-load-groups-text">Cargar Grupos de WhatsApp de la Línea</span>
+                    </button>
+                </div>
                 <div class="variables-grid">
                     <div class="variable-group">
                         <h3>ID_GRUPO_RESUMEN (1)</h3>
-                        <input type="text" name="ID_GRUPO_RESUMEN" id="ID_GRUPO_RESUMEN">
+                        <select name="ID_GRUPO_RESUMEN" id="ID_GRUPO_RESUMEN"></select>
                     </div>
                     <div class="variable-group">
                         <h3>ID_GRUPO_RESUMEN (2)</h3>
-                        <input type="text" name="ID_GRUPO_RESUMEN_2" id="ID_GRUPO_RESUMEN_2">
+                        <select name="ID_GRUPO_RESUMEN_2" id="ID_GRUPO_RESUMEN_2"></select>
                     </div>
                     <div class="variable-group">
                         <h3>SHEET_ID_RESUMEN</h3>

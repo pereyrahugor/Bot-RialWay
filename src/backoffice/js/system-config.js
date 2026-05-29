@@ -73,7 +73,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const input = document.getElementById(elementId) || document.getElementsByName(key)[0];
                     if (input) {
                         if (input.tagName === 'SELECT') {
-                            input.value = String(initialVariables[key]);
+                            const val = String(initialVariables[key] || '');
+                            if (key === 'ID_GRUPO_RESUMEN' || key === 'ID_GRUPO_RESUMEN_2') {
+                                input.innerHTML = '';
+                                const opt = document.createElement('option');
+                                opt.value = val;
+                                opt.text = val ? val : 'Sin asignar / Sin grupo';
+                                opt.selected = true;
+                                input.appendChild(opt);
+                            }
+                            input.value = val;
                         } else {
                             input.value = initialVariables[key];
                         }
@@ -291,4 +300,72 @@ document.addEventListener('DOMContentLoaded', async () => {
             hotSaveBtn.disabled = false;
         }
     });
+
+    // --- Cargar Grupos de WhatsApp ---
+    const btnLoadGroups = document.getElementById('btn-load-groups');
+    const loadGroupsSpinner = document.getElementById('load-groups-spinner');
+    const btnLoadGroupsText = document.getElementById('btn-load-groups-text');
+
+    if (btnLoadGroups) {
+        btnLoadGroups.addEventListener('click', async () => {
+            btnLoadGroups.disabled = true;
+            if (loadGroupsSpinner) loadGroupsSpinner.style.display = 'inline-block';
+            if (btnLoadGroupsText) btnLoadGroupsText.textContent = 'Buscando grupos...';
+
+            try {
+                const token = localStorage.getItem('system_config_token');
+                const response = await fetch(`/api/backoffice/whatsapp/groups?token=${token}`);
+                const data = await response.json();
+
+                if (data.success && Array.isArray(data.groups)) {
+                    const select1 = document.getElementById('ID_GRUPO_RESUMEN');
+                    const select2 = document.getElementById('ID_GRUPO_RESUMEN_2');
+                    
+                    const val1 = select1 ? select1.value : '';
+                    const val2 = select2 ? select2.value : '';
+
+                    const optionsHtml = ['<option value="">Sin asignar / Sin grupo</option>']
+                        .concat(data.groups.map(g => `<option value="${g.id}">${g.name} (${g.id})</option>`))
+                        .join('');
+
+                    if (select1) {
+                        select1.innerHTML = optionsHtml;
+                        select1.value = val1;
+                        if (val1 && select1.value !== val1) {
+                            const opt = document.createElement('option');
+                            opt.value = val1;
+                            opt.text = `${val1} (Grupo guardado anterior)`;
+                            opt.selected = true;
+                            select1.appendChild(opt);
+                            select1.value = val1;
+                        }
+                    }
+
+                    if (select2) {
+                        select2.innerHTML = optionsHtml;
+                        select2.value = val2;
+                        if (val2 && select2.value !== val2) {
+                            const opt = document.createElement('option');
+                            opt.value = val2;
+                            opt.text = `${val2} (Grupo guardado anterior)`;
+                            opt.selected = true;
+                            select2.appendChild(opt);
+                            select2.value = val2;
+                        }
+                    }
+
+                    alert(`🎉 Se cargaron ${data.groups.length} grupos de WhatsApp correctamente.`);
+                } else {
+                    alert('❌ Error al cargar grupos: ' + (data.error || 'Asegúrate de que el bot esté conectado por QR.'));
+                }
+            } catch (err) {
+                console.error('Error loading WhatsApp groups:', err);
+                alert('❌ Error de conexión al obtener los grupos.');
+            } finally {
+                btnLoadGroups.disabled = false;
+                if (loadGroupsSpinner) loadGroupsSpinner.style.display = 'none';
+                if (btnLoadGroupsText) btnLoadGroupsText.textContent = 'Cargar Grupos de WhatsApp de la Línea';
+            }
+        });
+    }
 });

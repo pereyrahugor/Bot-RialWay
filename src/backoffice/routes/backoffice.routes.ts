@@ -2028,6 +2028,47 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             res.status(500).json({ success: false, error: error.message });
         }
     });
+
+    app.get('/api/backoffice/whatsapp/groups', backofficeAuth, async (req: any, res: any) => {
+        try {
+            const { getGroupProvider, getAdapterProvider } = await import('../../providers/instances');
+            
+            // 1. Intentar con el proveedor de grupos (Baileys)
+            const groupProvider = getGroupProvider();
+            let sock: any = null;
+            
+            if (groupProvider && typeof groupProvider.getInstance === 'function') {
+                sock = await groupProvider.getInstance();
+            }
+            
+            // 2. Si no hay proveedor de grupos, intentar con el principal (Baileys)
+            if (!sock) {
+                const adapterProvider = getAdapterProvider();
+                if (adapterProvider && typeof adapterProvider.getInstance === 'function') {
+                    sock = await adapterProvider.getInstance();
+                }
+            }
+            
+            if (!sock || typeof sock.groupFetchAllParticipating !== 'function') {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: 'No hay un proveedor de WhatsApp (Baileys) activo o conectado para listar grupos. Verifica el código QR en la sección de Conexión.' 
+                });
+            }
+            
+            console.log('[API/Groups] Obteniendo lista de grupos de WhatsApp...');
+            const chats = await sock.groupFetchAllParticipating();
+            const groupsList = Object.entries(chats).map(([jid, group]: [string, any]) => ({
+                id: jid,
+                name: group.subject || 'Sin nombre'
+            }));
+            
+            res.json({ success: true, groups: groupsList });
+        } catch (error: any) {
+            console.error('[API/Groups] Error al listar grupos:', error);
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
     
     // --- CRM ROUTES ---
     app.get('/api/backoffice/crm/tasks', backofficeAuth, async (req: any, res: any) => {
