@@ -459,7 +459,19 @@ class MetaCloudProvider extends ProviderClass {
         try {
             const form = new FormData();
             form.append('messaging_product', 'whatsapp');
-            form.append('file', fs.createReadStream(filePath));
+
+            const lowerPath = filePath.toLowerCase();
+            let contentType = 'application/octet-stream';
+            if (lowerPath.endsWith('.webp')) contentType = 'image/webp';
+            else if (lowerPath.endsWith('.png')) contentType = 'image/png';
+            else if (lowerPath.endsWith('.jpg') || lowerPath.endsWith('.jpeg')) contentType = 'image/jpeg';
+            else if (lowerPath.endsWith('.pdf')) contentType = 'application/pdf';
+            else if (lowerPath.endsWith('.mp4')) contentType = 'video/mp4';
+            else if (lowerPath.endsWith('.mp3')) contentType = 'audio/mpeg';
+            else if (lowerPath.endsWith('.ogg')) contentType = 'audio/ogg';
+            else if (lowerPath.endsWith('.opus')) contentType = 'audio/ogg; codecs=opus';
+
+            form.append('file', fs.createReadStream(filePath), { contentType, filename: path.basename(filePath) });
 
             const response = await axios.post(url, form, {
                 headers: {
@@ -524,27 +536,52 @@ class MetaCloudProvider extends ProviderClass {
                 }
 
                 if (finalPath && fs.existsSync(finalPath)) {
+                    const lowerPath = finalPath.toLowerCase();
+                    const isSticker = lowerPath.endsWith('.webp') || mimeType.includes('webp') || mimeType.includes('sticker') || options.type === 'sticker' || (options.media && options.media.type === 'sticker');
+
+                    if (isSticker) {
+                        try {
+                            const { default: sharp } = await import('sharp');
+                            const dir = path.dirname(finalPath);
+                            const base = path.basename(finalPath, path.extname(finalPath));
+                            const resizedPath = path.join(dir, `${base}_sticker.webp`);
+                            
+                            await sharp(finalPath)
+                                .resize(512, 512, {
+                                    fit: 'contain',
+                                    background: { r: 0, g: 0, b: 0, alpha: 0 }
+                                })
+                                .toFormat('webp')
+                                .toFile(resizedPath);
+                                
+                            console.log(`✨ [MetaCloudProvider] Sticker procesado y redimensionado a 512x512: ${resizedPath}`);
+                            finalPath = resizedPath;
+                        } catch (sharpErr: any) {
+                            console.warn('⚠️ [MetaCloudProvider] No se pudo redimensionar el sticker con sharp (falló o no instalado):', sharpErr.message);
+                        }
+                    }
+
                     console.log(`📤 [MetaCloudProvider] Subiendo archivo local a Meta: ${finalPath}`);
                     const mediaId = await this.uploadMedia(finalPath);
                     if (mediaId) {
                         const mediaData = { id: mediaId };
-                        const lowerPath = finalPath.toLowerCase();
+                        const finalLowerPath = finalPath.toLowerCase();
                         
-                        if (lowerPath.endsWith('.webp') || mimeType.includes('webp') || mimeType.includes('sticker') || options.type === 'sticker' || (options.media && options.media.type === 'sticker')) {
+                        if (isSticker) {
                             body.type = 'sticker';
                             body.sticker = { ...mediaData };
-                        } else if (lowerPath.endsWith('.pdf') || mimeType.includes('pdf')) {
+                        } else if (finalLowerPath.endsWith('.pdf') || mimeType.includes('pdf')) {
                             body.type = 'document';
                             body.document = { ...mediaData, filename: path.basename(finalPath), caption: finalCaption };
-                        } else if (lowerPath.endsWith('.jpg') || lowerPath.endsWith('.png') || lowerPath.endsWith('.jpeg') || mimeType.includes('image')) {
+                        } else if (finalLowerPath.endsWith('.jpg') || finalLowerPath.endsWith('.png') || finalLowerPath.endsWith('.jpeg') || mimeType.includes('image')) {
                             body.type = 'image';
                             body.image = { ...mediaData, caption: finalCaption };
-                        } else if (lowerPath.endsWith('.mp4') || mimeType.includes('video')) {
+                        } else if (finalLowerPath.endsWith('.mp4') || finalLowerPath.endsWith('.ogg') || finalLowerPath.endsWith('.opus') || finalLowerPath.endsWith('.mp3') || finalLowerPath.endsWith('.wav') || mimeType.includes('audio')) {
+                            body.type = (finalLowerPath.endsWith('.opus') || mimeType.includes('voice')) ? 'voice' : 'audio';
+                            body.audio = { ...mediaData };
+                        } else if (finalLowerPath.endsWith('.mp4') || mimeType.includes('video')) {
                             body.type = 'video';
                             body.video = { ...mediaData, caption: finalCaption };
-                        } else if (lowerPath.endsWith('.mp3') || lowerPath.endsWith('.ogg') || lowerPath.endsWith('.opus') || mimeType.includes('audio')) {
-                            body.type = (lowerPath.endsWith('.opus') || mimeType.includes('voice')) ? 'voice' : 'audio';
-                            body.audio = { ...mediaData };
                         } else {
                             body.type = 'document';
                             body.document = { ...mediaData, filename: path.basename(finalPath), caption: finalCaption };
@@ -558,9 +595,17 @@ class MetaCloudProvider extends ProviderClass {
                                 }
                             });
                             console.log(`✅ [MetaCloudProvider] Media enviado con éxito (ID: ${mediaId})`);
+                            // Limpiar sticker temporal si corresponde
+                            if (finalPath.endsWith('_sticker.webp') && fs.existsSync(finalPath)) {
+                                try { fs.unlinkSync(finalPath); } catch (e) { /* ignore cleanup error */ }
+                            }
                             return res.data;
                         } catch (err: any) {
                             console.error('❌ [MetaCloudProvider] Error enviando mensaje con mediaId:', err.response?.data || err.message);
+                            // Limpiar en caso de error también
+                            if (finalPath.endsWith('_sticker.webp') && fs.existsSync(finalPath)) {
+                                try { fs.unlinkSync(finalPath); } catch (e) { /* ignore cleanup error */ }
+                            }
                         }
                     } else {
                         console.error(`❌ [MetaCloudProvider] No se pudo obtener mediaId para: ${finalPath}`);
