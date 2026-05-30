@@ -530,7 +530,10 @@ class MetaCloudProvider extends ProviderClass {
                         const mediaData = { id: mediaId };
                         const lowerPath = finalPath.toLowerCase();
                         
-                        if (lowerPath.endsWith('.pdf') || mimeType.includes('pdf')) {
+                        if (lowerPath.endsWith('.webp') || mimeType.includes('webp') || mimeType.includes('sticker') || options.type === 'sticker' || (options.media && options.media.type === 'sticker')) {
+                            body.type = 'sticker';
+                            body.sticker = { ...mediaData };
+                        } else if (lowerPath.endsWith('.pdf') || mimeType.includes('pdf')) {
                             body.type = 'document';
                             body.document = { ...mediaData, filename: path.basename(finalPath), caption: finalCaption };
                         } else if (lowerPath.endsWith('.jpg') || lowerPath.endsWith('.png') || lowerPath.endsWith('.jpeg') || mimeType.includes('image')) {
@@ -573,7 +576,10 @@ class MetaCloudProvider extends ProviderClass {
             const mediaData: any = { link: mediaUrl };
             const lowerMediaUrl = (mediaUrl || '').toLowerCase();
 
-            if (mimeType.includes('image') || lowerMediaUrl.endsWith('.jpg') || lowerMediaUrl.endsWith('.png') || lowerMediaUrl.endsWith('.jpeg')) {
+            if (lowerMediaUrl.endsWith('.webp') || mimeType.includes('webp') || mimeType.includes('sticker') || options.type === 'sticker' || (options.media && options.media.type === 'sticker')) {
+                body.type = 'sticker';
+                body.sticker = { ...mediaData };
+            } else if (mimeType.includes('image') || lowerMediaUrl.endsWith('.jpg') || lowerMediaUrl.endsWith('.png') || lowerMediaUrl.endsWith('.jpeg')) {
                 body.type = 'image';
                 body.image = { ...mediaData, caption: finalCaption };
             } else if (mimeType.includes('audio') || mimeType.includes('voice') || lowerMediaUrl.endsWith('.mp3') || lowerMediaUrl.endsWith('.ogg') || lowerMediaUrl.endsWith('.opus')) {
@@ -645,6 +651,10 @@ class MetaCloudProvider extends ProviderClass {
 
     public async sendImage(number: string, media: string, caption: string = ''): Promise<any> {
         return this.sendMessage(number, caption, { media: { url: media, mimetype: 'image/png' } });
+    }
+
+    public async sendSticker(number: string, media: string): Promise<any> {
+        return this.sendMessage(number, '', { media: { url: media, mimetype: 'image/webp' }, type: 'sticker' });
     }
 
     public async sendVideo(number: string, media: string, caption: string = ''): Promise<any> {

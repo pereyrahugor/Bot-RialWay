@@ -55,11 +55,19 @@ export const processSendMessage = async (
 ) => {
     const { adapterProvider, HistoryHandler: depsHistoryHandler, openaiMain } = deps;
     // 1. Determinar tipo y contenido
-    let finalType: 'text' | 'image' | 'video' | 'document' = 'text';
+    let finalType: 'text' | 'image' | 'video' | 'document' | 'sticker' = 'text';
     if (file) {
-        if (file.mimetype.startsWith('image/')) finalType = 'image';
-        else if (file.mimetype.startsWith('video/')) finalType = 'video';
-        else finalType = 'document';
+        const lowerOrigName = (file.originalname || '').toLowerCase();
+        const lowerFileName = (file.filename || '').toLowerCase();
+        if (file.mimetype === 'image/webp' || lowerOrigName.endsWith('.webp') || lowerFileName.endsWith('.webp')) {
+            finalType = 'sticker';
+        } else if (file.mimetype.startsWith('image/')) {
+            finalType = 'image';
+        } else if (file.mimetype.startsWith('video/')) {
+            finalType = 'video';
+        } else {
+            finalType = 'document';
+        }
     }
     
     const fileUrl = file ? `/uploads/${file.filename}` : '';
@@ -96,7 +104,13 @@ export const processSendMessage = async (
 
             if (file) {
                 const absolutePath = path.resolve(file.path);
-                if (finalType === 'image') {
+                if (finalType === 'sticker') {
+                    if (typeof (providerToSend as any).sendSticker === 'function') {
+                        providerResponse = await (providerToSend as any).sendSticker(jid, absolutePath);
+                    } else {
+                        providerResponse = await providerToSend.sendMessage(jid, '', { media: absolutePath, type: 'sticker' });
+                    }
+                } else if (finalType === 'image') {
                     if (typeof providerToSend.sendImage === 'function') {
                         providerResponse = await providerToSend.sendImage(jid, absolutePath, message || '');
                     } else {
@@ -1091,15 +1105,23 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             }
 
             // Normalizar tipo de media
-            let finalType: 'text' | 'image' | 'video' | 'document' = 'document';
-            if (mediaType === 'image' || mediaUrl.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i)) {
+            let finalType: 'text' | 'image' | 'video' | 'document' | 'sticker' = 'document';
+            if (mediaType === 'sticker' || mediaUrl.match(/\.webp$/i)) {
+                finalType = 'sticker';
+            } else if (mediaType === 'image' || mediaUrl.match(/\.(jpeg|jpg|gif|png|svg)$/i)) {
                 finalType = 'image';
             } else if (mediaType === 'video' || mediaUrl.match(/\.(mp4|webm)$/i)) {
                 finalType = 'video';
             }
 
             // Enviar usando el método adecuado del proveedor
-            if (finalType === 'image') {
+            if (finalType === 'sticker') {
+                if (typeof (providerToSend as any).sendSticker === 'function') {
+                    providerResponse = await (providerToSend as any).sendSticker(jid, absolutePath);
+                } else {
+                    providerResponse = await providerToSend.sendMessage(jid, '', { media: absolutePath, type: 'sticker' });
+                }
+            } else if (finalType === 'image') {
                 if (typeof providerToSend.sendImage === 'function') {
                     providerResponse = await providerToSend.sendImage(jid, absolutePath, '');
                 } else {
