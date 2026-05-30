@@ -612,6 +612,88 @@ async function fetchMessages(chatId, reset = false) {
     }
 }
 
+// --- SISTEMA DE CACHÉ DE MEDIA EN INDEXEDDB (OFFLINE-FIRST) ---
+const mediaCache = {
+    db: null,
+    init() {
+        return new Promise((resolve, reject) => {
+            if (this.db) return resolve();
+            const request = indexedDB.open('RialWayMediaCache', 1);
+            request.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains('media')) {
+                    db.createObjectStore('media');
+                }
+            };
+            request.onsuccess = (e) => {
+                this.db = e.target.result;
+                resolve();
+            };
+            request.onerror = (e) => reject(e.target.error);
+        });
+    },
+    async get(url) {
+        const isCacheable = url.startsWith('/') || url.includes('/uploads/') || url.includes('/tmp/') || url.includes('/temp/');
+        if (!isCacheable) return url;
+
+        try {
+            await this.init();
+            return new Promise((resolve) => {
+                const transaction = this.db.transaction(['media'], 'readonly');
+                const store = transaction.objectStore('media');
+                const request = store.get(url);
+                
+                request.onsuccess = async (e) => {
+                    const cachedBlob = e.target.result;
+                    if (cachedBlob) {
+                        resolve(URL.createObjectURL(cachedBlob));
+                    } else {
+                        try {
+                            const res = await fetch(url);
+                            if (!res.ok) throw new Error('Status not 200');
+                            const blob = await res.blob();
+                            
+                            const writeTx = this.db.transaction(['media'], 'readwrite');
+                            const writeStore = writeTx.objectStore('media');
+                            writeStore.put(blob, url);
+                            
+                            resolve(URL.createObjectURL(blob));
+                        } catch (fetchErr) {
+                            resolve(url);
+                        }
+                    }
+                };
+                request.onerror = () => resolve(url);
+            });
+        } catch (err) {
+            return url;
+        }
+    }
+};
+
+async function loadCachedMedia() {
+    const elements = document.querySelectorAll('.cached-media[data-media-src]');
+    elements.forEach(async (el) => {
+        const src = el.getAttribute('data-media-src');
+        if (!src) return;
+        try {
+            const finalSrc = await mediaCache.get(src);
+            if (finalSrc) {
+                el.src = finalSrc;
+                el.removeAttribute('data-media-src');
+                
+                const parent = el.closest('.image-container, .video-container, .msg-audio');
+                if (parent) {
+                    const downloadBtn = parent.querySelector('.cached-download');
+                    if (downloadBtn) downloadBtn.href = finalSrc;
+                }
+            }
+        } catch (e) {
+            el.src = src;
+        }
+    });
+}
+
 function renderMessages() {
     const container = document.getElementById('messages');
     let html = '';
@@ -629,6 +711,7 @@ function renderMessages() {
     });
 
     container.innerHTML = html;
+    loadCachedMedia();
 }
 
 function generateMessageHtml(m) {
@@ -638,7 +721,7 @@ function generateMessageHtml(m) {
     let contentHtml = m.content || '';
     const type = m.type || 'text';
     
-    const isImageUrl = type === 'image' || contentHtml.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i) || (contentHtml.includes('/uploads/') && contentHtml.match(/\.(jpeg|jpg|gif|png|webp|svg)/i));
+    const isImageUrl = type === 'image' || type === 'sticker' || contentHtml.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i) || (contentHtml.includes('/uploads/') && contentHtml.match(/\.(jpeg|jpg|gif|png|webp|svg)/i));
     const isVideoUrl = type === 'video' || contentHtml.match(/\.(mp4|webm)$/i) || (contentHtml.includes('/uploads/') && contentHtml.match(/\.(mp4|webm)/i));
     const isAudioUrl = type === 'voice' || type === 'audio' || contentHtml.match(/\.(ogg|opus|mp3|wav|aac|m4a)$/i) || (contentHtml.includes('/uploads/') && contentHtml.match(/\.(ogg|opus|mp3|wav|aac|m4a)/i));
     const isFileUrl = type === 'document' || (contentHtml.includes('/uploads/') && !isImageUrl && !isVideoUrl && !isAudioUrl);
@@ -646,12 +729,12 @@ function generateMessageHtml(m) {
     if (isImageUrl && contentHtml) {
         contentHtml = `
             <div class="msg-media image-container">
-                <img src="${contentHtml}" alt="imagen" onclick="openLightbox('${contentHtml}')" class="zoomable-image">
+                <img data-media-src="${contentHtml}" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'><rect width='100' height='100' fill='%23f1f5f9'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='10' fill='%2394a3b8'>Cargando...</text></svg>" alt="imagen" onclick="openLightbox(this.src)" class="zoomable-image cached-media">
                 <div class="media-actions">
                     <button onclick="event.stopPropagation(); openForwardModal('${contentHtml}', 'image')" class="media-action-btn" title="Reenviar Imagen" style="background: rgba(0,0,0,0.5); border: none; color: white; border-radius: 4px; padding: 6px 10px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;">
                         <i class="fas fa-share"></i>
                     </button>
-                    <a href="${contentHtml}" download class="media-action-btn" title="Descargar Imagen">
+                    <a href="${contentHtml}" download class="media-action-btn cached-download" title="Descargar Imagen">
                         <i class="fas fa-download"></i>
                     </a>
                 </div>
@@ -659,12 +742,12 @@ function generateMessageHtml(m) {
     } else if (isVideoUrl && contentHtml) {
         contentHtml = `
             <div class="msg-media video-container">
-                <video src="${contentHtml}" controls></video>
+                <video data-media-src="${contentHtml}" controls class="cached-media"></video>
                 <div class="media-actions">
                     <button onclick="event.stopPropagation(); openForwardModal('${contentHtml}', 'video')" class="media-action-btn" title="Reenviar Video" style="background: rgba(0,0,0,0.5); border: none; color: white; border-radius: 4px; padding: 6px 10px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;">
                         <i class="fas fa-share"></i>
                     </button>
-                    <a href="${contentHtml}" download class="media-action-btn" title="Descargar Video">
+                    <a href="${contentHtml}" download class="media-action-btn cached-download" title="Descargar Video">
                         <i class="fas fa-download"></i>
                     </a>
                 </div>
@@ -672,12 +755,12 @@ function generateMessageHtml(m) {
     } else if (isAudioUrl && contentHtml) {
         contentHtml = `
             <div class="msg-audio">
-                <audio src="${contentHtml}" controls preload="metadata"></audio>
+                <audio data-media-src="${contentHtml}" controls preload="metadata" class="cached-media"></audio>
                 <div class="audio-download-row" style="display: flex; align-items: center; gap: 15px; margin-top: 6px;">
                     <button onclick="event.stopPropagation(); openForwardModal('${contentHtml}', 'voice')" class="media-download-link" title="Reenviar Audio" style="background: none; border: none; color: var(--accent); cursor: pointer; display: flex; align-items: center; gap: 5px; font-size: 0.85rem; padding: 0;">
                         <i class="fas fa-share"></i> Reenviar
                     </button>
-                    <a href="${contentHtml}" download class="media-download-link" title="Descargar Audio">
+                    <a href="${contentHtml}" download class="media-download-link cached-download" title="Descargar Audio">
                         <i class="fas fa-download"></i> Descargar Audio
                     </a>
                 </div>
