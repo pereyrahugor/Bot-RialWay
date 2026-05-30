@@ -536,45 +536,12 @@ class MetaCloudProvider extends ProviderClass {
                 }
 
                 if (finalPath && fs.existsSync(finalPath)) {
-                    const lowerPath = finalPath.toLowerCase();
-                    let isSticker = lowerPath.endsWith('.webp') || mimeType.includes('webp') || mimeType.includes('sticker') || options.type === 'sticker' || (options.media && options.media.type === 'sticker');
-
-                    if (isSticker) {
-                        try {
-                            const dir = path.dirname(finalPath);
-                            const base = path.basename(finalPath, path.extname(finalPath));
-                            const resizedPath = path.join(dir, `${base}_sticker.webp`);
-
-                            try {
-                                const { default: sharp } = await import('sharp');
-                                await sharp(finalPath)
-                                    .resize(512, 512, {
-                                        fit: 'contain',
-                                        background: { r: 0, g: 0, b: 0, alpha: 0 }
-                                    })
-                                    .toFormat('webp')
-                                    .toFile(resizedPath);
-                                
-                                console.log(`✨ [MetaCloudProvider] Sticker optimizado y redimensionado a 512x512 con sharp: ${resizedPath}`);
-                                finalPath = resizedPath;
-                            } catch (sharpErr: any) {
-                                if (!lowerPath.endsWith('.webp')) {
-                                    console.warn('⚠️ [MetaCloudProvider] sharp no disponible para convertir imagen a sticker, se enviará como imagen normal.');
-                                    isSticker = false;
-                                } else {
-                                    console.log('ℹ️ [MetaCloudProvider] sharp no disponible. Enviando el archivo .webp tal cual como sticker.');
-                                }
-                            }
-                        } catch (err: any) {
-                            console.warn('⚠️ [MetaCloudProvider] Error excepcional optimizando sticker:', err.message);
-                        }
-                    }
-
                     console.log(`📤 [MetaCloudProvider] Subiendo archivo local a Meta: ${finalPath}`);
                     const mediaId = await this.uploadMedia(finalPath);
                     if (mediaId) {
                         const mediaData = { id: mediaId };
                         const finalLowerPath = finalPath.toLowerCase();
+                        const isSticker = finalLowerPath.endsWith('.webp') || mimeType.includes('webp') || mimeType.includes('sticker') || options.type === 'sticker' || (options.media && options.media.type === 'sticker');
                         
                         if (isSticker) {
                             body.type = 'sticker';
@@ -604,17 +571,9 @@ class MetaCloudProvider extends ProviderClass {
                                 }
                             });
                             console.log(`✅ [MetaCloudProvider] Media enviado con éxito (ID: ${mediaId})`);
-                            // Limpiar sticker temporal si corresponde
-                            if (finalPath.endsWith('_sticker.webp') && fs.existsSync(finalPath)) {
-                                try { fs.unlinkSync(finalPath); } catch (e) { /* ignore cleanup error */ }
-                            }
                             return res.data;
                         } catch (err: any) {
                             console.error('❌ [MetaCloudProvider] Error enviando mensaje con mediaId:', err.response?.data || err.message);
-                            // Limpiar en caso de error también
-                            if (finalPath.endsWith('_sticker.webp') && fs.existsSync(finalPath)) {
-                                try { fs.unlinkSync(finalPath); } catch (e) { /* ignore cleanup error */ }
-                            }
                         }
                     } else {
                         console.error(`❌ [MetaCloudProvider] No se pudo obtener mediaId para: ${finalPath}`);

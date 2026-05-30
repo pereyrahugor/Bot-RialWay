@@ -43,6 +43,32 @@ export class SupabaseBaileysProvider extends BaileysProvider {
     }
 
     /**
+     * Envía un sticker de forma nativa usando Baileys
+     */
+    public sendSticker = async (number: string, mediaPath: string): Promise<any> => {
+        try {
+            const isReady = !!(this.vendor?.authState?.creds?.me?.id || this.vendor?.user?.id);
+            if (!isReady) {
+                console.error('[SupabaseBaileysProvider] ❌ Socket no listo para enviar sticker');
+                return null;
+            }
+            const jid = number.includes('@') ? number : `${number}@s.whatsapp.net`;
+            const absolutePath = path.isAbsolute(mediaPath) ? mediaPath : path.resolve(mediaPath);
+            if (!fs.existsSync(absolutePath)) {
+                console.error(`[SupabaseBaileysProvider] ❌ El archivo de sticker no existe: ${absolutePath}`);
+                return null;
+            }
+            console.log(`[SupabaseBaileysProvider] 📤 Enviando sticker via Baileys nativo a ${jid}: ${absolutePath}`);
+            const buffer = fs.readFileSync(absolutePath);
+            const response = await this.vendor.sendMessage(jid, { sticker: buffer });
+            return response;
+        } catch (err: any) {
+            console.error('[SupabaseBaileysProvider] ❌ Error enviando sticker:', err);
+            return null;
+        }
+    }
+
+    /**
      * BuilderBot define initVendor como una propiedad asignada a una función.
      * Debemos seguir el mismo patrón para evitar conflictos de tipos.
      */

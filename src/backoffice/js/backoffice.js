@@ -216,6 +216,10 @@ async function fetchChats(refresh = false) {
         }
         
         const newChats = await res.json();
+        if (!Array.isArray(newChats)) {
+            console.error('❌ La respuesta del servidor no es un arreglo válido de chats:', newChats);
+            return;
+        }
         if (newChats.length < CHAT_LIMIT) allChatsLoaded = true;
 
         if (refresh) {
@@ -261,10 +265,15 @@ async function fetchChats(refresh = false) {
 async function fetchBotTags() {
     try {
         const res = await fetch(`/api/backoffice/tags?token=${token}`);
-        botTags = await res.json();
-        renderTagManager();
-        renderFilterDropdown();
-        renderBulkFilterDropdown();
+        const data = await res.json();
+        if (Array.isArray(data)) {
+            botTags = data;
+            renderTagManager();
+            renderFilterDropdown();
+            renderBulkFilterDropdown();
+        } else {
+            console.error('❌ La respuesta del servidor no es un arreglo válido de etiquetas:', data);
+        }
     } catch (e) { console.error(e); }
 }
 
