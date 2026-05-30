@@ -52,6 +52,7 @@
     "polka": "^0.5.2",
     "qrcode": "^1.5.4",
     "serve-static": "^2.2.0",
+    "sharp": "0.32.6",
     "socket.io": "^4.8.1",
     "wabt": "^1.0.37",
     "whaileys": "^6.4.10",

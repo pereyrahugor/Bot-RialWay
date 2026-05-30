@@ -541,23 +541,47 @@ class MetaCloudProvider extends ProviderClass {
 
                     if (isSticker) {
                         try {
-                            const { default: sharp } = await import('sharp');
                             const dir = path.dirname(finalPath);
                             const base = path.basename(finalPath, path.extname(finalPath));
                             const resizedPath = path.join(dir, `${base}_sticker.webp`);
                             
-                            await sharp(finalPath)
-                                .resize(512, 512, {
-                                    fit: 'contain',
-                                    background: { r: 0, g: 0, b: 0, alpha: 0 }
-                                })
-                                .toFormat('webp')
-                                .toFile(resizedPath);
-                                
-                            console.log(`✨ [MetaCloudProvider] Sticker procesado y redimensionado a 512x512: ${resizedPath}`);
-                            finalPath = resizedPath;
-                        } catch (sharpErr: any) {
-                            console.warn('⚠️ [MetaCloudProvider] No se pudo redimensionar el sticker con sharp (falló o no instalado):', sharpErr.message);
+                            let resized = false;
+
+                            // 1. Intentar con sharp
+                            try {
+                                const { default: sharp } = await import('sharp');
+                                await sharp(finalPath)
+                                    .resize(512, 512, {
+                                        fit: 'contain',
+                                        background: { r: 0, g: 0, b: 0, alpha: 0 }
+                                    })
+                                    .toFormat('webp')
+                                    .toFile(resizedPath);
+                                resized = true;
+                                console.log(`✨ [MetaCloudProvider] Sticker procesado y redimensionado a 512x512 con sharp: ${resizedPath}`);
+                            } catch (sharpErr: any) {
+                                console.warn('⚠️ [MetaCloudProvider] sharp no disponible o falló, intentando con jimp...', sharpErr.message);
+                            }
+
+                            // 2. Fallback a jimp (100% pure JS, portable)
+                            if (!resized) {
+                                try {
+                                    const { Jimp } = await import('jimp');
+                                    const image = await Jimp.read(finalPath);
+                                    image.contain({ w: 512, h: 512 });
+                                    await image.write(resizedPath as any);
+                                    resized = true;
+                                    console.log(`✨ [MetaCloudProvider] Sticker procesado y redimensionado a 512x512 con jimp: ${resizedPath}`);
+                                } catch (jimpErr: any) {
+                                    console.error('❌ [MetaCloudProvider] Fallaron todos los motores de redimensionamiento (sharp y jimp):', jimpErr.message);
+                                }
+                            }
+
+                            if (resized) {
+                                finalPath = resizedPath;
+                            }
+                        } catch (err: any) {
+                            console.warn('⚠️ [MetaCloudProvider] Error excepcional procesando sticker:', err.message);
                         }
                     }
 
