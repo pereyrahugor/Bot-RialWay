@@ -11,6 +11,10 @@ import { HistoryHandler } from '../db/historyHandler';
  */
 const sentMessageCache = new Set<string>();
 
+// Cache temporal para evitar rate limit en las llamadas a la API de Meta Graph
+let lastMetaSyncTime = 0;
+const META_SYNC_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutos de caché
+
 export const trackSentMessage = (id: string) => {
     if (!id) return;
     sentMessageCache.add(id);
@@ -319,17 +323,21 @@ export const hasActiveSession = async (adapterProvider: any, groupProvider: any 
         const { HistoryHandler } = await import('../db/historyHandler');
         const metaOnboarding = await HistoryHandler.getMetaOnboardingData();
 
-        if (metaOnboarding && metaOnboarding.whatsappToken && metaOnboarding.whatsappNumberId && metaOnboarding.whatsappToken !== 'PENDING') {
+        const now = Date.now();
+        const hasData = metaOnboarding?.onboarding_data && Object.keys(metaOnboarding.onboarding_data).length > 2;
+        const skipSync = hasData && (now - lastMetaSyncTime < META_SYNC_COOLDOWN_MS);
+
+        if (metaOnboarding && metaOnboarding.whatsappToken && metaOnboarding.whatsappNumberId && metaOnboarding.whatsappToken !== 'PENDING' && !skipSync) {
             try {
                 const axios = (await import('axios')).default;
                 const phoneId = metaOnboarding.whatsappNumberId;
                 const token = metaOnboarding.whatsappToken;
 
-                // 1. Consultar nodo del número de teléfono
-                const phoneRes = await axios.get(`https://graph.facebook.com/v22.0/${phoneId}`, {
+                // 1. Consultar nodo del número de teléfono usando v25.0 para soporte completo de whatsapp_business_manager_messaging_limit
+                const phoneRes = await axios.get(`https://graph.facebook.com/v25.0/${phoneId}`, {
                     headers: { 'Authorization': `Bearer ${token}` },
                     params: {
-                        fields: "id,display_phone_number,verified_name,quality_rating,status,code_verification_status,messaging_limit_tier"
+                        fields: "id,display_phone_number,verified_name,quality_rating,status,code_verification_status,messaging_limit_tier,whatsapp_business_manager_messaging_limit"
                     }
                 });
 
@@ -337,7 +345,7 @@ export const hasActiveSession = async (adapterProvider: any, groupProvider: any 
                 let accountReviewStatus = null;
                 if (metaOnboarding.whatsappBusinessId) {
                     try {
-                        const wabaRes = await axios.get(`https://graph.facebook.com/v22.0/${metaOnboarding.whatsappBusinessId}`, {
+                        const wabaRes = await axios.get(`https://graph.facebook.com/v25.0/${metaOnboarding.whatsappBusinessId}`, {
                             headers: { 'Authorization': `Bearer ${token}` },
                             params: {
                                 fields: "id,account_review_status"
@@ -348,6 +356,7 @@ export const hasActiveSession = async (adapterProvider: any, groupProvider: any 
                 }
 
                 // 3. Unir y guardar en onboarding_data temporal
+                const finalMessagingLimit = phoneRes.data?.whatsapp_business_manager_messaging_limit || phoneRes.data?.messaging_limit_tier || null;
                 metaOnboarding.onboarding_data = {
                     ...(metaOnboarding.onboarding_data || {}),
                     display_phone_number: phoneRes.data?.display_phone_number || null,
@@ -355,9 +364,13 @@ export const hasActiveSession = async (adapterProvider: any, groupProvider: any 
                     quality_rating: phoneRes.data?.quality_rating || null,
                     status: phoneRes.data?.status || null,
                     code_verification_status: phoneRes.data?.code_verification_status || null,
-                    messaging_limit_tier: phoneRes.data?.messaging_limit_tier || null,
+                    messaging_limit_tier: finalMessagingLimit,
+                    messagingLimit: finalMessagingLimit,
                     account_review_status: accountReviewStatus
                 };
+
+                // Actualizar marca de tiempo tras sincronización exitosa
+                lastMetaSyncTime = now;
 
                 // 4. Actualizar en la base de datos en segundo plano
                 const supabase = HistoryHandler.getSupabase();
@@ -372,6 +385,8 @@ export const hasActiveSession = async (adapterProvider: any, groupProvider: any 
 
             } catch (err: any) {
                 console.warn("⚠️ [hasActiveSession] No se pudieron obtener stats dinámicas de Meta:", err.message);
+                // Si falla por rate limit, agregamos penalización temporal de 5 minutos antes de volver a intentar
+                lastMetaSyncTime = now - (5 * 60 * 1000); 
             }
         }
 

@@ -50,6 +50,8 @@ async function fetchStatus() {
                 
                 // 1. Número de teléfono
                 const phoneDisplay = obData.display_phone_number || data.metaOnboarding.phone_number_id || 'No configurado';
+                const phoneId = data.metaOnboarding.phone_number_id || data.metaOnboarding.whatsappNumberId || 'No configurado';
+                const wabaId = data.metaOnboarding.waba_id || data.metaOnboarding.whatsappBusinessId || 'No configurado';
                 
                 // 2. Nombre verificado (Verified Name)
                 const verifiedName = obData.verified_name || 'Sin Nombre de Marca';
@@ -98,10 +100,12 @@ async function fetchStatus() {
                 let tierHuman = tier;
                 if (tier === 'TIER_50') tierHuman = '50 conversaciones / 24h';
                 else if (tier === 'TIER_250') tierHuman = '250 conversaciones / 24h';
+                else if (tier === 'TIER_2K') tierHuman = '2,000 conversaciones / 24h';
                 else if (tier === 'TIER_1K') tierHuman = '1,000 conversaciones / 24h';
                 else if (tier === 'TIER_10K') tierHuman = '10,000 conversaciones / 24h';
                 else if (tier === 'TIER_100K') tierHuman = '100,000 conversaciones / 24h';
                 else if (tier === 'TIER_UNLIMITED') tierHuman = 'Conversaciones Ilimitadas';
+                else if (tier === 'UNTIERED') tierHuman = 'Sin Límite Definido (Untiered)';
 
                 extraInfo = `
                     <div class="meta-stats" style="margin-top: 15px; padding: 15px; background: rgba(6, 104, 225, 0.05); border-radius: 12px; border: 1px solid rgba(6, 104, 225, 0.15); display: flex; flex-direction: column; gap: 10px; text-align: left; font-size: 0.95rem;">
@@ -112,6 +116,14 @@ async function fetchStatus() {
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <strong>Número de Teléfono:</strong>
                             <span style="font-weight: 600; color: #1e293b;">${phoneDisplay}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <strong>ID del Teléfono (Phone ID):</strong>
+                            <span style="font-family: monospace; font-size: 0.85rem; color: #64748b;">${phoneId}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(6, 104, 225, 0.1); padding-bottom: 8px;">
+                            <strong>ID de WABA:</strong>
+                            <span style="font-family: monospace; font-size: 0.85rem; color: #64748b;">${wabaId}</span>
                         </div>
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <strong>Estado del Canal:</strong>
