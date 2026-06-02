@@ -283,7 +283,12 @@ export const hasActiveSession = async (adapterProvider: any, groupProvider: any 
             if (!provider) return null;
             
             const isMeta = provider.constructor.name === 'MetaCloudProvider';
-            const isReady = !!(provider?.vendor?.user || provider?.globalVendorArgs?.sock?.user) && provider?.vendor?.ws?.isOpen;
+            const isReady = !!(
+                provider?.vendor?.authState?.creds?.me?.id || 
+                provider?.vendor?.user?.id || 
+                provider?.vendor?.user || 
+                provider?.globalVendorArgs?.sock?.user
+            );
 
             if (isMeta) return { active: true, type: 'meta', message: 'Conectado via API' };
 

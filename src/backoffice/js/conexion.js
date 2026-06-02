@@ -56,13 +56,13 @@ async function fetchStatus() {
                 
                 // 3. Estado del número de Meta
                 const metaStatus = obData.status || 'Desconocido';
-                let metaStatusLabel = `<span class="badge" style="background: #94a3b8; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem;">${metaStatus}</span>`;
+                let metaStatusLabel = `<span class="meta-status-badge" style="background: #94a3b8; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem; display: inline-block;">${metaStatus}</span>`;
                 if (metaStatus === 'CONNECTED' || metaStatus === 'APPROVED') {
-                    metaStatusLabel = `<span class="badge" style="background: #10b981; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem;"><i class="fas fa-circle-check"></i> Conectado</span>`;
+                    metaStatusLabel = `<span class="meta-status-badge" style="background: #10b981; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem; display: inline-block;"><i class="fas fa-circle-check"></i> Conectado</span>`;
                 } else if (metaStatus === 'BANNED') {
-                    metaStatusLabel = `<span class="badge" style="background: #ef4444; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem;"><i class="fas fa-ban"></i> Baneado / Bloqueado</span>`;
+                    metaStatusLabel = `<span class="meta-status-badge" style="background: #ef4444; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem; display: inline-block;"><i class="fas fa-ban"></i> Baneado / Bloqueado</span>`;
                 } else if (metaStatus === 'RESTRICTED' || metaStatus === 'FLAGGED') {
-                    metaStatusLabel = `<span class="badge" style="background: #f59e0b; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem;"><i class="fas fa-triangle-exclamation"></i> ${metaStatus === 'RESTRICTED' ? 'Restringido' : 'Advertencia'}</span>`;
+                    metaStatusLabel = `<span class="meta-status-badge" style="background: #f59e0b; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem; display: inline-block;"><i class="fas fa-triangle-exclamation"></i> ${metaStatus === 'RESTRICTED' ? 'Restringido' : 'Advertencia'}</span>`;
                 }
                 
                 // 4. Calificación de Calidad (Quality Rating)
@@ -131,7 +131,7 @@ async function fetchStatus() {
                         </div>
                         <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(6, 104, 225, 0.1); padding-top: 8px;">
                             <strong>Límite de Mensajes (Tier):</strong>
-                            <span class="badge" style="background: #0668E1; color: white; padding: 3px 10px; border-radius: 12px; font-size: 0.85rem; font-weight: 600;">${tierHuman}</span>
+                            <span class="meta-status-badge" style="background: #0668E1; color: white; padding: 3px 10px; border-radius: 12px; font-size: 0.85rem; font-weight: 600; display: inline-block;">${tierHuman}</span>
                         </div>
                     </div>
                 `;
@@ -227,10 +227,11 @@ const reloadBtn = document.getElementById('system-reload-btn');
 
 async function fetchBotStatus() {
     try {
-        const res = await fetch(`/api/backoffice/settings/bot-status?token=${localStorage.getItem('backoffice_token')}`);
+        const token = localStorage.getItem('backoffice_token');
+        const res = await fetch(`/api/backoffice/get-setting?key=GLOBAL_BOT_ENABLED&token=${token}`);
         const data = await res.json();
         if (data.success) {
-            botToggle.checked = data.enabled;
+            botToggle.checked = data.value !== 'false';
         }
     } catch (e) { console.error("Error fetching bot status", e); }
 }
@@ -239,11 +240,16 @@ if (botToggle) {
     botToggle.addEventListener('change', async () => {
         const enabled = botToggle.checked;
         try {
-            await fetch('/api/backoffice/settings/toggle-bot', {
+            const token = localStorage.getItem('backoffice_token');
+            const res = await fetch(`/api/backoffice/save-setting?token=${token}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ token: localStorage.getItem('backoffice_token'), enabled })
+                body: JSON.stringify({ key: 'GLOBAL_BOT_ENABLED', value: enabled ? 'true' : 'false' })
             });
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+                throw new Error(data.error || 'Server error');
+            }
         } catch (e) { 
             alert("Error al cambiar el estado del bot"); 
             botToggle.checked = !enabled;
