@@ -46,12 +46,93 @@ async function fetchStatus() {
             
             let extraInfo = '';
             if (data.metaOnboarding.onboarding_data) {
-                const { verificationStatus, messagingLimit } = data.metaOnboarding.onboarding_data;
-                const vStatusLabel = verificationStatus === 'verified' ? '✅ Verificado' : (verificationStatus === 'not_verified' ? '❌ No Verificado' : `⏳ ${verificationStatus || 'Pendiente'}`);
+                const obData = data.metaOnboarding.onboarding_data;
+                
+                // 1. Número de teléfono
+                const phoneDisplay = obData.display_phone_number || data.metaOnboarding.phone_number_id || 'No configurado';
+                
+                // 2. Nombre verificado (Verified Name)
+                const verifiedName = obData.verified_name || 'Sin Nombre de Marca';
+                
+                // 3. Estado del número de Meta
+                const metaStatus = obData.status || 'Desconocido';
+                let metaStatusLabel = `<span class="badge" style="background: #94a3b8; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem;">${metaStatus}</span>`;
+                if (metaStatus === 'CONNECTED' || metaStatus === 'APPROVED') {
+                    metaStatusLabel = `<span class="badge" style="background: #10b981; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem;"><i class="fas fa-circle-check"></i> Conectado</span>`;
+                } else if (metaStatus === 'BANNED') {
+                    metaStatusLabel = `<span class="badge" style="background: #ef4444; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem;"><i class="fas fa-ban"></i> Baneado / Bloqueado</span>`;
+                } else if (metaStatus === 'RESTRICTED' || metaStatus === 'FLAGGED') {
+                    metaStatusLabel = `<span class="badge" style="background: #f59e0b; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem;"><i class="fas fa-triangle-exclamation"></i> ${metaStatus === 'RESTRICTED' ? 'Restringido' : 'Advertencia'}</span>`;
+                }
+                
+                // 4. Calificación de Calidad (Quality Rating)
+                const quality = obData.quality_rating || 'UNKNOWN';
+                let qualityLabel = `<span style="font-weight: 600; color: #94a3b8;">⚪ Desconocida</span>`;
+                if (quality === 'GREEN') {
+                    qualityLabel = `<span style="font-weight: 600; color: #10b981;">🟢 Alta (Verde)</span>`;
+                } else if (quality === 'YELLOW') {
+                    qualityLabel = `<span style="font-weight: 600; color: #f59e0b;">🟡 Media (Amarillo)</span>`;
+                } else if (quality === 'RED') {
+                    qualityLabel = `<span style="font-weight: 600; color: #ef4444;">🔴 Baja (Rojo)</span>`;
+                }
+                
+                // 5. Estado de Verificación de Cuenta WABA (Business Verification)
+                const verificationStatus = obData.code_verification_status || obData.verificationStatus || 'not_verified';
+                const vStatusLabel = (verificationStatus === 'verified' || verificationStatus === 'VERIFIED') 
+                    ? '<span style="color: #10b981; font-weight: 600;">✅ Verificado</span>' 
+                    : '<span style="color: #ef4444; font-weight: 600;">❌ No Verificado</span>';
+
+                // 6. Revisión de Cuenta Comercial WABA
+                const wabaReview = obData.account_review_status || 'UNKNOWN';
+                let wabaReviewLabel = `<span style="font-weight: 600; color: #94a3b8;">⏳ Pendiente</span>`;
+                if (wabaReview === 'APPROVED') {
+                    wabaReviewLabel = `<span style="color: #10b981; font-weight: 600;">✅ Aprobada</span>`;
+                } else if (wabaReview === 'REJECTED') {
+                    wabaReviewLabel = `<span style="color: #ef4444; font-weight: 600;">❌ Rechazada</span>`;
+                } else if (wabaReview === 'NEEDS_COMPLIANCE_REVIEW') {
+                    wabaReviewLabel = `<span style="color: #f59e0b; font-weight: 600;">⚠️ Requiere Revisión</span>`;
+                }
+
+                // 7. Límite de mensajes salientes (Tier)
+                const tier = obData.messaging_limit_tier || obData.messagingLimit || 'Desconocido';
+                let tierHuman = tier;
+                if (tier === 'TIER_50') tierHuman = '50 conversaciones / 24h';
+                else if (tier === 'TIER_250') tierHuman = '250 conversaciones / 24h';
+                else if (tier === 'TIER_1K') tierHuman = '1,000 conversaciones / 24h';
+                else if (tier === 'TIER_10K') tierHuman = '10,000 conversaciones / 24h';
+                else if (tier === 'TIER_100K') tierHuman = '100,000 conversaciones / 24h';
+                else if (tier === 'TIER_UNLIMITED') tierHuman = 'Conversaciones Ilimitadas';
+
                 extraInfo = `
-                    <div class="meta-stats" style="margin-top: 10px; padding: 10px; background: rgba(6, 104, 225, 0.1); border-radius: 8px; border: 1px solid rgba(6, 104, 225, 0.2);">
-                        <div style="margin-bottom: 5px;"><strong>Verificación:</strong> ${vStatusLabel}</div>
-                        <div><strong>Límite de Mensajes:</strong> <span class="badge" style="background: #0668E1; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem;">${messagingLimit || 'Desconocido'}</span></div>
+                    <div class="meta-stats" style="margin-top: 15px; padding: 15px; background: rgba(6, 104, 225, 0.05); border-radius: 12px; border: 1px solid rgba(6, 104, 225, 0.15); display: flex; flex-direction: column; gap: 10px; text-align: left; font-size: 0.95rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(6, 104, 225, 0.1); padding-bottom: 8px;">
+                            <strong>Marca / Nombre:</strong>
+                            <span style="font-weight: 600; color: #1e293b;">${verifiedName}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <strong>Número de Teléfono:</strong>
+                            <span style="font-weight: 600; color: #1e293b;">${phoneDisplay}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <strong>Estado del Canal:</strong>
+                            ${metaStatusLabel}
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <strong>Calificación de Calidad:</strong>
+                            ${qualityLabel}
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <strong>Verificación del Número:</strong>
+                            ${vStatusLabel}
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <strong>Revisión de WABA:</strong>
+                            ${wabaReviewLabel}
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(6, 104, 225, 0.1); padding-top: 8px;">
+                            <strong>Límite de Mensajes (Tier):</strong>
+                            <span class="badge" style="background: #0668E1; color: white; padding: 3px 10px; border-radius: 12px; font-size: 0.85rem; font-weight: 600;">${tierHuman}</span>
+                        </div>
                     </div>
                 `;
             }

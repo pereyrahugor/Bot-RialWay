@@ -314,6 +314,62 @@ export const hasActiveSession = async (adapterProvider: any, groupProvider: any 
         const { HistoryHandler } = await import('../db/historyHandler');
         const metaOnboarding = await HistoryHandler.getMetaOnboardingData();
 
+        if (metaOnboarding && metaOnboarding.whatsappToken && metaOnboarding.whatsappNumberId && metaOnboarding.whatsappToken !== 'PENDING') {
+            try {
+                const axios = (await import('axios')).default;
+                const phoneId = metaOnboarding.whatsappNumberId;
+                const token = metaOnboarding.whatsappToken;
+
+                // 1. Consultar nodo del número de teléfono
+                const phoneRes = await axios.get(`https://graph.facebook.com/v22.0/${phoneId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    params: {
+                        fields: "id,display_phone_number,verified_name,quality_rating,status,code_verification_status,messaging_limit_tier"
+                    }
+                });
+
+                // 2. Consultar WABA
+                let accountReviewStatus = null;
+                if (metaOnboarding.whatsappBusinessId) {
+                    try {
+                        const wabaRes = await axios.get(`https://graph.facebook.com/v22.0/${metaOnboarding.whatsappBusinessId}`, {
+                            headers: { 'Authorization': `Bearer ${token}` },
+                            params: {
+                                fields: "id,account_review_status"
+                            }
+                        });
+                        accountReviewStatus = wabaRes.data?.account_review_status || null;
+                    } catch (e) { /* ignore WABA errors */ }
+                }
+
+                // 3. Unir y guardar en onboarding_data temporal
+                metaOnboarding.onboarding_data = {
+                    ...(metaOnboarding.onboarding_data || {}),
+                    display_phone_number: phoneRes.data?.display_phone_number || null,
+                    verified_name: phoneRes.data?.verified_name || null,
+                    quality_rating: phoneRes.data?.quality_rating || null,
+                    status: phoneRes.data?.status || null,
+                    code_verification_status: phoneRes.data?.code_verification_status || null,
+                    messaging_limit_tier: phoneRes.data?.messaging_limit_tier || null,
+                    account_review_status: accountReviewStatus
+                };
+
+                // 4. Actualizar en la base de datos en segundo plano
+                const supabase = HistoryHandler.getSupabase();
+                if (supabase) {
+                    supabase.from('meta_onboarding')
+                        .update({ onboarding_data: metaOnboarding.onboarding_data })
+                        .eq('project_id', metaOnboarding.project_id)
+                        .then(({ error }) => {
+                            if (error) console.error("Error actualizando stats de Meta en DB:", error.message);
+                        });
+                }
+
+            } catch (err: any) {
+                console.warn("⚠️ [hasActiveSession] No se pudieron obtener stats dinámicas de Meta:", err.message);
+            }
+        }
+
         return {
             adapter: adapterStatus,
             group: groupStatus,

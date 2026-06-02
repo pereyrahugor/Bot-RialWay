@@ -188,7 +188,8 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
 
         // Inyectar fecha y hora actual en el system prompt o como mensaje adicional
         const currentDatetimeArg = getArgentinaDatetimeString();
-        messages[0].content += `\n\nFecha/Hora Actual (Argentina): ${currentDatetimeArg}\nID de Usuario: ${userId}\nProject ID: ${projectId}`;
+        const contactNameInfo = chatData?.name ? `\nNombre de Contacto: ${chatData.name}` : '';
+        messages[0].content += `\n\nFecha/Hora Actual (Argentina): ${currentDatetimeArg}\nID de Usuario: ${userId}${contactNameInfo}\nProject ID: ${projectId}`;
         
         // Inyectar el último resultado de base de datos si existe en la base de datos
         if (lastDbResult) {
