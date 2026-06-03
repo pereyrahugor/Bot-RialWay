@@ -1,85 +1,61 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <script src="/js/auth-check.js"></script>
-    <meta charset="UTF-8">
-    <title>Tablero CRM | {{BOT_NAME}}</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/style/backoffice.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="/style/crm-common.css">
-    <link rel="stylesheet" href="/style/crm.css">
-    <!-- SortableJS for Drag and Drop -->
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-    <script src="/socket.io/socket.io.js"></script>
-</head>
-<body data-theme="light">
-    <!-- Navbar -->
-    <div id="navbar">
-        <div class="nav-item" title="Conversaciones" onclick="window.location.href='/backoffice'"><i class="fas fa-comments"></i><span class="nav-label">Conversaciones</span></div>
-        <div class="nav-item" title="Dashboard" onclick="window.location.href='/dashboard'"><i class="fas fa-chart-simple"></i><span class="nav-label">Dashboard</span></div>
-        <div class="nav-item" title="Conexión" onclick="window.location.href='/conexion'"><i class="fas fa-plug-circle-bolt"></i><span class="nav-label">Conexión</span></div>
-        <div class="nav-item" title="Webchat" onclick="window.location.href='/webchat'"><i class="fas fa-headset"></i><span class="nav-label">Webchat</span></div>
-        <div class="nav-item active" title="CRM" onclick="window.location.href='/crm'"><i class="fas fa-id-card-clip"></i><span class="nav-label">CRM</span></div>
-        <div class="nav-item" title="Tareas" onclick="window.location.href='/crm-tareas'"><i class="fas fa-calendar-check"></i><span class="nav-label">Tareas</span></div>
-        <div class="nav-item" title="Contactos" onclick="toggleLeadsPanel(event)"><i class="fas fa-user-group"></i><span class="nav-label">Contactos</span></div>
-        <div class="nav-item" title="Tickets" onclick="toggleTicketsPanel(event)">
-            <i class="fas fa-clipboard-check"></i>
-            <span class="nav-label">Tickets</span>
-            <span class="badge" id="tickets-badge">0</span>
-        </div>
+/* global loadViewScript, Sortable */
+window.crmView = {
+    title: 'CRM - ' + (window.BOT_NAME || 'Backoffice'),
 
-        <div class="nav-spacer"></div>
+    getHTML() {
+        const crmModals = _getCRMModals();
+        return `
+        <div class="crm-main-container kanban-wrapper relative" style="z-index:10;">
 
-        <div class="nav-item" title="Configuración" onclick="window.location.href='/system-config'"><i class="fas fa-gears"></i><span class="nav-label">Configuración</span></div>
-        <div class="nav-item" title="Manual" onclick="window.location.href='/docs'"><i class="fas fa-book"></i><span class="nav-label">Manual</span></div>
-        <div class="nav-item" title="Conexión Meta" id="nav-meta-btn" onclick="toggleMetaPanel(event)">
-            <i class="fab fa-meta"></i>
-            <span class="nav-label">Meta Info</span>
-        </div>
-        <div class="nav-item" id="theme-toggle" title="Cambiar Tema"><i class="fas fa-adjust"></i><span class="nav-label">Tema</span></div>
-        <div class="nav-item nav-item-logout" onclick="logout()" title="Cerrar Sesión"><i class="fas fa-power-off"></i><span class="nav-label">Salir</span></div>
-    </div>
-
-    <div class="crm-main-container">
-        <div class="kanban-header animate-fade">
-            <div class="header-info">
-                <h1><i class="fas fa-layer-group kanban-header-icon"></i> CRM {{BOT_NAME}}</h1>
-                <p>Gestión visual de oportunidades y seguimiento de clientes.</p>
+            <div class="kanban-header animate-fade">
+                <div class="header-info">
+                    <h1><i class="fas fa-layer-group kanban-header-icon"></i> CRM ${window.BOT_NAME || ''}</h1>
+                    <p>Gestion visual de oportunidades y seguimiento de clientes.</p>
+                </div>
+                <div class="header-actions">
+                    <button class="btn btn-primary" onclick="addNewColumn()">
+                        <i class="fas fa-plus"></i> Nuevo Estado
+                    </button>
+                    <button class="btn btn-primary" onclick="openClosedLeadsModal()">
+                        <i class="fas fa-archive"></i> Leads Cerrados
+                    </button>
+                    <button id="btn-new-user" class="btn btn-primary" onclick="window.openNewUserModal()">
+                        <i class="fas fa-users"></i> Nuevo Usuario
+                    </button>
+                    <button class="btn btn-primary" onclick="toggleCRMConfigModal()">
+                        <i class="fas fa-cog"></i> Configurar Campos
+                    </button>
+                    <button class="btn btn-primary" onclick="window.openNewLeadModal()">
+                        <i class="fas fa-plus-circle"></i> Crear Lead Card
+                    </button>
+                </div>
             </div>
-            <div class="header-actions">
-                <button class="btn btn-primary" onclick="addNewColumn()">
-                    <i class="fas fa-plus"></i> Nuevo Estado
-                </button>
-                <button class="btn btn-primary" onclick="openClosedLeadsModal()">
-                    <i class="fas fa-archive"></i> Leads Cerrados
-                </button>
-                <button id="btn-new-user" class="btn btn-primary" onclick="window.openNewUserModal()" title="Gestionar Equipo">
-                    <i class="fas fa-users"></i> Nuevo Usuario
-                </button>
 
-                <button class="btn btn-primary" onclick="toggleCRMConfigModal()" title="Configurar Campos">
-                    <i class="fas fa-cog"></i> Configurar Campos
-                </button>
-                <button class="btn btn-primary" onclick="window.openNewLeadModal()" title="Crear Lead">
-                    <i class="fas fa-plus-circle"></i> Crear Lead Card
-                </button>
+            <div id="kanban-board" class="kanban-scroll-area">
+                <div class="kanban-board-inner" id="kanban-board-inner"></div>
             </div>
         </div>
+        ${crmModals}`;
+    },
 
-        <!-- Kanban Board Area -->
-        <div id="kanban-board" class="kanban-scroll-area">
-            <div class="kanban-board-inner" id="kanban-board-inner">
-                <!-- Las columnas se renderizan dinámicamente desde crm.js -->
-            </div>
-        </div>
-    </div>
+    async init() {
+        if (typeof Sortable === 'undefined') {
+            await loadViewScript('https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js');
+        }
+        await loadViewScript('/js/crm.js?v=2');
+        if (typeof window.initCRMView === 'function') await window.initCRMView();
+    },
 
-    <!-- Modal Editar Tarjeta -->
+    destroy() {}
+};
+
+// Modales compartidos entre crm.view.js y crm-tareas.view.js
+function _getCRMModals() {
+    return `
+    <!-- Modal Editar Lead -->
     <div id="card-modal" class="modal-overlay">
-        <div class="modal-content animate-pop modal-content-md">
-            <div class="modal-header modal-header-top">
+        <div class="modal-content modal-content-md animate-pop-in">
+            <div class="modal-header-top">
                 <div>
                     <h3><i class="fas fa-clipboard-list modal-h3-icon"></i> Detalle del Lead</h3>
                     <div id="modal-ticket-ref"></div>
@@ -89,31 +65,26 @@
             <div class="modal-body">
                 <form id="card-edit-form">
                     <input type="hidden" id="edit-lead-id">
-
                     <div id="crm-fields-container">
-                        <!-- Campos del Lead se inyectarán aquí según la configuración -->
-
                         <div class="modal-section" data-field="crm-ticket-title">
                             <label><i class="fas fa-envelope-open-text"></i> Titulo del Ticket</label>
                             <input type="text" id="edit-ticket-title" class="crm-input" placeholder="Ej: Consulta por preventa">
                         </div>
-
                         <div class="modal-grid">
                             <div class="modal-section" data-field="crm-name">
-                                <label><i class="fas fa-user"></i> Nombre Completo / Razón Social</label>
+                                <label><i class="fas fa-user"></i> Nombre Completo / Razon Social</label>
                                 <input type="text" id="edit-lead-name" class="crm-input" placeholder="Nombre completo...">
                             </div>
                             <div class="modal-section" data-field="crm-phone">
-                                <label><i class="fas fa-phone"></i> Teléfono</label>
+                                <label><i class="fas fa-phone"></i> Telefono</label>
                                 <div class="input-with-action">
                                     <input type="text" id="edit-lead-phone" class="crm-input" readonly>
-                                    <button type="button" class="btn-action btn-action-primary" onclick="openWhatsAppDirect()" title="Enviar WhatsApp">
+                                    <button type="button" class="btn-action btn-action-primary" onclick="openWhatsAppDirect()">
                                         <i class="fab fa-whatsapp"></i>
                                     </button>
                                 </div>
                             </div>
                         </div>
-
                         <div class="modal-grid">
                             <div class="modal-section" data-field="crm-cuit">
                                 <label><i class="fas fa-id-card"></i> Cuil / Cuit / DNI</label>
@@ -124,14 +95,13 @@
                                 <input type="email" id="edit-lead-email" class="crm-input" placeholder="email@ejemplo.com">
                             </div>
                         </div>
-
                         <div class="modal-grid">
                             <div class="modal-section" data-field="crm-address">
                                 <label><i class="fas fa-map-marker-alt"></i> Domicilio</label>
                                 <input type="text" id="edit-lead-address" class="crm-input" placeholder="Calle, Nro, Localidad...">
                             </div>
                             <div class="modal-section" data-field="crm-tax-status">
-                                <label><i class="fas fa-file-invoice-dollar"></i> Situación Impositiva</label>
+                                <label><i class="fas fa-file-invoice-dollar"></i> Situacion Impositiva</label>
                                 <select id="edit-lead-tax-status" class="crm-input">
                                     <option value="Cons. Final">Cons. Final</option>
                                     <option value="Responsable Inscripto">Responsable Inscripto</option>
@@ -140,7 +110,6 @@
                                 </select>
                             </div>
                         </div>
-
                         <div class="modal-grid">
                             <div class="modal-section" data-field="crm-product">
                                 <label><i class="fas fa-shopping-bag"></i> Producto Ofrecido</label>
@@ -159,12 +128,10 @@
                                 </select>
                             </div>
                         </div>
-
                         <div class="modal-section" data-field="crm-notes">
                             <label><i class="fas fa-sticky-note"></i> Historial de Notas / Comentarios</label>
                             <textarea id="edit-custom-notes" class="crm-input" rows="4" placeholder="Observaciones generales..."></textarea>
                         </div>
-
                         <div class="modal-grid">
                             <div class="modal-section" data-field="crm-due-date">
                                 <label><i class="fas fa-bell"></i> Fecha Alerta / Seguimiento</label>
@@ -179,45 +146,30 @@
                                 </select>
                             </div>
                         </div>
-
                         <div class="modal-section" data-field="crm-status">
                             <label><i class="fas fa-tasks"></i> Estado del Lead (CRM)</label>
-                            <select id="edit-lead-status" class="crm-input" onchange="syncStatusToColumn(this.value)">
-                                <!-- Opciones generadas dinámicamente según las columnas -->
-                            </select>
+                            <select id="edit-lead-status" class="crm-input" onchange="syncStatusToColumn && syncStatusToColumn(this.value)"></select>
                         </div>
                     </div>
-
-                    <div id="additional-notes-list">
-                        <!-- Aquí se inyectarán las notas dinámicas -->
-                    </div>
-
-                    <button type="button" class="btn btn-add-note" onclick="addNewNoteUI()">
+                    <div id="additional-notes-list"></div>
+                    <button type="button" class="btn-add-note" onclick="addNewNoteUI()">
                         <i class="fas fa-plus-circle"></i> Agregar Nota con Fecha
                     </button>
-
                     <div id="alert-status-info"></div>
-
                     <div id="assignee-section" class="modal-section">
                         <label><i class="fas fa-user-tag assignee-icon"></i> Asignar Lead a:</label>
                         <select id="edit-lead-assignee" class="crm-input">
                             <option value="">Sin asignar (Libre)</option>
-                            <!-- Se llena dinámicamente -->
                         </select>
                     </div>
-
-                    <div class="modal-section modal-tags-section">
+                    <div class="modal-tags-section">
                         <h4 class="modal-tags-title"><i class="fas fa-tags modal-tags-icon"></i> Etiquetas</h4>
                         <div id="current-lead-tags"></div>
-
                         <div class="tag-mgmt-box">
                             <h5 class="tag-mgmt-title">Gestionar Etiquetas</h5>
-                            <div id="available-tags-to-assign">
-                                <!-- Se llena dinámicamente -->
-                            </div>
+                            <div id="available-tags-to-assign"></div>
                         </div>
                     </div>
-
                     <button type="submit" class="btn btn-primary btn-save-lead">
                         <i class="fas fa-save btn-save-icon"></i> Guardar y Sincronizar
                     </button>
@@ -228,13 +180,15 @@
 
     <!-- Modal Editar Nombre Columna -->
     <div id="column-modal" class="modal-overlay">
-        <div class="modal-content animate-pop modal-content-sm">
+        <div class="modal-content modal-content-sm animate-pop-in">
             <div class="modal-header">
-                <h3>✏️ Editar Estado</h3>
+                <h3 class="flex items-center gap-2">
+                    <i class="fas fa-pen text-accent-bright text-sm"></i> Editar Estado
+                </h3>
                 <button class="btn-close-modal" onclick="closeColumnModal()"><i class="fas fa-times"></i></button>
             </div>
             <div class="modal-body">
-                <input type="text" id="column-name-input" class="crm-input" placeholder="Nombre del estado...">
+                <input type="text" id="column-name-input" class="crm-input mb-4" placeholder="Nombre del estado...">
                 <div class="modal-action-row">
                     <button class="btn btn-danger btn-flex-1" onclick="deleteCurrentColumn()" id="btn-delete-col">
                         <i class="fas fa-trash-alt"></i> Eliminar
@@ -249,23 +203,20 @@
 
     <!-- Modal Leads Cerrados -->
     <div id="closed-leads-modal" class="modal-overlay">
-        <div class="modal-content animate-pop modal-content-lg">
+        <div class="modal-content modal-content-lg animate-pop-in">
             <div class="modal-header">
-                <h3><i class="fas fa-check-double modal-h3-icon"></i> Histórico de Leads Cerrados</h3>
+                <h3><i class="fas fa-check-double modal-h3-icon"></i> Historico de Leads Cerrados</h3>
                 <button class="btn-close-modal" onclick="closeClosedLeadsModal()"><i class="fas fa-times"></i></button>
             </div>
             <div class="modal-body">
-                <div id="closed-leads-list" class="closed-list-container">
-                    <!-- Se llena desde JS -->
-                </div>
+                <div id="closed-leads-list" class="closed-list-container"></div>
             </div>
         </div>
     </div>
 
-
     <!-- Modal Crear Nuevo Lead -->
     <div id="new-lead-modal" class="modal-overlay">
-        <div class="modal-content animate-pop modal-content-sm-plus">
+        <div class="modal-content modal-content-sm-plus animate-pop-in">
             <div class="modal-header">
                 <h3><i class="fas fa-user-plus modal-h3-icon"></i> Crear Nuevo Lead</h3>
                 <button class="btn-close-modal" onclick="closeNewLeadModal()"><i class="fas fa-times"></i></button>
@@ -273,11 +224,11 @@
             <form id="new-lead-form">
                 <div class="modal-body">
                     <div class="modal-section">
-                        <label><i class="fas fa-phone"></i> Teléfono / ID (WhatsApp)</label>
+                        <label><i class="fas fa-phone"></i> Telefono / ID (WhatsApp)</label>
                         <input type="text" id="new-lead-id" class="crm-input" placeholder="Ej: 54911..." required>
                     </div>
                     <div class="modal-section">
-                        <label><i class="fas fa-user"></i> Nombre Completo / Razón Social</label>
+                        <label><i class="fas fa-user"></i> Nombre Completo / Razon Social</label>
                         <input type="text" id="new-lead-name" class="crm-input" placeholder="Ej: Juan Perez" required>
                     </div>
                     <div class="modal-section">
@@ -295,11 +246,11 @@
         </div>
     </div>
 
-    <!-- Modal Equipo (Gestionar Usuarios) -->
+    <!-- Modal Equipo -->
     <div id="modal-users" class="modal-overlay">
-        <div class="modal-content animate-pop modal-content-md">
+        <div class="modal-content modal-content-md animate-pop-in">
             <div class="modal-header">
-                <h3><i class="fas fa-users-cog modal-h3-icon"></i> Gestión de Equipo</h3>
+                <h3><i class="fas fa-users-cog modal-h3-icon"></i> Gestion de Equipo</h3>
                 <button class="btn-close-modal" onclick="document.getElementById('modal-users').classList.remove('active')"><i class="fas fa-times"></i></button>
             </div>
             <div class="modal-body">
@@ -308,7 +259,7 @@
                     <div class="modal-section">
                         <input type="text" id="new-user-name" class="crm-input mb-10" placeholder="Nombre completo">
                         <input type="text" id="new-user-user" class="crm-input mb-10" placeholder="Usuario (Ej: juan_vendedor)">
-                        <input type="password" id="new-user-pass" class="crm-input mb-10" placeholder="Contraseña">
+                        <input type="password" id="new-user-pass" class="crm-input mb-10" placeholder="Contrasena">
                         <select id="new-user-role" class="crm-input mb-15">
                             <option value="subuser">Vendedor / Operador (Limitado)</option>
                             <option value="admin">Administrador (Total)</option>
@@ -318,42 +269,32 @@
                         </button>
                     </div>
                 </div>
-
                 <h4 class="team-list-title">Usuarios en el equipo</h4>
-                <div id="team-list-container">
-                </div>
+                <div id="team-list-container"></div>
             </div>
         </div>
     </div>
 
-
-    <!-- MODAL DE CONFIGURACIÓN CRM -->
+    <!-- Modal Configuracion CRM -->
     <div id="crm-config-modal" class="modal-overlay">
-        <div class="modal-content animate-pop modal-content-md">
+        <div class="modal-content modal-content-md animate-pop-in">
             <div class="modal-header">
-                <h3 class="modal-config-title"><i class="fas fa-cog"></i> Configuración de Campos CRM</h3>
+                <h3 class="modal-config-title"><i class="fas fa-cog modal-h3-icon"></i> Configuracion de Campos CRM</h3>
                 <button class="btn-icon" onclick="toggleCRMConfigModal()"><i class="fas fa-times"></i></button>
             </div>
             <div class="modal-body">
                 <p class="modal-config-desc">
-                    Arrastra los campos para cambiar su orden de visualización en el panel de detalles del Lead. Marca o desmarca para mostrar u ocultar.
+                    Arrasta los campos para cambiar su orden. Marca o desmarca para mostrar u ocultar.
                 </p>
-
-                <div id="crm-fields-list" class="sortable-list">
-                    <!-- Campos generados por JS -->
-                </div>
-
+                <div id="crm-fields-list" class="sortable-list"></div>
                 <div class="modal-config-actions">
                     <button class="btn btn-primary btn-flex-1" onclick="saveCRMConfig()">
-                        <i class="fas fa-save"></i> Guardar Configuración
+                        <i class="fas fa-save"></i> Guardar Configuracion
                     </button>
                     <button class="btn btn-secondary" onclick="toggleCRMConfigModal()">Cancelar</button>
                 </div>
             </div>
         </div>
-    </div>
-
-    <script src="/js/crm-common.js"></script>
-    <script src="/js/crm.js"></script>
-</body>
-</html>
+    </div>`;
+}
+window._getCRMModals = _getCRMModals;

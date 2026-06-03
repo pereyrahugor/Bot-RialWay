@@ -21,7 +21,7 @@ window.checkAdminAccess = () => {
     }
 };
 
-document.addEventListener('DOMContentLoaded', async () => {
+async function _initSystemConfigPage() {
     console.log('Unified System Config with 5 Assistant Prompts loaded');
 
     if (localStorage.getItem('config_authenticated') === 'true') {
@@ -152,7 +152,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     document.getElementById('cancel-btn').addEventListener('click', () => {
-        window.location.href = '/dashboard';
+        if (typeof window.navigate === 'function') window.navigate('/dashboard');
+        else window.location.href = '/dashboard';
     });
 
     // Manejo del formulario UNIFICADO (Bulk Save)
@@ -368,4 +369,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
     }
-});
+}
+
+document.addEventListener('DOMContentLoaded', _initSystemConfigPage);
+window.initSystemConfigView = _initSystemConfigPage;
