@@ -77,6 +77,16 @@ export class SupabaseBaileysProvider extends BaileysProvider {
         return await this.initProvider();
     }
 
+    /**
+     * Anula el registro de listeners automáticos de la clase base.
+     * Evita que se dupliquen las suscripciones al evento `messages.upsert`
+     * y por ende que el bot responda dos veces. Todo el flujo se controla
+     * en nuestro `initProvider` personalizado.
+     */
+    protected listenOnEvents = (vendor: any): void => {
+        // No-op
+    }
+
     protected initProvider = async (): Promise<any> => {
         // Evitar múltiples inicializaciones simultáneas
         if (this.initialized && this.vendor?.ws?.isOpen) {
