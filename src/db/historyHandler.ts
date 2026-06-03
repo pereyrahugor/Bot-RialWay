@@ -843,7 +843,8 @@ export class HistoryHandler {
         address?: string,
         offered_product?: string,
         crm_status?: string,
-        crm_due_date?: string | null
+        crm_due_date?: string | null,
+        metadata?: any
     }, forcedProjectId?: string) {
         const chatId = this.normalizeId(rawChatId);
         let currentProjectId = forcedProjectId;
