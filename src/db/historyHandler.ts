@@ -1939,6 +1939,9 @@ export class HistoryHandler {
             }
 
             // --- PASO ADICIONAL 3: Migrar al token maestro si existe ---
+            // Se desactiva la migración automática al token maestro ya que si el mainToken no tiene permisos explícitos
+            // compartidos sobre la WABA del cliente, todas las llamadas a la API de Meta fallarán para este proyecto.
+            /*
             try {
                 const mainToken = await this.getMainToken();
                 if (mainToken && token !== mainToken) {
@@ -1951,6 +1954,7 @@ export class HistoryHandler {
             } catch (swapErr) {
                 console.warn('⚠️ [HistoryHandler] No se pudo migrar al main_token:', swapErr);
             }
+            */
 
             return { success: true, data };
         } catch (err: any) {
