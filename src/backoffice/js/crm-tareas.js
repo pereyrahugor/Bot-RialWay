@@ -1,4 +1,5 @@
-/* global Sortable, FB, metaAppId */
+/* global Sortable, FB, metaAppId, showToast */
+(function() {
 const backofficeToken = localStorage.getItem('backoffice_token');
 const activeToken = backofficeToken;
 
@@ -31,9 +32,8 @@ function getLocalDateString(date) {
 }
 
 // --- Inicialización ---
-document.addEventListener('DOMContentLoaded', async () => {
+async function _initCRMTareasPage() {
     console.log('🚀 Iniciando CRM Tareas como:', userName, `(${userRole})`);
-    showToast(`Bienvenido ${userName}`, 'success');
     
     // Mostrar botones de admin si corresponde
     if (isAdmin) {
@@ -67,11 +67,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         setTimeout(() => openCardModal(pendingId), 300);
     }
     
-    // Auto-check de alertas visuales cada minuto
-    setInterval(checkAlertsVisual, 60000);
-    
+    // Auto-check de alertas visuales cada minuto (evitar acumulacion en re-visitas SPA)
+    if (window._crmTareasAlertInterval) clearInterval(window._crmTareasAlertInterval);
+    window._crmTareasAlertInterval = setInterval(checkAlertsVisual, 60000);
+
+    _setupCRMTareasFormHandlers();
+
+    // Re-afirmar globals de tareas (para que al volver desde CRM no queden los de CRM)
+    window.syncCRM = syncCRM;
+    window.openCardModal = openCardModal;
+    window.closeCardModal = closeCardModal;
+    window.closeColumnModal = () => {};
+
     console.log('✅ CRM Tareas Listo');
-});
+}
+
+window.initCRMTareasView = _initCRMTareasPage;
 
 // Exportar globalmente para botones HTML
 window.syncCRM = syncCRM;
@@ -95,7 +106,7 @@ async function loadCRMState() {
 }
 
 async function syncCRM() {
-    showToast('🔄 Sincronizando datos...');
+    showToast('Sincronizando datos...', 'info');
     try {
         const [resLeads, resTickets] = await Promise.all([
             fetch(`/api/backoffice/leads?token=${activeToken}&limit=300`),
@@ -121,10 +132,11 @@ async function syncCRM() {
         }
 
         distributeCards();
-        initDragAndDrop();
+        try { initDragAndDrop(); } catch (e) { console.error('[CRM Tareas] initDragAndDrop error:', e); }
+        showToast('Tareas Actualizadas', 'success');
     } catch (e) {
         console.error(e);
-        showToast('❌ Error al sincronizar datos', 'error');
+        showToast('Error al sincronizar datos', 'error');
     }
 }
 
@@ -190,7 +202,8 @@ function createCardElement(ticket, lead, metadata) {
     card.onclick = (e) => {
         if (e.target.closest('button')) return;
         localStorage.setItem('activeChat', ticket.chat_id);
-        window.location.href = '/backoffice';
+        if (typeof window.navigate === 'function') window.navigate('/backoffice');
+        else window.location.href = '/backoffice';
     };
     
     const tags = (lead?.tags || []).map(t => 
@@ -316,7 +329,7 @@ function initDragAndDrop() {
                 crmData[ticketId].alertDate = newDateString;
 
                 // Actualizar DB en tiempo real
-                showToast('💾 Reprogramando vencimiento...', 'success');
+                showToast('Reprogramando vencimiento...', 'info');
                 try {
                     // Actualizar el metadata global
                     await saveCRMMetadata();
@@ -328,7 +341,7 @@ function initDragAndDrop() {
                         body: JSON.stringify({ crm_due_date: newDateString })
                     });
 
-                    showToast('Vencimiento reprogramado correctamente');
+                    showToast('Vencimiento reprogramado correctamente', 'success');
                     
                     // Sincronizar datos de inmediato para reposicionar
                     await syncCRM();
@@ -417,80 +430,103 @@ function closeCardModal() {
     document.getElementById('card-modal').classList.remove('active');
 }
 
-document.getElementById('card-edit-form').onsubmit = async (e) => {
-    e.preventDefault();
-    if (!currentEditId) return;
+function _setupCRMTareasFormHandlers() {
+    const cardForm = document.getElementById('card-edit-form');
+    if (cardForm) cardForm.onsubmit = async (e) => {
+        e.preventDefault();
+        if (!currentEditId) return;
 
-    const ticket = allTickets.find(t => t.id === currentEditId);
-    const chatId = ticket?.chat_id;
-    const metadata = crmData[currentEditId] || { columnId: 'UNASSIGNED' };
+        const ticket = allTickets.find(t => t.id === currentEditId);
+        const chatId = ticket?.chat_id;
+        const metadata = crmData[currentEditId] || { columnId: 'UNASSIGNED' };
 
-    let mainNotes = document.getElementById('edit-custom-notes').value;
-    const additionalNotes = Array.from(document.querySelectorAll('.additional-note-box'))
-        .map(box => box.value.trim())
-        .filter(val => val !== '');
+        let mainNotes = document.getElementById('edit-custom-notes').value;
+        const additionalNotes = Array.from(document.querySelectorAll('.additional-note-box'))
+            .map(box => box.value.trim())
+            .filter(val => val !== '');
 
-    if (additionalNotes.length > 0) {
-        const date = new Date().toLocaleDateString();
-        mainNotes += `\n\n--- [Tareas] Added on ${date} ---\n` + additionalNotes.join('\n');
-    }
+        if (additionalNotes.length > 0) {
+            const date = new Date().toLocaleDateString();
+            mainNotes += `\n\n--- [Tareas] Added on ${date} ---\n` + additionalNotes.join('\n');
+        }
 
-    const leadData = {
-        name: document.getElementById('edit-lead-name').value,
-        email: document.getElementById('edit-lead-email').value,
-        source: document.getElementById('edit-lead-source').value,
-        cuit_dni: document.getElementById('edit-lead-cuit').value,
-        address: document.getElementById('edit-lead-address').value,
-        tax_status: document.getElementById('edit-lead-tax-status').value,
-        offered_product: document.getElementById('edit-lead-offered-product').value,
-        crm_status: document.getElementById('edit-lead-status').value,
-        crm_due_date: document.getElementById('edit-alert-date').value || null,
-        priority: document.getElementById('edit-priority').value || 'Media',
-        notes: mainNotes
+        const leadData = {
+            name: document.getElementById('edit-lead-name').value,
+            email: document.getElementById('edit-lead-email').value,
+            source: document.getElementById('edit-lead-source').value,
+            cuit_dni: document.getElementById('edit-lead-cuit').value,
+            address: document.getElementById('edit-lead-address').value,
+            tax_status: document.getElementById('edit-lead-tax-status').value,
+            offered_product: document.getElementById('edit-lead-offered-product').value,
+            crm_status: document.getElementById('edit-lead-status').value,
+            crm_due_date: document.getElementById('edit-alert-date').value || null,
+            priority: document.getElementById('edit-priority').value || 'Media',
+            notes: mainNotes
+        };
+
+        metadata.alertDate = document.getElementById('edit-alert-date').value;
+        metadata.priority = document.getElementById('edit-priority').value;
+        metadata.customNotes = leadData.notes;
+        metadata.columnId = leadData.crm_status;
+        crmData[currentEditId] = metadata;
+
+        const ticketTitle = document.getElementById('edit-ticket-title').value;
+        showToast('Guardando...', 'info');
+
+        try {
+            await saveCRMMetadata();
+            await fetch(`/api/backoffice/crm/ticket/${currentEditId}?token=${activeToken}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ titulo: ticketTitle, priority: leadData.priority, notas: mainNotes, contact: leadData })
+            });
+
+            if (chatId && isAdmin) {
+                const assignee = document.getElementById('edit-lead-assignee').value;
+                await fetch(`/api/backoffice/chat/assign?token=${activeToken}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chatId, userId: assignee || null })
+                });
+            }
+            closeCardModal();
+            await syncCRM();
+            showToast('Ficha de cliente actualizada', 'success');
+        } catch (e) {
+            console.error('Error al guardar:', e);
+            showToast('Error al guardar ficha', 'error');
+        }
     };
 
-    metadata.alertDate = document.getElementById('edit-alert-date').value;
-    metadata.priority = document.getElementById('edit-priority').value;
-    metadata.customNotes = leadData.notes;
-    metadata.columnId = leadData.crm_status; 
-    
-    crmData[currentEditId] = metadata;
+    const leadForm = document.getElementById('new-lead-form');
+    if (leadForm) leadForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const chatId = document.getElementById('new-lead-id').value.trim();
+        const name = document.getElementById('new-lead-name').value.trim();
+        const product = document.getElementById('new-lead-product').value.trim();
 
-    const ticketTitle = document.getElementById('edit-ticket-title').value;
-
-    showToast('💾 Guardando...', 'success');
-
-    try {
-        await saveCRMMetadata();
-        
-        await fetch(`/api/backoffice/crm/ticket/${currentEditId}?token=${activeToken}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                titulo: ticketTitle,
-                priority: leadData.priority,
-                notas: mainNotes,
-                contact: leadData
-            })
-        });
-
-        if (chatId && isAdmin) {
-            const assignee = document.getElementById('edit-lead-assignee').value;
-            await fetch(`/api/backoffice/chat/assign?token=${activeToken}`, {
+        showToast('Creando Lead Card...', 'info');
+        try {
+            const res = await fetch(`/api/backoffice/chat/manual-lead?token=${activeToken}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chatId, userId: assignee || null })
+                body: JSON.stringify({
+                    chatId,
+                    details: { name, offered_product: product, source: 'Manual CRM', notes: `Lead creado manualmente: ${product}` }
+                })
             });
+            const data = await res.json();
+            if (data.success) {
+                closeNewLeadModal();
+                await syncCRM();
+                showToast('Lead Card creada con éxito', 'success');
+                if (data.ticket?.id) setTimeout(() => openCardModal(data.ticket.id), 500);
+            } else throw new Error(data.error);
+        } catch (err) {
+            showToast('Error: ' + err.message, 'error');
         }
-        
-        closeCardModal();
-        await syncCRM();
-        showToast('Ficha de cliente actualizada con éxito');
-    } catch (e) {
-        console.error('Error al guardar:', e);
-        showToast('Error al guardar ficha', 'error');
-    }
-};
+    };
+}
 
 // --- Tag Management ---
 async function fetchTags() {
@@ -595,7 +631,7 @@ window.addNewNoteUI = () => {
 window.openWhatsAppDirect = () => {
     const phone = document.getElementById('edit-lead-phone').value;
     if (!phone || phone === 'Desconocido') {
-        showToast('❌ No hay un número válido registrado.', 'error');
+        showToast('No hay un número válido registrado.', 'error');
         return;
     }
     const cleanPhone = phone.replace(/\D/g, '');
@@ -606,7 +642,7 @@ window.openWhatsAppDirect = () => {
 window.confirmCloseTicket = async (ticketId) => {
     if (!confirm('¿Seguro quieres cerrar este lead? Se moverá al historial de cerrados.')) return;
     
-    showToast('🔏 Cerrando lead...', 'success');
+    showToast('Cerrando lead...', 'info');
     try {
         if (!crmData[ticketId]) crmData[ticketId] = {};
         crmData[ticketId].closedAt = new Date().toISOString();
@@ -619,7 +655,7 @@ window.confirmCloseTicket = async (ticketId) => {
         });
 
         await syncCRM();
-        showToast('Lead cerrado con éxito');
+        showToast('Lead cerrado con éxito', 'success');
     } catch (e) {
         console.error('Error cerrando ticket:', e);
         showToast('Error al cerrar ticket', 'error');
@@ -627,9 +663,11 @@ window.confirmCloseTicket = async (ticketId) => {
 };
 
 window.openClosedLeadsModal = async () => {
+    const modal = document.getElementById('closed-leads-modal');
     const list = document.getElementById('closed-leads-list');
+    if (!modal || !list) return;
+    modal.classList.add('active');
     list.innerHTML = '<div style="text-align:center; padding:20px;"><i class="fas fa-spinner fa-spin"></i> Cargando historial...</div>';
-    document.getElementById('closed-leads-modal').classList.add('active');
     
     try {
         const res = await fetch(`/api/backoffice/tickets?token=${activeToken}&estado=Cerrado`);
@@ -663,7 +701,7 @@ window.openClosedLeadsModal = async () => {
                         <div style="font-size:0.8rem; color:var(--accent); margin-top:5px;"><i class="fas fa-calendar-check"></i> Cerrado el: ${closedDate}</div>
                     </div>
                     <div style="display:flex; gap:10px;">
-                        <button class="btn-action btn-action-primary" onclick="localStorage.setItem('activeChat', '${t.chat_id}'); window.location.href='/backoffice'" title="Ver Chat">
+                        <button class="btn-action btn-action-primary" onclick="localStorage.setItem('activeChat', '${t.chat_id}'); if(window.navigate) window.navigate('/backoffice'); else window.location.href='/backoffice';" title="Ver Chat">
                             <i class="fas fa-comments"></i>
                         </button>
                     </div>
@@ -735,7 +773,7 @@ window.saveNewUser = async () => {
     const role = document.getElementById('new-user-role').value;
 
     if (!username || !password) {
-        showToast('⚠️ Completa usuario y contraseña', 'error');
+        showToast('Completa usuario y contraseña', 'warning');
         return;
     }
 
@@ -747,15 +785,15 @@ window.saveNewUser = async () => {
         });
         const data = await res.json();
         if (data.success) {
-            showToast('✅ Usuario creado con éxito');
+            showToast('Usuario creado con éxito', 'success');
             document.getElementById('new-user-name').value = '';
             document.getElementById('new-user-pass').value = '';
             await loadTeam();
         } else {
-            showToast('❌ Error: ' + data.error, 'error');
+            showToast('Error: ' + data.error, 'error');
         }
     } catch (e) {
-        showToast('❌ Error de conexión', 'error');
+        showToast('Error de conexión', 'error');
     }
 };
 
@@ -779,7 +817,7 @@ window.saveCRMConfig = async () => {
             })
         });
         if (res.ok) {
-            showToast('✅ Configuración guardada');
+            showToast('Configuración guardada', 'success');
             window.toggleCRMConfigModal();
             window.applyCRMConfig();
             distributeCards();
@@ -862,39 +900,6 @@ function closeNewLeadModal() { document.getElementById('new-lead-modal').classLi
 window.openNewLeadModal = openNewLeadModal;
 window.closeNewLeadModal = closeNewLeadModal;
 
-document.getElementById('new-lead-form').onsubmit = async (e) => {
-    e.preventDefault();
-    const chatId = document.getElementById('new-lead-id').value.trim();
-    const name = document.getElementById('new-lead-name').value.trim();
-    const product = document.getElementById('new-lead-product').value.trim();
-
-    showToast('🚀 Creando Lead Card...', 'success');
-    try {
-        const res = await fetch(`/api/backoffice/chat/manual-lead?token=${activeToken}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                chatId,
-                details: {
-                    name,
-                    offered_product: product,
-                    source: 'Manual CRM',
-                    notes: `Lead creado manualmente: ${product}`
-                }
-            })
-        });
-        const data = await res.json();
-        if (data.success) {
-            closeNewLeadModal();
-            await syncCRM();
-            showToast('✅ Lead Card creada con éxito');
-            if (data.ticket?.id) setTimeout(() => openCardModal(data.ticket.id), 500);
-        } else throw new Error(data.error);
-    } catch (err) {
-        showToast('❌ Error: ' + err.message, 'error');
-    }
-};
-
 // --- Utilidades Visuales ---
 function getPriorityColor(priority) {
     switch (priority) {
@@ -934,33 +939,6 @@ function formatDate(dateStr) {
     return d.toLocaleDateString([], { day: '2-digit', month: '2-digit' });
 }
 
-function showToast(message, type = 'success') {
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${type}`;
-    toast.innerHTML = `<i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}" style="margin-right:8px;"></i> ${message}`;
-    
-    Object.assign(toast.style, {
-        position: 'fixed',
-        bottom: '20px',
-        left: '50%',
-        transform: 'translateX(-50%) translateY(100px)',
-        background: type === 'success' ? '#10b981' : '#ef4444',
-        color: 'white',
-        padding: '12px 24px',
-        borderRadius: '12px',
-        zIndex: '10000',
-        transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-        fontWeight: '600',
-        boxShadow: '0 10px 15px rgba(0,0,0,0.1)'
-    });
-
-    document.body.appendChild(toast);
-    setTimeout(() => toast.style.transform = 'translateX(-50%) translateY(0)', 10);
-    setTimeout(() => {
-        toast.style.transform = 'translateX(-50%) translateY(100px)';
-        setTimeout(() => toast.remove(), 400);
-    }, 3000);
-}
 
 // --- Real-time Updates via Socket.IO ---
 /* global io */
@@ -978,3 +956,4 @@ if (typeof io !== 'undefined') {
         syncCRM();
     });
 }
+})();

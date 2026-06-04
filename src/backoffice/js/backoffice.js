@@ -1,14 +1,14 @@
-/* global io, metaAppId, FB, toggleLeadsPanel, toggleTicketsPanel, toggleMetaPanel */
+/* global io, metaAppId, FB, toggleLeadsPanel, toggleTicketsPanel, toggleMetaPanel, showToast */
 const token = localStorage.getItem('backoffice_token');
 if (!token) window.location.href = '/login';
 
 let activeChatId = null;
 let activeTicketId = null;
 let crmColumns = [];
-let crmData = {};
+let _boCrmData = {};
 let chats = [];
 let allMessages = [];
-let botTags = [];
+let _boBotTags = [];
 let selectedFile = null;
 let isSending = false;
 
@@ -33,7 +33,7 @@ async function initCRMData() {
 
         const dataSettingValue = settings.CRM_METADATA;
         if (dataSettingValue) {
-            crmData = JSON.parse(dataSettingValue);
+            _boCrmData = JSON.parse(dataSettingValue);
         }
 
         // Poblar el selector de estados si existe
@@ -267,7 +267,7 @@ async function fetchBotTags() {
         const res = await fetch(`/api/backoffice/tags?token=${token}`);
         const data = await res.json();
         if (Array.isArray(data)) {
-            botTags = data;
+            _boBotTags = data;
             renderTagManager();
             renderFilterDropdown();
             renderBulkFilterDropdown();
@@ -284,7 +284,7 @@ function renderBulkFilterDropdown() {
     const selectedVals = Array.from(select.selectedOptions).map(o => o.value);
     
     select.innerHTML = 
-        botTags.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+        _boBotTags.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
         
     Array.from(select.options).forEach(opt => {
         if (selectedVals.includes(opt.value)) {
@@ -308,7 +308,7 @@ function renderFilterDropdown() {
     
     const currentValue = select.value;
     select.innerHTML = '<option value="">Todas las etiquetas</option>' + 
-        botTags.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+        _boBotTags.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
     select.value = currentValue;
 }
 
@@ -330,12 +330,13 @@ const avatarCache = new Map();
 
 function renderChatList(listToRender = chats) {
     const list = document.getElementById('chat-list');
+    if (!list) return;
     list.innerHTML = listToRender.map(chat => {
         const initial = (chat.name || chat.id).charAt(0).toUpperCase();
-        const avatarUrl = `/api/backoffice/profile-pic/${chat.id}?token=${token}`;
-        
+        const avatarUrl = chat.id ? `/api/backoffice/profile-pic/${chat.id}?token=${token}` : '';
+
         // Si ya lo tenemos en caché local, usarlo directamente
-        const finalSrc = avatarCache.has(chat.id) ? avatarCache.get(chat.id) : '';
+        const finalSrc = (chat.id && avatarCache.has(chat.id)) ? avatarCache.get(chat.id) : '';
         
         // Icono de plataforma
         let platformIcon = '';
@@ -487,11 +488,11 @@ async function selectChat(id) {
     const headerAvatar = document.getElementById('active-chat-avatar');
     const nameForInitial = (chat.name && chat.name !== '[-]') ? chat.name : chat.id;
     const initial = nameForInitial.charAt(0).toUpperCase();
-    const avatarUrl = `/api/backoffice/profile-pic/${chat.id}?token=${token}`;
-    
+    const avatarUrl = chat.id ? `/api/backoffice/profile-pic/${chat.id}?token=${token}` : '';
+
     headerAvatar.innerHTML = `
         <span style="position:relative; z-index:1;">${initial}</span>
-        <img src="${avatarUrl}" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; z-index:2;" onerror="this.style.display='none'">
+        ${avatarUrl ? `<img src="${avatarUrl}" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; z-index:2;" onerror="this.style.display='none'">` : ''}
     `;
     
     const botToggle = document.getElementById('bot-toggle');
@@ -503,8 +504,10 @@ async function selectChat(id) {
     // Habilitar botones de acción independientes
     const tagsBtn = document.getElementById('open-tags-btn');
     const crmBtn = document.getElementById('open-crm-btn');
+    const ticketBtn = document.getElementById('open-ticket-btn');
     if (tagsBtn) tagsBtn.disabled = false;
     if (crmBtn) crmBtn.disabled = false;
+    if (ticketBtn) ticketBtn.disabled = false;
 
     renderActiveChatTags();
     populateCRMFields(chat);
@@ -554,14 +557,13 @@ function updateInputState(botEnabled) {
     
     console.log(`[UI] Actualizando estado de input. Bot habilitado: ${isBotEnabled}`);
 
-    // Bloqueamos el input si el bot está activo para evitar interferencias
+    // Bot activo = todo bloqueado; bot inactivo = todo habilitado
     input.disabled = isBotEnabled;
     btn.disabled = isBotEnabled;
     attachBtn.disabled = isBotEnabled;
-    
     const emojiBtn = document.getElementById('emoji-btn');
     if (emojiBtn) emojiBtn.disabled = isBotEnabled;
-    
+
     if (isBotEnabled) {
         input.parentElement.style.borderColor = 'var(--accent)';
         input.style.opacity = '0.6';
@@ -995,7 +997,7 @@ async function loadCRMJump(chatId) {
                 statusSelect.innerHTML = crmColumns.map(c => `<option value="${c.id}">${c.title}</option>`).join('');
                 
                 // Buscar estado actual en metadatos
-                const meta = crmData[activeTicketId] || {};
+                const meta = _boCrmData[activeTicketId] || {};
                 const currentColumnId = meta.columnId || 'UNASSIGNED';
                 statusSelect.value = currentColumnId;
             }
@@ -1155,15 +1157,15 @@ async function saveCRMDetails() {
             // Sincronizar Metadatos (Columna)
             const col = crmColumns.find(c => c.id === details.crm_status || c.title === details.crm_status);
             if (col) {
-                if (!crmData[activeTicketId]) crmData[activeTicketId] = {};
-                crmData[activeTicketId].columnId = col.id;
-                crmData[activeTicketId].priority = details.priority;
-                crmData[activeTicketId].alertDate = details.crm_due_date;
+                if (!_boCrmData[activeTicketId]) _boCrmData[activeTicketId] = {};
+                _boCrmData[activeTicketId].columnId = col.id;
+                _boCrmData[activeTicketId].priority = details.priority;
+                _boCrmData[activeTicketId].alertDate = details.crm_due_date;
                 
                 const resSet = await fetch(`/api/backoffice/save-setting?token=${token}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ key: 'CRM_METADATA', value: JSON.stringify(crmData) })
+                    body: JSON.stringify({ key: 'CRM_METADATA', value: JSON.stringify(_boCrmData) })
                 });
                 if (!resSet.ok) console.warn('No se pudo guardar la configuración CRM_METADATA');
             }
@@ -1199,40 +1201,6 @@ async function saveCRMDetails() {
     }
 }
 
-function showToast(message, type = 'success') {
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${type}`;
-    toast.innerHTML = `<i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}" style="margin-right:8px;"></i> ${message}`;
-    
-    // Estilos inline rápidos para el toast si no están en CSS
-    Object.assign(toast.style, {
-        position: 'fixed',
-        bottom: '20px',
-        left: '50%',
-        transform: 'translateX(-50%) translateY(100px)',
-        background: type === 'success' ? '#10b981' : '#ef4444',
-        color: 'white',
-        padding: '12px 24px',
-        borderRadius: '12px',
-        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-        zIndex: '10000',
-        transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-        fontWeight: '600'
-    });
-
-    document.body.appendChild(toast);
-    
-    // Animar entrada
-    setTimeout(() => {
-        toast.style.transform = 'translateX(-50%) translateY(0)';
-    }, 10);
-
-    // Salida
-    setTimeout(() => {
-        toast.style.transform = 'translateX(-50%) translateY(100px)';
-        setTimeout(() => toast.remove(), 400);
-    }, 3000);
-}
 
 async function createTag() {
     const name = document.getElementById('new-tag-name').value;
@@ -1272,7 +1240,7 @@ async function addTagToChat(tagId) {
         body: JSON.stringify({ tagId })
     });
     if (res.ok) {
-        const tag = botTags.find(t => t.id === tagId);
+        const tag = _boBotTags.find(t => t.id === tagId);
         const chat = chats.find(c => c.id === activeChatId);
         if (chat && tag) {
             if (!chat.tags) chat.tags = [];
@@ -1305,7 +1273,7 @@ function renderTagManager() {
     
     editorList.innerHTML = `
         <div style="max-height: 200px; overflow-y: auto; margin-top: 10px;">
-            ${botTags.map(t => `
+            ${_boBotTags.map(t => `
                 <div class="tag-item-edit">
                     <span class="tag-pill" style="background:${t.color || '#6366f1'}">${t.name}</span>
                     <button class="btn-icon" onclick="deleteTag('${t.id}')" style="color:#f87171;"><i class="fas fa-trash-alt"></i></button>
@@ -1318,7 +1286,7 @@ function renderTagManager() {
     if (chat) {
         const assignedTagIds = (chat.tags || []).map(t => t.id);
         const assignList = document.getElementById('available-tags-to-assign');
-        assignList.innerHTML = botTags.map(t => {
+        assignList.innerHTML = _boBotTags.map(t => {
             const isAssigned = assignedTagIds.includes(t.id);
             return `
                 <div onclick="${isAssigned ? 'removeTagFromChat' : 'addTagToChat'}('${t.id}')" 
@@ -1340,7 +1308,8 @@ setInterval(() => fetchChats(true), 60000);
 socket.on('ticket_updated', (payload) => {
     console.log('📡 Ticket actualizado:', payload);
     fetchPendingTicketsCount();
-    if (document.getElementById('tickets-panel').classList.contains('active')) {
+    const _tp = document.getElementById('tickets-panel');
+    if (_tp && _tp.classList.contains('active')) {
         fetchTickets();
     }
 });
@@ -1462,10 +1431,6 @@ function goToTicketChat(chatId) {
 }
 
 function openTicketModal() {
-    if (!activeChatId) {
-        showToast('⚠️ Selecciona un chat primero', 'error');
-        return;
-    }
     document.getElementById('ticket-modal').classList.add('active');
     document.getElementById('ticket-title').focus();
 }
@@ -1627,7 +1592,8 @@ function toggleMetaPanel(e) {
         if (typeof showToast === 'function') showToast('❌ Error: No se encontró el componente de Meta', 'error');
     }
 }
-window.toggleMetaPanel = toggleMetaPanel;
+// No sobreescribir window.toggleMetaPanel - crm-common.js lo maneja
+window.realToggleMeta = toggleMetaPanel;
 
 function launchMetaOnboarding() {
     const activeToken = localStorage.getItem('system_config_token') || localStorage.getItem('backoffice_token');
@@ -1791,15 +1757,17 @@ if (urlParams.get('openPanel') === 'meta') {
     }, 500);
 }
 
-// Listeners para Infinite Scroll
-document.getElementById('chat-list').addEventListener('scroll', function() {
+// Listeners para Infinite Scroll - con null check para no crashear si el script carga fuera del view
+const _chatListEl = document.getElementById('chat-list');
+if (_chatListEl) _chatListEl.addEventListener('scroll', function() {
     const { scrollTop, scrollHeight, clientHeight } = this;
     if (scrollTop + clientHeight >= scrollHeight - 20) {
         if (!loadingChats && !allChatsLoaded) fetchChats();
     }
 });
 
-document.getElementById('messages').addEventListener('scroll', function() {
+const _messagesEl = document.getElementById('messages');
+if (_messagesEl) _messagesEl.addEventListener('scroll', function() {
     if (this.scrollTop < 50 && !loadingMessages && !allMessagesLoaded) {
         fetchMessages(activeChatId);
     }
@@ -2466,9 +2434,8 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // --- Exportaciones Finales ---
-window.toggleLeadsPanel = window.realToggleLeads;
-window.toggleTicketsPanel = window.realToggleTickets;
-window.toggleMetaPanel = toggleMetaPanel;
+// NO sobreescribir toggleLeadsPanel/toggleTicketsPanel/toggleMetaPanel:
+// crm-common.js los maneja con routing SPA. Solo exponer las funciones reales.
 window.realToggleMeta = toggleMetaPanel;
 window.toggleBulkModal = toggleBulkModal;
 window.switchMetaTab = switchMetaTab;
@@ -2876,4 +2843,32 @@ window.handleForwardSearch = handleForwardSearch;
 window.executeForward = executeForward;
 
 console.log('✅ [BACKOFFICE] Cargado Correctamente.');
+
+// Funcion de re-inicializacion para SPA (llamada en cada visita a la view)
+window.initBackofficeView = function() {
+    fetchChats(true);
+    checkMetaStatus();
+    initCRMData();
+    fetchBotTags();
+    fetchPendingTicketsCount();
+
+    // Re-attach scroll listeners en el nuevo DOM
+    const chatList = document.getElementById('chat-list');
+    if (chatList) {
+        chatList.addEventListener('scroll', function() {
+            const { scrollTop, scrollHeight, clientHeight } = this;
+            if (scrollTop + clientHeight >= scrollHeight - 20) {
+                if (!loadingChats && !allChatsLoaded) fetchChats();
+            }
+        });
+    }
+    const messagesEl = document.getElementById('messages');
+    if (messagesEl) {
+        messagesEl.addEventListener('scroll', function() {
+            if (this.scrollTop < 50 && !loadingMessages && !allMessagesLoaded) {
+                fetchMessages(activeChatId);
+            }
+        });
+    }
+};
 

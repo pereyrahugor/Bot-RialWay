@@ -24,11 +24,15 @@ function logout() {
 function highlightActiveNav() {
     const path = window.location.pathname;
     const navItems = document.querySelectorAll('.nav-item');
-    
+
     navItems.forEach(item => {
-        const onclick = item.getAttribute('onclick') || '';
         item.classList.remove('active');
-        
+        const route = item.getAttribute('data-route');
+        if (route) {
+            if (route === path) item.classList.add('active');
+            return;
+        }
+        const onclick = item.getAttribute('onclick') || '';
         if (path === '/backoffice' && onclick.includes('/backoffice')) item.classList.add('active');
         if (path === '/dashboard' && onclick.includes('/dashboard')) item.classList.add('active');
         if (path === '/crm' && onclick.includes("'/crm'")) item.classList.add('active');
@@ -36,33 +40,124 @@ function highlightActiveNav() {
         if (path === '/webchat' && onclick.includes('/webchat')) item.classList.add('active');
         if (path === '/system-config' && onclick.includes('/system-config')) item.classList.add('active');
     });
+
+    // Mensajeria: activo solo en /backoffice (ruta directa del dropdown)
+    const msgBtn = document.getElementById('nav-messaging-btn');
+    if (msgBtn) msgBtn.classList.toggle('active', path === '/backoffice');
 }
+
+// ── Dropdown Mensajeria ────────────────────────────────────────────
+function _closeAllNavDropdowns() {
+    document.querySelectorAll('#navbar .nav-dropdown.open').forEach(el => {
+        el.classList.remove('open');
+        const menu = el.querySelector('.nav-dropdown-menu');
+        if (menu) menu.style.height = '0';
+    });
+}
+
+window.toggleMessagingFlyout = function(e) {
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    const container = document.getElementById('nav-messaging-btn');
+    if (!container) return;
+    const menu = container.querySelector('.nav-dropdown-menu');
+    if (!menu) return;
+
+    const isOpen = container.classList.contains('open');
+    _closeAllNavDropdowns();
+    if (!isOpen) {
+        container.classList.add('open');
+        menu.style.height = menu.scrollHeight + 'px';
+        // Mark active links
+        const path = window.location.pathname;
+        document.querySelectorAll('#nav-messaging-btn .nav-dropdown-link[data-route]').forEach(item => {
+            item.classList.toggle('active', item.getAttribute('data-route') === path);
+        });
+    }
+};
+
+window.closeMessagingFlyout = function() {
+    const container = document.getElementById('nav-messaging-btn');
+    if (!container) return;
+    container.classList.remove('open');
+    const menu = container.querySelector('.nav-dropdown-menu');
+    if (menu) menu.style.height = '0';
+};
+
+window.toggleAjustesFlyout = function(e) {
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    const container = document.getElementById('nav-ajustes-btn');
+    if (!container) return;
+    const menu = container.querySelector('.nav-dropdown-menu');
+    if (!menu) return;
+    const isOpen = container.classList.contains('open');
+    _closeAllNavDropdowns();
+    if (!isOpen) {
+        container.classList.add('open');
+        menu.style.height = menu.scrollHeight + 'px';
+    }
+};
+
+window.closeAjustesFlyout = function() {
+    const container = document.getElementById('nav-ajustes-btn');
+    if (!container) return;
+    container.classList.remove('open');
+    const menu = container.querySelector('.nav-dropdown-menu');
+    if (menu) menu.style.height = '0';
+};
 
 // Manejo inteligente de Paneles laterales desde cualquier página
 window.toggleLeadsPanel = (e) => {
     if (window.location.pathname !== '/backoffice') {
-        window.location.href = '/backoffice?openPanel=leads';
+        if (typeof window.navigate === 'function') window.navigate('/backoffice?openPanel=leads');
+        else window.location.href = '/backoffice?openPanel=leads';
         return;
     }
-    // Si ya estamos en backoffice, la función real debe existir en backoffice.js
     if (typeof window.realToggleLeads === 'function') window.realToggleLeads(e);
 };
 
 window.toggleTicketsPanel = (e) => {
     if (window.location.pathname !== '/backoffice') {
-        window.location.href = '/backoffice?openPanel=tickets';
+        if (typeof window.navigate === 'function') window.navigate('/backoffice?openPanel=tickets');
+        else window.location.href = '/backoffice?openPanel=tickets';
         return;
     }
     if (typeof window.realToggleTickets === 'function') window.realToggleTickets(e);
 };
 
+// Meta panel vive en el shell - siempre disponible desde cualquier view
 window.toggleMetaPanel = (e) => {
-    if (window.location.pathname !== '/backoffice') {
-        window.location.href = '/backoffice?openPanel=meta';
-        return;
+    if (e && e.stopPropagation) e.stopPropagation();
+    const panel = document.getElementById('meta-panel');
+    if (!panel) return;
+    // Cerrar otros paneles globales si estan abiertos
+    ['leads-panel', 'tickets-panel'].forEach(id => {
+        const p = document.getElementById(id);
+        if (p) p.classList.remove('active');
+    });
+    panel.classList.toggle('active');
+    if (panel.classList.contains('active')) {
+        _refreshMetaPanelStatus();
     }
-    if (typeof window.realToggleMeta === 'function') window.realToggleMeta(e);
 };
+window.realToggleMeta = window.toggleMetaPanel;
+
+async function _refreshMetaPanelStatus() {
+    const statusEl = document.getElementById('meta-panel-status');
+    if (!statusEl) return;
+    try {
+        const token = localStorage.getItem('system_config_token') || localStorage.getItem('backoffice_token');
+        if (!token) return;
+        const res = await fetch(`/api/backoffice/whatsapp/config?token=${token}`);
+        const data = await res.json();
+        if (data && data.config && data.config.access_token) {
+            statusEl.textContent = 'Meta Cloud API vinculado';
+            statusEl.style.color = '#10b981';
+        } else {
+            statusEl.textContent = 'Meta Cloud API no vinculado';
+            statusEl.style.color = 'rgba(255,255,255,0.4)';
+        }
+    } catch (_) { /* silencioso */ }
+}
 
 async function updateMetaNavButton() {
     const navBtn = document.getElementById('nav-meta-btn');
@@ -131,28 +226,92 @@ window.applyCRMConfig = () => {
     });
 };
 
+// ── Sidebar toggle ────────────────────────────────────────────────
+function _clearFlyoutStyles() {
+    document.querySelectorAll('#navbar .nav-dropdown-menu').forEach(m => {
+        m.classList.remove('flyout-active');
+    });
+}
+
+function _setSidebarCollapsed(collapsed) {
+    const nav = document.getElementById('navbar');
+    if (!nav) return;
+    _closeAllNavDropdowns();
+    nav.classList.toggle('collapsed', collapsed);
+    document.body.classList.toggle('sidebar-collapsed', collapsed);
+    localStorage.setItem('sidebar-collapsed', collapsed ? '1' : '0');
+    _clearFlyoutStyles();
+}
+
+function _initFlyoutHover() {
+    document.querySelectorAll('#navbar .nav-item').forEach(item => {
+        const link = item.querySelector(':scope > .nav-link');
+        const menu = item.querySelector(':scope > .nav-dropdown-menu');
+        if (!link || !menu) return;
+        let _t = null;
+        const show = () => {
+            const nav = document.getElementById('navbar');
+            if (!nav || !nav.classList.contains('collapsed')) return;
+            if (window.innerWidth <= 768) return;
+            clearTimeout(_t);
+            menu.classList.add('flyout-active');
+        };
+        const hide = (delay) => {
+            clearTimeout(_t);
+            _t = setTimeout(() => menu.classList.remove('flyout-active'), delay);
+        };
+        link.addEventListener('mouseenter', show);
+        link.addEventListener('mouseleave', () => hide(120));
+        menu.addEventListener('mouseenter', () => clearTimeout(_t));
+        menu.addEventListener('mouseleave', () => hide(80));
+    });
+}
+
 // Inicialización
 document.addEventListener('DOMContentLoaded', async () => {
     initTheme();
     highlightActiveNav();
-    updateMetaNavButton(); // Verificar estado de Meta
-    
-    // Cargar y aplicar configuración de CRM si corresponde
+    updateMetaNavButton();
+
+    // Iniciales del bot en el avatar del header
+    const avatar = document.getElementById('nav-brand-avatar');
+    if (avatar) {
+        const name = (window.BOT_NAME || '').trim();
+        const words = name.split(/\s+/).filter(Boolean);
+        avatar.textContent = words.length >= 2
+            ? (words[0][0] + words[1][0]).toUpperCase()
+            : (words[0] || 'B').slice(0, 2).toUpperCase();
+    }
+
     await window.fetchCRMConfig();
     window.applyCRMConfig();
 
-    const themeBtn = document.getElementById('theme-toggle');
-    if (themeBtn) themeBtn.addEventListener('click', toggleTheme);
-    
-    // Verificar si venimos redirigidos para abrir un panel
-    const urlParams = new URLSearchParams(window.location.search);
-    const panelToOpen = urlParams.get('openPanel');
-    if (panelToOpen && window.location.pathname === '/backoffice') {
-        // Esperar un momento a que backoffice.js cargue y defina las funciones
-        setTimeout(() => {
-            if (panelToOpen === 'leads') window.toggleLeadsPanel();
-            if (panelToOpen === 'tickets') window.toggleTicketsPanel();
-            if (panelToOpen === 'meta') window.toggleMetaPanel();
-        }, 500);
+
+    // Sidebar toggle
+    const savedCollapsed = localStorage.getItem('sidebar-collapsed') === '1';
+    const isSmall = window.innerWidth <= 768;
+    _setSidebarCollapsed(isSmall ? true : savedCollapsed);
+
+    if (isSmall) {
+        const t = document.getElementById('sidebar-toggler');
+        if (t) t.style.display = 'none';
+    }
+
+    _initFlyoutHover();
+
+    const toggler = document.getElementById('sidebar-toggler');
+    const mobileBtn = document.getElementById('sidebar-menu-btn');
+    const nav = document.getElementById('navbar');
+    if (toggler && nav) {
+        toggler.addEventListener('click', () => {
+            _closeAllNavDropdowns();
+            _setSidebarCollapsed(!nav.classList.contains('collapsed'));
+        });
+    }
+    if (mobileBtn && nav) {
+        mobileBtn.addEventListener('click', () => {
+            _closeAllNavDropdowns();
+            _setSidebarCollapsed(!nav.classList.contains('collapsed'));
+        });
     }
 });

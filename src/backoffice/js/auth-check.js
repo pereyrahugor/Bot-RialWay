@@ -1,8 +1,11 @@
 (function() {
     const path = window.location.pathname;
     
-    // 1. Protección de Backoffice y CRM (Lectura de datos y chats)
-    if (path.startsWith('/backoffice') || path.startsWith('/crm') || path.startsWith('/documentacion')) {
+    // 1. Protección de Backoffice, CRM y Docs
+    if (path.startsWith('/backoffice') || path.startsWith('/crm') ||
+        path.startsWith('/documentacion') || path.startsWith('/docs') ||
+        path.startsWith('/dashboard') || path.startsWith('/conexion') ||
+        path.startsWith('/webchat')) {
         const token = localStorage.getItem('backoffice_token');
         if (!token) window.location.href = '/login';
     }

@@ -1,19 +1,15 @@
 import path from 'path';
 import fs from 'fs';
-import { withRetry } from "../../utils/retryHelper";
-import { safeToAsk } from "../../apis/openai/openaiHelper";
-import { AssistantResponseProcessor } from "../../apis/openai/AssistantResponseProcessor";
-import { transcribeAudioFile } from "../../apis/openai/audioTranscriptior";
+import { backofficeAuth } from "../../middleware/auth";
 
-import { backofficeAuth } from "../../backoffice/middleware/auth";
-
-/**
- * Registra las rutas de Webchat en la instancia de Polka.
- */
-export const registerWebchatRoutes = (app: any, { 
-    webChatManager, 
-    openaiVision, 
-    aiManager 
+export const registerWebchatRoutes = (app: any, {
+    webChatManager,
+    openaiVision,
+    aiManager,
+    safeToAsk,
+    AssistantResponseProcessor,
+    transcribeAudioFile,
+    withRetry
 }: any) => {
 
     app.post('/webchat-api', async (req: any, res: any) => {
@@ -24,8 +20,16 @@ export const registerWebchatRoutes = (app: any, {
             let message = req.body.message || "";
             let ip = '';
             const xff = req.headers['x-forwarded-for'];
-            if (typeof xff === 'string') ip = xff.split(',')[0];
-            else ip = req.ip || '';
+            if (typeof xff === 'string') {
+                ip = xff.split(',')[0].trim();
+            } else if (Array.isArray(xff) && xff.length > 0) {
+                ip = xff[0].trim();
+            } else {
+                ip = (req as any).ip || req.socket?.remoteAddress || (req as any).connection?.remoteAddress || '127.0.0.1';
+            }
+            // Normalizar IPv4-mapped IPv6 (::ffff:127.0.0.1 → 127.0.0.1)
+            ip = ip.replace(/^::ffff:/, '');
+            if (!ip) ip = '127.0.0.1';
 
             if (req.body.file) {
                 const file = req.body.file;
@@ -95,12 +99,14 @@ export const registerWebchatRoutes = (app: any, {
 
                 // Guardar mensaje del usuario en el historial persistente (Backoffice)
                 await HistoryHandler.saveMessage(
-                    ip, 
-                    'user', 
-                    message, 
-                    'text', 
-                    'Webchat User', 
-                    ip
+                    ip,
+                    'user',
+                    message,
+                    'text',
+                    'Webchat User',
+                    ip,
+                    null,
+                    'whatsapp'
                 );
 
                 // Estado compatible con safeToAsk

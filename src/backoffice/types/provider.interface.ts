@@ -14,4 +14,11 @@ export interface BackofficeConfig {
     groupProvider?: BackofficeProvider;
     openaiMain?: any;
     upload?: any;
+    webChatManager?: any;
+    openaiVision?: any;
+    aiManager?: any;
+    safeToAsk?: (...args: any[]) => Promise<any>;
+    AssistantResponseProcessor?: any;
+    transcribeAudioFile?: (path: string) => Promise<string | null>;
+    withRetry?: <T>(fn: () => Promise<T>, options?: any) => Promise<T>;
 }

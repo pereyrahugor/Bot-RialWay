@@ -11,7 +11,9 @@
     "dev": "npm run lint && nodemon ./src/app.ts",
     "build": "esbuild src/app.ts --bundle --platform=node --format=esm --packages=external --outdir=dist",
     "vaciar_base_backoffice": "tsx vaciar_base_backoffice.ts",
-    "meta_webhook_register": "tsx meta_webhook_register.ts"
+    "meta_webhook_register": "tsx meta_webhook_register.ts",
+    "tailwind:build": "tailwindcss -c src/backoffice/tailwind.config.js -i src/backoffice/style/tailwind.input.css -o src/backoffice/style/tailwind.css --minify",
+    "tailwind:watch": "tailwindcss -c src/backoffice/tailwind.config.js -i src/backoffice/style/tailwind.input.css -o src/backoffice/style/tailwind.css --watch"
   },
   "keywords": [],
   "dependencies": {
@@ -19,6 +21,7 @@
     "@builderbot/bot": "1.3.5",
     "@builderbot/provider-baileys": "1.3.5",
     "@deepgram/sdk": "^3.11.1",
+    "@fortawesome/fontawesome-free": "^7.2.0",
     "@googlemaps/google-maps-services-js": "^3.4.2",
     "@supabase/supabase-js": "^2.87.1",
     "@types/express": "^5.0.3",
@@ -71,6 +74,7 @@
     "eslint-plugin-builderbot": "latest",
     "nodemon": "^3.1.0",
     "rollup": "^4.10.0",
+    "tailwindcss": "^3.4.19",
     "tsx": "^4.7.1",
     "typescript": "^6.0.2"
   },

@@ -97,24 +97,28 @@ export const registerStaticRoutes = (app: any, { __dirname, provider, groupProvi
         }
     };
 
-    // Registrar páginas HTML
-    serveHtmlPage("/dashboard", "dashboard.html");
-    serveHtmlPage("/conexion", "conexion.html");
-    serveHtmlPage("/webchat", "webchat.html");
-    serveHtmlPage("/webreset", "webreset.html");
-    serveHtmlPage("/system-config", "system-config.html");
+    // Paginas standalone (no forman parte del SPA shell)
     serveHtmlPage("/login", "login.html");
-    serveHtmlPage("/backoffice", "backoffice.html");
-    serveHtmlPage("/backoffice-preview", "backoffice-preview.html");
-    serveHtmlPage("/crm", "crm.html");
-    serveHtmlPage("/crm-tareas", "crm-tareas.html");
-    serveHtmlPage("/documentacion", "docs.html");
-    serveHtmlPage("/docs", "docs.html");
+    serveHtmlPage("/webreset", "webreset.html");
+
+    // Rutas SPA: todas sirven shell.html; el router JS carga la view correspondiente
+    serveHtmlPage("/backoffice", "shell.html");
+    serveHtmlPage("/dashboard", "shell.html");
+    serveHtmlPage("/conexion", "shell.html");
+    serveHtmlPage("/webchat", "shell.html");
+    serveHtmlPage("/system-config", "shell.html");
+    serveHtmlPage("/crm", "shell.html");
+    serveHtmlPage("/crm-tareas", "shell.html");
+    serveHtmlPage("/documentacion", "shell.html");
+    serveHtmlPage("/docs", "shell.html");
 
     // Servir archivos estáticos
     app.use("/js", serve(path.join(process.cwd(), "src", "backoffice", "js")));
     app.use("/style", serve(path.join(process.cwd(), "src", "backoffice", "style")));
     app.use("/assets", serve(path.join(process.cwd(), "src", "assets")));
+    // Vendor packages instalados localmente
+    app.use("/vendor/toast", serve(path.join(process.cwd(), "node_modules", "nextjs-toast-notify", "dist")));
+    app.use("/vendor/fontawesome", serve(path.join(process.cwd(), "node_modules", "@fortawesome", "fontawesome-free")));
     app.use("/uploads", serve(path.join(process.cwd(), "uploads")));
     app.use("/temp", serve(path.join(process.cwd(), "tmp")));
     app.use("/app/temp", serve(path.join(process.cwd(), "tmp")));

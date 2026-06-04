@@ -15,7 +15,7 @@ import { setAdapterProvider, setGroupProvider, getAdapterProvider, getGroupProvi
 import { restoreSessionFromDb, startSessionSync, deleteSessionFromDb, isSessionInDb } from "./providers/sessionSync";
 import { ErrorReporter } from "./bot/errorReporter";
 import { updateMain } from "./apis/google/updateMain";
-import { WebChatManager } from "./webchat/WebChatManager";
+import { WebChatManager } from "./backoffice";
 import { HistoryHandler } from "./db/historyHandler";
 import { registerProcessCallback, handleQueue, userQueues, userLocks } from "./bot/queueManager";
 
@@ -23,7 +23,10 @@ import { registerProcessCallback, handleQueue, userQueues, userLocks } from "./b
 import { processSendMessage, processBulkTemplate, processImportExcel, BackofficeDependencies } from "./backoffice/routes/backoffice.routes";
 import { mountBackoffice } from "./backoffice/index";
 import { registerRailwayRoutes } from "./apis/railway/railway.routes";
-import { registerWebchatRoutes } from "./webchat/routes/webchat.routes";
+import { safeToAsk } from "./apis/openai/openaiHelper";
+import { AssistantResponseProcessor } from "./apis/openai/AssistantResponseProcessor";
+import { transcribeAudioFile } from "./apis/openai/audioTranscriptior";
+import { withRetry } from "./utils/retryHelper";
 import { initSocketIO } from "./sockets/socket.manager";
 import { registerProviderEvents, hasActiveSession } from "./providers/provider.manager";
 import { startHumanInactivityWorker } from "./workers/humanInactivity.worker";
@@ -301,10 +304,6 @@ const main = async () => {
         };
 
         
-        const openaiMainDynamic = await getOpenAI();
-
-        mountBackoffice(app, { provider: adapterProvider, groupProvider, openaiMain: openaiMainDynamic, upload });
-        registerExternalApiRoutes(app, { adapterProvider });
     }
 
     // 6. Initialize AI Manager and flows
@@ -342,9 +341,11 @@ const main = async () => {
         app.use(smartBodyParser);
 
         // 9. Register Other Routes
-        registerRailwayRoutes(app, { RailwayApi });
+        const openaiMainDynamic = await getOpenAI();
         const openaiVision = await getOpenAIVision();
-        registerWebchatRoutes(app, { webChatManager, openaiVision, aiManager: aiManagerInstance });
+        mountBackoffice(app, { provider: adapterProvider, groupProvider, openaiMain: openaiMainDynamic, upload, webChatManager, openaiVision, aiManager: aiManagerInstance, safeToAsk, AssistantResponseProcessor, transcribeAudioFile, withRetry });
+        registerExternalApiRoutes(app, { adapterProvider });
+        registerRailwayRoutes(app, { RailwayApi });
 
         // API Health & Info
         app.get("/health", (_req: any, res: any) => res.json({ status: "ok", time: new Date().toISOString() }));
