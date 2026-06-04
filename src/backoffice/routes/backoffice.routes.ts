@@ -1158,7 +1158,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
-    app.post('/api/backoffice/baileys/start', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
+    app.post('/api/backoffice/baileys/start', bodyParser.json(), async (req: any, res: any) => {
         const { isGroup } = req.body;
         const provider = isGroup ? deps.groupProvider : deps.adapterProvider;
 
