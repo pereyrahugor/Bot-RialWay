@@ -192,6 +192,7 @@ const main = async () => {
             await adapterProvider.initVendor();
         } else {
             console.log('ℹ️ [App] No se detectó sesión previa en base de datos para el Motor Principal (Baileys). Esperando a que el usuario inicie generación de QR desde el Backoffice.');
+            adapterProvider.preventAutoStart = true;
         }
     }
 
@@ -204,6 +205,7 @@ const main = async () => {
                 await groupProvider.initVendor();
             } else {
                 console.log('ℹ️ [App] No se detectó sesión previa en base de datos para el Motor de Grupos (Baileys Auxiliar). Esperando a que el usuario inicie generación de QR desde el Backoffice.');
+                groupProvider.preventAutoStart = true;
             }
         }
     }

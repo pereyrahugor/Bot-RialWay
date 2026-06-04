@@ -15,6 +15,7 @@ const logger = pino({ level: 'error' });
 export class SupabaseBaileysProvider extends BaileysProvider {
     saveCreds: any = null;
     qrCodeString: string | null = null;
+    public preventAutoStart = false;
     private initialized = false;
     private lidToPnCache = new Map<string, string>();
 
@@ -92,6 +93,11 @@ export class SupabaseBaileysProvider extends BaileysProvider {
         if (this.initialized && this.vendor?.ws?.isOpen) {
             console.log(`[SupabaseBaileysProvider] ℹ️ Conexión ya activa para ${this.globalVendorArgs.name}. Saltando.`);
             return this.vendor;
+        }
+
+        if (this.preventAutoStart) {
+            console.log(`[SupabaseBaileysProvider] ℹ️ Auto-start prevenido para ${this.globalVendorArgs.name || 'default'}. Esperando activación manual.`);
+            return null;
         }
 
         const { useSupabaseAuthState } = await import('../db/supabaseAdapter');

@@ -1176,6 +1176,9 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         console.log(`[BACKOFFICE] Iniciando generación de QR para Baileys (Grupo: ${!!isGroup})...`);
 
         try {
+            if ('preventAutoStart' in provider) {
+                provider.preventAutoStart = false;
+            }
             if (typeof provider.initVendor === 'function') {
                 await provider.initVendor();
             }
