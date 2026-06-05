@@ -4,6 +4,7 @@ module.exports = {
     './src/backoffice/html/**/*.html',
     './src/backoffice/js/**/*.js',
   ],
+  safelist: ['hidden-item'],
   darkMode: ['selector', '[data-theme="dark"]'],
   theme: {
     extend: {

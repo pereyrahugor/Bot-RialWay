@@ -3,6 +3,10 @@ import fs from 'fs';
 import serve from 'serve-static';
 import { backofficeAuth } from '../middleware/auth'; // auth vive en backoffice/middleware
 
+let _visibilityCache: { wa: string; ig: string; ms: string; crm: string; sysConfig: string } | null = null;
+let _visibilityCacheAt = 0;
+const VISIBILITY_TTL = 60 * 1000;
+
 /**
  * Registra las rutas de servicio de HTML y archivos estáticos.
  */
@@ -54,24 +58,38 @@ export const registerStaticRoutes = (app: any, { __dirname, provider, groupProvi
                         }
                     };
 
-                    // Obtener configuración de visibilidad desde DB en paralelo con safety
-                    const [dbWa, dbIg, dbMs, dbCRM] = await Promise.all([
-                        getSettingSafe('WHATSAPP_VISIBLE'),
-                        getSettingSafe('INSTAGRAM_VISIBLE', 'false'),
-                        getSettingSafe('MESSENGER_VISIBLE', 'false'),
-                        getSettingSafe('CRM_VISIBLE', 'true')
-                    ]);
-                    
+                    // Obtener configuración de visibilidad (cacheada para evitar queries en cada navegación)
+                    const now = Date.now();
+                    if (!_visibilityCache || (now - _visibilityCacheAt) > VISIBILITY_TTL) {
+                        const [dbWa, dbIg, dbMs, dbCRM] = await Promise.all([
+                            getSettingSafe('WHATSAPP_VISIBLE'),
+                            getSettingSafe('INSTAGRAM_VISIBLE', 'false'),
+                            getSettingSafe('MESSENGER_VISIBLE', 'false'),
+                            getSettingSafe('CRM_VISIBLE', 'true')
+                        ]);
+                        _visibilityCache = { wa: dbWa, ig: dbIg, ms: dbMs, crm: dbCRM, sysConfig: '' };
+                        _visibilityCacheAt = now;
+                    }
+                    const cache = _visibilityCache!;
+                    const [dbWa, dbIg, dbMs, dbCRM] = [cache.wa, cache.ig, cache.ms, cache.crm];
+
                     // Si cualquiera de las plataformas está activa, mostrar backoffice
                     const isAnyPlatformActive = (dbWa !== 'false') || (dbIg === 'true') || (dbMs === 'true');
                     const showBackoffice = isAnyPlatformActive ? '' : 'hidden-item';
                     const showCRM = (dbCRM === 'false' || (!dbCRM && process.env.CRM_VISIBLE === 'false')) ? 'hidden-item' : '';
+                    const _sysCfgRaw = (process.env.SYSTEM_CONFIG_VISIBLE ?? 'true').trim();
+                    const systemConfigVisible = _sysCfgRaw !== 'false';
+                    console.log('[Static] SYSTEM_CONFIG_VISIBLE raw:', JSON.stringify(_sysCfgRaw), '→ hidden:', !systemConfigVisible);
+                    const showSystemConfig = systemConfigVisible ? '' : 'hidden-item';
+                    const systemConfigVisibleJs = systemConfigVisible ? 'true' : 'false';
 
                     // Reemplazo universal de placeholders
                     htmlContent = htmlContent.replace(/{{BOT_NAME}}/g, botName);
                     htmlContent = htmlContent.replace(/{{ASSISTANT_NAME}}/g, botName);
                     htmlContent = htmlContent.replace(/{{SHOW_BACKOFFICE_STYLE}}/g, showBackoffice);
                     htmlContent = htmlContent.replace(/{{SHOW_CRM_STYLE}}/g, showCRM);
+                    htmlContent = htmlContent.replace(/{{SHOW_SYSTEM_CONFIG_STYLE}}/g, showSystemConfig);
+                    htmlContent = htmlContent.replace(/{{SYSTEM_CONFIG_VISIBLE_JS}}/g, systemConfigVisibleJs);
                     
                     res.setHeader('Content-Type', 'text/html');
                     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -112,10 +130,27 @@ export const registerStaticRoutes = (app: any, { __dirname, provider, groupProvi
     serveHtmlPage("/documentacion", "shell.html");
     serveHtmlPage("/docs", "shell.html");
 
+    // Favicon directo (browsers lo piden en / automáticamente) — busca en src/assets primero, luego en assets/
+    app.get("/favicon.ico", (_req: any, res: any) => {
+        const candidates = [
+            path.join(process.cwd(), "src", "assets", "favicon.ico"),
+            path.join(process.cwd(), "assets", "favicon.ico"),
+        ];
+        const p = candidates.find(c => fs.existsSync(c));
+        if (p) {
+            res.setHeader("Content-Type", "image/x-icon");
+            res.setHeader("Cache-Control", "public, max-age=86400");
+            fs.createReadStream(p).pipe(res);
+        } else {
+            res.statusCode = 204; res.end();
+        }
+    });
+
     // Servir archivos estáticos
     app.use("/js", serve(path.join(process.cwd(), "src", "backoffice", "js")));
     app.use("/style", serve(path.join(process.cwd(), "src", "backoffice", "style")));
     app.use("/assets", serve(path.join(process.cwd(), "src", "assets")));
+    app.use("/assets", serve(path.join(process.cwd(), "assets")));
     // Vendor packages instalados localmente
     app.use("/vendor/toast", serve(path.join(process.cwd(), "node_modules", "nextjs-toast-notify", "dist")));
     app.use("/vendor/fontawesome", serve(path.join(process.cwd(), "node_modules", "@fortawesome", "fontawesome-free")));

@@ -1,8 +1,29 @@
 import { HistoryHandler } from "../db/historyHandler";
 
+// Promise singleton: todos los requests simultáneos comparten el mismo fetch, no se duplica la query
+let _adminPassPromise: Promise<string> | null = null;
+let _adminPassAt = 0;
+const ADMIN_PASS_TTL = 5 * 60 * 1000;
+
+function _fetchAdminPass(): Promise<string> {
+    const now = Date.now();
+    if (_adminPassPromise !== null && (now - _adminPassAt) < ADMIN_PASS_TTL) {
+        return _adminPassPromise;
+    }
+    _adminPassAt = now;
+    // Timeout de 3s: si Supabase tarda, no bloqueamos todas las requests
+    const fallback = new Promise<string>(resolve => setTimeout(() => resolve(''), 3000));
+    _adminPassPromise = Promise.race([
+        HistoryHandler.getSetting('ADMIN_PASS').then(
+            (dbPass) => dbPass || process.env.ADMIN_PASS || process.env.BACKOFFICE_TOKEN || ''
+        ),
+        fallback
+    ]);
+    return _adminPassPromise;
+}
+
 /**
  * Middleware de autenticación robusto para el backoffice.
-
  * Verifica el token en los headers o en la query string.
  */
 export const backofficeAuth = async (req: any, res: any, next: () => void) => {
@@ -28,14 +49,13 @@ export const backofficeAuth = async (req: any, res: any, next: () => void) => {
         if (token.startsWith('token=')) token = token.slice(6);
         else if (token.startsWith('Bearer ')) token = token.slice(7);
     }
-    
-    // Prioridad: Database Setting > Environment Variable
-    const dbAdminPass = await HistoryHandler.getSetting('ADMIN_PASS');
-    const adminPass = dbAdminPass || process.env.ADMIN_PASS || process.env.BACKOFFICE_TOKEN;
-    
+
+    // Un solo fetch a Supabase por ventana de TTL, compartido entre todos los requests simultáneos
+    const adminPass = await _fetchAdminPass();
+
     // Log de diagnóstico persistente para depurar fallos en producción
     const projectId = (HistoryHandler as any).PROJECT_ID || process.env.RAILWAY_PROJECT_ID || 'unknown';
-    
+
     if (!adminPass) {
         console.error('⚡⚡ [AUTH-NON-CONFIGURED] ⚡⚡');
         console.error(`DETALLE: No se encontró 'ADMIN_PASS' en la tabla 'settings' ni 'BACKOFFICE_TOKEN'/'ADMIN_PASS' en variables de entorno.`);

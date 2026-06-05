@@ -1,11 +1,11 @@
-/* global loadViewScript, FB */
+/* global loadViewScript, FB, fetchChats, jumpToCRM */
 window.backofficeView = {
     title: (window.BOT_NAME || 'Backoffice') + ' - Conversaciones',
 
     getHTML() {
         return `
         <!-- Contenido principal del backoffice -->
-        <div class="flex flex-1 h-screen overflow-hidden" style="position:relative;">
+        <div class="flex flex-1 h-full overflow-hidden" style="position:relative;">
 
             <!-- Sidebar chats -->
             <div id="sidebar">
@@ -42,9 +42,17 @@ window.backofficeView = {
                         <input type="text" id="search-input" class="search-input" placeholder="Buscar chat..." oninput="handleSearch()">
                     </div>
                     <div class="filter-wrapper">
-                        <select id="filter-tag" class="crm-input filter-select-compact" onchange="fetchChats(true)">
-                            <option value="">Todas las etiquetas</option>
-                        </select>
+                        <select id="filter-tag" style="display:none;"><option value="">Todas las etiquetas</option></select>
+                        <div class="tag-filter-split">
+                            <button class="tag-filter-main" onclick="_toggleTagFilter(event)">
+                                <i class="fas fa-tags"></i>
+                                <span id="tag-filter-label">Todas las etiquetas</span>
+                            </button>
+                            <button class="tag-filter-chevron" onclick="_toggleTagFilter(event)">
+                                <i class="fas fa-chevron-down" id="tag-filter-chevron-icon"></i>
+                            </button>
+                        </div>
+                        <ul class="tag-filter-dropdown" id="tag-filter-dropdown"></ul>
                     </div>
                 </div>
 
@@ -54,6 +62,9 @@ window.backofficeView = {
             <!-- Area de chat -->
             <div id="main-content" style="position:relative;">
                 <div id="chat-header">
+                    <button class="mobile-back-btn" onclick="document.body.classList.remove('mobile-chat-active')" aria-label="Volver">
+                        <i class="fas fa-arrow-left"></i>
+                    </button>
                     <div class="header-user">
                         <div class="chat-avatar" id="active-chat-avatar"></div>
                         <div>
@@ -74,17 +85,56 @@ window.backofficeView = {
                                 <i class="fas fa-plus-circle"></i>
                             </button>
                             <div id="crm-jump-container">
-                                <i class="fas fa-rocket crm-jump-icon"></i>
-                                <select id="crm-lead-jump" class="search-input crm-jump-select" onchange="jumpToCRM(this.value)">
-                                    <option value="" style="background:#1e293b;color:white;">Ver en CRM...</option>
-                                </select>
+                                <select id="crm-lead-jump" style="display:none;"></select>
+                                <div class="crm-jump-split">
+                                    <button class="crm-jump-main" onclick="_crmJumpDefault()">
+                                        <i class="fas fa-rocket"></i>
+                                        <span>Ver en CRM</span>
+                                    </button>
+                                    <button class="crm-jump-chevron" onclick="_toggleCRMJumpMenu(event)">
+                                        <i class="fas fa-chevron-down" id="crm-jump-chevron-icon"></i>
+                                    </button>
+                                </div>
+                                <ul class="crm-jump-dropdown-menu" id="crm-jump-dropdown"></ul>
+                            </div>
+                            <!-- Menu 3 puntitos: solo visible en mobile/tablet -->
+                            <div class="mobile-header-menu" id="mobile-header-menu-wrap">
+                                <button class="btn-icon" id="mobile-header-menu-btn" onclick="_toggleMobileHeaderMenu(event)" title="Mas opciones">
+                                    <i class="fas fa-ellipsis-vertical"></i>
+                                </button>
+                                <ul class="mobile-header-dropdown" id="mobile-header-dropdown">
+                                    <li onclick="toggleTagsPanel(); _closeMobileHeaderMenu()">
+                                        <i class="fas fa-tags"></i> Gestionar Etiquetas
+                                    </li>
+                                    <li onclick="toggleCRMPanel(); _closeMobileHeaderMenu()">
+                                        <i class="fas fa-user-pen"></i> Ficha del Cliente
+                                    </li>
+                                    <li onclick="openTicketModal(); _closeMobileHeaderMenu()">
+                                        <i class="fas fa-plus-circle"></i> Nuevo Ticket
+                                    </li>
+                                    <li class="mobile-bot-toggle-row" onclick="_mobileToggleBotClick()">
+                                        <i class="fas fa-robot"></i>
+                                        <span>Switch</span>
+                                        <label class="switch" onclick="event.stopPropagation()" style="margin-left:auto;">
+                                            <input type="checkbox" id="mobile-bot-toggle" onchange="toggleBot(this.checked); const r=document.getElementById('bot-toggle'); if(r) r.checked=this.checked;">
+                                            <span class="slider round">
+                                                <i class="fas fa-user"></i>
+                                                <i class="fas fa-robot"></i>
+                                            </span>
+                                        </label>
+                                    </li>
+                                </ul>
                             </div>
                         </div>
-                        <span id="bot-status-text" class="text-xs text-secondary-content">Sin chat seleccionado</span>
-                        <label class="switch">
-                            <input type="checkbox" id="bot-toggle" disabled onchange="toggleBot(this.checked)">
-                            <span class="slider round"></span>
-                        </label>
+                        <div class="header-bot-toggle-wrap">
+                            <label class="switch">
+                                <input type="checkbox" id="bot-toggle" disabled onchange="toggleBot(this.checked)">
+                                <span class="slider round">
+                                    <i class="fas fa-user"></i>
+                                    <i class="fas fa-robot"></i>
+                                </span>
+                            </label>
+                        </div>
                     </div>
                 </div>
 
@@ -99,19 +149,18 @@ window.backofficeView = {
                 <div id="emoji-picker" class="emoji-picker-container" style="display:none;"></div>
 
                 <div id="input-area">
-                    <button class="btn-icon" id="attach-btn" title="Adjuntar archivo" disabled onclick="document.getElementById('file-input').click()">
-                        <i class="fas fa-paperclip"></i>
+                    <button class="btn-icon input-action-btn" id="attach-btn" title="Adjuntar archivo" disabled onclick="document.getElementById('file-input').click()">
+                        <i class="fas fa-plus"></i>
                     </button>
                     <input type="file" id="file-input" style="display:none;" onchange="handleFileSelect(this)">
-                    <button class="btn-icon" id="emoji-btn" title="Emojis" disabled onclick="toggleEmojiPicker(event)">
-                        <i class="far fa-smile"></i>
-                    </button>
                     <div class="input-wrapper">
-                        <input type="text" id="message-input" placeholder="Escribe un mensaje aqui" disabled
+                        <button class="btn-icon input-action-btn" id="emoji-btn" title="Emojis" disabled onclick="toggleEmojiPicker(event)">
+                            <i class="far fa-face-smile"></i>
+                        </button>
+                        <input type="text" id="message-input" placeholder="Escribe un mensaje" disabled
                             onkeydown="if(event.key === 'Enter') sendMessage()">
                     </div>
-                    <button class="btn-icon" id="send-btn" title="Enviar mensaje" onclick="sendMessage()" disabled
-                        style="color:#00a884;">
+                    <button class="btn-icon input-action-btn" id="send-btn" title="Enviar mensaje" onclick="sendMessage()" disabled>
                         <i class="fas fa-paper-plane"></i>
                     </button>
                 </div>
@@ -136,9 +185,9 @@ window.backofficeView = {
                     </div>
                     <div data-field="crm-phone">
                         <label><i class="fas fa-phone"></i> Telefono</label>
-                        <div class="crm-phone-row">
+                        <div class="phone-input-wrap">
                             <input type="text" id="crm-phone-side" class="crm-input" readonly>
-                            <button class="btn-icon" id="btn-whatsapp-direct-side" onclick="openWhatsAppDirectSide()" style="color:#25d366;">
+                            <button class="phone-wa-btn" id="btn-whatsapp-direct-side" onclick="openWhatsAppDirectSide()">
                                 <i class="fab fa-whatsapp"></i>
                             </button>
                         </div>
@@ -157,12 +206,24 @@ window.backofficeView = {
                     </div>
                     <div data-field="crm-tax-status">
                         <label><i class="fas fa-file-invoice-dollar"></i> Situacion Impositiva</label>
-                        <select id="crm-tax-status" class="crm-input">
-                            <option value="Cons. Final">Cons. Final</option>
-                            <option value="Responsable Inscripto">Responsable Inscripto</option>
-                            <option value="Monotributo">Monotributo</option>
-                            <option value="Exento">Exento</option>
-                        </select>
+                        <div class="csd-wrap">
+                            <select id="crm-tax-status" hidden>
+                                <option value="Cons. Final">Cons. Final</option>
+                                <option value="Responsable Inscripto">Responsable Inscripto</option>
+                                <option value="Monotributo">Monotributo</option>
+                                <option value="Exento">Exento</option>
+                            </select>
+                            <button class="csd-btn" type="button" onclick="_csdToggle(this)">
+                                <span class="csd-label">Cons. Final</span>
+                                <i class="fas fa-chevron-down csd-chevron"></i>
+                            </button>
+                            <div class="csd-menu">
+                                <button class="csd-item selected" type="button" data-val="Cons. Final" onclick="_csdSelect(this,'Cons. Final')">Cons. Final</button>
+                                <button class="csd-item" type="button" data-val="Responsable Inscripto" onclick="_csdSelect(this,'Responsable Inscripto')">Responsable Inscripto</button>
+                                <button class="csd-item" type="button" data-val="Monotributo" onclick="_csdSelect(this,'Monotributo')">Monotributo</button>
+                                <button class="csd-item" type="button" data-val="Exento" onclick="_csdSelect(this,'Exento')">Exento</button>
+                            </div>
+                        </div>
                     </div>
                     <div data-field="crm-product">
                         <label><i class="fas fa-shopping-bag"></i> Producto Ofrecido</label>
@@ -170,15 +231,30 @@ window.backofficeView = {
                     </div>
                     <div data-field="crm-source">
                         <label><i class="fas fa-bullhorn"></i> Fuente / Canal</label>
-                        <select id="crm-source" class="crm-input">
-                            <option value="">Desconocida</option>
-                            <option value="Instagram">Instagram</option>
-                            <option value="Facebook">Facebook</option>
-                            <option value="WhatsApp">WhatsApp</option>
-                            <option value="Web">Web</option>
-                            <option value="Referido">Referido</option>
-                            <option value="Manual CRM">Manual CRM</option>
-                        </select>
+                        <div class="csd-wrap">
+                            <select id="crm-source" hidden>
+                                <option value="">Desconocida</option>
+                                <option value="Instagram">Instagram</option>
+                                <option value="Facebook">Facebook</option>
+                                <option value="WhatsApp">WhatsApp</option>
+                                <option value="Web">Web</option>
+                                <option value="Referido">Referido</option>
+                                <option value="Manual CRM">Manual CRM</option>
+                            </select>
+                            <button class="csd-btn" type="button" onclick="_csdToggle(this)">
+                                <span class="csd-label">Desconocida</span>
+                                <i class="fas fa-chevron-down csd-chevron"></i>
+                            </button>
+                            <div class="csd-menu">
+                                <button class="csd-item selected" type="button" data-val="" onclick="_csdSelect(this,'')">Desconocida</button>
+                                <button class="csd-item" type="button" data-val="Instagram" onclick="_csdSelect(this,'Instagram')">Instagram</button>
+                                <button class="csd-item" type="button" data-val="Facebook" onclick="_csdSelect(this,'Facebook')">Facebook</button>
+                                <button class="csd-item" type="button" data-val="WhatsApp" onclick="_csdSelect(this,'WhatsApp')">WhatsApp</button>
+                                <button class="csd-item" type="button" data-val="Web" onclick="_csdSelect(this,'Web')">Web</button>
+                                <button class="csd-item" type="button" data-val="Referido" onclick="_csdSelect(this,'Referido')">Referido</button>
+                                <button class="csd-item" type="button" data-val="Manual CRM" onclick="_csdSelect(this,'Manual CRM')">Manual CRM</button>
+                            </div>
+                        </div>
                     </div>
                     <div data-field="crm-notes">
                         <label><i class="fas fa-sticky-note"></i> Notas / Observaciones</label>
@@ -190,15 +266,33 @@ window.backofficeView = {
                     </div>
                     <div data-field="crm-priority">
                         <label><i class="fas fa-flag"></i> Prioridad</label>
-                        <select id="crm-priority" class="crm-input">
-                            <option value="Baja">Baja</option>
-                            <option value="Media">Media</option>
-                            <option value="Alta">Alta</option>
-                        </select>
+                        <div class="csd-wrap">
+                            <select id="crm-priority" hidden>
+                                <option value="Baja">Baja</option>
+                                <option value="Media">Media</option>
+                                <option value="Alta">Alta</option>
+                            </select>
+                            <button class="csd-btn" type="button" onclick="_csdToggle(this)">
+                                <span class="csd-label">Baja</span>
+                                <i class="fas fa-chevron-down csd-chevron"></i>
+                            </button>
+                            <div class="csd-menu">
+                                <button class="csd-item selected" type="button" data-val="Baja" onclick="_csdSelect(this,'Baja')">Baja</button>
+                                <button class="csd-item" type="button" data-val="Media" onclick="_csdSelect(this,'Media')">Media</button>
+                                <button class="csd-item" type="button" data-val="Alta" onclick="_csdSelect(this,'Alta')">Alta</button>
+                            </div>
+                        </div>
                     </div>
                     <div data-field="crm-status">
                         <label><i class="fas fa-tasks"></i> Estado del Lead (CRM)</label>
-                        <select id="crm-status-select-side" class="crm-input"></select>
+                        <div class="csd-wrap">
+                            <select id="crm-status-select-side" hidden></select>
+                            <button class="csd-btn" type="button" onclick="_csdToggle(this)">
+                                <span class="csd-label">Sin Asignar</span>
+                                <i class="fas fa-chevron-down csd-chevron"></i>
+                            </button>
+                            <div class="csd-menu"></div>
+                        </div>
                     </div>
                     <button class="btn-primary crm-save-btn" onclick="saveCRMDetails()">
                         <i class="fas fa-save icon-mr"></i> Guardar Ficha de Cliente
@@ -278,23 +372,47 @@ window.backofficeView = {
                         <div class="ticket-modal-col">
                             <div class="modal-section">
                                 <label><i class="fas fa-tag"></i> Tipo</label>
-                                <select id="ticket-type" class="crm-input">
-                                    <option value="Soporte">Soporte</option>
-                                    <option value="Ventas">Ventas</option>
-                                    <option value="Tecnico">Tecnico</option>
-                                    <option value="Asistencia Externa">Asistencia Externa</option>
-                                    <option value="Otro">Otro</option>
-                                </select>
+                                <div class="csd-wrap">
+                                    <select id="ticket-type" hidden>
+                                        <option value="Soporte">Soporte</option>
+                                        <option value="Ventas">Ventas</option>
+                                        <option value="Tecnico">Tecnico</option>
+                                        <option value="Asistencia Externa">Asistencia Externa</option>
+                                        <option value="Otro">Otro</option>
+                                    </select>
+                                    <button class="csd-btn" type="button" onclick="_csdToggle(this)">
+                                        <span class="csd-label">Soporte</span>
+                                        <i class="fas fa-chevron-down csd-chevron"></i>
+                                    </button>
+                                    <div class="csd-menu">
+                                        <button class="csd-item selected" type="button" data-val="Soporte" onclick="_csdSelect(this,'Soporte')">Soporte</button>
+                                        <button class="csd-item" type="button" data-val="Ventas" onclick="_csdSelect(this,'Ventas')">Ventas</button>
+                                        <button class="csd-item" type="button" data-val="Tecnico" onclick="_csdSelect(this,'Tecnico')">Tecnico</button>
+                                        <button class="csd-item" type="button" data-val="Asistencia Externa" onclick="_csdSelect(this,'Asistencia Externa')">Asistencia Externa</button>
+                                        <button class="csd-item" type="button" data-val="Otro" onclick="_csdSelect(this,'Otro')">Otro</button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         <div class="ticket-modal-col">
                             <div class="modal-section">
                                 <label><i class="fas fa-flag"></i> Prioridad</label>
-                                <select id="ticket-priority" class="crm-input">
-                                    <option value="Baja">Baja</option>
-                                    <option value="Media" selected>Media</option>
-                                    <option value="Alta">Alta</option>
-                                </select>
+                                <div class="csd-wrap">
+                                    <select id="ticket-priority" hidden>
+                                        <option value="Baja">Baja</option>
+                                        <option value="Media" selected>Media</option>
+                                        <option value="Alta">Alta</option>
+                                    </select>
+                                    <button class="csd-btn" type="button" onclick="_csdToggle(this)">
+                                        <span class="csd-label">Media</span>
+                                        <i class="fas fa-chevron-down csd-chevron"></i>
+                                    </button>
+                                    <div class="csd-menu">
+                                        <button class="csd-item" type="button" data-val="Baja" onclick="_csdSelect(this,'Baja')">Baja</button>
+                                        <button class="csd-item selected" type="button" data-val="Media" onclick="_csdSelect(this,'Media')">Media</button>
+                                        <button class="csd-item" type="button" data-val="Alta" onclick="_csdSelect(this,'Alta')">Alta</button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -305,114 +423,6 @@ window.backofficeView = {
                     <button class="btn-primary btn-full-mt" onclick="createTicket()">
                         <i class="fas fa-save icon-mr"></i> Crear Ticket
                     </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Modal Plantillas Meta (Bulk) -->
-        <div id="bulk-modal" class="modal-overlay">
-            <div class="modal-content meta-modal-content animate-pop-in">
-                <div class="modal-header">
-                    <h3><i class="fab fa-whatsapp platform-whatsapp mr-2"></i> Centro de Plantillas Meta</h3>
-                    <button class="btn-close-modal" onclick="toggleBulkModal()"><i class="fas fa-times"></i></button>
-                </div>
-                <div class="meta-tabs meta-tabs-bar">
-                    <div id="tab-my-templates" class="meta-tab active" onclick="switchMetaTab('my')">
-                        <i class="fas fa-list"></i> Mis Plantillas
-                    </div>
-                    <div class="meta-badge-bar">
-                        <span class="meta-badge-title">Ver en META</span>
-                        <a id="link-meta-library" href="https://business.facebook.com/latest/whatsapp_manager/template_library" target="_blank" class="meta-link-item">
-                            <i class="fas fa-book"></i> Biblioteca <span class="meta-library-badge">SDK</span>
-                        </a>
-                        <a id="link-meta-new" href="https://business.facebook.com/latest/whatsapp_manager/message_templates" target="_blank" class="meta-link-item">
-                            <i class="fas fa-plus"></i> Nueva Plantilla
-                        </a>
-                    </div>
-                </div>
-                <div class="meta-scroll-area">
-                    <div id="view-my-templates" class="meta-grid">
-                        <div id="my-templates-loader" class="text-center py-10 opacity-50" style="grid-column:1/-1;">
-                            <i class="fas fa-circle-notch fa-spin text-3xl text-accent-bright"></i>
-                            <p class="loader-sync-text text-sm text-secondary-content mt-3">Sincronizando con Meta Cloud...</p>
-                        </div>
-                    </div>
-                    <div id="view-template-detail" style="display:none; padding:40px;">
-                        <button class="btn-icon tpl-detail-back-btn mb-5" onclick="switchMetaTab('my')">
-                            <i class="fas fa-arrow-left"></i>
-                        </button>
-                        <div class="tpl-detail-grid">
-                            <div class="meta-preview-overlay tpl-preview-col rounded-2xl overflow-hidden">
-                                <div class="wa-preview-bubble">
-                                    <div id="wa-preview-text-final" class="wa-preview-text">...</div>
-                                    <div class="wa-preview-time">12:00 <i class="fas fa-check-double wa-check-icon"></i></div>
-                                </div>
-                            </div>
-                            <div>
-                                <div class="tpl-name-row">
-                                    <h2 id="detail-tpl-name" class="tpl-name-header">Nombre de Plantilla</h2>
-                                    <a id="btn-edit-in-meta" href="#" target="_blank">
-                                        <i class="fab fa-facebook"></i> Editar en META
-                                    </a>
-                                </div>
-                                <div id="detail-badges" class="tpl-detail-badges">
-                                    <div id="detail-tpl-status" class="meta-card-tag">ESTADO</div>
-                                    <span id="detail-tpl-lang-badge" class="tpl-info-badge"><i class="fas fa-globe"></i> ES</span>
-                                    <span id="detail-tpl-cat-badge" class="tpl-info-badge"><i class="fas fa-tag"></i> CATEGORIA</span>
-                                </div>
-                                <div id="library-adopt-section" style="display:none;">
-                                    <h4 class="library-adopt-heading text-sm font-heading font-bold text-primary-content mb-2">
-                                        <i class="fas fa-copy"></i> Te gusta esta plantilla?
-                                    </h4>
-                                    <p class="library-adopt-desc text-xs text-secondary-content mb-3">Podes usarla como base para crear la tuya propia.</p>
-                                    <button class="btn-primary w-full justify-center" onclick="useTemplateAsBase()">
-                                        <i class="fas fa-magic"></i> Usar como Base
-                                    </button>
-                                </div>
-                                <div id="bulk-actions-section" style="display:none;">
-                                    <h4 class="bulk-actions-heading text-sm font-heading font-bold text-primary-content mb-2">
-                                        <i class="fas fa-play"></i> Ejecutar Envio Masivo
-                                    </h4>
-                                    <p class="bulk-actions-desc text-xs text-secondary-content mb-4">Configura el archivo Excel para iniciar el envio.</p>
-                                    <div class="bulk-actions-body">
-                                        <div class="bulk-filter-section">
-                                            <label class="bulk-filter-label"><i class="fas fa-filter"></i> Filtros de Descarga</label>
-                                            <div class="bulk-filter-date-grid">
-                                                <div>
-                                                    <label class="bulk-filter-sublabel">Desde:</label>
-                                                    <input type="date" id="bulk-filter-start" class="crm-input bulk-filter-input">
-                                                </div>
-                                                <div>
-                                                    <label class="bulk-filter-sublabel">Hasta:</label>
-                                                    <input type="date" id="bulk-filter-end" class="crm-input bulk-filter-input">
-                                                </div>
-                                            </div>
-                                            <label class="bulk-filter-sublabel mb-1 block">Etiquetas (Ctrl/Cmd para varias)</label>
-                                            <select id="bulk-filter-tags" class="crm-input" multiple style="min-height:80px;"></select>
-                                        </div>
-                                        <button class="btn-primary btn-download-excel" onclick="downloadBulkExcel()">
-                                            <i class="fas fa-file-excel"></i> 1. Descargar Formato Excel
-                                        </button>
-                                        <div class="bulk-upload-section mt-5 pt-5" style="border-top:1px solid rgba(255,255,255,0.07);">
-                                            <label class="bulk-filter-label">2. Subir Excel Completado</label>
-                                            <div class="bulk-upload-row">
-                                                <input type="file" id="bulk-file-input" class="crm-input" accept=".xlsx,.xls">
-                                                <button class="btn-primary flex-shrink-0" onclick="startBulkSend()" id="send-bulk-btn">
-                                                    <i class="fas fa-paper-plane"></i> Enviar
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <div id="bulk-progress" style="display:none;" class="mt-5">
-                                            <div class="bulk-progress-track">
-                                                <div id="bulk-progress-bar" class="bulk-progress-bar" style="width:0%"></div>
-                                            </div>
-                                            <p id="bulk-status-text" class="bulk-status-text"></p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -544,6 +554,94 @@ window.backofficeView = {
             window.initBackofficeView();
         }
 
+        window._toggleMobileHeaderMenu = function(e) {
+            e.stopPropagation();
+            const d = document.getElementById('mobile-header-dropdown');
+            if (!d) return;
+            const real = document.getElementById('bot-toggle');
+            const mob = document.getElementById('mobile-bot-toggle');
+            if (real && mob) { mob.checked = real.checked; mob.disabled = real.disabled; }
+            const isOpen = d.classList.toggle('open');
+            if (isOpen) document.addEventListener('click', window._closeMobileHeaderMenu, { once: true });
+        };
+        window._closeMobileHeaderMenu = function() {
+            const d = document.getElementById('mobile-header-dropdown');
+            if (d) d.classList.remove('open');
+        };
+        window._toggleTagFilter = function(e) {
+            e.stopPropagation();
+            const dd = document.getElementById('tag-filter-dropdown');
+            const icon = document.getElementById('tag-filter-chevron-icon');
+            const label = document.getElementById('tag-filter-label');
+            const select = document.getElementById('filter-tag');
+            if (!dd || !select) return;
+            const cur = select.options[select.selectedIndex];
+            if (label && cur) label.textContent = cur.textContent;
+            dd.innerHTML = '';
+            Array.from(select.options).forEach(opt => {
+                const li = document.createElement('li');
+                const active = opt.value === select.value;
+                li.innerHTML = (opt.value ? '<i class="fas fa-tag"></i>' : '<i class="fas fa-tags"></i>') + opt.textContent;
+                if (active) li.classList.add('active');
+                li.onclick = () => {
+                    select.value = opt.value;
+                    if (label) label.textContent = opt.textContent;
+                    if (typeof fetchChats === 'function') fetchChats(true);
+                    dd.classList.remove('open');
+                    if (icon) icon.style.transform = '';
+                };
+                dd.appendChild(li);
+            });
+            const isOpen = dd.classList.toggle('open');
+            if (icon) icon.style.transform = isOpen ? 'rotate(180deg)' : '';
+            if (isOpen) document.addEventListener('click', () => {
+                dd.classList.remove('open');
+                if (icon) icon.style.transform = '';
+            }, { once: true });
+        };
+        window._crmJumpDefault = function() {
+            const select = document.getElementById('crm-lead-jump');
+            if (!select) return;
+            const first = Array.from(select.options).find(o => o.value);
+            if (!first) return;
+            select.value = first.value;
+            if (typeof jumpToCRM === 'function') jumpToCRM();
+        };
+        window._toggleCRMJumpMenu = function(e) {
+            e.stopPropagation();
+            const dd = document.getElementById('crm-jump-dropdown');
+            const icon = document.getElementById('crm-jump-chevron-icon');
+            if (!dd) return;
+            const select = document.getElementById('crm-lead-jump');
+            dd.innerHTML = '';
+            Array.from(select.options).forEach(opt => {
+                if (!opt.value) return;
+                const li = document.createElement('li');
+                li.innerHTML = '<i class="fas fa-ticket-alt"></i>' + opt.textContent;
+                li.onclick = () => {
+                    select.value = opt.value;
+                    if (typeof jumpToCRM === 'function') jumpToCRM();
+                    dd.classList.remove('open');
+                    if (icon) icon.style.transform = '';
+                };
+                dd.appendChild(li);
+            });
+            if (!dd.children.length) return;
+            const isOpen = dd.classList.toggle('open');
+            if (icon) icon.style.transform = isOpen ? 'rotate(180deg)' : '';
+            if (isOpen) document.addEventListener('click', () => {
+                dd.classList.remove('open');
+                if (icon) icon.style.transform = '';
+            }, { once: true });
+        };
+        window._mobileToggleBotClick = function() {
+            const real = document.getElementById('bot-toggle');
+            const mob = document.getElementById('mobile-bot-toggle');
+            if (!real || real.disabled || !mob) return;
+            mob.checked = !mob.checked;
+            mob.dispatchEvent(new Event('change'));
+        };
+
         // Manejar parametro openPanel en la URL
         const urlParams = new URLSearchParams(window.location.search);
         const panel = urlParams.get('openPanel') || urlParams.get('panel');
@@ -557,6 +655,7 @@ window.backofficeView = {
     },
 
     destroy() {
-        // El socket de backoffice.js persiste entre visitas (no se desconecta)
+        document.body.classList.remove('mobile-chat-active');
+        if (typeof window._backofficeAbortAll === 'function') window._backofficeAbortAll();
     }
 };

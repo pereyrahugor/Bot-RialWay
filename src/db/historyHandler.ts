@@ -102,6 +102,8 @@ export class HistoryHandler {
         this.initialized = true;
         console.log(`[HistoryHandler] Initializing DB for Project: ${this.PROJECT_IDENTIFIER}`);
         if (!supabase) return;
+        // En modo local no hay schema remoto que inicializar
+        if (process.env.STORAGE_MODE === 'local') return;
 
         // 0. Bootstrap de configuración
         await this.bootstrapConfig();
@@ -1234,13 +1236,12 @@ export class HistoryHandler {
             const { data, error } = await supabase
                 .from('messages')
                 .select('*')
-                .eq('chat_id', chatId)
-                .eq('project_id', targetProjectId)
-                .order('created_at', { ascending: false }) // Primero los más nuevos para el LIMIT
+                .in('chat_id', [chatId, `${chatId}@s.whatsapp.net`, `${chatId}@c.us`])
+                .order('created_at', { ascending: false })
                 .range(offset, offset + limit - 1);
-            
+
             if (error) throw error;
-            return (data || []).reverse(); // Revertir para orden cronológico
+            return (data || []).reverse();
         } catch (err) {
             console.error('[HistoryHandler] Error en getMessages:', err);
             return [];

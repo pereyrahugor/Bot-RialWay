@@ -4,28 +4,28 @@ window.docsView = {
 
     getHTML() {
         return `
-        <main class="crm-main-container relative" style="z-index:10;">
-            <div class="card animate-reveal-up">
-                <div class="flex items-center justify-between mb-6">
-                    <div>
-                        <h1 class="text-2xl font-heading font-bold text-gradient-accent">Centro de Ayuda</h1>
-                        <p class="text-xs text-secondary-content mt-1">Guia operacional de ${window.BOT_NAME || 'Backoffice'}</p>
-                    </div>
-                    <button class="btn-primary" onclick="window.print()">
-                        <i class="fas fa-file-pdf icon-mr"></i> Guardar PDF
-                    </button>
+        <main class="crm-main-container docs-main relative" style="z-index:10; padding:0;">
+            <div class="kanban-header animate-fade">
+                <div class="header-info">
+                    <h1><i class="fas fa-book-open kanban-header-icon"></i> Centro de Ayuda</h1>
+                    <p>Guia operacional de ${window.BOT_NAME || 'Backoffice'}</p>
                 </div>
+                <button class="btn no-print" onclick="window.print()">
+                    <i class="fas fa-file-pdf"></i> Guardar PDF
+                </button>
+            </div>
 
-                <div class="flex gap-2 mb-6 no-print">
-                    <button class="tab-btn active" id="btn-user-docs" onclick="switchDoc('user')">
-                        <i class="fas fa-user-tie icon-mr"></i> Instrucciones de Uso
-                    </button>
-                    <button class="tab-btn" id="btn-api-docs" onclick="switchDoc('api')">
-                        <i class="fas fa-code icon-mr"></i> Instrucciones Tecnicas API
-                    </button>
-                </div>
+            <nav class="docs-nav no-print" role="tablist">
+                <button class="docs-nav-tab active" id="btn-user-docs" onclick="switchDoc('user')" role="tab">
+                    <i class="fas fa-user-tie"></i><span>Instrucciones de Uso</span>
+                </button>
+                <button class="docs-nav-tab" id="btn-api-docs" onclick="switchDoc('api')" role="tab">
+                    <i class="fas fa-code"></i><span>Instrucciones Tecnicas API</span>
+                </button>
+            </nav>
 
-                <div id="content" class="prose max-w-none text-primary-content"
+            <div class="docs-content-area">
+                <div id="content" class="prose max-w-none text-primary-content animate-reveal-up"
                     style="line-height:1.7;">
                     <div class="flex items-center justify-center py-10 opacity-50">
                         <i class="fas fa-circle-notch fa-spin text-2xl text-accent-bright mr-3"></i>

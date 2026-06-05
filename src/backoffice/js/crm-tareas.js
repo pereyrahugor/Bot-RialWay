@@ -1,4 +1,4 @@
-/* global Sortable, FB, metaAppId, showToast */
+/* global Sortable, FB, metaAppId, showToast, _csdRebuild, _csdSync */
 (function() {
 const backofficeToken = localStorage.getItem('backoffice_token');
 const activeToken = backofficeToken;
@@ -131,8 +131,7 @@ async function syncCRM() {
             crmData = {};
         }
 
-        distributeCards();
-        try { initDragAndDrop(); } catch (e) { console.error('[CRM Tareas] initDragAndDrop error:', e); }
+        renderBoard();
         showToast('Tareas Actualizadas', 'success');
     } catch (e) {
         console.error(e);
@@ -140,9 +139,38 @@ async function syncCRM() {
     }
 }
 
+function renderBoard() {
+    const board = document.getElementById('kanban-board-inner');
+    if (!board) return;
+    board.innerHTML = '';
+    const cols = [
+        { id: 'overdue',  icon: 'fa-calendar-times',  color: '#ef4444', title: 'Vencidas' },
+        { id: 'today',    icon: 'fa-calendar-day',    color: '#f59e0b', title: 'Hoy' },
+        { id: 'tomorrow', icon: 'fa-calendar-minus',  color: '#3b82f6', title: 'Manana' },
+        { id: 'week',     icon: 'fa-calendar-week',   color: '#10b981', title: 'Esta Semana' },
+        { id: 'later',    icon: 'fa-calendar-plus',   color: '#8b5cf6', title: 'Mas Adelante' },
+        { id: 'nodate',   icon: 'fa-calendar-xmark',  color: '#6b7280', title: 'Sin Fecha' },
+    ];
+    cols.forEach(col => {
+        const colEl = document.createElement('div');
+        colEl.className = 'kanban-column animate-fade';
+        colEl.dataset.id = col.id;
+        colEl.innerHTML = `
+            <div class="column-header">
+                <div class="column-title-group">
+                    <i class="fas ${col.icon}" style="color:${col.color};"></i>
+                    <span class="column-title">${col.title}</span>
+                </div>
+                <span class="column-badge" id="badge-${col.id}">0</span>
+            </div>
+            <div class="kanban-cards" id="cards-${col.id}"></div>
+        `;
+        board.appendChild(colEl);
+    });
+    distributeCards();
+}
+
 function distributeCards() {
-    const containers = document.querySelectorAll('.kanban-cards');
-    containers.forEach(c => c.innerHTML = '');
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -287,72 +315,6 @@ function createCardElement(ticket, lead, metadata) {
     return card;
 }
 
-function initDragAndDrop() {
-    const containers = document.querySelectorAll('.kanban-cards');
-    containers.forEach(container => {
-        new Sortable(container, {
-            group: 'kanban-tareas',
-            animation: 150,
-            ghostClass: 'sortable-ghost',
-            onEnd: async (evt) => {
-                const ticketId = evt.item.dataset.id;
-                const chatId = evt.item.dataset.chatId;
-                const newColumnId = evt.to.id.replace('cards-', '');
-
-                console.log(`[DragDrop] Tarjeta ${ticketId} movida a la columna de fecha: ${newColumnId}`);
-
-                let newDateString = null;
-                const today = new Date();
-
-                if (newColumnId === 'today') {
-                    newDateString = getLocalDateString(today);
-                } else if (newColumnId === 'tomorrow') {
-                    const tomorrow = new Date(today);
-                    tomorrow.setDate(today.getDate() + 1);
-                    newDateString = getLocalDateString(tomorrow);
-                } else if (newColumnId === 'overdue') {
-                    const yesterday = new Date(today);
-                    yesterday.setDate(today.getDate() - 1);
-                    newDateString = getLocalDateString(yesterday);
-                } else if (newColumnId === 'week') {
-                    const weekOut = new Date(today);
-                    weekOut.setDate(today.getDate() + 3); // Valor intermedio de la semana
-                    newDateString = getLocalDateString(weekOut);
-                } else if (newColumnId === 'later') {
-                    const laterOut = new Date(today);
-                    laterOut.setDate(today.getDate() + 8); // Más allá de los 7 días
-                    newDateString = getLocalDateString(laterOut);
-                }
-
-                // Guardar localmente
-                if (!crmData[ticketId]) crmData[ticketId] = {};
-                crmData[ticketId].alertDate = newDateString;
-
-                // Actualizar DB en tiempo real
-                showToast('Reprogramando vencimiento...', 'info');
-                try {
-                    // Actualizar el metadata global
-                    await saveCRMMetadata();
-
-                    // Actualizar crm_due_date en tabla de chats
-                    await fetch(`/api/backoffice/chat/${encodeURIComponent(chatId)}/contact?token=${activeToken}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ crm_due_date: newDateString })
-                    });
-
-                    showToast('Vencimiento reprogramado correctamente', 'success');
-                    
-                    // Sincronizar datos de inmediato para reposicionar
-                    await syncCRM();
-                } catch (e) {
-                    console.error('[DragDrop] Error al guardar vencimiento:', e);
-                    showToast('Error al reprogramar vencimiento', 'error');
-                }
-            }
-        });
-    });
-}
 
 async function saveCRMMetadata() {
     try {
@@ -409,7 +371,10 @@ function openCardModal(ticketId) {
     // Carga de asignación
     if (isAdmin) {
         const selectAssign = document.getElementById('edit-lead-assignee');
-        if (selectAssign) selectAssign.value = lead?.assigned_to || '';
+        if (selectAssign) {
+            selectAssign.value = lead?.assigned_to || '';
+            _csdSync('edit-lead-assignee');
+        }
     }
 
     // Cargar opciones de estado basadas en las columnas estándar
@@ -417,6 +382,8 @@ function openCardModal(ticketId) {
     if (selectStatus) {
         selectStatus.innerHTML = standardColumns.map(c => `<option value="${c.id}">${c.title}</option>`).join('');
         selectStatus.value = metadata.columnId || lead?.crm_status || 'UNASSIGNED';
+        _csdRebuild('edit-lead-status');
+        _csdSync('edit-lead-status');
     }
 
     window.applyCRMConfig(); // Aplicar orden y visibilidad
@@ -757,9 +724,11 @@ function renderAssigneeSelect() {
     const select = document.getElementById('edit-lead-assignee');
     if (!select) return;
     const currentVal = select.value;
-    select.innerHTML = '<option value="">Sin asignar (Libre)</option>' + 
+    select.innerHTML = '<option value="">Sin asignar (Libre)</option>' +
         teamUsers.map(u => `<option value="${u.id}">${u.username} (${u.role})</option>`).join('');
     select.value = currentVal;
+    _csdRebuild('edit-lead-assignee');
+    _csdSync('edit-lead-assignee');
 }
 
 window.openNewUserModal = () => {

@@ -1,4 +1,4 @@
-/* global Sortable, FB, metaAppId, showToast */
+/* global Sortable, FB, metaAppId, showToast, _csdRebuild, _csdSync */
 (function() {
 const backofficeToken = localStorage.getItem('backoffice_token');
 const activeToken = backofficeToken;
@@ -174,7 +174,7 @@ function renderBoard() {
         columnEl.dataset.id = col.id;
         
         columnEl.innerHTML = `
-            <div class="column-header" ${col.fixed ? '' : `onclick="editColumn('${col.id}')"`}>
+            <div class="column-header" ${!col.fixed ? `onclick="editColumn('${col.id}')"` : ''}>
                 <div class="column-title-group">
                     ${col.fixed ? '<i class="fas fa-star" style="color:#f59e0b;"></i>' : ''}
                     <span class="column-title">${col.title}</span>
@@ -304,8 +304,8 @@ function createCardElement(ticket, lead, metadata) {
 
 function initDragAndDrop() {
     // 1. Arrastre de tarjetas entre columnas
-    const containers = document.querySelectorAll('.kanban-cards');
-    containers.forEach(container => {
+    document.querySelectorAll('.kanban-cards').forEach(container => {
+        if (Sortable.get(container)) return;
         new Sortable(container, {
             group: 'kanban',
             animation: 150,
@@ -315,8 +315,7 @@ function initDragAndDrop() {
                 const newColumnId = evt.to.id.replace('cards-', '');
                 if (!crmData[ticketId]) crmData[ticketId] = {};
                 crmData[ticketId].columnId = newColumnId;
-                
-                // Sincronizar crm_status con el ID de la columna (más robusto para integraciones)
+
                 const ticket = allTickets.find(t => t.id === ticketId);
                 if (ticket && ticket.chat_id) {
                     await updateLeadStatus(ticket.chat_id, newColumnId);
@@ -330,7 +329,7 @@ function initDragAndDrop() {
 
     // 2. Arrastre de columnas (Reordenar etapas)
     const boardInner = document.getElementById('kanban-board-inner');
-    if (boardInner) {
+    if (boardInner && !Sortable.get(boardInner)) {
         new Sortable(boardInner, {
             animation: 150,
             draggable: '.kanban-column',
@@ -403,7 +402,10 @@ function openCardModal(ticketId) {
     // Carga de asignación
     if (isAdmin) {
         const selectAssign = document.getElementById('edit-lead-assignee');
-        if (selectAssign) selectAssign.value = lead?.assigned_to || '';
+        if (selectAssign) {
+            selectAssign.value = lead?.assigned_to || '';
+            _csdSync('edit-lead-assignee');
+        }
     }
 
     // Cargar opciones de estado basadas en las columnas
@@ -411,6 +413,8 @@ function openCardModal(ticketId) {
     if (selectStatus) {
         selectStatus.innerHTML = columns.map(c => `<option value="${c.id}">${c.title}</option>`).join('');
         selectStatus.value = metadata.columnId || 'UNASSIGNED';
+        _csdRebuild('edit-lead-status');
+        _csdSync('edit-lead-status');
     }
 
     window.applyCRMConfig(); // Aplicar orden y visibilidad
@@ -882,9 +886,11 @@ function renderAssigneeSelect() {
     const select = document.getElementById('edit-lead-assignee');
     if (!select) return;
     const currentVal = select.value;
-    select.innerHTML = '<option value="">Sin asignar (Libre)</option>' + 
+    select.innerHTML = '<option value="">Sin asignar (Libre)</option>' +
         teamUsers.map(u => `<option value="${u.id}">${u.username} (${u.role})</option>`).join('');
     select.value = currentVal;
+    _csdRebuild('edit-lead-assignee');
+    _csdSync('edit-lead-assignee');
 }
 
 window.openNewUserModal = () => {
