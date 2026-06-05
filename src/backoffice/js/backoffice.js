@@ -1,4 +1,5 @@
-/* global io, metaAppId, FB, toggleLeadsPanel, toggleTicketsPanel, toggleMetaPanel, showToast */
+/* global io, metaAppId, FB, toggleLeadsPanel, toggleTicketsPanel, toggleMetaPanel, showToast, _csdSync, _csdRebuild */
+
 const token = localStorage.getItem('backoffice_token');
 if (!token) window.location.href = '/login';
 
@@ -40,12 +41,12 @@ async function initCRMData() {
         const statusSelect = document.getElementById('crm-status-select-side');
         if (statusSelect) {
             statusSelect.innerHTML = crmColumns.map(col => `<option value="${col.id}">${col.title}</option>`).join('');
+            _csdRebuild('crm-status-select-side');
         }
     } catch (e) {
         console.error('[initCRMData] Error:', e);
     }
 }
-initCRMData();
 
 // Función para scroll al fondo del chat
 function scrollToBottom() {
@@ -82,10 +83,12 @@ let messageOffset = 0;
 const MSG_LIMIT = 50;
 let loadingMessages = false;
 let allMessagesLoaded = false;
+let _fetchMessagesController = null;
 
 // Paginación de chats
-const CHAT_LIMIT = 50;
+const CHAT_LIMIT = 20;
 let loadingChats = false;
+let _fetchChatsController = null;
 
 // Inicializar Socket.IO para tiempo real
 const socket = io();
@@ -94,17 +97,17 @@ socket.on('connect', () => {
     console.log('✅ Conectado al servidor de tiempo real');
 });
 
+const normChatId = id => (id || '').split('@')[0];
+
 socket.on('new_message', (msg) => {
     console.log('📩 Nuevo mensaje recibido por socket:', msg);
-    // Normalizar chat_id por si el servidor lo envía como chatId
     const cid = msg.chat_id || msg.chatId;
     if (!msg.chat_id) msg.chat_id = cid;
 
     // 1. Si es el chat activo, añadir mensaje a la vista
-    if (cid === activeChatId) {
-        // Evitar duplicados si el mensaje ya está en la lista (comparando ID y external_id)
-        const isDuplicate = allMessages.some(m => 
-            (m.id === msg.id && msg.id !== undefined) || 
+    if (normChatId(cid) === normChatId(activeChatId)) {
+        const isDuplicate = allMessages.some(m =>
+            (m.id === msg.id && msg.id !== undefined) ||
             (m.external_id === msg.external_id && msg.external_id !== undefined && msg.external_id !== null)
         );
         if (!isDuplicate) {
@@ -113,9 +116,9 @@ socket.on('new_message', (msg) => {
             scrollToBottom();
         }
     }
-    
+
     // 2. Actualizar lista de chats localmente (Optimización)
-    const chatIdx = chats.findIndex(c => c.id === cid);
+    const chatIdx = chats.findIndex(c => normChatId(c.id) === normChatId(cid));
     if (chatIdx !== -1) {
         chats[chatIdx].last_message_at = msg.created_at || new Date().toISOString();
         chats[chatIdx].last_message = msg.content;
@@ -206,10 +209,11 @@ async function fetchChats(refresh = false) {
     const tagFilter = document.getElementById('filter-tag')?.value || '';
 
     loadingChats = true;
+    _fetchChatsController = new AbortController();
     try {
         const platformParam = currentPlatform === 'all' ? '' : `&platform=${currentPlatform}`;
         const url = `/api/backoffice/chats?token=${token}&limit=${CHAT_LIMIT}&offset=${chatOffset}&search=${encodeURIComponent(query)}&tag=${tagFilter}${platformParam}`;
-        const res = await fetch(url);
+        const res = await fetch(url, { signal: _fetchChatsController.signal });
         if (res.status === 401) {
             logout();
             return;
@@ -255,8 +259,9 @@ async function fetchChats(refresh = false) {
                 if (toggle) toggle.checked = activeChat.bot_enabled;
             }
         }
-    } catch (e) { 
-        console.error(e); 
+    } catch (e) {
+        if (e.name === 'AbortError') return;
+        console.error(e);
     } finally {
         loadingChats = false;
     }
@@ -325,19 +330,32 @@ function formatLastMessageTime(dateStr) {
     return date.toLocaleDateString([], { day: '2-digit', month: '2-digit' });
 }
 
-// Local cache for avatar URLs to avoid re-requesting during current session
 const avatarCache = new Map();
+const avatarFailed = new Set();
+window._avatarFail = (chatId) => avatarFailed.add(chatId);
+
+function getInitials(name) {
+    if (!name) return '?';
+    const words = name.trim().split(/\s+/);
+    if (words.length === 1) return words[0].charAt(0).toUpperCase();
+    return (words[0].charAt(0) + words[words.length - 1].charAt(0)).toUpperCase();
+}
+
+function getAvatarBg(str) {
+    const colors = ['#0078D4','#25d366','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#10b981','#f97316','#6366f1'];
+    let hash = 0;
+    for (let i = 0; i < (str || '').length; i++) hash = (str.charCodeAt(i) + ((hash << 5) - hash)) | 0;
+    return colors[Math.abs(hash) % colors.length];
+}
 
 function renderChatList(listToRender = chats) {
     const list = document.getElementById('chat-list');
     if (!list) return;
     list.innerHTML = listToRender.map(chat => {
-        const initial = (chat.name || chat.id).charAt(0).toUpperCase();
-        const avatarUrl = chat.id ? `/api/backoffice/profile-pic/${chat.id}?token=${token}` : '';
+        const nameForAvatar = (chat.name && chat.name !== '[-]') ? chat.name : chat.id.split('@')[0];
+        const initials = getInitials(nameForAvatar);
+        const bg = getAvatarBg(chat.id || '');
 
-        // Si ya lo tenemos en caché local, usarlo directamente
-        const finalSrc = (chat.id && avatarCache.has(chat.id)) ? avatarCache.get(chat.id) : '';
-        
         // Icono de plataforma
         let platformIcon = '';
         if (chat.type === 'instagram') platformIcon = '<i class="fab fa-instagram platform-instagram"></i>';
@@ -354,9 +372,9 @@ function renderChatList(listToRender = chats) {
         const unreadCount = chat.unread_count || 0;
         const unreadHtml = unreadCount > 0 ? `<div class="unread-badge">${unreadCount}</div>` : '';
 
-        const statusBadge = chat.bot_enabled 
-            ? `<div style="text-align:right;"><span style="color: var(--accent); font-size: 0.75rem;">🤖 Bot</span><br/><span style="font-size:0.65rem; opacity:0.7;">${timeStr}</span></div>`
-            : `<div style="text-align:right;"><span style="color: #f87171; font-size: 0.75rem;">👤 Humano</span><br/><span style="font-size:0.65rem; opacity:0.7;">${timeStr}</span></div>`;
+        const statusBadge = chat.bot_enabled
+            ? `<div style="text-align:right;"><i class="fas fa-robot" style="color:#22c55e; font-size:0.8rem;"></i><br/><span style="font-size:0.65rem; opacity:0.7;">${timeStr}</span></div>`
+            : `<div style="text-align:right;"><i class="fas fa-user" style="color:#f87171; font-size:0.8rem;"></i><br/><span style="font-size:0.65rem; opacity:0.7;">${timeStr}</span></div>`;
 
         // CRM Status Badge
         let crmStatusHtml = '';
@@ -368,67 +386,30 @@ function renderChatList(listToRender = chats) {
 
         return `
             <div class="chat-item ${activeChatId === chat.id ? 'active' : ''}" onclick="selectChat('${chat.id}')">
-                <div class="chat-avatar">
-                   <img data-src="${avatarUrl}" src="${finalSrc || `https://ui-avatars.com/api/?name=${initial}&background=random`}" 
-                        class="avatar-img"
-                        onerror="this.onerror=null; this.src='https://ui-avatars.com/api/?name=${initial}&background=random'">
+                <div class="chat-avatar" style="background:${bg};">
+                    <span>${initials}</span>
                     ${iconOverlayHtml}
                 </div>
                 <div class="chat-info">
-                    <div style="display:flex; justify-content:space-between; align-items: baseline;">
-                        <div style="display:flex; flex-direction:column;">
-                            <span class="chat-name">${(chat.name && chat.name !== '[-]') ? chat.name : chat.id.split('@')[0]}</span>
-                            <span style="font-size: 0.75rem; opacity: 0.6; color: var(--text-muted); font-weight: normal;">${chat.id.split('@')[0]}</span>
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:4px;">
+                        <div style="display:flex; flex-direction:column; min-width:0; flex:1; overflow:hidden;">
+                            <div style="display:flex; align-items:center; gap:4px; overflow:hidden;">
+                                <span class="chat-name" style="flex-shrink:0; max-width:120px;">${(chat.name && chat.name !== '[-]') ? chat.name : chat.id.split('@')[0]}</span>
+                                <div class="chat-tags-list" style="display:flex; flex-wrap:nowrap; overflow:hidden; gap:3px; min-width:0;">${tagsHtml}</div>
+                            </div>
+                            <span style="font-size:0.7rem; opacity:0.5; color:var(--text-muted); font-weight:normal; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${chat.id.split('@')[0]}</span>
                             ${crmStatusHtml}
                         </div>
-                        ${statusBadge}
-                    </div>
-                    <div class="chat-info-bottom">
-                       <div class="chat-tags-list" style="display:flex; flex-wrap:wrap; margin-top:2px;">${tagsHtml}</div>
-                       ${unreadHtml}
+                        <div style="display:flex; flex-direction:column; align-items:flex-end; gap:2px; flex-shrink:0;">
+                            ${statusBadge}
+                            ${unreadHtml}
+                        </div>
                     </div>
                 </div>
             </div>
         `;
     }).join('');
 
-    // Activar Lazy Loading para las nuevas imágenes
-    observeAvatars();
-}
-
-function observeAvatars() {
-    const options = {
-        root: document.getElementById('chat-list'),
-        rootMargin: '100px',
-        threshold: 0.01
-    };
-
-    const observer = new IntersectionObserver((entries, obs) => {
-        entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                const img = entry.target;
-                const src = img.getAttribute('data-src');
-                if (src) {
-                    // Si ya tiene el src correcto, no hacer nada
-                    if (img.getAttribute('src') === src) return;
-                    
-                    // Cargar imagen
-                    img.src = src;
-                    img.removeAttribute('data-src');
-                    
-                    // Guardar en caché local para que si se re-renderiza la lista no parpadee
-                    const chatIdMatch = src.match(/\/profile-pic\/([^?]+)/);
-                    if (chatIdMatch) {
-                        const chatId = chatIdMatch[1];
-                        avatarCache.set(chatId, src);
-                    }
-                }
-                obs.unobserve(img);
-            }
-        });
-    }, options);
-
-    document.querySelectorAll('.avatar-img[data-src]').forEach(img => observer.observe(img));
 }
 
 
@@ -479,6 +460,7 @@ async function checkPlatformVisibility() {
 
 async function selectChat(id) {
     activeChatId = id;
+    if (window.innerWidth <= 768) document.body.classList.add('mobile-chat-active');
     const chat = chats.find(c => c.id === id);
     
     document.getElementById('active-chat-phone').innerText = chat.id.split('@')[0];
@@ -486,14 +468,11 @@ async function selectChat(id) {
     document.getElementById('active-chat-name').innerText = displayName;
     
     const headerAvatar = document.getElementById('active-chat-avatar');
-    const nameForInitial = (chat.name && chat.name !== '[-]') ? chat.name : chat.id;
-    const initial = nameForInitial.charAt(0).toUpperCase();
-    const avatarUrl = chat.id ? `/api/backoffice/profile-pic/${chat.id}?token=${token}` : '';
-
-    headerAvatar.innerHTML = `
-        <span style="position:relative; z-index:1;">${initial}</span>
-        ${avatarUrl ? `<img src="${avatarUrl}" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; z-index:2;" onerror="this.style.display='none'">` : ''}
-    `;
+    const nameForAvatar = (chat.name && chat.name !== '[-]') ? chat.name : chat.id.split('@')[0];
+    const headerInitials = getInitials(nameForAvatar);
+    const headerBg = getAvatarBg(chat.id || '');
+    headerAvatar.style.background = headerBg;
+    headerAvatar.innerHTML = `<span>${headerInitials}</span>`;
     
     const botToggle = document.getElementById('bot-toggle');
     botToggle.disabled = false;
@@ -542,7 +521,9 @@ function updateBotStatusText(enabled) {
     const txt = document.getElementById('bot-status-text');
     if (!txt) return;
     const isEnabled = enabled === true || enabled === 'true' || enabled === 1;
-    txt.innerText = isEnabled ? 'Bot Activo' : 'Intervención Humana';
+    txt.innerHTML = isEnabled
+        ? '<i class="fas fa-robot"></i>'
+        : '<i class="fas fa-user"></i>';
     txt.className = isEnabled ? 'status-bot' : 'status-human';
 }
 
@@ -578,35 +559,46 @@ function updateInputState(botEnabled) {
 
 
 async function fetchMessages(chatId, reset = false) {
-    if (loadingMessages) return;
-    loadingMessages = true;
-
+    // Al cambiar de chat, cancelar el fetch anterior y forzar la nueva carga
     if (reset) {
+        if (_fetchMessagesController) _fetchMessagesController.abort();
+        loadingMessages = false;
         messageOffset = 0;
         allMessagesLoaded = false;
-        // No limpiamos allMessages aquí para evitar parpadeo blanco, solo marcamos
-    }
-    
-    if (allMessagesLoaded && !reset) {
-        loadingMessages = false;
-        return;
     }
 
+    if (loadingMessages) return;
+    if (allMessagesLoaded && !reset) return;
+
+    loadingMessages = true;
+    const myController = new AbortController();
+    _fetchMessagesController = myController;
+
     try {
-        const res = await fetch(`/api/backoffice/messages/${chatId}?token=${token}&limit=${MSG_LIMIT}&offset=${messageOffset}`);
+        const res = await fetch(
+            `/api/backoffice/messages/${chatId}?token=${token}&limit=${MSG_LIMIT}&offset=${messageOffset}`,
+            { signal: myController.signal }
+        );
+
+        // Si el usuario cambio de chat mientras esperabamos la respuesta, descartar
+        if (chatId !== activeChatId) return;
+
         const newMessages = await res.json();
-        
+
+        if (chatId !== activeChatId) return;
+
         if (newMessages.length < MSG_LIMIT) allMessagesLoaded = true;
 
         const container = document.getElementById('messages');
+        if (!container) return;
         const oldScrollHeight = container.scrollHeight;
 
         if (reset) {
-            allMessages = newMessages; // REEMPLAZAR en vez de concatenar
+            allMessages = newMessages;
         } else {
-            allMessages = [...newMessages, ...allMessages]; // Infinit scroll up: concatenar al inicio
+            allMessages = [...newMessages, ...allMessages];
         }
-        
+
         renderMessages();
 
         if (reset) {
@@ -617,9 +609,11 @@ async function fetchMessages(chatId, reset = false) {
 
         messageOffset += newMessages.length;
     } catch (e) {
+        if (e.name === 'AbortError') return;
         console.error(e);
     } finally {
-        loadingMessages = false;
+        // Solo resetear el flag si somos el fetch activo (evita que un abort previo resetee el flag del nuevo chat)
+        if (_fetchMessagesController === myController) loadingMessages = false;
     }
 }
 
@@ -731,11 +725,14 @@ function generateMessageHtml(m) {
     
     let contentHtml = m.content || '';
     const type = m.type || 'text';
-    
-    const isImageUrl = type === 'image' || type === 'sticker' || contentHtml.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i) || (contentHtml.includes('/uploads/') && contentHtml.match(/\.(jpeg|jpg|gif|png|webp|svg)/i));
-    const isVideoUrl = type === 'video' || contentHtml.match(/\.(mp4|webm)$/i) || (contentHtml.includes('/uploads/') && contentHtml.match(/\.(mp4|webm)/i));
-    const isAudioUrl = type === 'voice' || type === 'audio' || contentHtml.match(/\.(ogg|opus|mp3|wav|aac|m4a)$/i) || (contentHtml.includes('/uploads/') && contentHtml.match(/\.(ogg|opus|mp3|wav|aac|m4a)/i));
-    const isFileUrl = type === 'document' || (contentHtml.includes('/uploads/') && !isImageUrl && !isVideoUrl && !isAudioUrl);
+
+    // Solo tratar como media si el content parece una URL real (no texto de caption)
+    const looksLikeUrl = contentHtml.startsWith('/') || contentHtml.startsWith('http://') || contentHtml.startsWith('https://') || contentHtml.includes('/uploads/') || contentHtml.includes('/tmp/');
+
+    const isImageUrl = looksLikeUrl && (type === 'image' || type === 'sticker' || contentHtml.match(/\.(jpeg|jpg|gif|png|webp|svg)($|\?)/i));
+    const isVideoUrl = looksLikeUrl && (type === 'video' || contentHtml.match(/\.(mp4|webm)($|\?)/i));
+    const isAudioUrl = looksLikeUrl && (type === 'voice' || type === 'audio' || contentHtml.match(/\.(ogg|opus|mp3|wav|aac|m4a)($|\?)/i));
+    const isFileUrl = looksLikeUrl && (type === 'document' || (contentHtml.includes('/uploads/') && !isImageUrl && !isVideoUrl && !isAudioUrl));
 
     if (isImageUrl && contentHtml) {
         contentHtml = `
@@ -1058,16 +1055,18 @@ function populateCRMFields(chat) {
     document.getElementById('crm-address').value = chat.address || '';
     document.getElementById('crm-tax-status').value = chat.tax_status || 'Cons. Final';
     document.getElementById('crm-product').value = chat.offered_product || '';
-    
+    _csdSync('crm-source');
+    _csdSync('crm-tax-status');
+
     // Nuevos campos sincronizados con CRM
     const ticketTitleEl = document.getElementById('crm-ticket-title');
     if (ticketTitleEl) ticketTitleEl.value = chat.ticket_title || '';
-    
+
     const phoneEl = document.getElementById('crm-phone-side');
     if (phoneEl) phoneEl.value = chat.id ? chat.id.split('@')[0] : '';
 
     const priorityEl = document.getElementById('crm-priority');
-    if (priorityEl) priorityEl.value = chat.priority || 'Baja';
+    if (priorityEl) { priorityEl.value = chat.priority || 'Baja'; _csdSync('crm-priority'); }
 
     // CRM Native Columns
     const statusEl = document.getElementById('crm-status-select-side');
@@ -1080,19 +1079,19 @@ function populateCRMFields(chat) {
             }
             optionsHtml += crmColumns.map(c => `<option value="${c.id}">${c.title}</option>`).join('');
             statusEl.innerHTML = optionsHtml;
+            _csdRebuild('crm-status-select-side');
         }
 
         const currentVal = chat.crm_status || 'UNASSIGNED';
-        // Intentar establecer por valor (ID)
         statusEl.value = currentVal;
-        
-        // Si no hay coincidencia exacta (selectedIndex -1), intentar buscar por Título (para compatibilidad)
+
         if (statusEl.selectedIndex === -1) {
             const col = crmColumns.find(c => c.id === currentVal || c.title === currentVal);
             if (col) statusEl.value = col.id;
-            else statusEl.value = currentVal; // Fallback al valor crudo si no coincide
+            else statusEl.value = currentVal;
         }
-        
+
+        _csdSync('crm-status-select-side');
         console.log(`[CRM] Poblando estado: ${currentVal} -> Asignado: ${statusEl.value}`);
     }
     
@@ -1379,11 +1378,22 @@ async function fetchTickets() {
                     
                     <div class="ticket-status-row">
                         <span style="font-size:0.75rem; color:var(--text-muted);">Estado:</span>
-                        <select class="status-select" onchange="updateTicketStatus('${t.id}', this.value)">
-                            <option value="Abierto" ${t.estado === 'Abierto' ? 'selected' : ''}>Abierto</option>
-                            <option value="En progreso" ${t.estado === 'En progreso' ? 'selected' : ''}>En progreso</option>
-                            <option value="Cerrado" ${t.estado === 'Cerrado' ? 'selected' : ''}>Cerrado</option>
-                        </select>
+                        <div class="csd-wrap csd-sm" style="width:auto; min-width:120px;">
+                            <select class="status-select" hidden onchange="updateTicketStatus('${t.id}', this.value)">
+                                <option value="Abierto" ${t.estado === 'Abierto' ? 'selected' : ''}>Abierto</option>
+                                <option value="En progreso" ${t.estado === 'En progreso' ? 'selected' : ''}>En progreso</option>
+                                <option value="Cerrado" ${t.estado === 'Cerrado' ? 'selected' : ''}>Cerrado</option>
+                            </select>
+                            <button class="csd-btn" type="button" onclick="_csdToggle(this)">
+                                <span class="csd-label">${t.estado}</span>
+                                <i class="fas fa-chevron-down csd-chevron"></i>
+                            </button>
+                            <div class="csd-menu">
+                                <button class="csd-item ${t.estado === 'Abierto' ? 'selected' : ''}" type="button" data-val="Abierto" onclick="_csdSelect(this,'Abierto')">Abierto</button>
+                                <button class="csd-item ${t.estado === 'En progreso' ? 'selected' : ''}" type="button" data-val="En progreso" onclick="_csdSelect(this,'En progreso')">En progreso</button>
+                                <button class="csd-item ${t.estado === 'Cerrado' ? 'selected' : ''}" type="button" data-val="Cerrado" onclick="_csdSelect(this,'Cerrado')">Cerrado</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             `;
@@ -1733,20 +1743,12 @@ async function deleteActiveTicket() {
 }
 
 async function toggleIntervention() {
-    // En RialWay, la intervención se maneja a través del toggleBot
     const toggle = document.getElementById('bot-toggle');
-    if (toggle) {
-        const newState = !toggle.checked;
-        toggleBot(newState);
-    }
+    if (toggle) toggleBot(toggle.checked);
 }
 
-// Inicialización principal
-fetchPendingTicketsCount();
+// Inicialización principal - los datos los carga initBackofficeView (primera y posteriores visitas)
 setInterval(fetchPendingTicketsCount, 30000);
-fetchBotTags();
-checkMetaStatus(); // Check if bulk messaging should be enabled
-fetchChats(true);  // CARGA INICIAL (CORRECCIÓN)
 
 // Manejo de URL params
 const urlParams = new URLSearchParams(window.location.search);
@@ -2428,9 +2430,6 @@ async function startBulkSend() {
 document.addEventListener('DOMContentLoaded', () => {
     const tplBody = document.getElementById('tpl-body');
     if (tplBody) tplBody.addEventListener('input', detectTemplateVariables);
-    
-    // Verificar estado de Meta al cargar para inicializar window.isMetaConnected
-    checkMetaStatus();
 });
 
 // --- Exportaciones Finales ---
@@ -2870,5 +2869,12 @@ window.initBackofficeView = function() {
             }
         });
     }
+};
+
+window._backofficeAbortAll = function() {
+    if (_fetchChatsController) { _fetchChatsController.abort(); _fetchChatsController = null; }
+    if (_fetchMessagesController) { _fetchMessagesController.abort(); _fetchMessagesController = null; }
+    loadingChats = false;
+    loadingMessages = false;
 };
 

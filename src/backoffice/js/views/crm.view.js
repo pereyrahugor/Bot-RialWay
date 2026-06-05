@@ -13,21 +13,28 @@ window.crmView = {
                     <p>Gestion visual de oportunidades y seguimiento de clientes.</p>
                 </div>
                 <div class="header-actions">
-                    <button class="btn btn-primary" onclick="addNewColumn()">
-                        <i class="fas fa-plus"></i> Nuevo Estado
-                    </button>
-                    <button class="btn btn-primary" onclick="openClosedLeadsModal()">
-                        <i class="fas fa-archive"></i> Leads Cerrados
-                    </button>
-                    <button id="btn-new-user" class="btn btn-primary" onclick="window.openNewUserModal()">
-                        <i class="fas fa-users"></i> Nuevo Usuario
-                    </button>
-                    <button class="btn btn-primary" onclick="toggleCRMConfigModal()">
-                        <i class="fas fa-cog"></i> Configurar Campos
-                    </button>
                     <button class="btn btn-primary" onclick="window.openNewLeadModal()">
-                        <i class="fas fa-plus-circle"></i> Crear Lead Card
+                        <i class="fas fa-plus"></i> Crear Lead
                     </button>
+                    <div class="header-more-menu">
+                        <button class="btn-icon-round" onclick="_toggleCRMMenu(event)" aria-label="Mas opciones">
+                            <i class="fas fa-ellipsis-vertical"></i>
+                        </button>
+                        <ul class="header-dropdown" id="crm-more-dropdown">
+                            <li onclick="_closeCRMMenu(); addNewColumn()">
+                                <i class="fas fa-plus"></i> Nuevo Estado
+                            </li>
+                            <li onclick="_closeCRMMenu(); openClosedLeadsModal()">
+                                <i class="fas fa-box-archive"></i> Leads Cerrados
+                            </li>
+                            <li id="btn-new-user" onclick="_closeCRMMenu(); window.openNewUserModal()">
+                                <i class="fas fa-user-plus"></i> Nuevo Usuario
+                            </li>
+                            <li onclick="_closeCRMMenu(); toggleCRMConfigModal()">
+                                <i class="fas fa-sliders"></i> Configurar Campos
+                            </li>
+                        </ul>
+                    </div>
                 </div>
             </div>
 
@@ -42,11 +49,24 @@ window.crmView = {
         if (typeof Sortable === 'undefined') {
             await loadViewScript('https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js');
         }
-        await loadViewScript('/js/crm.js?v=2');
+        await loadViewScript('/js/crm.js?v=4');
         if (typeof window.initCRMView === 'function') await window.initCRMView();
     },
 
     destroy() {}
+};
+
+window._toggleCRMMenu = function(e) {
+    e.stopPropagation();
+    const d = document.getElementById('crm-more-dropdown');
+    if (!d) return;
+    const isOpen = d.classList.toggle('open');
+    if (isOpen) document.addEventListener('click', window._closeCRMMenu, { once: true });
+};
+
+window._closeCRMMenu = function() {
+    const d = document.getElementById('crm-more-dropdown');
+    if (d) d.classList.remove('open');
 };
 
 // Modales compartidos entre crm.view.js y crm-tareas.view.js
@@ -72,14 +92,14 @@ function _getCRMModals() {
                         </div>
                         <div class="modal-grid">
                             <div class="modal-section" data-field="crm-name">
-                                <label><i class="fas fa-user"></i> Nombre Completo / Razon Social</label>
+                                <label><i class="fas fa-user"></i> Nombre / Razon Social</label>
                                 <input type="text" id="edit-lead-name" class="crm-input" placeholder="Nombre completo...">
                             </div>
                             <div class="modal-section" data-field="crm-phone">
                                 <label><i class="fas fa-phone"></i> Telefono</label>
-                                <div class="input-with-action">
+                                <div class="phone-input-wrap">
                                     <input type="text" id="edit-lead-phone" class="crm-input" readonly>
-                                    <button type="button" class="btn-action btn-action-primary" onclick="openWhatsAppDirect()">
+                                    <button type="button" class="phone-wa-btn" onclick="openWhatsAppDirect()">
                                         <i class="fab fa-whatsapp"></i>
                                     </button>
                                 </div>
@@ -102,12 +122,24 @@ function _getCRMModals() {
                             </div>
                             <div class="modal-section" data-field="crm-tax-status">
                                 <label><i class="fas fa-file-invoice-dollar"></i> Situacion Impositiva</label>
-                                <select id="edit-lead-tax-status" class="crm-input">
-                                    <option value="Cons. Final">Cons. Final</option>
-                                    <option value="Responsable Inscripto">Responsable Inscripto</option>
-                                    <option value="Monotributo">Monotributo</option>
-                                    <option value="Exento">Exento</option>
-                                </select>
+                                <div class="csd-wrap">
+                                    <select id="edit-lead-tax-status" hidden>
+                                        <option value="Cons. Final">Cons. Final</option>
+                                        <option value="Responsable Inscripto">Responsable Inscripto</option>
+                                        <option value="Monotributo">Monotributo</option>
+                                        <option value="Exento">Exento</option>
+                                    </select>
+                                    <button class="csd-btn" type="button" onclick="_csdToggle(this)">
+                                        <span class="csd-label">Cons. Final</span>
+                                        <i class="fas fa-chevron-down csd-chevron"></i>
+                                    </button>
+                                    <div class="csd-menu">
+                                        <button class="csd-item selected" type="button" data-val="Cons. Final" onclick="_csdSelect(this,'Cons. Final')">Cons. Final</button>
+                                        <button class="csd-item" type="button" data-val="Responsable Inscripto" onclick="_csdSelect(this,'Responsable Inscripto')">Responsable Inscripto</button>
+                                        <button class="csd-item" type="button" data-val="Monotributo" onclick="_csdSelect(this,'Monotributo')">Monotributo</button>
+                                        <button class="csd-item" type="button" data-val="Exento" onclick="_csdSelect(this,'Exento')">Exento</button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         <div class="modal-grid">
@@ -117,15 +149,30 @@ function _getCRMModals() {
                             </div>
                             <div class="modal-section" data-field="crm-source">
                                 <label><i class="fas fa-bullhorn"></i> Fuente / Canal</label>
-                                <select id="edit-lead-source" class="crm-input">
-                                    <option value="">Desconocida</option>
-                                    <option value="Instagram">Instagram</option>
-                                    <option value="Facebook">Facebook</option>
-                                    <option value="WhatsApp">WhatsApp</option>
-                                    <option value="Web">Web</option>
-                                    <option value="Referido">Referido</option>
-                                    <option value="Manual CRM">Manual CRM</option>
-                                </select>
+                                <div class="csd-wrap">
+                                    <select id="edit-lead-source" hidden>
+                                        <option value="">Desconocida</option>
+                                        <option value="Instagram">Instagram</option>
+                                        <option value="Facebook">Facebook</option>
+                                        <option value="WhatsApp">WhatsApp</option>
+                                        <option value="Web">Web</option>
+                                        <option value="Referido">Referido</option>
+                                        <option value="Manual CRM">Manual CRM</option>
+                                    </select>
+                                    <button class="csd-btn" type="button" onclick="_csdToggle(this)">
+                                        <span class="csd-label">Desconocida</span>
+                                        <i class="fas fa-chevron-down csd-chevron"></i>
+                                    </button>
+                                    <div class="csd-menu">
+                                        <button class="csd-item selected" type="button" data-val="" onclick="_csdSelect(this,'')">Desconocida</button>
+                                        <button class="csd-item" type="button" data-val="Instagram" onclick="_csdSelect(this,'Instagram')">Instagram</button>
+                                        <button class="csd-item" type="button" data-val="Facebook" onclick="_csdSelect(this,'Facebook')">Facebook</button>
+                                        <button class="csd-item" type="button" data-val="WhatsApp" onclick="_csdSelect(this,'WhatsApp')">WhatsApp</button>
+                                        <button class="csd-item" type="button" data-val="Web" onclick="_csdSelect(this,'Web')">Web</button>
+                                        <button class="csd-item" type="button" data-val="Referido" onclick="_csdSelect(this,'Referido')">Referido</button>
+                                        <button class="csd-item" type="button" data-val="Manual CRM" onclick="_csdSelect(this,'Manual CRM')">Manual CRM</button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         <div class="modal-section" data-field="crm-notes">
@@ -139,16 +186,34 @@ function _getCRMModals() {
                             </div>
                             <div class="modal-section" data-field="crm-priority">
                                 <label><i class="fas fa-tag"></i> Prioridad</label>
-                                <select id="edit-priority" class="crm-input">
-                                    <option value="Baja">Baja</option>
-                                    <option value="Media" selected>Media</option>
-                                    <option value="Alta">Alta</option>
-                                </select>
+                                <div class="csd-wrap">
+                                    <select id="edit-priority" hidden>
+                                        <option value="Baja">Baja</option>
+                                        <option value="Media" selected>Media</option>
+                                        <option value="Alta">Alta</option>
+                                    </select>
+                                    <button class="csd-btn" type="button" onclick="_csdToggle(this)">
+                                        <span class="csd-label">Media</span>
+                                        <i class="fas fa-chevron-down csd-chevron"></i>
+                                    </button>
+                                    <div class="csd-menu">
+                                        <button class="csd-item" type="button" data-val="Baja" onclick="_csdSelect(this,'Baja')">Baja</button>
+                                        <button class="csd-item selected" type="button" data-val="Media" onclick="_csdSelect(this,'Media')">Media</button>
+                                        <button class="csd-item" type="button" data-val="Alta" onclick="_csdSelect(this,'Alta')">Alta</button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         <div class="modal-section" data-field="crm-status">
                             <label><i class="fas fa-tasks"></i> Estado del Lead (CRM)</label>
-                            <select id="edit-lead-status" class="crm-input" onchange="syncStatusToColumn && syncStatusToColumn(this.value)"></select>
+                            <div class="csd-wrap">
+                                <select id="edit-lead-status" hidden onchange="syncStatusToColumn && syncStatusToColumn(this.value)"></select>
+                                <button class="csd-btn" type="button" onclick="_csdToggle(this)">
+                                    <span class="csd-label">Sin Asignar</span>
+                                    <i class="fas fa-chevron-down csd-chevron"></i>
+                                </button>
+                                <div class="csd-menu"></div>
+                            </div>
                         </div>
                     </div>
                     <div id="additional-notes-list"></div>
@@ -158,9 +223,18 @@ function _getCRMModals() {
                     <div id="alert-status-info"></div>
                     <div id="assignee-section" class="modal-section">
                         <label><i class="fas fa-user-tag assignee-icon"></i> Asignar Lead a:</label>
-                        <select id="edit-lead-assignee" class="crm-input">
-                            <option value="">Sin asignar (Libre)</option>
-                        </select>
+                        <div class="csd-wrap">
+                            <select id="edit-lead-assignee" hidden>
+                                <option value="">Sin asignar (Libre)</option>
+                            </select>
+                            <button class="csd-btn" type="button" onclick="_csdToggle(this)">
+                                <span class="csd-label">Sin asignar (Libre)</span>
+                                <i class="fas fa-chevron-down csd-chevron"></i>
+                            </button>
+                            <div class="csd-menu">
+                                <button class="csd-item selected" type="button" data-val="" onclick="_csdSelect(this,'')">Sin asignar (Libre)</button>
+                            </div>
+                        </div>
                     </div>
                     <div class="modal-tags-section">
                         <h4 class="modal-tags-title"><i class="fas fa-tags modal-tags-icon"></i> Etiquetas</h4>
@@ -260,10 +334,20 @@ function _getCRMModals() {
                         <input type="text" id="new-user-name" class="crm-input mb-10" placeholder="Nombre completo">
                         <input type="text" id="new-user-user" class="crm-input mb-10" placeholder="Usuario (Ej: juan_vendedor)">
                         <input type="password" id="new-user-pass" class="crm-input mb-10" placeholder="Contrasena">
-                        <select id="new-user-role" class="crm-input mb-15">
-                            <option value="subuser">Vendedor / Operador (Limitado)</option>
-                            <option value="admin">Administrador (Total)</option>
-                        </select>
+                        <div class="csd-wrap mb-15">
+                            <select id="new-user-role" hidden>
+                                <option value="subuser">Vendedor / Operador (Limitado)</option>
+                                <option value="admin">Administrador (Total)</option>
+                            </select>
+                            <button class="csd-btn" type="button" onclick="_csdToggle(this)">
+                                <span class="csd-label">Vendedor / Operador (Limitado)</span>
+                                <i class="fas fa-chevron-down csd-chevron"></i>
+                            </button>
+                            <div class="csd-menu">
+                                <button class="csd-item selected" type="button" data-val="subuser" onclick="_csdSelect(this,'subuser')">Vendedor / Operador (Limitado)</button>
+                                <button class="csd-item" type="button" data-val="admin" onclick="_csdSelect(this,'admin')">Administrador (Total)</button>
+                            </div>
+                        </div>
                         <button class="btn btn-primary btn-full-tall" onclick="window.saveNewUser()">
                             <i class="fas fa-user-plus"></i> Crear Usuario
                         </button>

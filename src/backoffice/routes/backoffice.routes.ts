@@ -12,6 +12,9 @@ import { getOpenAI } from "../../apis/openai/openaiHelper";
 // Caché para fotos de perfil (chatId -> {url, timestamp})
 const profilePicCache = new Map<string, { url: string, expires: number }>();
 const CACHE_TTL = 1000 * 60 * 60; // 1 hora
+// Negative cache: chatIds sin foto de perfil (evita llamadas repetidas a WhatsApp)
+const profilePicNotFound = new Map<string, number>();
+const NOT_FOUND_TTL = 1000 * 60 * 10; // 10 minutos
 
 /**
  * Registra las rutas del backoffice en la instancia de Polka.
@@ -670,29 +673,42 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                 jid = `${chatId}@s.whatsapp.net`;
             }
 
+            // Negative cache: si ya sabemos que no tiene foto, responder 404 inmediatamente
+            const notFoundAt = profilePicNotFound.get(jid);
+            if (notFoundAt && (Date.now() - notFoundAt) < NOT_FOUND_TTL) {
+                res.status(404).end();
+                return;
+            }
+
             const vendor = (adapterProvider as any).vendor || adapterProvider.globalVendorArgs?.sock;
             if (vendor && typeof vendor.profilePictureUrl === 'function') {
                 try {
-                    // 1. Verificar caché
+                    // 1. Verificar caché positivo
                     const cached = profilePicCache.get(jid);
                     if (cached && cached.expires > Date.now()) {
                         res.writeHead(302, { Location: cached.url });
                         return res.end();
                     }
 
-                    // 2. Si no hay caché o expiró, pedir a WhatsApp
-                    const url = await vendor.profilePictureUrl(jid, 'image');
+                    // 2. Pedir a WhatsApp con timeout de 3s para no bloquear el pool de conexiones
+                    const timeout = new Promise<null>((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000));
+                    const url = await Promise.race([
+                        vendor.profilePictureUrl(jid, 'image'),
+                        timeout
+                    ]) as string | null;
+
                     if (url) {
                         profilePicCache.set(jid, { url, expires: Date.now() + CACHE_TTL });
                         res.writeHead(302, { Location: url });
                         return res.end();
                     }
-                } catch (picError) {
-                    // Si falla, intentamos devolver 404 pero no guardamos en caché negativa aún
-                    // para permitir reintentos posteriores del navegador si fue un glitch temporal
+                } catch (_picError) {
+                    // timeout o error de WhatsApp
                 }
             }
-            
+
+            // Guardar en negative cache para evitar llamadas repetidas
+            profilePicNotFound.set(jid, Date.now());
             res.status(404).end();
         } catch (e) {
             console.error('[ProfilePic] Error excepcional:', e);

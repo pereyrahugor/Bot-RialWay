@@ -20,11 +20,17 @@ let _mountNonce = 0;
 
 function loadViewScript(src) {
     if (_loadedScripts[src]) return Promise.resolve();
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
         const el = document.createElement('script');
         el.src = src;
-        el.onload = () => { _loadedScripts[src] = true; resolve(); };
-        el.onerror = reject;
+        const done = () => { _loadedScripts[src] = true; resolve(); };
+        // Timeout de 30s: safety net para CDN lento; scripts locales no deben llegar a esto
+        const t = setTimeout(() => {
+            console.warn('[Router] Timeout cargando script, continuando:', src);
+            done();
+        }, 30000);
+        el.onload = () => { clearTimeout(t); done(); };
+        el.onerror = () => { clearTimeout(t); console.warn('[Router] Error cargando script:', src); done(); };
         document.head.appendChild(el);
     });
 }
@@ -47,8 +53,16 @@ function highlightActiveNav(path) {
     document.querySelectorAll('#nav-messaging-btn .nav-dropdown-link[data-route]').forEach(item => {
         item.classList.toggle('active', item.getAttribute('data-route') === path);
     });
-    // Cerrar flyout al navegar
+    // Integraciones flyout button
+    const intBtn = document.getElementById('nav-integraciones-btn');
+    if (intBtn) intBtn.classList.toggle('active', path === '/crm' || path === '/crm-tareas');
+    // Dropdown links de Integraciones
+    document.querySelectorAll('#nav-integraciones-btn .nav-dropdown-link[data-route]').forEach(item => {
+        item.classList.toggle('active', item.getAttribute('data-route') === path);
+    });
+    // Cerrar flyouts al navegar
     if (typeof window.closeMessagingFlyout === 'function') window.closeMessagingFlyout();
+    if (typeof window.closeIntegracionesFlyout === 'function') window.closeIntegracionesFlyout();
 }
 window.highlightActiveNav = highlightActiveNav;
 
@@ -61,6 +75,11 @@ async function mountView(path) {
 
     if (!viewScript) {
         navigate('/backoffice');
+        return;
+    }
+
+    if (cleanPath === '/system-config' && window.__SYSTEM_CONFIG_VISIBLE === false) {
+        navigate('/dashboard');
         return;
     }
 

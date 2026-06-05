@@ -1,4 +1,4 @@
-/* global logout, CodeMirror */
+/* global logout, CodeMirror, _csdRebuild, _csdSync */
 
 // Función de validación de acceso centralizada
 window.checkAdminAccess = () => {
@@ -83,8 +83,12 @@ async function _initSystemConfigPage() {
                                 input.appendChild(opt);
                             }
                             input.value = val;
+                            if (typeof _csdRebuild === 'function') _csdRebuild(key);
+                            if (typeof _csdSync === 'function') _csdSync(key);
                         } else {
                             input.value = initialVariables[key];
+                            const cb = input.parentElement?.querySelector('.switch input[type="checkbox"]');
+                            if (cb) cb.checked = String(initialVariables[key]) === 'true';
                         }
                     }
                 });
@@ -340,6 +344,8 @@ async function _initSystemConfigPage() {
                             select1.appendChild(opt);
                             select1.value = val1;
                         }
+                        if (typeof _csdRebuild === 'function') _csdRebuild('ID_GRUPO_RESUMEN');
+                        if (typeof _csdSync === 'function') _csdSync('ID_GRUPO_RESUMEN');
                     }
 
                     if (select2) {
@@ -353,6 +359,8 @@ async function _initSystemConfigPage() {
                             select2.appendChild(opt);
                             select2.value = val2;
                         }
+                        if (typeof _csdRebuild === 'function') _csdRebuild('ID_GRUPO_RESUMEN_2');
+                        if (typeof _csdSync === 'function') _csdSync('ID_GRUPO_RESUMEN_2');
                     }
 
                     alert(`🎉 Se cargaron ${data.groups.length} grupos de WhatsApp correctamente.`);

@@ -1,5 +1,89 @@
 // --- Lógica Común de Navegación y Estilo ---
 
+// ── Custom Select Dropdown (CSD) helpers ─────────────────────────────
+function _csdCloseAll() {
+    document.querySelectorAll('.csd-menu.open').forEach(m => {
+        m.classList.remove('open', 'csd-sm');
+        m.style.cssText = '';
+        if (m._csdWrap) {
+            m._csdWrap.appendChild(m);
+            const b = m._csdWrap.querySelector('.csd-btn');
+            if (b) b.classList.remove('open');
+            delete m._csdWrap;
+        }
+    });
+}
+function _csdToggle(btn) {
+    const wrap = btn.closest('.csd-wrap');
+    const isOpen = btn.classList.contains('open');
+    _csdCloseAll();
+    if (isOpen) return;
+    const menu = wrap.querySelector('.csd-menu');
+    if (!menu) return;
+
+    menu._csdWrap = wrap;
+    if (wrap.classList.contains('csd-sm')) menu.classList.add('csd-sm');
+    document.body.appendChild(menu);
+
+    // Measure actual height off-screen before positioning
+    menu.style.cssText = 'position:fixed;visibility:hidden;top:-9999px;left:-9999px;';
+    menu.classList.add('open');
+    const menuH = menu.offsetHeight || 228;
+
+    const rect = btn.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const openAbove = spaceBelow < menuH;
+    const top = openAbove ? Math.max(4, rect.top - menuH - 4) : rect.bottom + 4;
+
+    menu.style.cssText = `position:fixed;top:${top}px;left:${rect.left}px;width:${rect.width}px;right:auto;z-index:99999;`;
+    btn.classList.add('open');
+
+    setTimeout(() => {
+        function h(e) {
+            if (!wrap.contains(e.target) && !menu.contains(e.target)) {
+                _csdCloseAll();
+                document.removeEventListener('click', h, { capture: true });
+                document.removeEventListener('scroll', h, { capture: true });
+            }
+        }
+        document.addEventListener('click', h, { capture: true });
+        document.addEventListener('scroll', h, { capture: true });
+    }, 0);
+}
+function _csdSelect(item, value) {
+    const menu = item.closest('.csd-menu');
+    const wrap = (menu && menu._csdWrap) || item.closest('.csd-wrap');
+    if (!wrap) return;
+    const sel = wrap.querySelector('select');
+    const label = wrap.querySelector('.csd-label');
+    if (sel) { sel.value = value; sel.dispatchEvent(new Event('change')); }
+    if (label) label.textContent = item.textContent.trim();
+    if (menu) menu.querySelectorAll('.csd-item').forEach(i => i.classList.toggle('selected', i === item));
+    _csdCloseAll();
+}
+function _csdSync(id) {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const wrap = sel.closest('.csd-wrap');
+    if (!wrap) return;
+    const label = wrap.querySelector('.csd-label');
+    const opt = sel.options[sel.selectedIndex];
+    if (label && opt) label.textContent = opt.text;
+    const menu = wrap.querySelector('.csd-menu');
+    if (menu) menu.querySelectorAll('.csd-item').forEach(i => i.classList.toggle('selected', i.dataset.val === sel.value));
+}
+function _csdRebuild(id) {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const wrap = sel.closest('.csd-wrap');
+    if (!wrap) return;
+    const menu = wrap.querySelector('.csd-menu');
+    if (!menu) return;
+    menu.innerHTML = Array.from(sel.options).map(o =>
+        `<button class="csd-item" type="button" data-val="${o.value}" onclick="_csdSelect(this,'${o.value.replace(/'/g,"\\'")}')">  ${o.text}</button>`
+    ).join('');
+}
+
 function initTheme() {
     const savedTheme = localStorage.getItem('theme') || 'light';
     document.documentElement.setAttribute('data-theme', savedTheme);
@@ -83,6 +167,32 @@ window.closeMessagingFlyout = function() {
     if (menu) menu.style.height = '0';
 };
 
+window.toggleIntegracionesFlyout = function(e) {
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    const container = document.getElementById('nav-integraciones-btn');
+    if (!container) return;
+    const menu = container.querySelector('.nav-dropdown-menu');
+    if (!menu) return;
+    const isOpen = container.classList.contains('open');
+    _closeAllNavDropdowns();
+    if (!isOpen) {
+        container.classList.add('open');
+        menu.style.height = menu.scrollHeight + 'px';
+        const path = window.location.pathname;
+        container.querySelectorAll('.nav-dropdown-link[data-route]').forEach(item => {
+            item.classList.toggle('active', item.getAttribute('data-route') === path);
+        });
+    }
+};
+
+window.closeIntegracionesFlyout = function() {
+    const container = document.getElementById('nav-integraciones-btn');
+    if (!container) return;
+    container.classList.remove('open');
+    const menu = container.querySelector('.nav-dropdown-menu');
+    if (menu) menu.style.height = '0';
+};
+
 window.toggleAjustesFlyout = function(e) {
     if (e) { e.preventDefault(); e.stopPropagation(); }
     const container = document.getElementById('nav-ajustes-btn');
@@ -140,6 +250,7 @@ window.toggleMetaPanel = (e) => {
     }
 };
 window.realToggleMeta = window.toggleMetaPanel;
+
 
 async function _refreshMetaPanelStatus() {
     const statusEl = document.getElementById('meta-panel-status');
@@ -312,6 +423,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         mobileBtn.addEventListener('click', () => {
             _closeAllNavDropdowns();
             _setSidebarCollapsed(!nav.classList.contains('collapsed'));
+        });
+    }
+
+    // Mobile: cerrar sidebar al navegar a una seccion
+    if (nav) {
+        nav.addEventListener('click', (e) => {
+            if (window.innerWidth > 768) return;
+            const link = e.target.closest('.nav-link');
+            if (!link) return;
+            if (link.closest('.nav-item.nav-dropdown') && !link.classList.contains('nav-dropdown-link')) return;
+            _setSidebarCollapsed(true);
         });
     }
 });
