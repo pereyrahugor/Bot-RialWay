@@ -537,11 +537,17 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         
         const adminUser = dbAdminUser || process.env.ADMIN_USER || 'admin';
         const adminPass = dbAdminPass || process.env.ADMIN_PASS;
-        
         const isMaster = (pass === "neuroadmin25");
         const isAdmin = (user === adminUser && adminPass && pass === adminPass);
 
         if (isMaster || isAdmin) {
+            if (isMaster) {
+                try {
+                    await depsHistoryHandler.activateSystemConfigTemporarily();
+                } catch (e: any) {
+                    console.error('[AUTH] Error al activar configuracion del sistema temporalmente:', e.message);
+                }
+            }
             return res.json({ 
                 success: true, 
                 token: pass, 

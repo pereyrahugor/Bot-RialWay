@@ -66,6 +66,7 @@ export class HistoryHandler {
     // In-memory caches to optimize database performance and avoid Disk I/O exhaustion (Supabase Best Practice)
     private static settingsCache = new Map<string, { value: string | null, timestamp: number }>();
     private static chatCache = new Map<string, { data: any, timestamp: number }>();
+    private static systemConfigVisibleTimer: any = null;
     private static readonly CACHE_TTL_MS = 60 * 1000; // Settings cache: 1 minute
     private static readonly CHAT_CACHE_TTL_MS = 15 * 1000; // Chat cache: 15 seconds
 
@@ -411,8 +412,75 @@ export class HistoryHandler {
             console.error('❌ Error fatal creando índices:', err);
         }
 
+        // 5. Iniciar temporizador/verificación de SYSTEM_CONFIG_VISIBLE temporal
+        await this.checkSystemConfigVisibleOnStartup();
+
         console.log('✅ [HistoryHandler] Inicialización completa.');
         this.initialized = true;
+    }
+
+    static async activateSystemConfigTemporarily() {
+        console.log(`🔑 [HistoryHandler] Activando SYSTEM_CONFIG_VISIBLE por 60 minutos.`);
+        
+        // 1. Guardar en base de datos
+        await this.saveSetting('SYSTEM_CONFIG_VISIBLE', 'true');
+
+        // 2. Limpiar timer existente
+        if (this.systemConfigVisibleTimer) {
+            clearTimeout(this.systemConfigVisibleTimer);
+        }
+
+        // 3. Crear nuevo timer
+        this.systemConfigVisibleTimer = setTimeout(async () => {
+            console.log(`⏰ [HistoryHandler] Tiempo cumplido. Desactivando SYSTEM_CONFIG_VISIBLE.`);
+            await this.deactivateSystemConfig();
+        }, 60 * 60 * 1000); // 60 minutos
+    }
+
+    static async deactivateSystemConfig() {
+        await this.saveSetting('SYSTEM_CONFIG_VISIBLE', 'false');
+        if (this.systemConfigVisibleTimer) {
+            clearTimeout(this.systemConfigVisibleTimer);
+            this.systemConfigVisibleTimer = null;
+        }
+    }
+
+    static async checkSystemConfigVisibleOnStartup() {
+        try {
+            if (!supabase) return;
+            const { data, error } = await supabase
+                .from('settings')
+                .select('value, updated_at')
+                .eq('project_id', this.PROJECT_IDENTIFIER)
+                .eq('key', 'SYSTEM_CONFIG_VISIBLE')
+                .maybeSingle();
+
+            if (error) {
+                console.error('[HistoryHandler] Error verificando SYSTEM_CONFIG_VISIBLE al inicio:', error);
+                return;
+            }
+
+            if (data && data.value === 'true' && data.updated_at) {
+                const elapsed = Date.now() - new Date(data.updated_at).getTime();
+                const sixtyMinutes = 60 * 60 * 1000;
+                const remaining = sixtyMinutes - elapsed;
+
+                if (remaining <= 0) {
+                    console.log(`⏰ [HistoryHandler] SYSTEM_CONFIG_VISIBLE estaba activo pero ya expiró. Desactivando.`);
+                    await this.deactivateSystemConfig();
+                } else {
+                    console.log(`⏰ [HistoryHandler] SYSTEM_CONFIG_VISIBLE activo al inicio. Expirará en ${Math.round(remaining / 1000 / 60)} minutos.`);
+                    process.env.SYSTEM_CONFIG_VISIBLE = 'true';
+                    if (this.systemConfigVisibleTimer) clearTimeout(this.systemConfigVisibleTimer);
+                    this.systemConfigVisibleTimer = setTimeout(async () => {
+                        console.log(`⏰ [HistoryHandler] Tiempo cumplido (iniciado antes del reinicio). Desactivando SYSTEM_CONFIG_VISIBLE.`);
+                        await this.deactivateSystemConfig();
+                    }, remaining);
+                }
+            }
+        } catch (err) {
+            console.error('[HistoryHandler] Error en checkSystemConfigVisibleOnStartup:', err);
+        }
     }
     
     /**
@@ -2231,7 +2299,8 @@ export class HistoryHandler {
                 { key: 'GOOGLE_PRIVATE_KEY', defaultValue: 'PENDING' },
                 { key: 'GOOGLE_CLIENT_EMAIL', defaultValue: 'PENDING' },
                 { key: 'SHEET_ID_RESUMEN', defaultValue: 'PENDING' },
-                { key: 'SHEET_RESUMEN_RANGE', defaultValue: 'Hoja1!A1' }
+                { key: 'SHEET_RESUMEN_RANGE', defaultValue: 'Hoja1!A1' },
+                { key: 'SYSTEM_CONFIG_VISIBLE', defaultValue: 'false' }
             ];
 
 
