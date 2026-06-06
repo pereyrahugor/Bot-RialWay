@@ -12,6 +12,9 @@ const ROUTES = {
     '/docs':          '/js/views/docs.view.js',
     '/documentacion': '/js/views/docs.view.js',
     '/webchat':       '/js/views/webchat.view.js',
+    '/meta':          '/js/views/meta.view.js',
+    '/mercado-pago':  '/js/views/mercado-pago.view.js',
+    '/meli':          '/js/views/meli.view.js',
 };
 
 const _loadedScripts = {};

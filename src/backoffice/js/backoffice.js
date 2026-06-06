@@ -1,4 +1,20 @@
-/* global io, metaAppId, FB, toggleLeadsPanel, toggleTicketsPanel, toggleMetaPanel, showToast, _csdSync, _csdRebuild */
+/* global io, metaAppId, FB, toggleLeadsPanel, toggleTicketsPanel, toggleMetaPanel, showToast, _csdSync, _csdRebuild, navigate */
+
+function _tagStyle(hex) {
+    const color = hex || '#6366f1';
+    const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+    return isDark
+        ? `background:${color}; color:#ffffff;`
+        : `background:${color}22; color:${color};`;
+}
+
+window.addEventListener('themeChanged', () => {
+    document.querySelectorAll('.tag-pill[data-tag-color]').forEach(el => {
+        const base = (el.getAttribute('style') || '').replace(/background:[^;]+;?\s*/g, '').replace(/color:[^;]+;?\s*/g, '');
+        el.setAttribute('style', base + _tagStyle(el.dataset.tagColor));
+    });
+    if (document.getElementById('tag-list-editor')) renderTagManager();
+});
 
 const token = localStorage.getItem('backoffice_token');
 if (!token) window.location.href = '/login';
@@ -364,8 +380,8 @@ function renderChatList(listToRender = chats) {
         const showIconOverlay = currentPlatform === 'all' && chat.type !== 'whatsapp';
         const iconOverlayHtml = showIconOverlay ? `<div class="platform-icon-overlay">${platformIcon}</div>` : '';
 
-        const tagsHtml = (chat.tags || []).map(t => 
-            `<span class="tag-pill" style="background:${t.color || '#6366f1'}">${t.name}</span>`
+        const tagsHtml = (chat.tags || []).map(t =>
+            `<span class="tag-pill" data-tag-color="${t.color||'#6366f1'}" style="${_tagStyle(t.color)}">${t.name}</span>`
         ).join('');
 
         const timeStr = formatLastMessageTime(chat.last_message_at);
@@ -509,8 +525,8 @@ function renderActiveChatTags() {
     const container = document.getElementById('active-chat-tags');
     if (!container) return;
     if (chat && chat.tags) {
-        container.innerHTML = chat.tags.map(t => 
-            `<span class="tag-pill" style="background:${t.color}">${t.name}</span>`
+        container.innerHTML = chat.tags.map(t =>
+            `<span class="tag-pill" data-tag-color="${t.color||'#6366f1'}" style="${_tagStyle(t.color)}">${t.name}</span>`
         ).join('');
     } else {
         container.innerHTML = '';
@@ -1274,7 +1290,7 @@ function renderTagManager() {
         <div style="max-height: 200px; overflow-y: auto; margin-top: 10px;">
             ${_boBotTags.map(t => `
                 <div class="tag-item-edit">
-                    <span class="tag-pill" style="background:${t.color || '#6366f1'}">${t.name}</span>
+                    <span class="tag-pill" style="${_tagStyle(t.color)}">${t.name}</span>
                     <button class="btn-icon" onclick="deleteTag('${t.id}')" style="color:#f87171;"><i class="fas fa-trash-alt"></i></button>
                 </div>
             `).join('')}
@@ -1288,9 +1304,9 @@ function renderTagManager() {
         assignList.innerHTML = _boBotTags.map(t => {
             const isAssigned = assignedTagIds.includes(t.id);
             return `
-                <div onclick="${isAssigned ? 'removeTagFromChat' : 'addTagToChat'}('${t.id}')" 
-                     class="tag-pill" 
-                     style="background:${t.color || '#6366f1'}; cursor:pointer; opacity:${isAssigned ? 1 : 0.6}; transform:${isAssigned ? 'scale(1.05)' : 'scale(1)'}; border:${isAssigned ? '2px solid white' : '1px solid transparent'}">
+                <div onclick="${isAssigned ? 'removeTagFromChat' : 'addTagToChat'}('${t.id}')"
+                     class="tag-pill"
+                     data-tag-color="${t.color||'#6366f1'}" style="cursor:pointer; ${_tagStyle(t.color)}${isAssigned ? ' transform:scale(1.04);' : ' opacity:0.55;'}">
                     ${t.name} ${isAssigned ? '✓' : '+'}
                 </div>
             `;
@@ -1827,7 +1843,7 @@ async function checkMetaStatus() {
                                 ${config.verified_name ? `<div><strong>Nombre:</strong> ${config.verified_name}</div>` : ''}
                             </div>
                         </div>
-                        <button class="btn-primary" onclick="toggleBulkModal();" style="width:100%; height:45px; display:flex; align-items:center; justify-content:center; gap:10px; background:#10b981; border:none; border-radius:12px; font-weight:600; cursor:pointer; color:white; margin-top: 20px;">
+                        <button class="btn-primary" onclick="navigate('/meta');" style="width:100%; height:45px; display:flex; align-items:center; justify-content:center; gap:10px; background:#10b981; border:none; border-radius:12px; font-weight:600; cursor:pointer; color:white; margin-top: 20px;">
                             <i class="fas fa-layer-group"></i> Abrir Envío Masivo
                         </button>
                         <button class="btn-secondary" onclick="launchMetaOnboarding()" style="width:100%; margin-top:10px; opacity:0.7; font-size:0.8rem;">
@@ -1877,21 +1893,12 @@ async function checkMetaStatus() {
     }
 }
 
-async function toggleBulkModal() {
-    const modal = document.getElementById('bulk-modal');
-    const isOpening = !modal.classList.contains('active');
-    
-    if (isOpening) {
-        const metaPanel = document.getElementById('meta-panel');
-        if (metaPanel && metaPanel.classList.contains('active')) {
-            toggleMetaPanel(); // Cerramos el panel de Meta para centrar la atención en el modal
-        }
+function toggleBulkModal() {
+    const metaPanel = document.getElementById('meta-panel');
+    if (metaPanel && metaPanel.classList.contains('active')) {
+        toggleMetaPanel();
     }
-
-    modal.classList.toggle('active');
-    if (modal.classList.contains('active')) {
-        switchMetaTab('my');
-    }
+    if (typeof navigate === 'function') navigate('/meta');
 }
 
 function switchMetaTab(tab) {
@@ -2436,10 +2443,8 @@ document.addEventListener('DOMContentLoaded', () => {
 // NO sobreescribir toggleLeadsPanel/toggleTicketsPanel/toggleMetaPanel:
 // crm-common.js los maneja con routing SPA. Solo exponer las funciones reales.
 window.realToggleMeta = toggleMetaPanel;
+window.checkMetaStatus = checkMetaStatus;
 window.toggleBulkModal = toggleBulkModal;
-window.switchMetaTab = switchMetaTab;
-window.showTemplateDetail = showTemplateDetail;
-window.startBulkSend = startBulkSend;
 window.downloadBulkExcel = () => {
     if (currentSelectedTemplate) {
         let url = `/api/backoffice/whatsapp/template-excel/${currentSelectedTemplate.name}?token=${token}`;

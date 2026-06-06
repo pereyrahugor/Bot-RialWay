@@ -1406,22 +1406,29 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
 
         const projectId = (req.query.projectId as string) || process.env.RAILWAY_PROJECT_ID || "default";
-        
+
         // Intentar obtener config de la DB
         let config = await depsHistoryHandler.getMetaOnboardingData(projectId);
-        
+
         // Si no hay config específica, intentar la global (projectId=default)
         if (!config && projectId !== 'default') {
             config = await depsHistoryHandler.getMetaOnboardingData('default');
         }
-        
+
+        // Merge: DB tiene prioridad, pero solo si el valor no es vacío/null
+        const dbConfig: Record<string, any> = config || {};
+        const mergedConfig: Record<string, any> = { ...dbConfig };
+        if (!mergedConfig.waba_id        && process.env.META_WABA_ID)      mergedConfig.waba_id        = process.env.META_WABA_ID;
+        if (!mergedConfig.phone_number_id && process.env.META_PHONE_ID)     mergedConfig.phone_number_id = process.env.META_PHONE_ID;
+        if (!mergedConfig.access_token   && process.env.META_ACCESS_TOKEN) mergedConfig.access_token   = process.env.META_ACCESS_TOKEN;
+
         res.json({
             success: true,
             appId: process.env.META_APP_ID || '1493670789148486',
             appSecret: process.env.META_APP_SECRET || '',
             configId: process.env.META_CONFIG_ID || '',
             railwayProjectId: projectId,
-            config: config || {}
+            config: mergedConfig
         });
     });
 
