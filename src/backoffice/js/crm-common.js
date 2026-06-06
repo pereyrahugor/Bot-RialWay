@@ -234,38 +234,91 @@ window.toggleTicketsPanel = (e) => {
     if (typeof window.realToggleTickets === 'function') window.realToggleTickets(e);
 };
 
-// Meta panel vive en el shell - siempre disponible desde cualquier view
+// Meta vive en /meta view - navegar directamente
 window.toggleMetaPanel = (e) => {
     if (e && e.stopPropagation) e.stopPropagation();
-    const panel = document.getElementById('meta-panel');
-    if (!panel) return;
-    // Cerrar otros paneles globales si estan abiertos
-    ['leads-panel', 'tickets-panel'].forEach(id => {
-        const p = document.getElementById(id);
-        if (p) p.classList.remove('active');
-    });
-    panel.classList.toggle('active');
-    if (panel.classList.contains('active')) {
-        _refreshMetaPanelStatus();
-    }
+    if (typeof window.navigate === 'function') window.navigate('/meta');
+    else window.location.href = '/meta';
 };
 window.realToggleMeta = window.toggleMetaPanel;
 
 
 async function _refreshMetaPanelStatus() {
-    const statusEl = document.getElementById('meta-panel-status');
-    if (!statusEl) return;
     try {
         const token = localStorage.getItem('system_config_token') || localStorage.getItem('backoffice_token');
         if (!token) return;
         const res = await fetch(`/api/backoffice/whatsapp/config?token=${token}`);
         const data = await res.json();
-        if (data && data.config && data.config.access_token) {
-            statusEl.textContent = 'Meta Cloud API vinculado';
-            statusEl.style.color = '#10b981';
+        const config = (data && data.config) || {};
+        const isConnected = !!(config.waba_id && config.phone_number_id);
+
+        const statusEl = document.getElementById('meta-panel-status');
+        if (statusEl) {
+            statusEl.textContent = isConnected ? 'Meta Cloud API vinculado' : 'Meta Cloud API no vinculado';
+            statusEl.style.color = isConnected ? '#10b981' : 'rgba(255,255,255,0.4)';
+        }
+
+        const metaPanel = document.getElementById('meta-panel');
+        if (!metaPanel) return;
+        const content = metaPanel.querySelector('.tickets-list');
+        if (!content) return;
+
+        if (isConnected) {
+            window.isMetaConnected = true;
+            content.innerHTML = `
+                <div style="background: linear-gradient(135deg, #10b981, #059669); width: 100px; height: 100px; border-radius: 24px; display: flex; align-items: center; justify-content: center; font-size: 3rem; color: white; box-shadow: 0 15px 30px rgba(16, 185, 129, 0.4); margin-top: 40px;">
+                    <i class="fas fa-check-double"></i>
+                </div>
+                <div>
+                    <h2 style="margin: 0; color: var(--text-main); font-size: 1.6rem; font-weight: 700;">Meta Conectado</h2>
+                    <div style="height: 3px; width: 50px; background: #10b981; margin: 10px auto; border-radius: 10px;"></div>
+                    <p style="color: var(--text-muted); font-size: 1rem; margin-top: 15px; line-height: 1.6;">
+                        Tu cuenta de <strong>WhatsApp Business</strong> está vinculada correctamente.
+                    </p>
+                </div>
+                <div style="background: var(--bg-header); padding: 24px; border-radius: 20px; border: 1px solid var(--border); width: 100%; text-align: left;">
+                    <h4 style="margin: 0 0 15px 0; color: #10b981; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700;">Detalles de la conexión:</h4>
+                    <div style="font-size: 0.9rem; color: var(--text-main); line-height: 1.8;">
+                        <div><strong>WABA ID:</strong> ${config.waba_id}</div>
+                        <div><strong>ID de Teléfono:</strong> ${config.phone_number_id}</div>
+                        ${config.verified_name ? `<div><strong>Nombre:</strong> ${config.verified_name}</div>` : ''}
+                    </div>
+                </div>
+                <button class="btn-primary" onclick="navigate('/meta');" style="width:100%; height:45px; display:flex; align-items:center; justify-content:center; gap:10px; background:#10b981; border:none; border-radius:12px; font-weight:600; cursor:pointer; color:white; margin-top: 20px;">
+                    <i class="fas fa-layer-group"></i> Abrir Envío Masivo
+                </button>
+                <button class="btn-secondary" onclick="launchMetaOnboarding()" style="width:100%; margin-top:10px; opacity:0.7; font-size:0.8rem;">
+                    Actualizar Configuración
+                </button>
+            `;
         } else {
-            statusEl.textContent = 'Meta Cloud API no vinculado';
-            statusEl.style.color = 'rgba(255,255,255,0.4)';
+            window.isMetaConnected = false;
+            if (content && !content.querySelector('.fab.fa-meta')) {
+                content.innerHTML = `
+                    <div style="color: #0668E1; font-size: 4rem; margin-top: 40px; margin-bottom: 20px;">
+                        <i class="fas fa-infinity"></i>
+                    </div>
+                    <div>
+                        <h2 style="margin: 0; color: var(--text-main); font-size: 1.6rem; font-weight: 700;">Conexión Oficial</h2>
+                        <div style="height: 3px; width: 50px; background: #0668E1; margin: 10px auto; border-radius: 10px;"></div>
+                        <p style="color: var(--text-muted); font-size: 1rem; margin-top: 15px; line-height: 1.6;">
+                            Conecta tu cuenta de <strong>WhatsApp Business</strong> oficial para habilitar funciones profesionales.
+                        </p>
+                    </div>
+                    <div style="background: var(--bg-header); padding: 24px; border-radius: 20px; border: 1px solid var(--border); width: 100%; text-align: left;">
+                        <h4 style="margin: 0 0 15px 0; color: #0668E1; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700;">Beneficios activos:</h4>
+                        <ul style="font-size: 0.9rem; padding-left: 20px; color: var(--text-main); line-height: 2.2;">
+                            <li>Integración por <strong>Coexistencia</strong>.</li>
+                            <li>Registro via <strong>Popup de Facebook</strong>.</li>
+                            <li>Envío de <strong>Mensajes Masivos (HSM)</strong>.</li>
+                            <li>Soporte para <strong>Imágenes y Audios</strong> oficiales.</li>
+                        </ul>
+                    </div>
+                    <button class="btn-primary" onclick="launchMetaOnboarding()" style="width:100%; height:45px; display:flex; align-items:center; justify-content:center; gap:10px; background:#0668E1; border:none; border-radius:12px; font-weight:600; cursor:pointer; color:white; margin-top: 20px;">
+                        <i class="fab fa-meta"></i> Vincular con Meta Cloud API
+                    </button>
+                `;
+            }
         }
     } catch (_) { /* silencioso */ }
 }

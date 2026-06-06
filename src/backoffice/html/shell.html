@@ -125,11 +125,25 @@
                                 <span class="nav-label">Tareas</span>
                             </a>
                         </li>
-                        <li class="nav-item {{SHOW_BACKOFFICE_STYLE}}">
+                        <li class="nav-item {{SHOW_BACKOFFICE_STYLE}}" data-route="/meta">
                             <a href="#" class="nav-link nav-dropdown-link"
-                               onclick="event.preventDefault(); closeIntegracionesFlyout(); toggleMetaPanel(event)">
+                               onclick="event.preventDefault(); closeIntegracionesFlyout(); navigate('/meta')">
                                 <i class="fab fa-meta"></i>
                                 <span class="nav-label">Meta</span>
+                            </a>
+                        </li>
+                        <li class="nav-item" data-route="/mercado-pago">
+                            <a href="#" class="nav-link nav-dropdown-link"
+                               onclick="event.preventDefault(); closeIntegracionesFlyout(); navigate('/mercado-pago')">
+                                <i class="fas fa-credit-card"></i>
+                                <span class="nav-label">Mercado Pago</span>
+                            </a>
+                        </li>
+                        <li class="nav-item" data-route="/meli">
+                            <a href="#" class="nav-link nav-dropdown-link"
+                               onclick="event.preventDefault(); closeIntegracionesFlyout(); navigate('/meli')">
+                                <i class="fas fa-store"></i>
+                                <span class="nav-label">Meli</span>
                             </a>
                         </li>
                     </ul>
@@ -192,147 +206,6 @@
 
     <!-- Mount point para views dinamicas -->
     <div id="view-root" class="flex flex-1 overflow-hidden relative" style="z-index:10;"></div>
-
-    <!-- Panel Meta (global shell - disponible desde cualquier view) -->
-    <div id="meta-panel" class="tickets-panel">
-        <div class="panel-header">
-            <h3 class="text-base font-heading font-bold text-primary-content flex items-center gap-2">
-                <i class="fab fa-meta meta-panel-header-icon"></i> Onboarding Meta
-            </h3>
-            <button class="btn-icon" onclick="event.preventDefault(); toggleMetaPanel(event)"><i class="fas fa-times"></i></button>
-        </div>
-        <div class="tickets-list meta-panel-content">
-            <i class="fas fa-infinity meta-panel-icon"></i>
-            <div class="meta-panel-heading">
-                <h2>Conexion Oficial</h2>
-                <div class="meta-panel-accent-bar"></div>
-                <p class="meta-panel-desc">
-                    Conecta tu cuenta de <strong>WhatsApp Business</strong> oficial para habilitar funciones profesionales.
-                </p>
-            </div>
-            <div class="meta-panel-features">
-                <h4 class="meta-panel-features-title">Beneficios activos:</h4>
-                <ul class="meta-panel-list">
-                    <li>Integracion por <strong>Coexistencia</strong>.</li>
-                    <li>Registro via <strong>Popup de Facebook</strong>.</li>
-                    <li>Envio de <strong>Mensajes Masivos (HSM)</strong>.</li>
-                    <li>Soporte para <strong>Imagenes y Audios</strong> oficiales.</li>
-                </ul>
-            </div>
-            <button class="btn-primary meta-onboarding-btn" onclick="if(typeof launchMetaOnboarding==='function'){launchMetaOnboarding();}else{navigate('/backoffice');setTimeout(()=>{if(typeof launchMetaOnboarding==='function')launchMetaOnboarding();},1200);}">
-                <i class="fab fa-meta"></i> Vincular con META
-            </button>
-            <div id="meta-panel-status" class="text-xs text-secondary-content mt-2"></div>
-        </div>
-    </div>
-
-    <!-- Modal Plantillas Meta (global - accesible desde cualquier view) -->
-    <div id="bulk-modal" class="modal-overlay">
-        <div class="modal-content meta-modal-content animate-pop-in">
-            <div class="modal-header">
-                <h3><i class="fab fa-whatsapp platform-whatsapp mr-2"></i> Centro de Plantillas Meta</h3>
-                <button class="btn-close-modal" onclick="toggleBulkModal()"><i class="fas fa-times"></i></button>
-            </div>
-            <div class="meta-tabs meta-tabs-bar">
-                <div id="tab-my-templates" class="meta-tab active" onclick="switchMetaTab('my')">
-                    <i class="fas fa-list"></i> Mis Plantillas
-                </div>
-                <div class="meta-badge-bar">
-                    <span class="meta-badge-title">Ver en META</span>
-                    <a id="link-meta-library" href="https://business.facebook.com/latest/whatsapp_manager/template_library" target="_blank" class="meta-link-item">
-                        <i class="fas fa-book"></i> Biblioteca <span class="meta-library-badge">SDK</span>
-                    </a>
-                    <a id="link-meta-new" href="https://business.facebook.com/latest/whatsapp_manager/message_templates" target="_blank" class="meta-link-item">
-                        <i class="fas fa-plus"></i> Nueva Plantilla
-                    </a>
-                </div>
-            </div>
-            <div class="meta-scroll-area">
-                <div id="view-my-templates" class="meta-grid">
-                    <div id="my-templates-loader" class="text-center py-10 opacity-50" style="grid-column:1/-1;">
-                        <i class="fas fa-circle-notch fa-spin text-3xl text-accent-bright"></i>
-                        <p class="loader-sync-text text-sm text-secondary-content mt-3">Sincronizando con Meta Cloud...</p>
-                    </div>
-                </div>
-                <div id="view-template-detail" style="display:none; padding:40px;">
-                    <button class="btn-icon tpl-detail-back-btn mb-5" onclick="switchMetaTab('my')">
-                        <i class="fas fa-arrow-left"></i>
-                    </button>
-                    <div class="tpl-detail-grid">
-                        <div class="meta-preview-overlay tpl-preview-col rounded-2xl overflow-hidden">
-                            <div class="wa-preview-bubble">
-                                <div id="wa-preview-text-final" class="wa-preview-text">...</div>
-                                <div class="wa-preview-time">12:00 <i class="fas fa-check-double wa-check-icon"></i></div>
-                            </div>
-                        </div>
-                        <div>
-                            <div class="tpl-name-row">
-                                <h2 id="detail-tpl-name" class="tpl-name-header">Nombre de Plantilla</h2>
-                                <a id="btn-edit-in-meta" href="#" target="_blank">
-                                    <i class="fab fa-facebook"></i> Editar en META
-                                </a>
-                            </div>
-                            <div id="detail-badges" class="tpl-detail-badges">
-                                <div id="detail-tpl-status" class="meta-card-tag">ESTADO</div>
-                                <span id="detail-tpl-lang-badge" class="tpl-info-badge"><i class="fas fa-globe"></i> ES</span>
-                                <span id="detail-tpl-cat-badge" class="tpl-info-badge"><i class="fas fa-tag"></i> CATEGORIA</span>
-                            </div>
-                            <div id="library-adopt-section" style="display:none;">
-                                <h4 class="library-adopt-heading text-sm font-heading font-bold text-primary-content mb-2">
-                                    <i class="fas fa-copy"></i> Te gusta esta plantilla?
-                                </h4>
-                                <p class="library-adopt-desc text-xs text-secondary-content mb-3">Podes usarla como base para crear la tuya propia.</p>
-                                <button class="btn-primary w-full justify-center" onclick="useTemplateAsBase()">
-                                    <i class="fas fa-magic"></i> Usar como Base
-                                </button>
-                            </div>
-                            <div id="bulk-actions-section" style="display:none;">
-                                <h4 class="bulk-actions-heading text-sm font-heading font-bold text-primary-content mb-2">
-                                    <i class="fas fa-play"></i> Ejecutar Envio Masivo
-                                </h4>
-                                <p class="bulk-actions-desc text-xs text-secondary-content mb-4">Configura el archivo Excel para iniciar el envio.</p>
-                                <div class="bulk-actions-body">
-                                    <div class="bulk-filter-section">
-                                        <label class="bulk-filter-label"><i class="fas fa-filter"></i> Filtros de Descarga</label>
-                                        <div class="bulk-filter-date-grid">
-                                            <div>
-                                                <label class="bulk-filter-sublabel">Desde:</label>
-                                                <input type="date" id="bulk-filter-start" class="crm-input bulk-filter-input">
-                                            </div>
-                                            <div>
-                                                <label class="bulk-filter-sublabel">Hasta:</label>
-                                                <input type="date" id="bulk-filter-end" class="crm-input bulk-filter-input">
-                                            </div>
-                                        </div>
-                                        <label class="bulk-filter-sublabel mb-1 block">Etiquetas (Ctrl/Cmd para varias)</label>
-                                        <select id="bulk-filter-tags" class="crm-input" multiple style="min-height:80px;"></select>
-                                    </div>
-                                    <button class="btn-primary btn-download-excel" onclick="downloadBulkExcel()">
-                                        <i class="fas fa-file-excel"></i> 1. Descargar Formato Excel
-                                    </button>
-                                    <div class="bulk-upload-section mt-5 pt-5" style="border-top:1px solid rgba(255,255,255,0.07);">
-                                        <label class="bulk-filter-label">2. Subir Excel Completado</label>
-                                        <div class="bulk-upload-row">
-                                            <input type="file" id="bulk-file-input" class="crm-input" accept=".xlsx,.xls">
-                                            <button class="btn-primary flex-shrink-0" onclick="startBulkSend()" id="send-bulk-btn">
-                                                <i class="fas fa-paper-plane"></i> Enviar
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div id="bulk-progress" style="display:none;" class="mt-5">
-                                        <div class="bulk-progress-track">
-                                            <div id="bulk-progress-bar" class="bulk-progress-bar" style="width:0%"></div>
-                                        </div>
-                                        <p id="bulk-status-text" class="bulk-status-text"></p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <script src="/js/crm-common.js"></script>
     <script src="/js/neural-bg.js"></script>

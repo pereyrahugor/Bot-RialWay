@@ -576,16 +576,36 @@ window.backofficeView = {
             const select = document.getElementById('filter-tag');
             if (!dd || !select) return;
             const cur = select.options[select.selectedIndex];
-            if (label && cur) label.textContent = cur.textContent;
+            if (label && cur) {
+                if (cur.value) {
+                    const tags = (typeof _boBotTags !== 'undefined') ? _boBotTags : [];
+                    const tag  = tags.find(t => String(t.id) === String(cur.value));
+                    const color = tag ? tag.color : '#6366f1';
+                    label.innerHTML = `<span class="tag-pill" data-tag-color="${color}" style="${_tagStyle(color)}">${cur.textContent}</span>`;
+                } else {
+                    label.textContent = cur.textContent;
+                }
+            }
             dd.innerHTML = '';
             Array.from(select.options).forEach(opt => {
                 const li = document.createElement('li');
                 const active = opt.value === select.value;
-                li.innerHTML = (opt.value ? '<i class="fas fa-tag"></i>' : '<i class="fas fa-tags"></i>') + opt.textContent;
+                if (opt.value) {
+                    const tags = (typeof _boBotTags !== 'undefined') ? _boBotTags : [];
+                    const tag  = tags.find(t => String(t.id) === String(opt.value));
+                    const color = tag ? tag.color : '#6366f1';
+                    li.innerHTML = `<span class="tag-pill" data-tag-color="${color}" style="${_tagStyle(color)}">${opt.textContent}</span>`;
+                } else {
+                    li.innerHTML = '<i class="fas fa-tags"></i>' + opt.textContent;
+                }
                 if (active) li.classList.add('active');
                 li.onclick = () => {
                     select.value = opt.value;
-                    if (label) label.textContent = opt.textContent;
+                    if (label) {
+                        label.innerHTML = opt.value
+                            ? li.querySelector('.tag-pill').outerHTML
+                            : opt.textContent;
+                    }
                     if (typeof fetchChats === 'function') fetchChats(true);
                     dd.classList.remove('open');
                     if (icon) icon.style.transform = '';
