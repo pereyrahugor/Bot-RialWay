@@ -2429,12 +2429,15 @@ export class HistoryHandler {
 
     static async verifyUser(username: string, pass: string) {
         try {
+            const cleanUser = (username || '').trim();
+            const cleanPass = (pass || '').trim();
+            
             const { data, error } = await supabase
                 .from('users')
                 .select('*')
                 .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER)
-                .eq('username', username)
-                .eq('password', pass)
+                .ilike('username', cleanUser)
+                .eq('password', cleanPass)
                 .maybeSingle();
             if (error) throw error;
             return data || null;
