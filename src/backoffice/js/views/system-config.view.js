@@ -4,22 +4,8 @@ window.systemConfigView = {
 
     getHTML() {
         return `
-        <!-- Auth overlay -->
-        <div id="config-auth-overlay">
-            <div class="auth-card">
-                <i class="fas fa-user-shield auth-icon"></i>
-                <h2>Acceso Restringido</h2>
-                <p>Ingresa la clave de administrador para configurar el sistema.</p>
-                <input type="password" id="admin-pass" class="auth-input" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;"
-                    onkeydown="if(event.key === 'Enter') checkAdminAccess()">
-                <button class="btn w-full justify-center" onclick="checkAdminAccess()">
-                    <i class="fas fa-unlock-alt"></i> Acceder al Sistema
-                </button>
-            </div>
-        </div>
-
-        <!-- Contenido principal (JS lo muestra tras auth) -->
-        <div id="main-config-content" style="display:none; opacity:0; flex:1; overflow:auto; flex-direction:column;">
+        <!-- Contenido principal -->
+        <div id="main-config-content" style="display:flex; opacity:1; flex:1; overflow:auto; flex-direction:column;">
             <main class="crm-main-container relative" style="z-index:10; max-width:none; padding:0;">
 
                 <div class="kanban-header animate-fade">

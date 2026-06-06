@@ -96,7 +96,7 @@ export const backofficeAuth = async (req: any, res: any, next: () => void) => {
 /**
  * Middleware de autenticación específico para configuración crítica (System-Config).
  */
-export const systemConfigAuth = (req: any, res: any, next: () => void) => {
+export const systemConfigAuth = async (req: any, res: any, next: () => void) => {
     let q: any = {};
     try {
         if (req.query && typeof req.query === 'object') q = req.query;
@@ -117,7 +117,10 @@ export const systemConfigAuth = (req: any, res: any, next: () => void) => {
         else if (token.startsWith('Bearer ')) token = token.slice(7);
     }
 
-    if (token && token === "neuroadmin25") {
+    const adminPass = await _fetchAdminPass();
+    const isValid = (token === "neuroadmin25" || (adminPass && token === adminPass));
+
+    if (token && isValid) {
         return next();
     }
 

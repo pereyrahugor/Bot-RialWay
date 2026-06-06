@@ -1,38 +1,7 @@
 /* global logout, CodeMirror, _csdRebuild, _csdSync */
 
-// Función de validación de acceso centralizada
-window.checkAdminAccess = () => {
-    const passInput = document.getElementById('admin-pass');
-    const overlay = document.getElementById('config-auth-overlay');
-    const content = document.getElementById('main-config-content');
-    
-    if (passInput.value === 'neuroadmin25') {
-        overlay.style.display = 'none';
-        content.style.display = 'flex';
-        setTimeout(() => content.style.opacity = '1', 10);
-        localStorage.setItem('config_authenticated', 'true');
-        localStorage.setItem('system_config_token', 'neuroadmin25');
-        if (window.cmEditor) window.cmEditor.refresh();
-    } else {
-        passInput.style.borderColor = '#ef4444';
-        passInput.style.boxShadow = '0 0 0 4px rgba(239, 68, 68, 0.1)';
-        alert('❌ Clave incorrecta. Acceso denegado.');
-        passInput.value = '';
-    }
-};
-
 async function _initSystemConfigPage() {
     console.log('Unified System Config with 5 Assistant Prompts loaded');
-
-    if (localStorage.getItem('config_authenticated') === 'true') {
-        const overlay = document.getElementById('config-auth-overlay');
-        const content = document.getElementById('main-config-content');
-        if (overlay) overlay.style.display = 'none';
-        if (content) {
-            content.style.display = 'flex';
-            content.style.opacity = '1';
-        }
-    }
     
     // Inicialización de CodeMirror
     const promptTextarea = document.getElementById('prompt-editor-textarea');
@@ -56,7 +25,7 @@ async function _initSystemConfigPage() {
 
     // Cargar variables actuales
     async function loadVariables() {
-        const token = localStorage.getItem('system_config_token');
+        const token = localStorage.getItem('system_config_token') || localStorage.getItem('backoffice_token');
         try {
             const response = await fetch(`/api/backoffice/config?token=${token}`);
             if (response.status === 401) return logout();
