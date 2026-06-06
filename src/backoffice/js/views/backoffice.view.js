@@ -84,7 +84,7 @@ window.backofficeView = {
                             <button class="btn-icon" id="open-ticket-btn" onclick="openTicketModal()" title="Generar Ticket" disabled>
                                 <i class="fas fa-plus-circle"></i>
                             </button>
-                            <div id="crm-jump-container">
+                            <div id="crm-jump-container" style="display: none !important;">
                                 <select id="crm-lead-jump" style="display:none;"></select>
                                 <div class="crm-jump-split">
                                     <button class="crm-jump-main" onclick="_crmJumpDefault()">

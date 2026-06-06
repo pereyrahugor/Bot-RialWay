@@ -989,7 +989,7 @@ async function loadCRMJump(chatId) {
         activeTicketId = null;
 
         if (Array.isArray(tickets) && tickets.length > 0) {
-            container.style.display = 'flex';
+            container.style.display = 'none';
             select.innerHTML = '<option value="">🚀 Ver en CRM...</option>' + 
                 tickets.map(t => `<option value="${t.id}" data-chat="${t.chat_id}">${t.titulo} (${t.tipo})</option>`).join('');
             

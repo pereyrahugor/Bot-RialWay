@@ -1050,8 +1050,7 @@ export class HistoryHandler {
                     type: details.type || 'whatsapp',
                     ...details,
                     is_lead: true,
-                    last_message_at: new Date().toISOString(),
-                    created_at: new Date().toISOString()
+                    last_message_at: new Date().toISOString()
                 }, { onConflict: 'id,project_id' });
 
             if (chatErr) throw chatErr;
