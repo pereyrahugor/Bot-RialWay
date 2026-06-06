@@ -1063,6 +1063,9 @@ export class HistoryHandler {
                 .eq('telefono', chatId)
                 .maybeSingle();
 
+            const allowedTypes = ['Soporte', 'Ventas', 'Técnico', 'Otro', 'Asistencia Externa', 'Comercial', 'Nuevo Lead'];
+            const ticketType = allowedTypes.includes(details.offered_product) ? details.offered_product : 'Nuevo Lead';
+
             const { data: ticket, error: ticketErr } = await supabase
                 .from('tickets')
                 .insert({
@@ -1070,7 +1073,7 @@ export class HistoryHandler {
                     project_id: HistoryHandler.PROJECT_IDENTIFIER,
                     titulo: `Lead: ${details.name || chatId}`,
                     descripcion: details.notes || 'Lead creado manualmente',
-                    tipo: details.offered_product || 'Nuevo Lead',
+                    tipo: ticketType,
                     prioridad: 'Media',
                     estado: 'Abierto',
                     created_at: new Date().toISOString(),
