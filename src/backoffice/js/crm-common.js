@@ -104,6 +104,16 @@ function logout() {
     window.location.href = '/login';
 }
 
+/**
+ * Retorna el token de autenticación del backoffice listo para usar en URLs.
+ * Usa encodeURIComponent para evitar que caracteres especiales (#, &, etc.)
+ * rompan la query string.
+ */
+window.getAuthToken = function() {
+    const raw = localStorage.getItem('backoffice_token') || '';
+    return encodeURIComponent(raw);
+};
+
 // Resaltado automático de la página actual en el Nav
 function highlightActiveNav() {
     const path = window.location.pathname;

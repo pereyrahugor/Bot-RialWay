@@ -78,6 +78,8 @@ export const backofficeAuth = async (req: any, res: any, next: () => void) => {
         token = token.trim();
         if (token.startsWith('token=')) token = token.slice(6);
         else if (token.startsWith('Bearer ')) token = token.slice(7);
+        // Decodear caracteres especiales URL-encodeados (ej: %23 -> #)
+        try { token = decodeURIComponent(token); } catch (_) { /* ya decodificado */ }
     }
 
     // Un solo fetch a Supabase por ventana de TTL, compartido entre todos los requests simultáneos
@@ -147,6 +149,8 @@ export const systemConfigAuth = async (req: any, res: any, next: () => void) => 
         token = token.trim();
         if (token.startsWith('token=')) token = token.slice(6);
         else if (token.startsWith('Bearer ')) token = token.slice(7);
+        // Decodear caracteres especiales URL-encodeados
+        try { token = decodeURIComponent(token); } catch (_) { /* ya decodificado */ }
     }
 
     const adminPass = await _fetchAdminPass();
