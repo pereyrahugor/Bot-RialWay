@@ -215,15 +215,24 @@ window.systemConfigView = {
                         <div class="section-header">
                             <h2><i class="fas fa-shield-halved"></i> Sistema &amp; Acceso</h2>
                         </div>
-                        <div class="variable-group">
-                            <h3>ADMIN_USER</h3>
-                            <p class="description">Usuario administrador del backoffice.</p>
-                            <input type="text" name="ADMIN_USER" id="ADMIN_USER">
-                        </div>
-                        <div class="variable-group">
-                            <h3>ADMIN_PASS</h3>
-                            <p class="description">Contrasena de acceso al sistema.</p>
-                            <input type="password" name="ADMIN_PASS" id="ADMIN_PASS" autocomplete="new-password">
+                        <!-- CREDENCIALES: formulario propio fuera del form principal -->
+                        <div class="variable-group" style="grid-column:1/-1; background:var(--bg-header); border:1.5px solid var(--border); border-radius:14px; padding:20px;">
+                            <h3 style="margin-top:0;">🔑 Credenciales de acceso</h3>
+                            <p class="description">Guardado independiente para evitar problemas con campos de contraseña. Deja en blanco para no cambiar.</p>
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px;">
+                                <div>
+                                    <label style="font-size:0.8rem; font-weight:600; color:var(--text-muted); display:block; margin-bottom:4px;">ADMIN_USER</label>
+                                    <input type="text" id="ADMIN_USER" autocomplete="username" placeholder="Usuario actual (vacío = sin cambio)" style="width:100%; padding:8px 12px; border-radius:8px; border:1.5px solid var(--border); background:var(--bg-card); color:var(--text-main); font-size:0.9rem; box-sizing:border-box;">
+                                </div>
+                                <div>
+                                    <label style="font-size:0.8rem; font-weight:600; color:var(--text-muted); display:block; margin-bottom:4px;">ADMIN_PASS</label>
+                                    <input type="text" id="ADMIN_PASS" autocomplete="off" placeholder="Nueva contraseña (vacío = sin cambio)" style="width:100%; padding:8px 12px; border-radius:8px; border:1.5px solid var(--border); background:var(--bg-card); color:var(--text-main); font-size:0.9rem; box-sizing:border-box;">
+                                </div>
+                            </div>
+                            <button type="button" id="save-credentials-btn" style="padding:9px 20px; border-radius:10px; border:none; background:linear-gradient(135deg,#6366f1,#8b5cf6); color:white; cursor:pointer; font-size:0.88rem; font-weight:600; display:flex; align-items:center; gap:8px;">
+                                <i class="fas fa-key"></i> Guardar Credenciales
+                            </button>
+                            <p id="credentials-status" style="margin:8px 0 0; font-size:0.82rem; color:var(--text-muted);"></p>
                         </div>
                         <div class="variable-group">
                             <h3>STORAGE_MODE</h3>

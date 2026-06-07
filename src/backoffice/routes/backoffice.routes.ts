@@ -5,7 +5,7 @@ import url from 'url';
 import bodyParser from 'body-parser';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
-import { backofficeAuth, systemConfigAuth } from "../middleware/auth";
+import { backofficeAuth, systemConfigAuth, invalidateAuthCache } from "../middleware/auth";
 import { supabase, HistoryHandler as HistoryHandlerClass } from "../db/historyHandler";
 import { getOpenAI } from "../../apis/openai/openaiHelper";
 
@@ -2466,6 +2466,13 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
             const promises = keysToSave.map(key => depsHistoryHandler.saveSetting(key, settings[key]));
             await Promise.all(promises);
+
+            // Si se actualizaron credenciales de acceso, invalida el cache del middleware de auth
+            const credentialKeys = ['ADMIN_PASS', 'ADMIN_USER'];
+            if (keysToSave.some(k => credentialKeys.includes(k))) {
+                invalidateAuthCache();
+                console.log('[HOT-UPDATE] Credenciales actualizadas — cache de auth invalidado.');
+            }
 
             res.json({ success: true, message: `${keysToSave.length} variables guardadas (se omitieron ${keys.length - keysToSave.length} protegidas)` });
         } catch (error: any) {

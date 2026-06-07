@@ -207,6 +207,58 @@ async function _initSystemConfigPage() {
         }
     });
 
+    // ─── GUARDAR CREDENCIALES (ADMIN_USER / ADMIN_PASS) ───────────────────
+    // Handler independiente: los campos son type="text" (no password) para garantizar
+    // que el browser no los omita. Se leen directo del DOM, sin FormData.
+    const saveCredsBtn = document.getElementById('save-credentials-btn');
+    if (saveCredsBtn) {
+        saveCredsBtn.addEventListener('click', async () => {
+            const userEl = document.getElementById('ADMIN_USER');
+            const passEl = document.getElementById('ADMIN_PASS');
+            const statusEl = document.getElementById('credentials-status');
+
+            const adminUser = (userEl?.value || '').trim();
+            const adminPass = (passEl?.value || '').trim();
+
+            if (!adminUser && !adminPass) {
+                if (statusEl) { statusEl.textContent = '⚠️ Completá al menos un campo.'; statusEl.style.color = '#f59e0b'; }
+                return;
+            }
+
+            const settingsToSave = {};
+            if (adminUser) settingsToSave['ADMIN_USER'] = adminUser;
+            if (adminPass) settingsToSave['ADMIN_PASS'] = adminPass;
+
+            saveCredsBtn.disabled = true;
+            saveCredsBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+
+            try {
+                const token = localStorage.getItem('system_config_token');
+                const response = await fetch(`/api/backoffice/save-settings-bulk?token=${token}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ settings: settingsToSave })
+                });
+                if (response.status === 401) return logout();
+                const data = await response.json();
+                if (data.success) {
+                    if (statusEl) { statusEl.textContent = '✅ Credenciales guardadas correctamente.'; statusEl.style.color = '#10b981'; }
+                    if (userEl) userEl.value = '';
+                    if (passEl) passEl.value = '';
+                } else {
+                    if (statusEl) { statusEl.textContent = '❌ Error: ' + (data.error || 'desconocido'); statusEl.style.color = '#ef4444'; }
+                }
+            } catch (err) {
+                console.error('Error saving credentials:', err);
+                if (statusEl) { statusEl.textContent = '❌ Error de conexión.'; statusEl.style.color = '#ef4444'; }
+            } finally {
+                saveCredsBtn.disabled = false;
+                saveCredsBtn.innerHTML = '<i class="fas fa-key"></i> Guardar Credenciales';
+            }
+        });
+    }
+    // ──────────────────────────────────────────────────────────────────────
+
     async function syncPromptWithOpenAI(prompt, index) {
         try {
             const token = localStorage.getItem('system_config_token');

@@ -9,6 +9,13 @@ const ADMIN_PASS_TTL = 5 * 60 * 1000;
 const _userRoleCache = new Map<string, { role: string; timestamp: number }>();
 const USER_ROLE_TTL = 5 * 60 * 1000;
 
+/** Invalida el cache de contraseña del admin — llamar cuando se actualice ADMIN_PASS en la DB */
+export function invalidateAuthCache() {
+    _adminPassPromise = null;
+    _adminPassAt = 0;
+    console.log('[AUTH] Cache de credenciales invalidado.');
+}
+
 async function _getUserRole(userId: string): Promise<string> {
     const now = Date.now();
     const cached = _userRoleCache.get(userId);
