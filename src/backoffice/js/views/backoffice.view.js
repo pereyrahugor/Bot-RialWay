@@ -75,6 +75,14 @@ window.backofficeView = {
                     </div>
                     <div class="switch-container">
                         <div class="header-actions-group">
+                            <!-- Blacklist toggle: solo visible cuando la integración está activa -->
+                            <button class="btn-icon" id="blacklist-toggle-btn"
+                                title="Lista Negra: contacto habilitado"
+                                style="display:none;"
+                                onclick="toggleBlacklist()"
+                                disabled>
+                                <i class="fas fa-check-circle" style="color:#25D366;"></i>
+                            </button>
                             <button class="btn-icon" id="open-tags-btn" onclick="toggleTagsPanel()" title="Gestionar Etiquetas" disabled>
                                 <i class="fas fa-tags"></i>
                             </button>

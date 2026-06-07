@@ -34,13 +34,13 @@ async function _initCRMPage() {
     // Mostrar botones de admin si corresponde
     if (isAdmin) {
         const btnNewUser = document.getElementById('btn-new-user');
-        const assigneeSection = document.getElementById('assignee-section');
         if (btnNewUser) btnNewUser.style.display = 'block';
-        if (assigneeSection) assigneeSection.style.display = 'block';
-        
-        // Cargar equipo para los selects
-        await loadTeam();
     }
+    const assigneeSection = document.getElementById('assignee-section');
+    if (assigneeSection) assigneeSection.style.display = 'block';
+    
+    // Cargar equipo para los selects (para todos los usuarios)
+    await loadTeam();
 
     // Cargar etiquetas (para todos)
     await fetchTags();
@@ -400,12 +400,10 @@ function openCardModal(ticketId) {
     document.getElementById('edit-lead-offered-product').value = lead?.offered_product || ticket.tipo || '';
 
     // Carga de asignación
-    if (isAdmin) {
-        const selectAssign = document.getElementById('edit-lead-assignee');
-        if (selectAssign) {
-            selectAssign.value = lead?.assigned_to || '';
-            _csdSync('edit-lead-assignee');
-        }
+    const selectAssign = document.getElementById('edit-lead-assignee');
+    if (selectAssign) {
+        selectAssign.value = lead?.assigned_to || '';
+        _csdSync('edit-lead-assignee');
     }
 
     // Cargar opciones de estado basadas en las columnas
@@ -623,7 +621,7 @@ function _setupCRMFormHandlers() {
                 body: JSON.stringify({ titulo: ticketTitle, priority: leadData.priority, notas: mainNotes, contact: leadData })
             });
 
-            if (chatId && isAdmin) {
+            if (chatId) {
                 const assignee = document.getElementById('edit-lead-assignee').value;
                 await fetch(`/api/backoffice/chat/assign?token=${activeToken}`, {
                     method: 'POST',
@@ -850,11 +848,12 @@ window.closeClosedLeadsModal = () => {
 // --- Gestión de Usuarios (Equipo) ---
 
 async function loadTeam() {
-    if (!isAdmin) return;
     try {
         const res = await fetch(`/api/backoffice/users?token=${activeToken}`);
         teamUsers = await res.json();
-        renderUsersList();
+        if (isAdmin) {
+            renderUsersList();
+        }
         renderAssigneeSelect();
     } catch (e) {
         console.error('Error al cargar equipo:', e);

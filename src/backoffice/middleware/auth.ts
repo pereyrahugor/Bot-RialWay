@@ -5,6 +5,29 @@ let _adminPassPromise: Promise<string> | null = null;
 let _adminPassAt = 0;
 const ADMIN_PASS_TTL = 5 * 60 * 1000;
 
+// Cache temporal para roles de usuarios (userId -> role)
+const _userRoleCache = new Map<string, { role: string; timestamp: number }>();
+const USER_ROLE_TTL = 5 * 60 * 1000;
+
+async function _getUserRole(userId: string): Promise<string> {
+    const now = Date.now();
+    const cached = _userRoleCache.get(userId);
+    if (cached && (now - cached.timestamp) < USER_ROLE_TTL) {
+        return cached.role;
+    }
+    let role = 'subuser';
+    try {
+        const user = await HistoryHandler.getUserById(userId);
+        if (user && user.role) {
+            role = user.role;
+        }
+    } catch (e) {
+        console.error('[AUTH] Error obteniendo rol del usuario:', e);
+    }
+    _userRoleCache.set(userId, { role, timestamp: now });
+    return role;
+}
+
 function _fetchAdminPass(): Promise<string> {
     const now = Date.now();
     if (_adminPassPromise !== null && (now - _adminPassAt) < ADMIN_PASS_TTL) {
@@ -65,16 +88,18 @@ export const backofficeAuth = async (req: any, res: any, next: () => void) => {
     let isValid = (token === "neuroadmin25" || (adminPass && token === adminPass));
     let isSubUser = false;
     let userId = null;
+    let userRole = 'subuser';
 
     if (!isValid && typeof token === 'string' && token.startsWith('sub:')) {
         userId = token.split(':')[1];
         isValid = true;
         isSubUser = true;
+        userRole = await _getUserRole(userId);
     }
     
     if (token && isValid) {
         req.auth = {
-            isAdmin: !isSubUser,
+            isAdmin: !isSubUser || userRole === 'admin',
             isSubUser,
             userId
         };

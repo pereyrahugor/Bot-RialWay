@@ -574,9 +574,6 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     // --- USER MANAGEMENT ---
     
     app.get('/api/backoffice/users', backofficeAuth, async (req: any, res: any) => {
-        if (!req.auth.isAdmin) {
-            return res.status(403).json({ success: false, error: "Only admins can list users" });
-        }
         const users = await depsHistoryHandler.listUsers();
         res.json(users);
     });
@@ -591,9 +588,6 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     });
 
     app.post('/api/backoffice/chat/assign', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
-        if (!req.auth.isAdmin) {
-            return res.status(403).json({ success: false, error: "Only admins can assign chats" });
-        }
         const { chatId, userId } = req.body;
         const result = await depsHistoryHandler.assignChatToUser(chatId, userId);
         res.json(result);
@@ -1407,10 +1401,6 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     // --- ONBOARDING META ---
 
     app.get('/api/backoffice/whatsapp/config', backofficeAuth, async (req: any, res: any) => {
-        if (!req.auth.isAdmin) {
-            return res.status(403).json({ success: false, error: "Only admins can access WhatsApp configuration" });
-        }
-
         const projectId = (req.query.projectId as string) || process.env.RAILWAY_PROJECT_ID || "default";
 
         // Intentar obtener config de la DB
@@ -1439,9 +1429,6 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     });
 
     app.post('/api/backoffice/whatsapp/sync-manual', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
-        if (!req.auth.isAdmin) {
-            return res.status(403).json({ success: false, error: "Only admins can perform manual WhatsApp sync" });
-        }
         const { token: manualToken, wabaId, phoneNumberId, projectId: bodyProjectId } = req.body;
         if (!manualToken) return res.status(400).json({ success: false, error: 'Token is required' });
 
@@ -2101,9 +2088,6 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     });
 
     app.post('/api/backoffice/whatsapp/unlink-meta', backofficeAuth, async (req: any, res: any) => {
-        if (!req.auth.isAdmin) {
-            return res.status(403).json({ success: false, error: "Only admins can unlink Meta" });
-        }
         const projectId = req.query.projectId || process.env.RAILWAY_PROJECT_ID || "default";
         console.log(`📡 [UNLINK-META] Iniciando desvinculación de Meta para Proyecto: ${projectId}`);
         try {
@@ -2175,9 +2159,6 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     });
 
     app.post('/api/backoffice/whatsapp/onboard', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
-        if (!req.auth.isAdmin) {
-            return res.status(403).json({ success: false, error: "Only admins can perform onboarding" });
-        }
         const { code } = req.body;
         if (!code) return res.status(400).json({ success: false, error: 'Code is required' });
         try {
@@ -2607,6 +2588,179 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         } catch (error: any) {
             console.error('❌ [Docs] Error:', error.message);
             res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
+    // ─────────────────────────────────────────────────────────────
+    // LISTA NEGRA
+    // ─────────────────────────────────────────────────────────────
+
+    /** GET /api/backoffice/blacklist/status — ¿Está activa la integración? */
+    app.get('/api/backoffice/blacklist/status', backofficeAuth, async (req: any, res: any) => {
+        try {
+            const active = await depsHistoryHandler.getSetting('BLACKLIST_ACTIVE');
+            res.json({ active: active === 'true' });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    /** POST /api/backoffice/blacklist/activate — Activa la lista negra */
+    app.post('/api/backoffice/blacklist/activate', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
+        try {
+            const projectId = depsHistoryHandler.PROJECT_IDENTIFIER;
+            const { error } = await supabase
+                .from('settings')
+                .upsert({ project_id: projectId, key: 'BLACKLIST_ACTIVE', value: 'true' }, { onConflict: 'project_id,key' });
+            if (error) throw error;
+            // Invalidar caché
+            depsHistoryHandler.settingsCache?.delete?.(`${projectId}:BLACKLIST_ACTIVE`);
+            res.json({ success: true });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    /** POST /api/backoffice/blacklist/deactivate — Desactiva y elimina todos los registros */
+    app.post('/api/backoffice/blacklist/deactivate', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
+        try {
+            const projectId = depsHistoryHandler.PROJECT_IDENTIFIER;
+            // 1. Eliminar todas las entradas de blacklist del proyecto
+            const { error: delErr } = await supabase
+                .from('blacklist')
+                .delete()
+                .eq('project_id', projectId);
+            if (delErr) throw delErr;
+            // 2. Desactivar el setting
+            const { error: settErr } = await supabase
+                .from('settings')
+                .upsert({ project_id: projectId, key: 'BLACKLIST_ACTIVE', value: 'false' }, { onConflict: 'project_id,key' });
+            if (settErr) throw settErr;
+            depsHistoryHandler.settingsCache?.delete?.(`${projectId}:BLACKLIST_ACTIVE`);
+            res.json({ success: true });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    /** GET /api/backoffice/blacklist — Lista todas las entradas del proyecto */
+    app.get('/api/backoffice/blacklist', backofficeAuth, async (req: any, res: any) => {
+        try {
+            const projectId = depsHistoryHandler.PROJECT_IDENTIFIER;
+            const { data, error } = await supabase
+                .from('blacklist')
+                .select('chat_id, sin_bot, bloqueado_crm, notes, updated_at')
+                .eq('project_id', projectId)
+                .order('updated_at', { ascending: false });
+            if (error) throw error;
+            // Enriquecer con nombre del contacto desde chats
+            const chatIds = (data || []).map((r: any) => r.chat_id);
+            let chatNames: Record<string, string> = {};
+            if (chatIds.length > 0) {
+                const { data: chatRows } = await supabase
+                    .from('chats')
+                    .select('id, name')
+                    .in('id', chatIds)
+                    .eq('project_id', projectId);
+                (chatRows || []).forEach((c: any) => { chatNames[c.id] = c.name || c.id; });
+            }
+            const enriched = (data || []).map((r: any) => ({
+                ...r,
+                name: chatNames[r.chat_id] || r.chat_id
+            }));
+            res.json(enriched);
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    /** POST /api/backoffice/blacklist — Upsert de una entrada */
+    app.post('/api/backoffice/blacklist', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
+        try {
+            const { chat_id, sin_bot, bloqueado_crm, notes } = req.body;
+            if (!chat_id) return res.status(400).json({ success: false, error: 'chat_id requerido' });
+            const projectId = depsHistoryHandler.PROJECT_IDENTIFIER;
+            const { error } = await supabase
+                .from('blacklist')
+                .upsert({
+                    chat_id,
+                    project_id: projectId,
+                    sin_bot: !!sin_bot,
+                    bloqueado_crm: !!bloqueado_crm,
+                    notes: notes || '',
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'chat_id,project_id' });
+            if (error) throw error;
+            res.json({ success: true });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    /** DELETE /api/backoffice/blacklist/:chatId — Elimina una entrada */
+    app.delete('/api/backoffice/blacklist/:chatId', backofficeAuth, async (req: any, res: any) => {
+        try {
+            const projectId = depsHistoryHandler.PROJECT_IDENTIFIER;
+            const { error } = await supabase
+                .from('blacklist')
+                .delete()
+                .eq('chat_id', req.params.chatId)
+                .eq('project_id', projectId);
+            if (error) throw error;
+            res.json({ success: true });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    /** GET /api/backoffice/blacklist/check/:chatId — Verifica si un chat está en lista negra */
+    app.get('/api/backoffice/blacklist/check/:chatId', backofficeAuth, async (req: any, res: any) => {
+        try {
+            const projectId = depsHistoryHandler.PROJECT_IDENTIFIER;
+            const { data } = await supabase
+                .from('blacklist')
+                .select('sin_bot, bloqueado_crm')
+                .eq('chat_id', req.params.chatId)
+                .eq('project_id', projectId)
+                .maybeSingle();
+            res.json({ inBlacklist: !!data, sin_bot: data?.sin_bot || false, bloqueado_crm: data?.bloqueado_crm || false });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    /** POST /api/backoffice/blacklist/toggle/:chatId — Agrega o quita de lista negra (toggle rápido desde header) */
+    app.post('/api/backoffice/blacklist/toggle/:chatId', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
+        try {
+            const projectId = depsHistoryHandler.PROJECT_IDENTIFIER;
+            const chatId = req.params.chatId;
+            const { inBlacklist } = req.body;
+
+            if (inBlacklist) {
+                // Agregar con sin_bot=true por defecto
+                const { error } = await supabase
+                    .from('blacklist')
+                    .upsert({
+                        chat_id: chatId,
+                        project_id: projectId,
+                        sin_bot: true,
+                        bloqueado_crm: false,
+                        notes: '',
+                        updated_at: new Date().toISOString()
+                    }, { onConflict: 'chat_id,project_id' });
+                if (error) throw error;
+            } else {
+                // Quitar de la lista
+                const { error } = await supabase
+                    .from('blacklist')
+                    .delete()
+                    .eq('chat_id', chatId)
+                    .eq('project_id', projectId);
+                if (error) throw error;
+            }
+            res.json({ success: true, inBlacklist });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
         }
     });
 };

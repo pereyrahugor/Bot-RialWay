@@ -2449,6 +2449,21 @@ export class HistoryHandler {
         }
     }
 
+    static async getUserById(userId: string) {
+        try {
+            const { data, error } = await supabase
+                .from('users')
+                .select('*')
+                .eq('id', userId)
+                .maybeSingle();
+            if (error) throw error;
+            return data || null;
+        } catch (err) {
+            console.error('[HistoryHandler] Error en getUserById:', err);
+            return null;
+        }
+    }
+
     static async assignChatToUser(rawChatId: string, userId: string | null) {
         const chatId = this.normalizeId(rawChatId);
         try {

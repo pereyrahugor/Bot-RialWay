@@ -518,6 +518,7 @@ async function selectChat(id) {
     renderChatList();
     loadCRMJump(id); // Cargamos los datos para el "Salto al CRM"
     fetchMessages(id, true);
+    checkBlacklistForChat(id); // Verificar estado en lista negra
 }
 
 function renderActiveChatTags() {
@@ -2855,6 +2856,7 @@ window.initBackofficeView = function() {
     initCRMData();
     fetchBotTags();
     fetchPendingTicketsCount();
+    initBlacklist();
 
     // Re-attach scroll listeners en el nuevo DOM
     const chatList = document.getElementById('chat-list');
@@ -2882,4 +2884,93 @@ window._backofficeAbortAll = function() {
     loadingChats = false;
     loadingMessages = false;
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LISTA NEGRA - Lógica de integración en el backoffice
+// ─────────────────────────────────────────────────────────────────────────────
+
+let _blacklistActive = false;
+let _currentChatBlacklisted = false;
+
+/** Verifica si la Lista Negra está activa y muestra/oculta el toggle en el header */
+async function initBlacklist() {
+    try {
+        const res = await fetch(`/api/backoffice/blacklist/status?token=${token}`);
+        const data = await res.json();
+        _blacklistActive = !!data.active;
+        _updateBlacklistBtnVisibility();
+    } catch (e) {
+        console.warn('[Blacklist] No se pudo verificar status:', e);
+        _blacklistActive = false;
+    }
+}
+
+function _updateBlacklistBtnVisibility() {
+    const btn = document.getElementById('blacklist-toggle-btn');
+    if (!btn) return;
+    btn.style.display = _blacklistActive ? 'inline-flex' : 'none';
+}
+
+/** Llamada al seleccionar un chat: verifica si está en la lista negra y actualiza el botón */
+async function checkBlacklistForChat(chatId) {
+    if (!_blacklistActive) return;
+    const btn = document.getElementById('blacklist-toggle-btn');
+    if (!btn) return;
+
+    btn.disabled = true;
+    try {
+        const res = await fetch(`/api/backoffice/blacklist/check/${encodeURIComponent(chatId)}?token=${token}`);
+        const data = await res.json();
+        _currentChatBlacklisted = !!data.inBlacklist;
+        _updateBlacklistBtn(_currentChatBlacklisted);
+    } catch (e) {
+        console.warn('[Blacklist] Error verificando chat:', e);
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+function _updateBlacklistBtn(isBlacklisted) {
+    const btn = document.getElementById('blacklist-toggle-btn');
+    if (!btn) return;
+    if (isBlacklisted) {
+        btn.innerHTML = '<i class="fas fa-times-circle" style="color:#ef4444;"></i>';
+        btn.title = 'Lista Negra: contacto bloqueado — Clic para quitar';
+    } else {
+        btn.innerHTML = '<i class="fas fa-check-circle" style="color:#25D366;"></i>';
+        btn.title = 'Lista Negra: contacto habilitado — Clic para agregar';
+    }
+}
+
+/** Toggle rápido desde el header: agrega o quita de la lista negra */
+async function toggleBlacklist() {
+    if (!activeChatId || !_blacklistActive) return;
+    const btn = document.getElementById('blacklist-toggle-btn');
+    if (btn) btn.disabled = true;
+
+    const newState = !_currentChatBlacklisted; // nuevo valor: true = agregar, false = quitar
+    try {
+        const res = await fetch(`/api/backoffice/blacklist/toggle/${encodeURIComponent(activeChatId)}?token=${token}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ inBlacklist: newState })
+        });
+        const data = await res.json();
+        if (data.success) {
+            _currentChatBlacklisted = newState;
+            _updateBlacklistBtn(_currentChatBlacklisted);
+            const msg = newState
+                ? '⛔ Contacto agregado a lista negra (Sin Bot)'
+                : '✅ Contacto quitado de la lista negra';
+            if (typeof showToast === 'function') showToast(msg, newState ? 'warning' : 'success');
+        }
+    } catch (e) {
+        console.error('[Blacklist] Error en toggle:', e);
+        if (typeof showToast === 'function') showToast('Error al actualizar lista negra', 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+window.toggleBlacklist = toggleBlacklist;
 
