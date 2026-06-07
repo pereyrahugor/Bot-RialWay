@@ -21,9 +21,6 @@ window.listaNegraView = (() => {
                     <p>Control de contactos excluidos del bot o del CRM</p>
                 </div>
                 <div id="ln-header-actions" style="display:none; gap:8px; align-items:center;">
-                    <button id="ln-add-btn" class="btn-primary" onclick="listaNegraView._openAddModal()" style="display:flex; align-items:center; gap:6px; padding:8px 16px; font-size:0.88rem; border-radius:10px; background:linear-gradient(135deg,#25D366,#128C7E);">
-                        <i class="fas fa-plus"></i> Agregar contacto
-                    </button>
                     <button onclick="listaNegraView._confirmDeactivate()" style="display:flex; align-items:center; gap:6px; padding:8px 16px; font-size:0.88rem; border-radius:10px; background:transparent; border:1.5px solid var(--border); color:var(--text-muted); cursor:pointer;">
                         <i class="fas fa-power-off"></i> Desactivar
                     </button>
@@ -57,6 +54,10 @@ window.listaNegraView = (() => {
                                     <i class="fas fa-eye-slash" style="color:#ef4444; margin-top:2px; flex-shrink:0;"></i>
                                     <span><strong>Bloqueado CRM:</strong> Además de lo anterior, el contacto queda completamente oculto en el backoffice.</span>
                                 </li>
+                                <li style="display:flex; align-items:flex-start; gap:8px;">
+                                    <i class="fas fa-toggle-on" style="color:#128C7E; margin-top:2px; flex-shrink:0;"></i>
+                                    <span><strong>¿Cómo agregar?</strong> Abrí un chat en el backoffice y usá el ícono <i class="fas fa-check-circle" style="color:#25D366;"></i> del encabezado para agregar o quitar ese contacto.</span>
+                                </li>
                             </ul>
                         </div>
                         <button id="ln-activate-btn" class="btn-primary" onclick="listaNegraView._activar()" style="width:100%; padding:13px 20px; display:flex; align-items:center; justify-content:center; gap:10px; font-size:0.95rem; font-weight:600; border-radius:14px; background:linear-gradient(135deg,#25D366,#128C7E);">
@@ -88,7 +89,7 @@ window.listaNegraView = (() => {
                                             <i class="fas fa-eye-slash"></i> Bloqueado CRM
                                         </th>
                                         <th style="padding:12px 16px; text-align:left; font-weight:700; color:var(--text-muted); font-size:0.78rem; text-transform:uppercase; letter-spacing:1px;">Notas</th>
-                                        <th style="padding:12px 16px; text-align:center; font-weight:700; color:var(--text-muted); font-size:0.78rem; text-transform:uppercase; letter-spacing:1px;">Acciones</th>
+                                        <th style="padding:12px 16px; text-align:center; font-weight:700; color:var(--text-muted); font-size:0.78rem; text-transform:uppercase; letter-spacing:1px;">Quitar</th>
                                     </tr>
                                 </thead>
                                 <tbody id="ln-tbody">
@@ -103,57 +104,18 @@ window.listaNegraView = (() => {
                         <div id="ln-empty" style="display:none; padding:48px 24px; text-align:center;">
                             <i class="fas fa-list-check" style="font-size:2.5rem; color:var(--text-muted); margin-bottom:12px; display:block;"></i>
                             <p style="color:var(--text-muted); margin:0;">No hay contactos en la lista negra.</p>
-                            <p style="color:var(--text-muted); font-size:0.85rem; margin:4px 0 0;">Usá el botón <strong>Agregar contacto</strong> para añadir uno.</p>
+                            <p style="color:var(--text-muted); font-size:0.85rem; margin:4px 0 0;">
+                                Abrí un chat en el backoffice y usá el ícono <i class="fas fa-check-circle" style="color:#25D366;"></i> del encabezado para agregar un contacto.
+                            </p>
                         </div>
                     </div>
                 </div>
 
             </div>
         </main>
-
-        <!-- Modal: Agregar contacto -->
-        <div id="ln-modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:9999; display:none; align-items:center; justify-content:center;">
-            <div class="glass-card" style="width:100%; max-width:440px; padding:28px 24px; border-radius:20px; border-top:4px solid #25D366; position:relative;">
-                <h3 style="margin:0 0 4px; font-size:1.1rem; font-weight:700; color:var(--text-main);">Agregar a Lista Negra</h3>
-                <p style="margin:0 0 20px; font-size:0.85rem; color:var(--text-muted);">Ingresa el ID del contacto (número de teléfono con código de país)</p>
-                
-                <div style="margin-bottom:14px;">
-                    <label style="font-size:0.8rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; display:block; margin-bottom:6px;">ID Contacto (ej: 5491112345678)</label>
-                    <input id="ln-modal-chatid" type="text" placeholder="5491112345678@s.whatsapp.net o solo el número" style="width:100%; padding:10px 12px; border-radius:10px; border:1.5px solid var(--border); background:var(--bg-header); color:var(--text-main); font-size:0.9rem; box-sizing:border-box; outline:none;" oninput="this.style.borderColor='var(--border)'">
-                </div>
-
-                <div style="margin-bottom:14px; display:flex; gap:12px;">
-                    <label id="ln-modal-sinbot-label" style="flex:1; padding:12px; border-radius:12px; border:2px solid var(--border); cursor:pointer; display:flex; align-items:center; gap:8px; transition:all 0.2s;" onclick="listaNegraView._toggleModalMode('sinbot')">
-                        <input type="radio" name="ln-mode" id="ln-radio-sinbot" value="sinbot" checked style="accent-color:#25D366;">
-                        <span>
-                            <strong style="font-size:0.88rem;">Sin Bot</strong><br>
-                            <span style="font-size:0.78rem; color:var(--text-muted);">Visible, sin reset automático</span>
-                        </span>
-                    </label>
-                    <label id="ln-modal-blocked-label" style="flex:1; padding:12px; border-radius:12px; border:2px solid var(--border); cursor:pointer; display:flex; align-items:center; gap:8px; transition:all 0.2s;" onclick="listaNegraView._toggleModalMode('bloqueado')">
-                        <input type="radio" name="ln-mode" id="ln-radio-bloqueado" value="bloqueado" style="accent-color:#ef4444;">
-                        <span>
-                            <strong style="font-size:0.88rem;">Bloqueado CRM</strong><br>
-                            <span style="font-size:0.78rem; color:var(--text-muted);">Oculto completamente</span>
-                        </span>
-                    </label>
-                </div>
-
-                <div style="margin-bottom:18px;">
-                    <label style="font-size:0.8rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; display:block; margin-bottom:6px;">Notas (opcional)</label>
-                    <input id="ln-modal-notes" type="text" placeholder="Ej: Spam, cliente problemático..." style="width:100%; padding:10px 12px; border-radius:10px; border:1.5px solid var(--border); background:var(--bg-header); color:var(--text-main); font-size:0.9rem; box-sizing:border-box; outline:none;">
-                </div>
-
-                <div style="display:flex; gap:10px;">
-                    <button onclick="listaNegraView._closeModal()" style="flex:1; padding:11px; border-radius:10px; border:1.5px solid var(--border); background:transparent; color:var(--text-muted); cursor:pointer; font-size:0.9rem;">Cancelar</button>
-                    <button id="ln-modal-save-btn" onclick="listaNegraView._saveEntry()" style="flex:1; padding:11px; border-radius:10px; border:none; background:linear-gradient(135deg,#25D366,#128C7E); color:white; cursor:pointer; font-size:0.9rem; font-weight:600;">
-                        <i class="fas fa-check"></i> Guardar
-                    </button>
-                </div>
-            </div>
-        </div>
         `;
     }
+
 
     // ── INIT ──────────────────────────────────────────────────────────────
     async function init() {

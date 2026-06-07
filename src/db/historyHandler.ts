@@ -1284,12 +1284,32 @@ export class HistoryHandler {
                 }
             }
 
+            // --- FILTRO LISTA NEGRA (bloqueado_crm) ---
+            // Si la integración está activa, ocultamos los chats bloqueados del CRM
+            try {
+                const blacklistActive = await this.getSetting('BLACKLIST_ACTIVE');
+                if (blacklistActive === 'true') {
+                    const { data: blockedEntries } = await supabase
+                        .from('blacklist')
+                        .select('chat_id')
+                        .eq('project_id', this.PROJECT_IDENTIFIER)
+                        .eq('bloqueado_crm', true);
+                    if (blockedEntries && blockedEntries.length > 0) {
+                        const blockedIds = new Set(blockedEntries.map((e: any) => e.chat_id));
+                        finalChats = finalChats.filter((c: any) => !blockedIds.has(c.id));
+                    }
+                }
+            } catch (blErr) {
+                console.warn('[HistoryHandler] No se pudo aplicar filtro de lista negra:', blErr);
+            }
+
             return finalChats;
         } catch (err) {
             console.error('[HistoryHandler] Error en listChats:', err);
             return [];
         }
     }
+
 
 
     /**

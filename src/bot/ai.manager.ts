@@ -211,6 +211,31 @@ export class AiManager {
                 return state;
             }
 
+            // --- FILTRO DE LISTA NEGRA ---
+            const blacklistActive = await HistoryHandler.getSetting('BLACKLIST_ACTIVE', dynamicProjectId);
+            if (blacklistActive === 'true') {
+                const { supabase: supa } = await import('../db/historyHandler');
+                if (supa) {
+                    const { data: blEntry } = await supa
+                        .from('blacklist')
+                        .select('sin_bot, bloqueado_crm')
+                        .eq('chat_id', ctx.from)
+                        .eq('project_id', dynamicProjectId)
+                        .maybeSingle();
+                    if (blEntry && (blEntry.sin_bot || blEntry.bloqueado_crm)) {
+                        console.log(`[AiManager] ⛔ Contacto ${ctx.from} en lista negra (sin_bot=${blEntry.sin_bot}, bloqueado_crm=${blEntry.bloqueado_crm}). Activando intervención humana permanente.`);
+                        // Asegurar que el chat esté en modo intervención humana (bot_enabled=false)
+                        // El worker de inactividad lo excluye, por lo que permanecerá así indefinidamente.
+                        const currentBotState = await HistoryHandler.isBotEnabled(ctx.from);
+                        if (currentBotState) {
+                            await HistoryHandler.toggleBot(ctx.from, false);
+                        }
+                        return state;
+                    }
+                }
+            }
+
+
             // Comandos Globales y Sheet Update
             if (body === "#ACTUALIZAR#") {
                 try {

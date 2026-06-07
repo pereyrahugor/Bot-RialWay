@@ -145,6 +145,21 @@ async function _initSystemConfigPage() {
             }
         });
 
+        // ─── PARCHE: Campos de credenciales (los browsers omiten type="password" en FormData) ───
+        // Capturamos ADMIN_USER y ADMIN_PASS directamente del DOM.
+        const credentialFields = ['ADMIN_USER', 'ADMIN_PASS'];
+        credentialFields.forEach(key => {
+            const el = document.getElementById(key);
+            if (!el) return;
+            const val = el.value.trim();
+            // Si el usuario escribió algo, siempre guardar (ignorar guard de comparación)
+            if (val !== '') {
+                settingsToSave[key] = val;
+                hasChanges = true;
+            }
+        });
+        // ─────────────────────────────────────────────────────────────────────────────────────────
+
         if (!hasChanges) {
             alert('No se detectaron cambios para guardar.');
             return;
@@ -167,6 +182,11 @@ async function _initSystemConfigPage() {
             if (data.success) {
                 alert('✅ Configuración guardada correctamente.');
                 Object.assign(initialVariables, settingsToSave);
+                // Limpiar los campos de credenciales tras guardar para evitar re-guardado involuntario
+                credentialFields.forEach(key => {
+                    const el = document.getElementById(key);
+                    if (el && settingsToSave[key] !== undefined) el.value = '';
+                });
                 
                 // Sincronizar prompts cambiados con OpenAI si corresponde
                 for (let i = 1; i <= 5; i++) {
