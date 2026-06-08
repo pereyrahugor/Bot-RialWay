@@ -420,7 +420,7 @@ export class HistoryHandler {
     }
 
     static async activateSystemConfigTemporarily() {
-        console.log(`🔑 [HistoryHandler] Activando SYSTEM_CONFIG_VISIBLE por 1 segundo.`);
+        console.log(`🔑 [HistoryHandler] Activando SYSTEM_CONFIG_VISIBLE por 60 minutos.`);
         
         // 1. Guardar en base de datos
         await this.saveSetting('SYSTEM_CONFIG_VISIBLE', 'true');
@@ -434,7 +434,7 @@ export class HistoryHandler {
         this.systemConfigVisibleTimer = setTimeout(async () => {
             console.log(`⏰ [HistoryHandler] Tiempo cumplido. Desactivando SYSTEM_CONFIG_VISIBLE.`);
             await this.deactivateSystemConfig();
-        }, 1 * 1000); // 1 segundo
+        },60 * 60 * 1000); // 60 minutos
     }
 
     static async deactivateSystemConfig() {
