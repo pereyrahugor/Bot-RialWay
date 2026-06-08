@@ -2176,7 +2176,14 @@ export class HistoryHandler {
             console.error(`❌ [HistoryHandler] Error obteniendo setting ${key}:`, error);
         }
 
-        const value = data ? data.value : null;
+        let value = data ? data.value : null;
+        if ((key === 'ADMIN_USER' || key === 'ADMIN_PASS') && value && value.startsWith('b64:')) {
+            try {
+                value = Buffer.from(value.slice(4), 'base64').toString('utf-8');
+            } catch (e) {
+                console.error(`[HistoryHandler] Error decoding base64 setting ${key}:`, e);
+            }
+        }
 
         // 2. Guardar en cache antes de retornar
         this.settingsCache.set(cacheKey, { value, timestamp: now });

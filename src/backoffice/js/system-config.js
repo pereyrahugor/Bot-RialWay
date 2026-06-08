@@ -23,9 +23,11 @@ async function _initSystemConfigPage() {
     const assistantSelect = document.getElementById('assistant-select');
     let initialVariables = {};
 
+    const getSafeToken = () => localStorage.getItem('system_config_token') || localStorage.getItem('backoffice_token') || '';
+
     // Cargar variables actuales
     async function loadVariables() {
-        const token = localStorage.getItem('system_config_token') || localStorage.getItem('backoffice_token');
+        const token = getSafeToken();
         try {
             const response = await fetch(`/api/backoffice/config?token=${token}`);
             if (response.status === 401) return logout();
@@ -169,7 +171,7 @@ async function _initSystemConfigPage() {
         updateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
         
         try {
-            const token = localStorage.getItem('system_config_token');
+            const token = getSafeToken();
             const response = await fetch(`/api/backoffice/save-settings-bulk?token=${token}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -233,7 +235,7 @@ async function _initSystemConfigPage() {
             saveCredsBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
 
             try {
-                const token = localStorage.getItem('system_config_token');
+                const token = getSafeToken();
                 const response = await fetch(`/api/backoffice/save-settings-bulk?token=${token}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -261,7 +263,7 @@ async function _initSystemConfigPage() {
 
     async function syncPromptWithOpenAI(prompt, index) {
         try {
-            const token = localStorage.getItem('system_config_token');
+            const token = getSafeToken();
             await fetch(`/api/backoffice/update-prompt?token=${token}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -291,7 +293,7 @@ async function _initSystemConfigPage() {
         syncStatus.textContent = '⏳ Sincronizando...';
 
         try {
-            const token = localStorage.getItem('system_config_token');
+            const token = getSafeToken();
             const response = await fetch(`/api/backoffice/sync-assistant-prompt?token=${token}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -322,7 +324,7 @@ async function _initSystemConfigPage() {
         syncStatus.textContent = `⏳ Guardando...`;
 
         try {
-            const token = localStorage.getItem('system_config_token');
+            const token = getSafeToken();
             const settingKey = index === '1' ? 'ASSISTANT_PROMPT' : `ASSISTANT_PROMPT_${index}`;
             
             const response = await fetch(`/api/backoffice/save-settings-bulk?token=${token}`, {
@@ -359,7 +361,7 @@ async function _initSystemConfigPage() {
             if (btnLoadGroupsText) btnLoadGroupsText.textContent = 'Buscando grupos...';
 
             try {
-                const token = localStorage.getItem('system_config_token');
+                const token = getSafeToken();
                 const response = await fetch(`/api/backoffice/whatsapp/groups?token=${token}`);
                 const data = await response.json();
 

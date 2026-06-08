@@ -2232,7 +2232,11 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             if (PROTECTED_KEYS.includes(key)) {
                 return res.status(403).json({ success: false, error: 'Esta variable es estática y solo puede editarse vía base de datos.' });
             }
-            await depsHistoryHandler.saveSetting(key, value);
+            let val = value;
+            if ((key === 'ADMIN_USER' || key === 'ADMIN_PASS') && val) {
+                val = 'b64:' + Buffer.from(val).toString('base64');
+            }
+            await depsHistoryHandler.saveSetting(key, val);
             res.json({ success: true });
         } catch (error: any) {
             res.status(500).json({ success: false, error: error.message });
@@ -2437,7 +2441,13 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             const mergedConfig: any = { ...railwayVars };
             dbSettings?.forEach((s: any) => {
                 if (s.value !== null && s.value !== undefined) {
-                    mergedConfig[s.key] = s.value;
+                    let val = s.value;
+                    if ((s.key === 'ADMIN_USER' || s.key === 'ADMIN_PASS') && typeof val === 'string' && val.startsWith('b64:')) {
+                        try {
+                            val = Buffer.from(val.slice(4), 'base64').toString('utf-8');
+                        } catch (e) {}
+                    }
+                    mergedConfig[s.key] = val;
                 }
             });
 
@@ -2464,7 +2474,13 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             
             console.log(`📡 [HOT-UPDATE] Guardando ${keysToSave.length} variables en la base de datos...`);
 
-            const promises = keysToSave.map(key => depsHistoryHandler.saveSetting(key, settings[key]));
+            const promises = keysToSave.map(key => {
+                let val = settings[key];
+                if ((key === 'ADMIN_USER' || key === 'ADMIN_PASS') && val) {
+                    val = 'b64:' + Buffer.from(val).toString('base64');
+                }
+                return depsHistoryHandler.saveSetting(key, val);
+            });
             await Promise.all(promises);
 
             // Si se actualizaron credenciales de acceso, invalida el cache del middleware de auth
@@ -2491,7 +2507,13 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             if (error) throw error;
             const results: any = {};
             dbSettings?.forEach((s: any) => {
-                results[s.key] = s.value;
+                let val = s.value;
+                if ((s.key === 'ADMIN_USER' || s.key === 'ADMIN_PASS') && typeof val === 'string' && val.startsWith('b64:')) {
+                    try {
+                        val = Buffer.from(val.slice(4), 'base64').toString('utf-8');
+                    } catch (e) {}
+                }
+                results[s.key] = val;
             });
             res.json(results);
         } catch (error: any) {
