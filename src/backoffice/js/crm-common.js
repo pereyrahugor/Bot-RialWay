@@ -147,6 +147,10 @@ function toggleTheme() {
 
 function logout() {
     localStorage.removeItem('backoffice_token');
+    localStorage.removeItem('system_config_token');
+    localStorage.removeItem('user_role');
+    localStorage.removeItem('user_id');
+    localStorage.removeItem('user_name');
     window.location.href = '/login';
 }
 
