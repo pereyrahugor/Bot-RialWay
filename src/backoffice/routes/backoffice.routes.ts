@@ -1875,8 +1875,62 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                 const headerComp = template.components?.find((c: any) => c.type === 'HEADER');
                 if (headerComp && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComp.format)) {
                     const lowFormat = headerComp.format.toLowerCase();
-                    const mediaLink = headerComp.example?.header_handle?.[0] || '';
+                    let mediaLink = headerComp.example?.header_handle?.[0] || '';
                     if (mediaLink) {
+                        // Si es un link de Meta/Facebook, lo descargamos y servimos localmente
+                        const isMetaUrl = mediaLink.includes('fbcdn') || mediaLink.includes('fbsbx') || mediaLink.includes('facebook.com') || mediaLink.includes('lookaside.fbsbx.com');
+                        if (isMetaUrl) {
+                            try {
+                                console.log(`📥 [QUICK BULK] Descargando multimedia de cabecera de Meta: ${mediaLink.substring(0, 50)}...`);
+                                const accessToken = provider.config?.access_token || '';
+                                const downloadHeaders: any = {
+                                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                                    'Accept': '*/*'
+                                };
+                                if (accessToken) {
+                                    downloadHeaders['Authorization'] = `Bearer ${accessToken}`;
+                                }
+
+                                const response = await axios.get(mediaLink, {
+                                    responseType: 'arraybuffer',
+                                    timeout: 30000,
+                                    headers: downloadHeaders
+                                });
+
+                                const contentType = response.headers['content-type'] || '';
+                                let ext = 'bin';
+                                if (contentType.includes('video')) ext = 'mp4';
+                                else if (contentType.includes('image')) ext = 'jpg';
+                                else if (contentType.includes('pdf')) ext = 'pdf';
+                                else {
+                                    ext = lowFormat === 'image' ? 'jpg' : lowFormat === 'video' ? 'mp4' : 'pdf';
+                                }
+
+                                const uploadsDir = path.join(process.cwd(), 'uploads');
+                                if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
+                                const filename = `quick-bulk-${Date.now()}-${Math.floor(Math.random()*1000)}.${ext}`;
+                                const dest = path.join(uploadsDir, filename);
+                                fs.writeFileSync(dest, response.data);
+
+                                // Construir URL pública
+                                let baseUrl = process.env.PROJECT_URL;
+                                if (!baseUrl) {
+                                    const host = req.headers.host || '';
+                                    if (!host.includes('localhost')) {
+                                        baseUrl = `https://${host}`;
+                                    } else {
+                                        baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : `http://${host}`;
+                                    }
+                                }
+                                if (!baseUrl.startsWith('http')) baseUrl = `https://${baseUrl}`;
+                                mediaLink = `${baseUrl.replace(/\/$/, '')}/uploads/${filename}`;
+                                console.log(`✅ [QUICK BULK] Multimedia descargado y servido localmente en: ${mediaLink}`);
+                            } catch (downloadErr: any) {
+                                console.error(`❌ [QUICK BULK] Error descargando multimedia de cabecera:`, downloadErr.message);
+                            }
+                        }
+
                         components.push({
                             type: 'HEADER',
                             parameters: [{

@@ -160,8 +160,7 @@ window.metaView = (() => {
                                             </div>
                                         </div>
                                         <!-- Envío Rápido (Solo para plantillas sin variables) -->
-                                        <div id="quick-send-container" style="display:none; flex-direction:column; gap:8px; margin-top:15px; border-top:1px dashed var(--border); padding-top:15px;">
-                                            <div class="bulk-step-label"><i class="fas fa-bolt" style="color:#0668E1;"></i> Envío Rápido</div>
+                                        <div id="quick-send-container" style="display:none; margin-top:15px; border-top:1px dashed var(--border); padding-top:15px; width:100%;">
                                             <button id="quick-send-btn" class="btn-primary bulk-step-btn" onclick="startQuickBulkSend()" style="display:flex; align-items:center; justify-content:center; gap:8px;">
                                                 <i class="fas fa-bolt"></i> Envío Rápido
                                             </button>
