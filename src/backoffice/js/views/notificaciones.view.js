@@ -88,10 +88,16 @@ window.notificacionesView = (() => {
 
     // ── INITIALIZATION ────────────────────────────────────────────────────
     async function init(token) {
-        _token = token;
+        _token = (typeof token === 'string' && token && token !== 'undefined') ? token : '';
+        if (!_token) {
+            _token = (typeof window.getAuthToken === 'function' ? decodeURIComponent(window.getAuthToken()) : '') || localStorage.getItem('backoffice_token') || localStorage.getItem('system_config_token') || '';
+        }
+        if (_token === 'undefined') {
+            _token = '';
+        }
         _renderLoading();
         try {
-            const res = await fetch(`/api/backoffice/notifications/status?token=${_token}`);
+            const res = await fetch(`/api/backoffice/notifications/status?token=${encodeURIComponent(_token)}`);
             const data = await res.json();
             _isActive = !!data.active;
             _render();
@@ -152,7 +158,7 @@ window.notificacionesView = (() => {
             btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Activando...';
         }
         try {
-            const res = await fetch(`/api/backoffice/notifications/activate?token=${_token}`, { method: 'POST' });
+            const res = await fetch(`/api/backoffice/notifications/activate?token=${encodeURIComponent(_token)}`, { method: 'POST' });
             const data = await res.json();
             if (data.success) {
                 _isActive = true;
@@ -188,7 +194,7 @@ window.notificacionesView = (() => {
             btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Desactivando...';
         }
         try {
-            const res = await fetch(`/api/backoffice/notifications/deactivate?token=${_token}`, { method: 'POST' });
+            const res = await fetch(`/api/backoffice/notifications/deactivate?token=${encodeURIComponent(_token)}`, { method: 'POST' });
             const data = await res.json();
             if (data.success) {
                 _isActive = false;
