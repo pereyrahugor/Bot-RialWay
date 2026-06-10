@@ -1802,6 +1802,103 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         return processBulkTemplate(req, res, deps);
     });
 
+    app.post('/api/backoffice/whatsapp/send-quick-template', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
+        await syncMetaProvider();
+        const { templateName, languageCode, startDate, endDate, tagIds } = req.body;
+
+        try {
+            if (!templateName) {
+                return res.status(400).json({ success: false, error: 'Falta el nombre de la plantilla.' });
+            }
+
+            // 1. Obtener contactos reales filtrados
+            let chatsList = await depsHistoryHandler.listChats(5000, 0); 
+            if (chatsList && chatsList.length > 0) {
+                // Filtrar por fecha
+                if (startDate || endDate) {
+                    chatsList = chatsList.filter((c: any) => {
+                        if (!c.last_message_at) return false;
+                        const msgDate = new Date(c.last_message_at);
+                        if (startDate && msgDate < new Date(`${startDate}T00:00:00.000Z`)) return false;
+                        if (endDate && msgDate > new Date(`${endDate}T23:59:59.999Z`)) return false;
+                        return true;
+                    });
+                }
+
+                // Filtrar por etiquetas
+                if (tagIds) {
+                    const tagIdArray = Array.isArray(tagIds) ? tagIds : typeof tagIds === 'string' ? tagIds.split(',').filter(Boolean) : [];
+                    if (tagIdArray.length > 0) {
+                        chatsList = chatsList.filter((c: any) => {
+                            if (!c.tags || c.tags.length === 0) return false;
+                            return c.tags.some((t: any) => tagIdArray.includes(t.id));
+                        });
+                    }
+                }
+            } else {
+                chatsList = [];
+            }
+
+            // Filtrar el número de ejemplo
+            chatsList = chatsList.filter((chat: any) => {
+                const cleanPhone = chat.id.split('@')[0];
+                return cleanPhone !== '5491100000000';
+            });
+
+            if (chatsList.length === 0) {
+                return res.status(400).json({ success: false, error: 'No se encontraron contactos que coincidan con los filtros aplicados.' });
+            }
+
+            // 2. Responder 202 de inmediato
+            res.status(202).json({ success: true, message: 'Envío rápido masivo iniciado.', total: chatsList.length });
+
+            // 3. Procesar envíos en segundo plano
+            (async () => {
+                const provider = (adapterProvider.constructor.name === 'MetaCloudProvider') ? adapterProvider : (deps as any).groupProvider;
+                const templates = await provider.getTemplates();
+                const template = templates.find((t: any) => t.name === templateName);
+                if (!template) {
+                    console.error(`❌ [QUICK BULK] Plantilla ${templateName} no encontrada.`);
+                    return;
+                }
+
+                let bodyText = "";
+                const bodyComp = template.components?.find((c: any) => c.type === 'BODY');
+                if (bodyComp) {
+                    bodyText = bodyComp.text || "";
+                }
+
+                const historyContent = `[Campaña Rápida: ${templateName}]\n${bodyText}`;
+
+                let sent = 0, errors = 0;
+                for (const chat of chatsList) {
+                    const phone = chat.id.split('@')[0];
+                    try {
+                        const resApi = await provider.sendTemplate(phone, templateName, languageCode || template.language || 'es', []);
+                        if (resApi?.messages) {
+                            const msgId = resApi.messages[0].id;
+                            await depsHistoryHandler.saveMessage(chat.id, 'assistant', historyContent, 'text', null, null, msgId);
+                            sent++;
+                        } else {
+                            errors++;
+                        }
+                    } catch (e: any) {
+                        errors++;
+                        console.error(`❌ [QUICK BULK] Error de Meta para ${phone}:`, e.message || e);
+                    }
+                    await new Promise(r => setTimeout(r, 200));
+                }
+                console.log(`✅ [QUICK BULK] Envío rápido finalizado: ${sent} enviados, ${errors} errores de ${chatsList.length} contactos.`);
+            })();
+
+        } catch (error: any) {
+            console.error('Error en send-quick-template:', error);
+            if (!res.headersSent) {
+                res.status(500).json({ success: false, error: error.message });
+            }
+        }
+    });
+
     // --- IMPORTACION EXTERNA DE CONTACTOS ---
     
     app.get('/api/backoffice/chats/import-template', backofficeAuth, async (req: any, res: any) => {

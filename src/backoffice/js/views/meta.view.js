@@ -159,6 +159,13 @@ window.metaView = (() => {
                                                 </div>
                                             </div>
                                         </div>
+                                        <!-- Envío Rápido (Solo para plantillas sin variables) -->
+                                        <div id="quick-send-container" style="display:none; flex-direction:column; gap:8px; margin-top:15px; border-top:1px dashed var(--border); padding-top:15px;">
+                                            <div class="bulk-step-label"><i class="fas fa-bolt" style="color:#0668E1;"></i> Envío Rápido</div>
+                                            <button id="quick-send-btn" class="btn-primary bulk-step-btn" onclick="startQuickBulkSend()" style="display:flex; align-items:center; justify-content:center; gap:8px;">
+                                                <i class="fas fa-bolt"></i> Envío Rápido
+                                            </button>
+                                        </div>
                                         <!-- Progreso -->
                                         <div id="bulk-progress" style="display:none;">
                                             <div class="bulk-progress-track">
@@ -198,6 +205,7 @@ window.metaView = (() => {
         window.toggleMetaAccordion      = toggleMetaAccordion;
         window.showTplPreviewModal      = showTplPreviewModal;
         window.launchMetaOnboardingView = launchMetaOnboardingView;
+        window.startQuickBulkSend       = startQuickBulkSend;
 
         await checkMetaConnection();
     }
@@ -206,7 +214,8 @@ window.metaView = (() => {
         if (_popupCheckInterval) { clearInterval(_popupCheckInterval); _popupCheckInterval = null; }
         document.getElementById('tpl-preview-modal')?.remove();
         ['switchMetaTab', 'showTemplateDetail', 'startBulkSend', 'downloadBulkExcel',
-         'toggleTagChip', 'toggleMetaAccordion', 'showTplPreviewModal', 'launchMetaOnboardingView'
+         'toggleTagChip', 'toggleMetaAccordion', 'showTplPreviewModal', 'launchMetaOnboardingView',
+         'startQuickBulkSend'
         ].forEach(fn => { delete window[fn]; });
     }
 
@@ -431,6 +440,33 @@ window.metaView = (() => {
         const bulkSection = document.getElementById('bulk-actions-section');
         if (bulkSection) bulkSection.style.display = template.status === 'APPROVED' ? 'block' : 'none';
 
+        // Detectar si la plantilla tiene variables
+        let hasVariables = false;
+        if (template.components && Array.isArray(template.components)) {
+            hasVariables = template.components.some(c => {
+                if (c.type === 'HEADER' && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(c.format)) {
+                    return true;
+                }
+                if (c.type === 'BODY') {
+                    const text = c.text || c.content || '';
+                    const hasPlaceholders = /\{\{\w+\}\}/.test(text);
+                    if (hasPlaceholders) return true;
+                    if (template.parameter_format === 'named' && c.example?.body_text_named_params?.length > 0) {
+                        return true;
+                    }
+                }
+                if (c.type === 'BUTTONS' && Array.isArray(c.buttons)) {
+                    return c.buttons.some(b => b.type === 'URL' && b.url && b.url.includes('{{'));
+                }
+                return false;
+            });
+        }
+
+        const quickSendContainer = document.getElementById('quick-send-container');
+        if (quickSendContainer) {
+            quickSendContainer.style.display = (!hasVariables && template.status === 'APPROVED') ? 'flex' : 'none';
+        }
+
         const progressEl  = document.getElementById('bulk-progress');
         const fileInput   = document.getElementById('bulk-file-input');
         if (progressEl) progressEl.style.display = 'none';
@@ -500,6 +536,79 @@ window.metaView = (() => {
             progressBar.style.background  = '#ef4444';
             btn.disabled  = false;
             btn.innerHTML = '<i class="fas fa-paper-plane"></i> Reintentar';
+        }
+    }
+
+    // ── Envio masivo rápido (sin Excel) ───────────────────────────────────
+    async function startQuickBulkSend() {
+        if (!_currentTemplate) return;
+        
+        // Confirmar envío
+        if (!confirm(`¿Iniciar envío rápido de la plantilla "${_currentTemplate.name}" a los contactos filtrados?`)) {
+            return;
+        }
+
+        const btn         = document.getElementById('quick-send-btn');
+        const progressDiv = document.getElementById('bulk-progress');
+        const progressBar = document.getElementById('bulk-progress-bar');
+        const statusText  = document.getElementById('bulk-status-text');
+
+        const startDate = document.getElementById('bulk-filter-start')?.value || '';
+        const endDate   = document.getElementById('bulk-filter-end')?.value || '';
+        const tagIds    = [..._selectedTagIds];
+
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Iniciando...';
+        }
+        if (progressDiv) progressDiv.style.display = 'block';
+        if (progressBar) {
+            progressBar.style.width = '0%';
+            progressBar.style.background = 'var(--accent-color, #0099FF)';
+        }
+        if (statusText) statusText.innerText = 'Consultando contactos y procesando envío...';
+
+        try {
+            const res = await fetch(`/api/backoffice/whatsapp/send-quick-template?token=${_token}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    templateName: _currentTemplate.name,
+                    languageCode: _currentTemplate.language || 'es',
+                    startDate,
+                    endDate,
+                    tagIds
+                })
+            });
+
+            const data = await res.json();
+
+            if (res.status === 202 && data.success) {
+                if (statusText) statusText.innerText = `✅ Envío rápido iniciado para ${data.total} contactos.`;
+                if (progressBar) {
+                    progressBar.style.width = '100%';
+                    progressBar.style.background = '#10b981';
+                }
+                showToast(`🚀 Envío rápido iniciado para ${data.total} contactos`);
+                setTimeout(() => {
+                    switchMetaTab('my');
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="fas fa-bolt"></i> Envío Rápido';
+                    }
+                    if (progressDiv) progressDiv.style.display = 'none';
+                }, 3000);
+            } else {
+                throw new Error(data.error || 'Error al iniciar envío rápido');
+            }
+        } catch (e) {
+            console.error('[Quick Bulk] Error:', e);
+            if (statusText) statusText.innerText = '❌ ' + e.message;
+            if (progressBar) progressBar.style.background = '#ef4444';
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-bolt"></i> Reintentar Envío Rápido';
+            }
         }
     }
 
