@@ -1870,11 +1870,30 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
                 const historyContent = `[Campaña Rápida: ${templateName}]\n${bodyText}`;
 
+                // Construir componentes (como multimedia por defecto)
+                const components: any[] = [];
+                const headerComp = template.components?.find((c: any) => c.type === 'HEADER');
+                if (headerComp && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComp.format)) {
+                    const lowFormat = headerComp.format.toLowerCase();
+                    const mediaLink = headerComp.example?.header_handle?.[0] || '';
+                    if (mediaLink) {
+                        components.push({
+                            type: 'HEADER',
+                            parameters: [{
+                                type: lowFormat,
+                                [lowFormat]: { link: mediaLink }
+                            }]
+                        });
+                    } else {
+                        console.warn(`⚠️ [QUICK BULK] Plantilla ${templateName} tiene cabecera multimedia pero no tiene link/handle de ejemplo.`);
+                    }
+                }
+
                 let sent = 0, errors = 0;
                 for (const chat of chatsList) {
                     const phone = chat.id.split('@')[0];
                     try {
-                        const resApi = await provider.sendTemplate(phone, templateName, languageCode || template.language || 'es', []);
+                        const resApi = await provider.sendTemplate(phone, templateName, languageCode || template.language || 'es', components);
                         if (resApi?.messages) {
                             const msgId = resApi.messages[0].id;
                             await depsHistoryHandler.saveMessage(chat.id, 'assistant', historyContent, 'text', null, null, msgId);

@@ -444,8 +444,12 @@ window.metaView = (() => {
         let hasVariables = false;
         if (template.components && Array.isArray(template.components)) {
             hasVariables = template.components.some(c => {
-                if (c.type === 'HEADER' && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(c.format)) {
-                    return true;
+                if (c.type === 'HEADER') {
+                    if (c.format === 'TEXT') {
+                        const text = c.text || c.content || '';
+                        return /\{\{\w+\}\}/.test(text);
+                    }
+                    return false;
                 }
                 if (c.type === 'BODY') {
                     const text = c.text || c.content || '';
