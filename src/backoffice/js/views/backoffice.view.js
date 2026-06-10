@@ -10,7 +10,10 @@ window.backofficeView = {
             <!-- Sidebar chats -->
             <div id="sidebar">
                 <div class="sidebar-header">
-                    <h2 class="sidebar-title">Chats</h2>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <h2 class="sidebar-title">Chats</h2>
+                        <span id="unread-total-badge" style="display:none; background:#10b981; color:white; font-size:0.75rem; font-weight:700; padding:2px 8px; border-radius:12px;">0</span>
+                    </div>
                     <div class="sidebar-header-actions">
                         <button class="btn-icon-wa" title="Sincronizar Contactos" onclick="startContactSync()" id="btn-sync-baileys">
                             <i class="fas fa-sync-alt"></i>
@@ -34,6 +37,18 @@ window.backofficeView = {
                     <div class="platform-tab" id="tab-all" onclick="switchPlatform('all')" title="Todos" style="display:none;">
                         <i class="fas fa-list-ul"></i>
                     </div>
+                </div>
+
+                <!-- Unread filter container -->
+                <div id="unread-filter-container" style="display:none; align-items:center; justify-content:space-between; padding: 8px 16px; border-bottom: 1px solid var(--border); background: var(--bg-header);">
+                    <span style="font-size:0.85rem; font-weight:600; color:var(--text-muted); display:flex; align-items:center; gap:6px;">
+                        <i class="fas fa-envelope" style="color:#6366f1;"></i> Filtrar no leídos
+                    </span>
+                    <label style="width: 36px; height: 20px; position: relative; display: inline-block; cursor: pointer;">
+                        <input type="checkbox" id="unread-filter-checkbox" onchange="toggleUnreadFilter(this.checked)" style="opacity: 0; width: 0; height: 0; position: absolute;">
+                        <span style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: #cbd5e1; transition: .3s; border-radius: 34px;" id="unread-slider-bg"></span>
+                        <span style="position: absolute; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%;" id="unread-slider-knob"></span>
+                    </label>
                 </div>
 
                 <div class="search-container">
@@ -561,6 +576,23 @@ window.backofficeView = {
         if (typeof window.initBackofficeView === 'function') {
             window.initBackofficeView();
         }
+
+        window.toggleUnreadFilter = function(enabled) {
+            const bg = document.getElementById('unread-slider-bg');
+            const knob = document.getElementById('unread-slider-knob');
+            if (bg && knob) {
+                if (enabled) {
+                    bg.style.backgroundColor = '#6366f1';
+                    knob.style.transform = 'translateX(16px)';
+                } else {
+                    bg.style.backgroundColor = '#cbd5e1';
+                    knob.style.transform = 'translateX(0px)';
+                }
+            }
+            if (typeof window.executeUnreadFilter === 'function') {
+                window.executeUnreadFilter(enabled);
+            }
+        };
 
         window._toggleMobileHeaderMenu = function(e) {
             e.stopPropagation();

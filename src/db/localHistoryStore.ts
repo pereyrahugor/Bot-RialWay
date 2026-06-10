@@ -56,6 +56,7 @@ export interface LocalChat {
     is_lead?: boolean;
     last_db_result?: string | null;
     assigned_to?: string | null;
+    unread_count?: number;
 }
 
 export interface LocalMessage {
@@ -143,7 +144,8 @@ export class LocalHistoryStore {
                 crm_due_date: null,
                 is_lead: false,
                 last_db_result: null,
-                assigned_to: userId
+                assigned_to: userId,
+                unread_count: 0
             };
             chats.push(chat);
             this.saveChats(projectId, chats);
@@ -256,9 +258,13 @@ export class LocalHistoryStore {
         // Ensure chat exists
         const chat = await this.getOrCreateChat(chatId, "whatsapp", contactName, userId, projectId);
         
-        // Update chat's last message time
+        // Update chat's last message time and unread count
         const nowStr = new Date().toISOString();
-        await this.updateContactDetails(chatId, { last_message_at: nowStr }, projectId);
+        const updateData: Partial<LocalChat> = { last_message_at: nowStr };
+        if (role === 'user') {
+            updateData.unread_count = (chat.unread_count || 0) + 1;
+        }
+        await this.updateContactDetails(chatId, updateData, projectId);
 
         const messages = this.getMessagesList(projectId);
         const newMessage: LocalMessage = {

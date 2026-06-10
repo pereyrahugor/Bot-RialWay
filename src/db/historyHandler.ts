@@ -127,6 +127,7 @@ export class HistoryHandler {
                     assigned_agent TEXT DEFAULT 'asistente1',
                     last_message_at TIMESTAMPTZ DEFAULT NOW(),
                     last_human_message_at TIMESTAMPTZ,
+                    unread_count INTEGER DEFAULT 0,
                     metadata JSONB DEFAULT '{}'::jsonb,
                     PRIMARY KEY (id, project_id)
                 );
@@ -320,6 +321,13 @@ export class HistoryHandler {
 
                     // Migración para last_human_message_at y campos CRM
                     if (table.name === 'chats') {
+                        // Migración para unread_count
+                        const { error: unreadCountErr } = await supabase.from('chats').select('unread_count').limit(1);
+                        if (unreadCountErr && unreadCountErr.code === '42703') {
+                            console.log(`🔧 Agregando columna unread_count a chats...`);
+                            await supabase.rpc('exec_sql', { query: `ALTER TABLE chats ADD COLUMN IF NOT EXISTS unread_count INTEGER DEFAULT 0;` });
+                        }
+
                         const { error: humanMsgErr } = await supabase.from('chats').select('last_human_message_at').limit(1);
                         if (humanMsgErr && humanMsgErr.code === '42703') {
                             console.log(`🔧 Agregando columna last_human_message_at a chats...`);
@@ -711,7 +719,7 @@ export class HistoryHandler {
             }
 
             // Asegurar que el chat existe
-            await this.getOrCreateChat(chatId, resolvedPlatform, contactName, userId, currentProjectId);
+            const chatObj = await this.getOrCreateChat(chatId, resolvedPlatform, contactName, userId, currentProjectId);
 
             const msgData: any = {
                 chat_id: chatId,
@@ -787,10 +795,16 @@ export class HistoryHandler {
                 console.error('[HistoryHandler] Error en inserción de mensaje fallback:', insertError);
             }
 
-            // Actualizar timestamp del último mensaje en el chat para el ordenamiento de la lista
+            // Actualizar timestamp del último mensaje en el chat para el ordenamiento de la lista y el unread_count si es del usuario
+            const chatUpdate: any = { last_message_at: new Date().toISOString() };
+            if (role === 'user') {
+                const currentUnread = (chatObj as any)?.unread_count || 0;
+                chatUpdate.unread_count = currentUnread + 1;
+            }
+
             await supabase
                 .from('chats')
-                .update({ last_message_at: new Date().toISOString() })
+                .update(chatUpdate)
                 .eq('id', chatId)
                 .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
 
@@ -1182,9 +1196,9 @@ export class HistoryHandler {
         }
         try {
             // Campos mínimos para la lista (se incluyen campos CRM para autocompletado de Excel)
-            let selectString = 'id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, crm_status, crm_due_date, notes, email, source, is_lead, cuit_dni, tax_status, address, offered_product, chat_tags(tag_id, tags(*))';
+            let selectString = 'id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, crm_status, crm_due_date, notes, email, source, is_lead, cuit_dni, tax_status, address, offered_product, unread_count, chat_tags(tag_id, tags(*))';
             if (tagId) {
-                selectString = 'id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, crm_status, crm_due_date, notes, email, source, is_lead, cuit_dni, tax_status, address, offered_product, chat_tags!inner(tag_id, tags(*))';
+                selectString = 'id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, crm_status, crm_due_date, notes, email, source, is_lead, cuit_dni, tax_status, address, offered_product, unread_count, chat_tags!inner(tag_id, tags(*))';
             }
 
             let query = supabase

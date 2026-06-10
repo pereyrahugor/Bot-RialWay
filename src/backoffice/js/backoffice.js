@@ -21,6 +21,8 @@ if (!token) window.location.href = '/login';
 
 let activeChatId = null;
 let activeTicketId = null;
+let _notificationsActive = false;
+let _showOnlyUnreadChats = false;
 let crmColumns = [];
 let _boCrmData = {};
 let chats = [];
@@ -138,6 +140,9 @@ socket.on('new_message', (msg) => {
     if (chatIdx !== -1) {
         chats[chatIdx].last_message_at = msg.created_at || new Date().toISOString();
         chats[chatIdx].last_message = msg.content;
+        if (_notificationsActive && msg.role === 'user' && normChatId(cid) !== normChatId(activeChatId)) {
+            chats[chatIdx].unread_count = (chats[chatIdx].unread_count || 0) + 1;
+        }
         sortChats();
         renderChatList();
         saveChatsToCache(chats);
@@ -176,6 +181,24 @@ socket.on('message_deleted', (payload) => {
     if (activeChatId === payload.chatId) {
         renderMessages();
     }
+});
+
+socket.on('chat_read', (payload) => {
+    const cid = payload.chatId;
+    const chat = chats.find(c => normChatId(c.id) === normChatId(cid));
+    if (chat) {
+        chat.unread_count = 0;
+        renderChatList();
+    }
+});
+
+socket.on('notifications_deactivated', () => {
+    _notificationsActive = false;
+    _updateNotificationsUI();
+});
+
+socket.on('notifications_activated', () => {
+    loadNotificationsStatus();
 });
 
 // Sistema de Caché para la lista de chats (Persistencia para carga instantánea al refrescar)
@@ -367,7 +390,35 @@ function getAvatarBg(str) {
 function renderChatList(listToRender = chats) {
     const list = document.getElementById('chat-list');
     if (!list) return;
-    list.innerHTML = listToRender.map(chat => {
+
+    let filteredList = listToRender;
+    if (_notificationsActive && _showOnlyUnreadChats) {
+        filteredList = listToRender.filter(c => (c.unread_count || 0) > 0);
+    }
+
+    // Calcular unread total de la lista master (chats)
+    let totalUnread = 0;
+    if (_notificationsActive) {
+        totalUnread = chats.reduce((sum, c) => sum + (c.unread_count || 0), 0);
+    }
+    const totalBadge = document.getElementById('unread-total-badge');
+    if (totalBadge) {
+        if (_notificationsActive && totalUnread > 0) {
+            totalBadge.innerText = totalUnread > 99 ? '+99' : totalUnread;
+            totalBadge.style.display = 'inline-block';
+        } else {
+            totalBadge.style.display = 'none';
+        }
+    }
+
+    if (filteredList.length === 0) {
+        list.innerHTML = `<div style="padding: 20px; text-align: center; color: var(--text-muted); font-size: 0.9rem;">
+            ${_showOnlyUnreadChats ? 'No hay chats con mensajes sin leer' : 'No se encontraron chats'}
+        </div>`;
+        return;
+    }
+
+    list.innerHTML = filteredList.map(chat => {
         const nameForAvatar = (chat.name && chat.name !== '[-]') ? chat.name : chat.id.split('@')[0];
         const initials = getInitials(nameForAvatar);
         const bg = getAvatarBg(chat.id || '');
@@ -386,7 +437,8 @@ function renderChatList(listToRender = chats) {
 
         const timeStr = formatLastMessageTime(chat.last_message_at);
         const unreadCount = chat.unread_count || 0;
-        const unreadHtml = unreadCount > 0 ? `<div class="unread-badge">${unreadCount}</div>` : '';
+        const displayCount = unreadCount > 99 ? '+99' : unreadCount;
+        const unreadHtml = (_notificationsActive && unreadCount > 0) ? `<div class="unread-badge">${displayCount}</div>` : '';
 
         const statusBadge = chat.bot_enabled
             ? `<div style="text-align:right;"><i class="fas fa-robot" style="color:#22c55e; font-size:0.8rem;"></i><br/><span style="font-size:0.65rem; opacity:0.7;">${timeStr}</span></div>`
@@ -478,6 +530,10 @@ async function selectChat(id) {
     activeChatId = id;
     if (window.innerWidth <= 768) document.body.classList.add('mobile-chat-active');
     const chat = chats.find(c => c.id === id);
+    
+    if (_notificationsActive && chat) {
+        markChatAsRead(id);
+    }
     
     document.getElementById('active-chat-phone').innerText = chat.id.split('@')[0];
     const displayName = (chat.name && chat.name !== '[-]') ? chat.name : 'Lead sin nombre';
@@ -2861,6 +2917,7 @@ window.initBackofficeView = function() {
     fetchBotTags();
     fetchPendingTicketsCount();
     initBlacklist();
+    loadNotificationsStatus();
 
     // Re-attach scroll listeners en el nuevo DOM
     const chatList = document.getElementById('chat-list');
@@ -2977,4 +3034,79 @@ async function toggleBlacklist() {
 }
 
 window.toggleBlacklist = toggleBlacklist;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NOTIFICACIONES - Lógica de integración en el backoffice
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function loadNotificationsStatus() {
+    try {
+        const res = await fetch(`/api/backoffice/notifications/status?token=${token}`);
+        const data = await res.json();
+        _notificationsActive = !!data.active;
+        _updateNotificationsUI();
+    } catch (e) {
+        console.warn('[Notifications] No se pudo verificar status:', e);
+        _notificationsActive = false;
+        _updateNotificationsUI();
+    }
+}
+
+function _updateNotificationsUI() {
+    const filterContainer = document.getElementById('unread-filter-container');
+    const totalBadge = document.getElementById('unread-total-badge');
+    if (_notificationsActive) {
+        if (filterContainer) filterContainer.style.display = 'flex';
+    } else {
+        if (filterContainer) filterContainer.style.display = 'none';
+        if (totalBadge) totalBadge.style.display = 'none';
+        chats.forEach(c => c.unread_count = 0);
+    }
+    
+    // Restaurar el checkbox del filtro si es necesario
+    const filterCheckbox = document.getElementById('unread-filter-checkbox');
+    if (filterCheckbox) {
+        filterCheckbox.checked = _showOnlyUnreadChats;
+        // Sincronizar el slider visual
+        const bg = document.getElementById('unread-slider-bg');
+        const knob = document.getElementById('unread-slider-knob');
+        if (bg && knob) {
+            if (_showOnlyUnreadChats) {
+                bg.style.backgroundColor = '#6366f1';
+                knob.style.transform = 'translateX(16px)';
+            } else {
+                bg.style.backgroundColor = '#cbd5e1';
+                knob.style.transform = 'translateX(0px)';
+            }
+        }
+    }
+    
+    renderChatList();
+}
+
+async function markChatAsRead(chatId) {
+    if (!_notificationsActive) return;
+    const chat = chats.find(c => c.id === chatId);
+    if (chat && (chat.unread_count || 0) > 0) {
+        chat.unread_count = 0;
+        renderChatList();
+        try {
+            await fetch(`/api/backoffice/chat/read/${encodeURIComponent(chatId)}?token=${token}`, { method: 'POST' });
+        } catch (e) {
+            console.warn('[Notifications] Error al marcar como leído:', e);
+        }
+    }
+}
+
+function executeUnreadFilter(enabled) {
+    _showOnlyUnreadChats = enabled;
+    renderChatList();
+}
+
+// Exponer métodos para ser llamados por otros módulos
+window.executeUnreadFilter = executeUnreadFilter;
+window.backofficeController = {
+    loadNotificationsStatus,
+    refreshChatsList: () => renderChatList()
+};
 

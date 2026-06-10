@@ -6,7 +6,7 @@ import bodyParser from 'body-parser';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
 import { backofficeAuth, systemConfigAuth, invalidateAuthCache } from "../middleware/auth";
-import { supabase, HistoryHandler as HistoryHandlerClass } from "../db/historyHandler";
+import { supabase, HistoryHandler as HistoryHandlerClass, historyEvents } from "../db/historyHandler";
 import { getOpenAI } from "../../apis/openai/openaiHelper";
 
 // Caché para fotos de perfil (chatId -> {url, timestamp})
@@ -2788,6 +2788,97 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                 if (error) throw error;
             }
             res.json({ success: true, inBlacklist });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    // ─────────────────────────────────────────────────────────────
+    // NOTIFICACIONES
+    // ─────────────────────────────────────────────────────────────
+
+    /** GET /api/backoffice/notifications/status — ¿Está activa la integración? */
+    app.get('/api/backoffice/notifications/status', backofficeAuth, async (req: any, res: any) => {
+        try {
+            const active = await depsHistoryHandler.getSetting('NOTIFICATIONS_ACTIVE');
+            res.json({ active: active === 'true' });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    /** POST /api/backoffice/notifications/activate — Activa la integración de notificaciones */
+    app.post('/api/backoffice/notifications/activate', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
+        try {
+            const projectId = depsHistoryHandler.PROJECT_IDENTIFIER;
+            const { error } = await supabase
+                .from('settings')
+                .upsert({ project_id: projectId, key: 'NOTIFICATIONS_ACTIVE', value: 'true' }, { onConflict: 'project_id,key' });
+            if (error) throw error;
+            depsHistoryHandler.settingsCache?.delete?.(`${projectId}:NOTIFICATIONS_ACTIVE`);
+            res.json({ success: true });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    /** POST /api/backoffice/notifications/deactivate — Desactiva la integración y resetea contadores */
+    app.post('/api/backoffice/notifications/deactivate', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
+        try {
+            const projectId = depsHistoryHandler.PROJECT_IDENTIFIER;
+            // 1. Resetear todos los unread_count de chats a 0
+            if (process.env.STORAGE_MODE === "local") {
+                const { LocalHistoryStore } = await import('../../db/localHistoryStore');
+                const chats = LocalHistoryStore.getChats(projectId);
+                chats.forEach(c => c.unread_count = 0);
+                LocalHistoryStore.saveChats(projectId, chats);
+            } else {
+                const { error: resetErr } = await supabase
+                    .from('chats')
+                    .update({ unread_count: 0 })
+                    .eq('project_id', projectId);
+                if (resetErr) throw resetErr;
+            }
+            // 2. Guardar setting como false
+            const { error: settErr } = await supabase
+                .from('settings')
+                .upsert({ project_id: projectId, key: 'NOTIFICATIONS_ACTIVE', value: 'false' }, { onConflict: 'project_id,key' });
+            if (settErr) throw settErr;
+            depsHistoryHandler.settingsCache?.delete?.(`${projectId}:NOTIFICATIONS_ACTIVE`);
+            
+            // Notificar a clientes conectados que la integración se desactivó para limpiar badges
+            historyEvents.emit('notifications_deactivated', { projectId });
+
+            res.json({ success: true });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    /** POST /api/backoffice/chat/read/:chatId — Resetea unread_count a 0 para un chat */
+    app.post('/api/backoffice/chat/read/:chatId', backofficeAuth, async (req: any, res: any) => {
+        try {
+            const { chatId } = req.params;
+            const projectId = depsHistoryHandler.PROJECT_IDENTIFIER;
+            const cleanId = depsHistoryHandler.normalizeId(chatId);
+
+            if (process.env.STORAGE_MODE === "local") {
+                const { LocalHistoryStore } = await import('../../db/localHistoryStore');
+                await LocalHistoryStore.updateContactDetails(cleanId, { unread_count: 0 }, projectId);
+            } else {
+                const { error } = await supabase
+                    .from('chats')
+                    .update({ unread_count: 0 })
+                    .eq('id', cleanId)
+                    .eq('project_id', projectId);
+                if (error) throw error;
+            }
+            depsHistoryHandler.invalidateChatCache?.(cleanId, projectId);
+            
+            // Emitir evento para WebSockets
+            historyEvents.emit('chat_read', { chatId: cleanId, projectId });
+
+            res.json({ success: true });
         } catch (e: any) {
             res.status(500).json({ success: false, error: e.message });
         }
