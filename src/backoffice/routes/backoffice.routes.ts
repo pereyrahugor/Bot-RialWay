@@ -1805,6 +1805,176 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         return processBulkTemplate(req, res, deps);
     });
 
+    app.post('/api/backoffice/whatsapp/send-quick-template', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
+        await syncMetaProvider();
+        const { templateName, languageCode, startDate, endDate, tagIds } = req.body;
+
+        try {
+            if (!templateName) {
+                return res.status(400).json({ success: false, error: 'Falta el nombre de la plantilla.' });
+            }
+
+            // 1. Obtener contactos reales filtrados
+            let chatsList = await depsHistoryHandler.listChats(5000, 0); 
+            if (chatsList && chatsList.length > 0) {
+                // Filtrar por fecha
+                if (startDate || endDate) {
+                    chatsList = chatsList.filter((c: any) => {
+                        if (!c.last_message_at) return false;
+                        const msgDate = new Date(c.last_message_at);
+                        if (startDate && msgDate < new Date(`${startDate}T00:00:00.000Z`)) return false;
+                        if (endDate && msgDate > new Date(`${endDate}T23:59:59.999Z`)) return false;
+                        return true;
+                    });
+                }
+
+                // Filtrar por etiquetas
+                if (tagIds) {
+                    const tagIdArray = Array.isArray(tagIds) ? tagIds : typeof tagIds === 'string' ? tagIds.split(',').filter(Boolean) : [];
+                    if (tagIdArray.length > 0) {
+                        chatsList = chatsList.filter((c: any) => {
+                            if (!c.tags || c.tags.length === 0) return false;
+                            return c.tags.some((t: any) => tagIdArray.includes(t.id));
+                        });
+                    }
+                }
+            } else {
+                chatsList = [];
+            }
+
+            // Filtrar el número de ejemplo
+            chatsList = chatsList.filter((chat: any) => {
+                const cleanPhone = chat.id.split('@')[0];
+                return cleanPhone !== '5491100000000';
+            });
+
+            if (chatsList.length === 0) {
+                return res.status(400).json({ success: false, error: 'No se encontraron contactos que coincidan con los filtros aplicados.' });
+            }
+
+            // 2. Responder 202 de inmediato
+            res.status(202).json({ success: true, message: 'Envío rápido masivo iniciado.', total: chatsList.length });
+
+            // 3. Procesar envíos en segundo plano
+            (async () => {
+                const provider = (adapterProvider.constructor.name === 'MetaCloudProvider') ? adapterProvider : (deps as any).groupProvider;
+                const templates = await provider.getTemplates();
+                const template = templates.find((t: any) => t.name === templateName);
+                if (!template) {
+                    console.error(`❌ [QUICK BULK] Plantilla ${templateName} no encontrada.`);
+                    return;
+                }
+
+                let bodyText = "";
+                const bodyComp = template.components?.find((c: any) => c.type === 'BODY');
+                if (bodyComp) {
+                    bodyText = bodyComp.text || "";
+                }
+
+                const historyContent = `[Campaña Rápida: ${templateName}]\n${bodyText}`;
+
+                // Construir componentes (como multimedia por defecto)
+                const components: any[] = [];
+                const headerComp = template.components?.find((c: any) => c.type === 'HEADER');
+                if (headerComp && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComp.format)) {
+                    const lowFormat = headerComp.format.toLowerCase();
+                    let mediaLink = headerComp.example?.header_handle?.[0] || '';
+                    if (mediaLink) {
+                        // Si es un link de Meta/Facebook, lo descargamos y servimos localmente
+                        const isMetaUrl = mediaLink.includes('fbcdn') || mediaLink.includes('fbsbx') || mediaLink.includes('facebook.com') || mediaLink.includes('lookaside.fbsbx.com');
+                        if (isMetaUrl) {
+                            try {
+                                console.log(`📥 [QUICK BULK] Descargando multimedia de cabecera de Meta: ${mediaLink.substring(0, 50)}...`);
+                                const accessToken = provider.config?.access_token || '';
+                                const downloadHeaders: any = {
+                                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                                    'Accept': '*/*'
+                                };
+                                if (accessToken) {
+                                    downloadHeaders['Authorization'] = `Bearer ${accessToken}`;
+                                }
+
+                                const response = await axios.get(mediaLink, {
+                                    responseType: 'arraybuffer',
+                                    timeout: 30000,
+                                    headers: downloadHeaders
+                                });
+
+                                const contentType = response.headers['content-type'] || '';
+                                let ext = 'bin';
+                                if (contentType.includes('video')) ext = 'mp4';
+                                else if (contentType.includes('image')) ext = 'jpg';
+                                else if (contentType.includes('pdf')) ext = 'pdf';
+                                else {
+                                    ext = lowFormat === 'image' ? 'jpg' : lowFormat === 'video' ? 'mp4' : 'pdf';
+                                }
+
+                                const uploadsDir = path.join(process.cwd(), 'uploads');
+                                if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
+                                const filename = `quick-bulk-${Date.now()}-${Math.floor(Math.random()*1000)}.${ext}`;
+                                const dest = path.join(uploadsDir, filename);
+                                fs.writeFileSync(dest, response.data);
+
+                                // Construir URL pública
+                                let baseUrl = process.env.PROJECT_URL;
+                                if (!baseUrl) {
+                                    const host = req.headers.host || '';
+                                    if (!host.includes('localhost')) {
+                                        baseUrl = `https://${host}`;
+                                    } else {
+                                        baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : `http://${host}`;
+                                    }
+                                }
+                                if (!baseUrl.startsWith('http')) baseUrl = `https://${baseUrl}`;
+                                mediaLink = `${baseUrl.replace(/\/$/, '')}/uploads/${filename}`;
+                                console.log(`✅ [QUICK BULK] Multimedia descargado y servido localmente en: ${mediaLink}`);
+                            } catch (downloadErr: any) {
+                                console.error(`❌ [QUICK BULK] Error descargando multimedia de cabecera:`, downloadErr.message);
+                            }
+                        }
+
+                        components.push({
+                            type: 'HEADER',
+                            parameters: [{
+                                type: lowFormat,
+                                [lowFormat]: { link: mediaLink }
+                            }]
+                        });
+                    } else {
+                        console.warn(`⚠️ [QUICK BULK] Plantilla ${templateName} tiene cabecera multimedia pero no tiene link/handle de ejemplo.`);
+                    }
+                }
+
+                let sent = 0, errors = 0;
+                for (const chat of chatsList) {
+                    const phone = chat.id.split('@')[0];
+                    try {
+                        const resApi = await provider.sendTemplate(phone, templateName, languageCode || template.language || 'es', components);
+                        if (resApi?.messages) {
+                            const msgId = resApi.messages[0].id;
+                            await depsHistoryHandler.saveMessage(chat.id, 'assistant', historyContent, 'text', null, null, msgId);
+                            sent++;
+                        } else {
+                            errors++;
+                        }
+                    } catch (e: any) {
+                        errors++;
+                        console.error(`❌ [QUICK BULK] Error de Meta para ${phone}:`, e.message || e);
+                    }
+                    await new Promise(r => setTimeout(r, 200));
+                }
+                console.log(`✅ [QUICK BULK] Envío rápido finalizado: ${sent} enviados, ${errors} errores de ${chatsList.length} contactos.`);
+            })();
+
+        } catch (error: any) {
+            console.error('Error en send-quick-template:', error);
+            if (!res.headersSent) {
+                res.status(500).json({ success: false, error: error.message });
+            }
+        }
+    });
+
     // --- IMPORTACION EXTERNA DE CONTACTOS ---
     
     app.get('/api/backoffice/chats/import-template', backofficeAuth, async (req: any, res: any) => {
