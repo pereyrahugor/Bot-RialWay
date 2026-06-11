@@ -1,6 +1,43 @@
-dist/*
-node_modules
+# Git
+.git
+.github
+.gitignore
+.gitattributes
 
-*_sessions
-*tokens
-.wwebjs*
+# Build & Dependencies
+node_modules
+dist
+.rollup.cache
+
+# Application logs & state files
+*.log
+baileys.log
+dev.log
+dev_err.log
+dev_out.log
+node_err.log
+node_out.log
+upload_err.log
+upload_out.log
+wwebjs-*.qr.png
+*.qr.png
+
+# Persistent folders & local credentials
+sessions/
+bot_sessions/
+credentials/
+uploads/
+tmp/
+temp/
+scratch/
+
+# Local configuration & secrets
+.env
+.env*
+!.env.example
+nodemon.json
+docker-compose.yml
+
+# OS files
+.DS_Store
+Thumbs.db

@@ -3,9 +3,11 @@ FROM node:22-slim AS builder
 
 WORKDIR /app
 
-# Instalar dependencias del sistema necesarias para compilar (sharp, baileys, etc)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 make g++ git ca-certificates poppler-utils && \
+# Instalar dependencias del sistema usando cache mounts para acelerar descargas apt
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+    python3 make g++ git ca-certificates && \
     update-ca-certificates
 
 # Instalar pnpm
@@ -15,8 +17,9 @@ ENV PNPM_HOME=/usr/local/bin
 # Copiar configuración de dependencias para aprovechar la cache de Docker
 COPY package.json .npmrc pnpm-lock.yaml* package-lock.json* ./
 
-# Configurar pnpm para permitir dependencias exóticas si es necesario y realizar la instalación
-RUN pnpm config set block-exotic-subdeps false && \
+# Instalar dependencias utilizando cache mount para la tienda de pnpm (evita re-descargas)
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+    pnpm config set block-exotic-subdeps false && \
     pnpm install
 
 # Copiar el código fuente
@@ -30,10 +33,11 @@ RUN pnpm run build
 # Stage 2: Production stage
 FROM node:22-slim AS deploy
 
-# Instalar dependencias de runtime necesarias (ffmpeg para audios, poppler para pdfs)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    poppler-utils ffmpeg && \
-    rm -rf /var/lib/apt/lists/*
+# Instalar dependencias de runtime necesarias usando cache de apt
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+    poppler-utils ffmpeg
 
 WORKDIR /app
 
@@ -48,7 +52,6 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 
 # Copiar archivos estáticos y recursos necesarios según la nueva estructura
-# Nota: Según static.routes.ts, el servidor busca en src/backoffice/ y src/assets/
 COPY --from=builder /app/src/backoffice/html ./src/backoffice/html
 COPY --from=builder /app/src/backoffice/js ./src/backoffice/js
 COPY --from=builder /app/src/backoffice/style ./src/backoffice/style
