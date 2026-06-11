@@ -411,4 +411,98 @@ export class AssistantResponseProcessor {
             }
         }
     }
+
+    public static async procesarHandoverYDerivacion(
+        response: string,
+        ctx: any,
+        flowDynamic: any,
+        state: any,
+        provider: any,
+        gotoFlow: any,
+        getAssistantResponse: Function,
+        currentAssistantId: string,
+        assignedAgentName: string,
+        assistantMap: Record<string, string | undefined>,
+        projectId: string
+    ) {
+        if (!response) return;
+
+        const lower = response.toLowerCase();
+        
+        // Regex robusto para detectar derivación (sincronizado con ai.manager.ts)
+        const matchAsistente = lower.match(/(?:derivar|derivando|derivo)(?:\s+(?:a|al|el|a\s+la))?\s+asistente\s*([1-5])(?:\.|\b|$)/i);
+        let nextAgentName: string | null = null;
+        if (matchAsistente) {
+            nextAgentName = `asistente${matchAsistente[1]}`;
+        } else if (/(?:derivar|derivando|derivo)(?:\s+(?:a|al|el|a\s+la))?\s+(?:asesor|agente|humano|atencion|soporte)\s+humano\b/i.test(lower)) {
+            nextAgentName = 'asistente_humano';
+        }
+
+        const matchResumen = response.match(/GET_RESUMEN[\s\S]+/i);
+        const resumen = matchResumen ? matchResumen[0].trim() : "Continúa con la atención del cliente.";
+
+        if (nextAgentName) {
+            if (nextAgentName === 'asistente_humano') {
+                console.log(`🚀 [MultiAgent] Handover a HUMANO: Apagando bot para ${ctx.from}`);
+                await HistoryHandler.toggleBot(ctx.from, false);
+                
+                await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
+                    response, ctx, flowDynamic, state, provider, gotoFlow,
+                    getAssistantResponse, currentAssistantId, assignedAgentName, 0, projectId
+                );
+                return;
+            }
+
+            const nextAssistantId = assistantMap[nextAgentName];
+            
+            if (!nextAssistantId) {
+                console.warn(`⚠️ [MultiAgent] Handover fallido: No hay Assistant ID configurado para '${nextAgentName}' en el proyecto ${projectId}.`);
+                await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
+                    response, ctx, flowDynamic, state, provider, gotoFlow,
+                    getAssistantResponse, currentAssistantId, assignedAgentName, 0, projectId
+                );
+            } else if (nextAgentName === assignedAgentName) {
+                console.log(`[MultiAgent] El destino '${nextAgentName}' es el mismo que el actual (${assignedAgentName}). Ignorando handover.`);
+                await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
+                    response, ctx, flowDynamic, state, provider, gotoFlow,
+                    getAssistantResponse, currentAssistantId, assignedAgentName, 0, projectId
+                );
+            } else {
+                console.log(`🚀 [MultiAgent] Handover detectado: ${assignedAgentName} -> ${nextAgentName} (User: ${ctx.from})`);
+                
+                // 1. Persistir cambio de agente en DB y state
+                await HistoryHandler.setAssignedAgent(ctx.from, nextAgentName, projectId);
+                await state.update({ assignedAgent: nextAgentName });
+
+                // 2. Procesar respuesta del agente saliente
+                await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
+                    response, ctx, flowDynamic, state, provider, gotoFlow,
+                    getAssistantResponse, currentAssistantId, assignedAgentName, 0, projectId
+                );
+
+                // 3. Transición inmediata al nuevo agente
+                const resumenContextual = `RESUMEN DE LA CONVERSACIÓN PREVIA (PARA TU CONTEXTO):\n\n${resumen}`;
+                console.log(`🚀 [MultiAgent] Iniciando respuesta inmediata del nuevo agente: ${nextAgentName}`);
+                
+                let threadId = ctx?.thread_id;
+                if (!threadId && state?.get) threadId = state.get('thread_id');
+
+                const nextResponseRaw = await getAssistantResponse(
+                    nextAssistantId, resumenContextual, state, undefined, ctx.from, threadId, projectId, nextAgentName
+                );
+                
+                if (nextResponseRaw) {
+                    await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
+                        nextResponseRaw, ctx, flowDynamic, state, provider, gotoFlow,
+                        getAssistantResponse, nextAssistantId, nextAgentName, 0, projectId
+                    );
+                }
+            }
+        } else {
+            await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
+                response, ctx, flowDynamic, state, provider, gotoFlow,
+                getAssistantResponse, currentAssistantId, assignedAgentName, 0, projectId
+            );
+        }
+    }
 }
