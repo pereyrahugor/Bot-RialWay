@@ -131,7 +131,8 @@ const main = async () => {
     if (metaToken && (!metaPhoneId || metaPhoneId === 'PENDING' || !metaWabaId || metaWabaId === 'PENDING')) {
         console.log('📡 [App] Detectada configuración de Meta parcial. Iniciando recuperación automática de IDs...');
         try {
-            const discovery = await discoverMetaIds(metaToken);
+            const mainToken = await HistoryHandler.getMainToken();
+            const discovery = await discoverMetaIds(metaToken, mainToken);
             if (discovery && discovery.data?.phoneNumberId && discovery.data?.wabaId) {
                 console.log(`✅ [App] Recuperación exitosa: PhoneID=${discovery.data.phoneNumberId}, WABAID=${discovery.data.wabaId}`);
                 metaPhoneId = discovery.data.phoneNumberId;

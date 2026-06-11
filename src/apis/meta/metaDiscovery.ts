@@ -76,8 +76,9 @@ export async function discoverMetaIds(accessToken: string, mainToken: string | n
         // Buscar en los negocios si los obtuvimos
         for (const business of businesses) {
             try {
+                const tokenToUseForBiz = mainToken || accessToken;
                 const accountsResponse = await axios.get(`https://graph.facebook.com/v22.0/${business.id}/owned_whatsapp_business_accounts`, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                    headers: { 'Authorization': `Bearer ${tokenToUseForBiz}` }
                 });
                 const owned = accountsResponse.data?.data || [];
                 logDiag(`Business ${business.id}`, `Owned WABAs: ${owned.length}`, owned.length > 0 ? 'success' : 'empty', owned);
@@ -88,7 +89,7 @@ export async function discoverMetaIds(accessToken: string, mainToken: string | n
                 }
                 
                 const clientResponse = await axios.get(`https://graph.facebook.com/v22.0/${business.id}/client_whatsapp_business_accounts`, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                    headers: { 'Authorization': `Bearer ${tokenToUseForBiz}` }
                 });
                 const client = clientResponse.data?.data || [];
                 logDiag(`Business ${business.id}`, `Client WABAs: ${client.length}`, client.length > 0 ? 'success' : 'empty', client);
@@ -181,8 +182,9 @@ export async function discoverMetaIds(accessToken: string, mainToken: string | n
                 }
 
                 if (businessId) {
+                    const tokenToUseForBiz = mainToken || accessToken;
                     const bizWabas = await axios.get(`https://graph.facebook.com/v22.0/${businessId}/whatsapp_business_accounts`, {
-                        headers: { 'Authorization': `Bearer ${accessToken}` }
+                        headers: { 'Authorization': `Bearer ${tokenToUseForBiz}` }
                     });
                     if (bizWabas.data?.data && bizWabas.data.data.length > 0) {
                         wabaId = bizWabas.data.data[0].id;
@@ -237,9 +239,10 @@ export async function discoverMetaIds(accessToken: string, mainToken: string | n
         // Obtener el Phone Number ID
         let phoneNumberId = null;
         let verifiedName = "";
+        const tokenToUse = mainToken || accessToken;
         try {
             const phoneResponse = await axios.get(`https://graph.facebook.com/v22.0/${wabaId}/phone_numbers`, {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
+                headers: { 'Authorization': `Bearer ${tokenToUse}` }
             });
             const phoneData = phoneResponse.data.data?.[0];
             if (phoneData) {
@@ -258,7 +261,7 @@ export async function discoverMetaIds(accessToken: string, mainToken: string | n
 
         if (wabaId) {
             try {
-                const wabaStatus = await getWabaStatus(wabaId, accessToken);
+                const wabaStatus = await getWabaStatus(wabaId, tokenToUse);
                 verificationStatus = wabaStatus.verification_status;
             } catch (e) {
                 /* ignore failure to fetch extended status */
@@ -267,7 +270,7 @@ export async function discoverMetaIds(accessToken: string, mainToken: string | n
 
         if (phoneNumberId) {
             try {
-                const limitInfo = await getPhoneLimit(phoneNumberId, accessToken);
+                const limitInfo = await getPhoneLimit(phoneNumberId, tokenToUse);
                 messagingLimit = limitInfo.messaging_limit_tier;
             } catch (e) {
                 /* ignore failure to fetch limit info */

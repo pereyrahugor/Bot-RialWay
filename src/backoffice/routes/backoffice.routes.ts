@@ -486,6 +486,16 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                     const msgId = resApi.messages[0].id;
                     console.log(`✅ [BULK] Mensaje aceptado por Meta para ${phone}. ID: ${msgId}`);
                     
+                    // Si la plantilla tiene cabecera multimedia, guardar primero el mensaje multimedia
+                    const headerComp = template.components.find((c: any) => c.type === 'HEADER');
+                    if (headerComp && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComp.format)) {
+                        const lowFormat = headerComp.format.toLowerCase();
+                        const mediaLink = row.header_media_url || defaultMediaUrl || headerComp.example?.header_handle?.[0];
+                        if (mediaLink) {
+                            await depsHistoryHandler.saveMessage(phone, 'assistant', mediaLink, lowFormat, null, null, `${msgId}_media`);
+                        }
+                    }
+
                     // --- RENDERIZAR TEXTO PARA EL ASISTENTE ---
                     let renderedText = "";
                     const bodyComp = template.components.find((c: any) => c.type === 'BODY');
@@ -1953,6 +1963,13 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                         const resApi = await provider.sendTemplate(phone, templateName, languageCode || template.language || 'es', components);
                         if (resApi?.messages) {
                             const msgId = resApi.messages[0].id;
+                            
+                            // Si la plantilla tiene cabecera multimedia, guardar primero el mensaje multimedia
+                            if (headerComp && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComp.format) && mediaLink) {
+                                const mediaType = headerComp.format.toLowerCase();
+                                await depsHistoryHandler.saveMessage(chat.id, 'assistant', mediaLink, mediaType, null, null, `${msgId}_media`);
+                            }
+
                             await depsHistoryHandler.saveMessage(chat.id, 'assistant', historyContent, 'text', null, null, msgId);
                             sent++;
                         } else {
@@ -2163,17 +2180,18 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             }
 
             // Registrar y suscribir WhatsApp si se encontró
+            const tokenToUse = mainToken || accessToken;
             if (finalPhoneId) {
                 await axios.post(`https://graph.facebook.com/v22.0/${finalPhoneId}/register`, 
                     { messaging_product: 'whatsapp', pin: '' }, 
-                    { headers: { 'Authorization': `Bearer ${accessToken}` } }
+                    { headers: { 'Authorization': `Bearer ${tokenToUse}` } }
                 ).catch(() => {});
             }
 
             if (finalWabaId) {
                 await axios.post(`https://graph.facebook.com/v22.0/${finalWabaId}/subscribed_apps`, 
                     {}, 
-                    { headers: { 'Authorization': `Bearer ${accessToken}` } }
+                    { headers: { 'Authorization': `Bearer ${tokenToUse}` } }
                 ).catch(() => {});
 
                 // Suscribir también a smb_message_echoes para capturar mensajes
@@ -2183,7 +2201,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                     await axios.post(`https://graph.facebook.com/v22.0/${finalWabaId}/subscribed_apps`, 
                         { override_callback_uri: undefined }, 
                         { 
-                            headers: { 'Authorization': `Bearer ${accessToken}` },
+                            headers: { 'Authorization': `Bearer ${tokenToUse}` },
                             params: { subscribed_fields: 'messages,smb_message_echoes' }
                         }
                     );
@@ -2192,12 +2210,12 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                     console.warn('⚠️ [CALLBACK] No se pudo suscribir a smb_message_echoes:', smbErr?.response?.data || smbErr.message);
                 }
 
-                await depsHistoryHandler.saveMetaOnboardingData(finalWabaId, finalPhoneId, accessToken, { verified_name: finalVerifiedName }, projectId);
+                await depsHistoryHandler.saveMetaOnboardingData(finalWabaId, finalPhoneId, tokenToUse, { verified_name: finalVerifiedName }, projectId);
                 
                 // --- SINCRONIZACIÓN AUTOMÁTICA SMB ---
                 // Solicitamos contactos e historial inmediatamente tras la vinculación
                 if (finalPhoneId) {
-                    await triggerMetaSync(accessToken, finalPhoneId);
+                    await triggerMetaSync(tokenToUse, finalPhoneId);
                 }
             }
 

@@ -306,6 +306,18 @@ class MetaCloudProvider extends ProviderClass {
     }
 
     /**
+     * Formatea un número telefónico para la API de Meta (remueve el 9 de Argentina)
+     */
+    private formatNumberForMeta(number: string): string {
+        let clean = number.replace(/\D/g, '');
+        // Caso específico Argentina: Remover el '9' intermedio de móviles (549... -> 54...)
+        if (clean.startsWith('549') && clean.length === 13) {
+            clean = '54' + clean.slice(3);
+        }
+        return clean;
+    }
+
+    /**
      * Envía un mensaje basado en una plantilla oficial
      */
     public async sendTemplate(number: string, templateName: string, languageCode: string = 'es', components: any[] = []): Promise<any> {
@@ -317,8 +329,8 @@ class MetaCloudProvider extends ProviderClass {
 
         const url = `https://graph.facebook.com/v22.0/${phone_number_id}/messages`;
         
-        // Limpiar número: solo dígitos
-        const cleanNumber = number.replace(/\D/g, '');
+        // Limpiar número: solo dígitos y remover el '9' si corresponde
+        const cleanNumber = this.formatNumberForMeta(number);
         
         const body: any = {
             messaging_product: "whatsapp",
@@ -499,7 +511,7 @@ class MetaCloudProvider extends ProviderClass {
 
         const apiVersion = process.env.META_API_VERSION || 'v22.0';
         const url = `https://graph.facebook.com/${apiVersion}/${phone_number_id}/messages`;
-        const cleanNumber = number.replace(/\D/g, '');
+        const cleanNumber = this.formatNumberForMeta(number);
         const toFormat = `+${cleanNumber}`;
         
         // Detectar si el mensaje es una ruta de archivo local

@@ -1989,13 +1989,17 @@ export class HistoryHandler {
                 if (admin) superUserId = admin.id;
             } catch (e) { /* ignore */ }
 
+            // Obtener el mainToken del sistema de una vez si existe
+            const mainToken = await this.getMainToken();
+            const tokenToSave = mainToken || token;
+
             const { data, error } = await supabase
                 .from('meta_onboarding')
                 .upsert({
                     project_id: targetProjectId,
                     waba_id: wabaId,
                     phone_number_id: phoneId,
-                    access_token: token,
+                    access_token: tokenToSave,
                     onboarding_data: extra,
                     owner_id: superUserId,
                     status: 'active',
@@ -2028,7 +2032,7 @@ export class HistoryHandler {
 
             // --- PASO ADICIONAL 2: Asegurar suscripción a la WABA vía API de Meta ---
             // Esto garantiza que Meta envíe los webhooks al enrutador
-            if (wabaId && token) {
+            if (wabaId && tokenToSave) {
                 try {
                     const axios = (await import('axios')).default;
                     // Suscribir a messages + smb_message_echoes para capturar mensajes
@@ -2036,7 +2040,7 @@ export class HistoryHandler {
                     await axios.post(`https://graph.facebook.com/v22.0/${wabaId}/subscribed_apps`, 
                         {}, 
                         { 
-                            headers: { 'Authorization': `Bearer ${token}` },
+                            headers: { 'Authorization': `Bearer ${tokenToSave}` },
                             params: { subscribed_fields: 'messages,smb_message_echoes' }
                         }
                     );
@@ -2046,13 +2050,9 @@ export class HistoryHandler {
                 }
             }
 
-            // --- PASO ADICIONAL 3: Migrar al token maestro si existe ---
-            // Se desactiva la migración automática al token maestro ya que si el mainToken no tiene permisos explícitos
-            // compartidos sobre la WABA del cliente, todas las llamadas a la API de Meta fallarán para este proyecto.
-            /*
+            // --- PASO ADICIONAL 3: Migrar al token maestro si existe (Fallback) ---
             try {
-                const mainToken = await this.getMainToken();
-                if (mainToken && token !== mainToken) {
+                if (mainToken && tokenToSave !== mainToken) {
                     console.log(`📡 [HistoryHandler] Migrando token de cliente a 'main_token' para WABA ${wabaId}...`);
                     await supabase
                         .from('meta_onboarding')
@@ -2062,7 +2062,6 @@ export class HistoryHandler {
             } catch (swapErr) {
                 console.warn('⚠️ [HistoryHandler] No se pudo migrar al main_token:', swapErr);
             }
-            */
 
             return { success: true, data };
         } catch (err: any) {
