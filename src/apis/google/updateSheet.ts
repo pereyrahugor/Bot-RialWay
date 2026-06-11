@@ -273,7 +273,7 @@ async function processSheetById(SHEET_ID: string, options: { forceRecreate?: boo
                 }
 
                 // Insertar nuevos datos (Insert es más rápido que Upsert en tabla vacía)
-                let { error } = await supabase.from(tableName).insert(supabaseData);
+                const { error } = await supabase.from(tableName).insert(supabaseData);
                 if (error) {
                     console.error(`❌ Error uploading to Supabase table '${tableName}':`, error.message);
                     

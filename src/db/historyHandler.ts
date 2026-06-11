@@ -89,7 +89,8 @@ export class HistoryHandler {
         'DB_TABLES', 'OPENAI_TOOLS_DEFINITION', 'msjCierre', 'msjSeguimiento1', 'msjSeguimiento2', 'msjSeguimiento3',
         'timeOutCierre', 'timeOutSeguimiento2', 'timeOutSeguimiento3', 'ID_GRUPO_RESUMEN', 'ID_GRUPO_RESUMEN_2',
         'SHEET_ID_RESUMEN', 'SHEET_ID_UPDATE', 'DOCX_ID_UPDATE', 'GOOGLE_CALENDAR_ID',
-        'ADMIN_USER', 'ADMIN_PASS', 'WHATSAPP_VISIBLE', 'INSTAGRAM_VISIBLE', 'MESSENGER_VISIBLE', 'CRM_FIELDS_CONFIG'
+        'ADMIN_USER', 'ADMIN_PASS', 'WHATSAPP_VISIBLE', 'INSTAGRAM_VISIBLE', 'MESSENGER_VISIBLE', 'CRM_FIELDS_CONFIG',
+        'CLIENT_SLUG', 'AQUAVITA_SWS_BASE_URL', 'AQUAVITA_SWS_USERNAME', 'AQUAVITA_SWS_PASSWORD'
     ];
 
     static readonly FIXED_KEYS = [
@@ -503,6 +504,105 @@ export class HistoryHandler {
         let cleanId = id.replace(/@s\.whatsapp\.net$/, '');
         cleanId = cleanId.replace(/@c\.us$/, '');
         return cleanId;
+    }
+
+    static async getClientContext(rawChatId: string): Promise<any | null> {
+        const chatId = this.normalizeId(rawChatId);
+        if (process.env.STORAGE_MODE === "local") {
+            const chat = await LocalHistoryStore.getChat(chatId, this.PROJECT_IDENTIFIER);
+            if (!chat) return null;
+            const meta = chat.metadata || {};
+            return {
+                nombre: chat.name || meta.nombre,
+                direccion: meta.direccion,
+                email: meta.email,
+                dni_cuit: meta.dni_cuit,
+                tax_status: meta.tax_status,
+                offered_product: meta.offered_product,
+                tipoCliente: meta.tipoCliente,
+                incidencias_ids: meta.incidencias_ids || []
+            };
+        }
+        
+        try {
+            const chat = await this.getChat(chatId);
+            if (!chat) return null;
+            
+            const meta = chat.metadata || {};
+            return {
+                nombre: chat.name || meta.nombre,
+                direccion: meta.direccion,
+                email: meta.email,
+                dni_cuit: meta.dni_cuit,
+                tax_status: meta.tax_status,
+                offered_product: meta.offered_product,
+                tipoCliente: meta.tipoCliente,
+                incidencias_ids: meta.incidencias_ids || []
+            };
+        } catch (err) {
+            return null;
+        }
+    }
+
+    static async saveClientContext(rawChatId: string, contextData: any) {
+        const chatId = this.normalizeId(rawChatId);
+        
+        if (process.env.STORAGE_MODE === "local") {
+            const chat = await LocalHistoryStore.getChat(chatId, this.PROJECT_IDENTIFIER);
+            const currentMeta = chat?.metadata || {};
+            const updatedMeta = {
+                ...currentMeta,
+                nombre: contextData.nombre || currentMeta.nombre || chat?.name,
+                direccion: contextData.direccion || contextData.address || currentMeta.direccion,
+                email: contextData.email || currentMeta.email,
+                dni_cuit: contextData.numCliente || contextData.cuit_dni || currentMeta.dni_cuit,
+                tax_status: contextData.tax_status || currentMeta.tax_status,
+                offered_product: contextData.offered_product || currentMeta.offered_product,
+                tipoCliente: contextData.tipoCliente || contextData.tipo_cliente || currentMeta.tipoCliente,
+                incidencias_ids: contextData.incidencias_ids || currentMeta.incidencias_ids || []
+            };
+            const updatePayload: any = {
+                metadata: updatedMeta
+            };
+            if (contextData.nombre) {
+                updatePayload.name = contextData.nombre;
+            }
+            await LocalHistoryStore.updateContactDetails(chatId, updatePayload, this.PROJECT_IDENTIFIER);
+            return;
+        }
+
+        try {
+            const chat = await this.getChat(chatId);
+            const currentMeta = chat?.metadata || {};
+            const updatedMeta = {
+                ...currentMeta,
+                nombre: contextData.nombre || currentMeta.nombre || chat?.name,
+                direccion: contextData.direccion || contextData.address || currentMeta.direccion,
+                email: contextData.email || currentMeta.email,
+                dni_cuit: contextData.numCliente || contextData.cuit_dni || currentMeta.dni_cuit,
+                tax_status: contextData.tax_status || currentMeta.tax_status,
+                offered_product: contextData.offered_product || currentMeta.offered_product,
+                tipoCliente: contextData.tipoCliente || contextData.tipo_cliente || currentMeta.tipoCliente,
+                incidencias_ids: contextData.incidencias_ids || currentMeta.incidencias_ids || []
+            };
+
+            const updatePayload: any = {
+                metadata: updatedMeta
+            };
+            if (contextData.nombre) {
+                updatePayload.name = contextData.nombre;
+            }
+
+            this.invalidateChatCache(chatId, this.PROJECT_IDENTIFIER);
+
+            await supabase
+                .from('chats')
+                .update(updatePayload)
+                .eq('id', chatId)
+                .eq('project_id', this.PROJECT_IDENTIFIER);
+        } catch (err) {
+            console.error('[HistoryHandler] Error en saveClientContext:', err);
+        }
     }
 
     /**

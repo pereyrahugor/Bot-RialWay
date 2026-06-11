@@ -2689,7 +2689,9 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                     if ((s.key === 'ADMIN_USER' || s.key === 'ADMIN_PASS') && typeof val === 'string' && val.startsWith('b64:')) {
                         try {
                             val = Buffer.from(val.slice(4), 'base64').toString('utf-8');
-                        } catch (e) {}
+                        } catch (e) {
+                            // Ignorar error de decodificación
+                        }
                     }
                     mergedConfig[s.key] = val;
                 }
@@ -2755,7 +2757,9 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                 if ((s.key === 'ADMIN_USER' || s.key === 'ADMIN_PASS') && typeof val === 'string' && val.startsWith('b64:')) {
                     try {
                         val = Buffer.from(val.slice(4), 'base64').toString('utf-8');
-                    } catch (e) {}
+                    } catch (e) {
+                        // Ignorar error de decodificación
+                    }
                 }
                 results[s.key] = val;
             });
@@ -2928,7 +2932,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             if (error) throw error;
             // Enriquecer con nombre del contacto desde chats
             const chatIds = (data || []).map((r: any) => r.chat_id);
-            let chatNames: Record<string, string> = {};
+            const chatNames: Record<string, string> = {};
             if (chatIds.length > 0) {
                 const { data: chatRows } = await supabase
                     .from('chats')

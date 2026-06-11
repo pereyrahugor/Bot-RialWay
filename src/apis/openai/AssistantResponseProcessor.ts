@@ -23,6 +23,7 @@ import moment from 'moment';
 import OpenAI from "openai";
 import { transcribeAudioFile } from './audioTranscriptior';
 import { HistoryHandler } from '../../db/historyHandler';
+import { executeClientTool } from "../../bot/toolRouter";
 //import { handleToolFunctionCall } from '../Api-BotAsistente/handleToolFunctionCall.js';
 
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({
@@ -93,6 +94,47 @@ function esFechaFutura(fechaReservaStr: string): boolean {
 }
 
 export class AssistantResponseProcessor {
+    public static async actualizarContextoCliente(state: any, data: any, chatId?: string) {
+        if (!state || typeof state.get !== 'function' || typeof state.update !== 'function') return;
+        
+        const rawContext = state.get('datosClienteContext');
+        const contextAny: any = rawContext;
+        const current = contextAny || {
+            nombre: '',
+            apellido: '',
+            direccion: '',
+            numCliente: '',
+            tipoCliente: '',
+            incidencias_ids: [],
+            esCliente: 'No'
+        };
+
+        const updated = {
+            ...current,
+            nombre: data.nombre || data.nombreCliente || current.nombre,
+            apellido: data.apellido || current.apellido,
+            direccion: data.direccion || data.domicilioCompleto || data.domicilio || current.direccion,
+            numCliente: data.cliente_id || data.numCliente || current.numCliente,
+            tipoCliente: data.tipoCliente || current.tipoCliente,
+            esCliente: (data.esCliente || (data.cliente_id || data.numCliente ? 'Si' : current.esCliente))
+        };
+
+        if (data.incidencia_generada) {
+            updated.incidencias_ids = Array.isArray(updated.incidencias_ids) ? updated.incidencias_ids : [];
+            updated.incidencias_ids.push(String(data.incidencia_generada));
+        }
+
+        if ('numIncidencias' in updated) {
+            delete updated.numIncidencias;
+        }
+
+        await state.update({ datosClienteContext: updated });
+
+        if (chatId) {
+            await HistoryHandler.saveClientContext(chatId, updated);
+        }
+    }
+
     static async analizarYProcesarRespuestaAsistente(
         response: any,
         ctx: any,
@@ -182,8 +224,23 @@ export class AssistantResponseProcessor {
                     });
                 } else if (tipo === "cancel_event") {
                     apiResponse = await CalendarEvents.deleteEvent(jsonData.id);
+                } else {
+                    // Ruta a herramientas específicas del cliente usando el router modular
+                    const routerRes = await executeClientTool(tipo, jsonData, { 
+                        state, 
+                        ctx, 
+                        flowDynamic, 
+                        provider, 
+                        gotoFlow, 
+                        getAssistantResponse, 
+                        ASSISTANT_ID 
+                    });
+                    
+                    // Si el handler retorna un string, lo envolvemos en un objeto resultado; si es objeto, lo pasamos directo
+                    apiResponse = typeof routerRes === 'string' ? { result: routerRes } : routerRes;
                 }
             } catch (err: any) {
+                console.error(`[AssistantResponseProcessor] Error ejecutando tool '${tipo}':`, err.message);
                 apiResponse = { error: "Error en operación API: " + err.message };
             }
 
