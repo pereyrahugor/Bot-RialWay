@@ -1885,10 +1885,11 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
                 // Construir componentes (como multimedia por defecto)
                 const components: any[] = [];
+                let mediaLink = "";
                 const headerComp = template.components?.find((c: any) => c.type === 'HEADER');
                 if (headerComp && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComp.format)) {
                     const lowFormat = headerComp.format.toLowerCase();
-                    let mediaLink = headerComp.example?.header_handle?.[0] || '';
+                    mediaLink = headerComp.example?.header_handle?.[0] || '';
                     if (mediaLink) {
                         // Si es un link de Meta/Facebook, lo descargamos y servimos localmente
                         const isMetaUrl = mediaLink.includes('fbcdn') || mediaLink.includes('fbsbx') || mediaLink.includes('facebook.com') || mediaLink.includes('lookaside.fbsbx.com');
