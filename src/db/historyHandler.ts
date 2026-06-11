@@ -66,6 +66,7 @@ export class HistoryHandler {
     // In-memory caches to optimize database performance and avoid Disk I/O exhaustion (Supabase Best Practice)
     private static settingsCache = new Map<string, { value: string | null, timestamp: number }>();
     private static chatCache = new Map<string, { data: any, timestamp: number }>();
+    private static systemConfigVisibleTimer: any = null;
     private static readonly CACHE_TTL_MS = 60 * 1000; // Settings cache: 1 minute
     private static readonly CHAT_CACHE_TTL_MS = 15 * 1000; // Chat cache: 15 seconds
 
@@ -129,6 +130,7 @@ export class HistoryHandler {
                     assigned_agent TEXT DEFAULT 'asistente1',
                     last_message_at TIMESTAMPTZ DEFAULT NOW(),
                     last_human_message_at TIMESTAMPTZ,
+                    unread_count INTEGER DEFAULT 0,
                     metadata JSONB DEFAULT '{}'::jsonb,
                     PRIMARY KEY (id, project_id)
                 );
@@ -322,6 +324,13 @@ export class HistoryHandler {
 
                     // Migración para last_human_message_at y campos CRM
                     if (table.name === 'chats') {
+                        // Migración para unread_count
+                        const { error: unreadCountErr } = await supabase.from('chats').select('unread_count').limit(1);
+                        if (unreadCountErr && unreadCountErr.code === '42703') {
+                            console.log(`🔧 Agregando columna unread_count a chats...`);
+                            await supabase.rpc('exec_sql', { query: `ALTER TABLE chats ADD COLUMN IF NOT EXISTS unread_count INTEGER DEFAULT 0;` });
+                        }
+
                         const { error: humanMsgErr } = await supabase.from('chats').select('last_human_message_at').limit(1);
                         if (humanMsgErr && humanMsgErr.code === '42703') {
                             console.log(`🔧 Agregando columna last_human_message_at a chats...`);
@@ -414,8 +423,75 @@ export class HistoryHandler {
             console.error('❌ Error fatal creando índices:', err);
         }
 
+        // 5. Iniciar temporizador/verificación de SYSTEM_CONFIG_VISIBLE temporal
+        await this.checkSystemConfigVisibleOnStartup();
+
         console.log('✅ [HistoryHandler] Inicialización completa.');
         this.initialized = true;
+    }
+
+    static async activateSystemConfigTemporarily() {
+        console.log(`🔑 [HistoryHandler] Activando SYSTEM_CONFIG_VISIBLE por 60 minutos.`);
+        
+        // 1. Guardar en base de datos
+        await this.saveSetting('SYSTEM_CONFIG_VISIBLE', 'true');
+
+        // 2. Limpiar timer existente
+        if (this.systemConfigVisibleTimer) {
+            clearTimeout(this.systemConfigVisibleTimer);
+        }
+
+        // 3. Crear nuevo timer
+        this.systemConfigVisibleTimer = setTimeout(async () => {
+            console.log(`⏰ [HistoryHandler] Tiempo cumplido. Desactivando SYSTEM_CONFIG_VISIBLE.`);
+            await this.deactivateSystemConfig();
+        },60 * 60 * 1000); // 60 minutos
+    }
+
+    static async deactivateSystemConfig() {
+        await this.saveSetting('SYSTEM_CONFIG_VISIBLE', 'false');
+        if (this.systemConfigVisibleTimer) {
+            clearTimeout(this.systemConfigVisibleTimer);
+            this.systemConfigVisibleTimer = null;
+        }
+    }
+
+    static async checkSystemConfigVisibleOnStartup() {
+        try {
+            if (!supabase) return;
+            const { data, error } = await supabase
+                .from('settings')
+                .select('value, updated_at')
+                .eq('project_id', this.PROJECT_IDENTIFIER)
+                .eq('key', 'SYSTEM_CONFIG_VISIBLE')
+                .maybeSingle();
+
+            if (error) {
+                console.error('[HistoryHandler] Error verificando SYSTEM_CONFIG_VISIBLE al inicio:', error);
+                return;
+            }
+
+            if (data && data.value === 'true' && data.updated_at) {
+                const elapsed = Date.now() - new Date(data.updated_at).getTime();
+                const sixtyMinutes = 60 * 60 * 1000;
+                const remaining = sixtyMinutes - elapsed;
+
+                if (remaining <= 0) {
+                    console.log(`⏰ [HistoryHandler] SYSTEM_CONFIG_VISIBLE estaba activo pero ya expiró. Desactivando.`);
+                    await this.deactivateSystemConfig();
+                } else {
+                    console.log(`⏰ [HistoryHandler] SYSTEM_CONFIG_VISIBLE activo al inicio. Expirará en ${Math.round(remaining / 1000 / 60)} minutos.`);
+                    process.env.SYSTEM_CONFIG_VISIBLE = 'true';
+                    if (this.systemConfigVisibleTimer) clearTimeout(this.systemConfigVisibleTimer);
+                    this.systemConfigVisibleTimer = setTimeout(async () => {
+                        console.log(`⏰ [HistoryHandler] Tiempo cumplido (iniciado antes del reinicio). Desactivando SYSTEM_CONFIG_VISIBLE.`);
+                        await this.deactivateSystemConfig();
+                    }, remaining);
+                }
+            }
+        } catch (err) {
+            console.error('[HistoryHandler] Error en checkSystemConfigVisibleOnStartup:', err);
+        }
     }
     
     /**
@@ -646,7 +722,7 @@ export class HistoryHandler {
             }
 
             // Asegurar que el chat existe
-            await this.getOrCreateChat(chatId, resolvedPlatform, contactName, userId, currentProjectId);
+            const chatObj = await this.getOrCreateChat(chatId, resolvedPlatform, contactName, userId, currentProjectId);
 
             const msgData: any = {
                 chat_id: chatId,
@@ -722,10 +798,16 @@ export class HistoryHandler {
                 console.error('[HistoryHandler] Error en inserción de mensaje fallback:', insertError);
             }
 
-            // Actualizar timestamp del último mensaje en el chat para el ordenamiento de la lista
+            // Actualizar timestamp del último mensaje en el chat para el ordenamiento de la lista y el unread_count si es del usuario
+            const chatUpdate: any = { last_message_at: new Date().toISOString() };
+            if (role === 'user') {
+                const currentUnread = (chatObj as any)?.unread_count || 0;
+                chatUpdate.unread_count = currentUnread + 1;
+            }
+
             await supabase
                 .from('chats')
-                .update({ last_message_at: new Date().toISOString() })
+                .update(chatUpdate)
                 .eq('id', chatId)
                 .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
 
@@ -848,7 +930,8 @@ export class HistoryHandler {
         address?: string,
         offered_product?: string,
         crm_status?: string,
-        crm_due_date?: string | null
+        crm_due_date?: string | null,
+        metadata?: any
     }, forcedProjectId?: string) {
         const chatId = this.normalizeId(rawChatId);
         let currentProjectId = forcedProjectId;
@@ -984,8 +1067,7 @@ export class HistoryHandler {
                     type: details.type || 'whatsapp',
                     ...details,
                     is_lead: true,
-                    last_message_at: new Date().toISOString(),
-                    created_at: new Date().toISOString()
+                    last_message_at: new Date().toISOString()
                 }, { onConflict: 'id,project_id' });
 
             if (chatErr) throw chatErr;
@@ -998,6 +1080,9 @@ export class HistoryHandler {
                 .eq('telefono', chatId)
                 .maybeSingle();
 
+            const allowedTypes = ['Soporte', 'Ventas', 'Técnico', 'Otro', 'Asistencia Externa', 'Comercial', 'Nuevo Lead'];
+            const ticketType = allowedTypes.includes(details.offered_product) ? details.offered_product : 'Nuevo Lead';
+
             const { data: ticket, error: ticketErr } = await supabase
                 .from('tickets')
                 .insert({
@@ -1005,7 +1090,7 @@ export class HistoryHandler {
                     project_id: HistoryHandler.PROJECT_IDENTIFIER,
                     titulo: `Lead: ${details.name || chatId}`,
                     descripcion: details.notes || 'Lead creado manualmente',
-                    tipo: details.offered_product || 'Nuevo Lead',
+                    tipo: ticketType,
                     prioridad: 'Media',
                     estado: 'Abierto',
                     created_at: new Date().toISOString(),
@@ -1114,9 +1199,9 @@ export class HistoryHandler {
         }
         try {
             // Campos mínimos para la lista (se incluyen campos CRM para autocompletado de Excel)
-            let selectString = 'id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, crm_status, crm_due_date, notes, email, source, is_lead, cuit_dni, tax_status, address, offered_product, chat_tags(tag_id, tags(*))';
+            let selectString = 'id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, crm_status, crm_due_date, notes, email, source, is_lead, cuit_dni, tax_status, address, offered_product, unread_count, chat_tags(tag_id, tags(*))';
             if (tagId) {
-                selectString = 'id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, crm_status, crm_due_date, notes, email, source, is_lead, cuit_dni, tax_status, address, offered_product, chat_tags!inner(tag_id, tags(*))';
+                selectString = 'id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, crm_status, crm_due_date, notes, email, source, is_lead, cuit_dni, tax_status, address, offered_product, unread_count, chat_tags!inner(tag_id, tags(*))';
             }
 
             let query = supabase
@@ -1216,12 +1301,32 @@ export class HistoryHandler {
                 }
             }
 
+            // --- FILTRO LISTA NEGRA (bloqueado_crm) ---
+            // Si la integración está activa, ocultamos los chats bloqueados del CRM
+            try {
+                const blacklistActive = await this.getSetting('BLACKLIST_ACTIVE');
+                if (blacklistActive === 'true') {
+                    const { data: blockedEntries } = await supabase
+                        .from('blacklist')
+                        .select('chat_id')
+                        .eq('project_id', this.PROJECT_IDENTIFIER)
+                        .eq('bloqueado_crm', true);
+                    if (blockedEntries && blockedEntries.length > 0) {
+                        const blockedIds = new Set(blockedEntries.map((e: any) => e.chat_id));
+                        finalChats = finalChats.filter((c: any) => !blockedIds.has(c.id));
+                    }
+                }
+            } catch (blErr) {
+                console.warn('[HistoryHandler] No se pudo aplicar filtro de lista negra:', blErr);
+            }
+
             return finalChats;
         } catch (err) {
             console.error('[HistoryHandler] Error en listChats:', err);
             return [];
         }
     }
+
 
 
     /**
@@ -1942,6 +2047,9 @@ export class HistoryHandler {
             }
 
             // --- PASO ADICIONAL 3: Migrar al token maestro si existe ---
+            // Se desactiva la migración automática al token maestro ya que si el mainToken no tiene permisos explícitos
+            // compartidos sobre la WABA del cliente, todas las llamadas a la API de Meta fallarán para este proyecto.
+            /*
             try {
                 const mainToken = await this.getMainToken();
                 if (mainToken && token !== mainToken) {
@@ -1954,6 +2062,7 @@ export class HistoryHandler {
             } catch (swapErr) {
                 console.warn('⚠️ [HistoryHandler] No se pudo migrar al main_token:', swapErr);
             }
+            */
 
             return { success: true, data };
         } catch (err: any) {
@@ -2116,7 +2225,14 @@ export class HistoryHandler {
             console.error(`❌ [HistoryHandler] Error obteniendo setting ${key}:`, error);
         }
 
-        const value = data ? data.value : null;
+        let value = data ? data.value : null;
+        if ((key === 'ADMIN_USER' || key === 'ADMIN_PASS') && value && value.startsWith('b64:')) {
+            try {
+                value = Buffer.from(value.slice(4), 'base64').toString('utf-8');
+            } catch (e) {
+                console.error(`[HistoryHandler] Error decoding base64 setting ${key}:`, e);
+            }
+        }
 
         // 2. Guardar en cache antes de retornar
         this.settingsCache.set(cacheKey, { value, timestamp: now });
@@ -2261,7 +2377,8 @@ export class HistoryHandler {
                 { key: 'GOOGLE_PRIVATE_KEY', defaultValue: 'PENDING' },
                 { key: 'GOOGLE_CLIENT_EMAIL', defaultValue: 'PENDING' },
                 { key: 'SHEET_ID_RESUMEN', defaultValue: 'PENDING' },
-                { key: 'SHEET_RESUMEN_RANGE', defaultValue: 'Hoja1!A1' }
+                { key: 'SHEET_RESUMEN_RANGE', defaultValue: 'Hoja1!A1' },
+                { key: 'SYSTEM_CONFIG_VISIBLE', defaultValue: 'false' }
             ];
 
 
@@ -2390,17 +2507,35 @@ export class HistoryHandler {
 
     static async verifyUser(username: string, pass: string) {
         try {
+            const cleanUser = (username || '').trim();
+            const cleanPass = (pass || '').trim();
+            
             const { data, error } = await supabase
                 .from('users')
                 .select('*')
                 .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER)
-                .eq('username', username)
-                .eq('password', pass)
+                .ilike('username', cleanUser)
+                .eq('password', cleanPass)
                 .maybeSingle();
             if (error) throw error;
             return data || null;
         } catch (err) {
             console.error('[HistoryHandler] Error en verifyUser:', err);
+            return null;
+        }
+    }
+
+    static async getUserById(userId: string) {
+        try {
+            const { data, error } = await supabase
+                .from('users')
+                .select('*')
+                .eq('id', userId)
+                .maybeSingle();
+            if (error) throw error;
+            return data || null;
+        } catch (err) {
+            console.error('[HistoryHandler] Error en getUserById:', err);
             return null;
         }
     }

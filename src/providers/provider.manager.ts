@@ -133,6 +133,24 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
                     externalId,
                     ctx.platform || 'whatsapp'
                 );
+
+                // Si el mensaje original provino de un LID, guardamos el mapeo en metadata de chats para poder resolverlo en la intervención manual
+                if (ctx.payload?.key?.remoteJid?.endsWith('@lid')) {
+                    const originalLid = ctx.payload.key.remoteJid;
+                    try {
+                        const chat = await HistoryHandler.getChat(chatId);
+                        if (chat) {
+                            const currentMeta = chat.metadata || {};
+                            if (currentMeta.lid !== originalLid) {
+                                currentMeta.lid = originalLid;
+                                await HistoryHandler.updateContactDetails(chatId, { metadata: currentMeta });
+                                console.log(`${prefix} 💾 Guardado mapeo LID en metadata del chat: ${chatId} -> ${originalLid}`);
+                            }
+                        }
+                    } catch (metaErr: any) {
+                        console.error(`${prefix} ❌ Error guardando mapeo LID en metadata de chats:`, metaErr.message);
+                    }
+                }
             }
         } catch (err) {
             console.error(`❌ ${prefix} Error en el logger de mensajes entrantes:`, err);

@@ -15,6 +15,8 @@ const ROUTES = {
     '/meta':          '/js/views/meta.view.js',
     '/mercado-pago':  '/js/views/mercado-pago.view.js',
     '/meli':          '/js/views/meli.view.js',
+    '/lista-negra':   '/js/views/lista-negra.view.js',
+    '/notificaciones': '/js/views/notificaciones.view.js',
 };
 
 const _loadedScripts = {};

@@ -134,6 +134,7 @@ export const registerStaticRoutes = (app: any, { __dirname, provider, groupProvi
     serveHtmlPage("/documentacion", "shell.html");
     serveHtmlPage("/docs", "shell.html");
     serveHtmlPage("/meta", "shell.html");
+    serveHtmlPage("/lista-negra", "shell.html");
 
     // Favicon directo (browsers lo piden en / automáticamente) — busca en src/assets primero, luego en assets/
     app.get("/favicon.ico", (_req: any, res: any) => {

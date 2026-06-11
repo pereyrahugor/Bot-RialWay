@@ -1,38 +1,7 @@
 /* global logout, CodeMirror, _csdRebuild, _csdSync */
 
-// Función de validación de acceso centralizada
-window.checkAdminAccess = () => {
-    const passInput = document.getElementById('admin-pass');
-    const overlay = document.getElementById('config-auth-overlay');
-    const content = document.getElementById('main-config-content');
-    
-    if (passInput.value === 'neuroadmin25') {
-        overlay.style.display = 'none';
-        content.style.display = 'flex';
-        setTimeout(() => content.style.opacity = '1', 10);
-        localStorage.setItem('config_authenticated', 'true');
-        localStorage.setItem('system_config_token', 'neuroadmin25');
-        if (window.cmEditor) window.cmEditor.refresh();
-    } else {
-        passInput.style.borderColor = '#ef4444';
-        passInput.style.boxShadow = '0 0 0 4px rgba(239, 68, 68, 0.1)';
-        alert('❌ Clave incorrecta. Acceso denegado.');
-        passInput.value = '';
-    }
-};
-
 async function _initSystemConfigPage() {
     console.log('Unified System Config with 5 Assistant Prompts loaded');
-
-    if (localStorage.getItem('config_authenticated') === 'true') {
-        const overlay = document.getElementById('config-auth-overlay');
-        const content = document.getElementById('main-config-content');
-        if (overlay) overlay.style.display = 'none';
-        if (content) {
-            content.style.display = 'flex';
-            content.style.opacity = '1';
-        }
-    }
     
     // Inicialización de CodeMirror
     const promptTextarea = document.getElementById('prompt-editor-textarea');
@@ -54,9 +23,11 @@ async function _initSystemConfigPage() {
     const assistantSelect = document.getElementById('assistant-select');
     let initialVariables = {};
 
+    const getSafeToken = () => localStorage.getItem('system_config_token') || localStorage.getItem('backoffice_token') || '';
+
     // Cargar variables actuales
     async function loadVariables() {
-        const token = localStorage.getItem('system_config_token');
+        const token = getSafeToken();
         try {
             const response = await fetch(`/api/backoffice/config?token=${token}`);
             if (response.status === 401) return logout();
@@ -176,6 +147,21 @@ async function _initSystemConfigPage() {
             }
         });
 
+        // ─── PARCHE: Campos de credenciales (los browsers omiten type="password" en FormData) ───
+        // Capturamos ADMIN_USER y ADMIN_PASS directamente del DOM.
+        const credentialFields = ['ADMIN_USER', 'ADMIN_PASS'];
+        credentialFields.forEach(key => {
+            const el = document.getElementById(key);
+            if (!el) return;
+            const val = el.value.trim();
+            // Si el usuario escribió algo, siempre guardar (ignorar guard de comparación)
+            if (val !== '') {
+                settingsToSave[key] = val;
+                hasChanges = true;
+            }
+        });
+        // ─────────────────────────────────────────────────────────────────────────────────────────
+
         if (!hasChanges) {
             alert('No se detectaron cambios para guardar.');
             return;
@@ -185,7 +171,7 @@ async function _initSystemConfigPage() {
         updateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
         
         try {
-            const token = localStorage.getItem('system_config_token');
+            const token = getSafeToken();
             const response = await fetch(`/api/backoffice/save-settings-bulk?token=${token}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -198,6 +184,11 @@ async function _initSystemConfigPage() {
             if (data.success) {
                 alert('✅ Configuración guardada correctamente.');
                 Object.assign(initialVariables, settingsToSave);
+                // Limpiar los campos de credenciales tras guardar para evitar re-guardado involuntario
+                credentialFields.forEach(key => {
+                    const el = document.getElementById(key);
+                    if (el && settingsToSave[key] !== undefined) el.value = '';
+                });
                 
                 // Sincronizar prompts cambiados con OpenAI si corresponde
                 for (let i = 1; i <= 5; i++) {
@@ -218,9 +209,61 @@ async function _initSystemConfigPage() {
         }
     });
 
+    // ─── GUARDAR CREDENCIALES (ADMIN_USER / ADMIN_PASS) ───────────────────
+    // Handler independiente: los campos son type="text" (no password) para garantizar
+    // que el browser no los omita. Se leen directo del DOM, sin FormData.
+    const saveCredsBtn = document.getElementById('save-credentials-btn');
+    if (saveCredsBtn) {
+        saveCredsBtn.addEventListener('click', async () => {
+            const userEl = document.getElementById('ADMIN_USER');
+            const passEl = document.getElementById('ADMIN_PASS');
+            const statusEl = document.getElementById('credentials-status');
+
+            const adminUser = (userEl?.value || '').trim();
+            const adminPass = (passEl?.value || '').trim();
+
+            if (!adminUser && !adminPass) {
+                if (statusEl) { statusEl.textContent = '⚠️ Completá al menos un campo.'; statusEl.style.color = '#f59e0b'; }
+                return;
+            }
+
+            const settingsToSave = {};
+            if (adminUser) settingsToSave['ADMIN_USER'] = adminUser;
+            if (adminPass) settingsToSave['ADMIN_PASS'] = adminPass;
+
+            saveCredsBtn.disabled = true;
+            saveCredsBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+
+            try {
+                const token = getSafeToken();
+                const response = await fetch(`/api/backoffice/save-settings-bulk?token=${token}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ settings: settingsToSave })
+                });
+                if (response.status === 401) return logout();
+                const data = await response.json();
+                if (data.success) {
+                    if (statusEl) { statusEl.textContent = '✅ Credenciales guardadas correctamente.'; statusEl.style.color = '#10b981'; }
+                    if (userEl) userEl.value = '';
+                    if (passEl) passEl.value = '';
+                } else {
+                    if (statusEl) { statusEl.textContent = '❌ Error: ' + (data.error || 'desconocido'); statusEl.style.color = '#ef4444'; }
+                }
+            } catch (err) {
+                console.error('Error saving credentials:', err);
+                if (statusEl) { statusEl.textContent = '❌ Error de conexión.'; statusEl.style.color = '#ef4444'; }
+            } finally {
+                saveCredsBtn.disabled = false;
+                saveCredsBtn.innerHTML = '<i class="fas fa-key"></i> Guardar Credenciales';
+            }
+        });
+    }
+    // ──────────────────────────────────────────────────────────────────────
+
     async function syncPromptWithOpenAI(prompt, index) {
         try {
-            const token = localStorage.getItem('system_config_token');
+            const token = getSafeToken();
             await fetch(`/api/backoffice/update-prompt?token=${token}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -250,7 +293,7 @@ async function _initSystemConfigPage() {
         syncStatus.textContent = '⏳ Sincronizando...';
 
         try {
-            const token = localStorage.getItem('system_config_token');
+            const token = getSafeToken();
             const response = await fetch(`/api/backoffice/sync-assistant-prompt?token=${token}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -281,7 +324,7 @@ async function _initSystemConfigPage() {
         syncStatus.textContent = `⏳ Guardando...`;
 
         try {
-            const token = localStorage.getItem('system_config_token');
+            const token = getSafeToken();
             const settingKey = index === '1' ? 'ASSISTANT_PROMPT' : `ASSISTANT_PROMPT_${index}`;
             
             const response = await fetch(`/api/backoffice/save-settings-bulk?token=${token}`, {
@@ -318,7 +361,7 @@ async function _initSystemConfigPage() {
             if (btnLoadGroupsText) btnLoadGroupsText.textContent = 'Buscando grupos...';
 
             try {
-                const token = localStorage.getItem('system_config_token');
+                const token = getSafeToken();
                 const response = await fetch(`/api/backoffice/whatsapp/groups?token=${token}`);
                 const data = await response.json();
 

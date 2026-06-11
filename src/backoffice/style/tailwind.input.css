@@ -2655,7 +2655,7 @@
     border-color: rgba(0,102,255,0.25);
   }
   #crm-jump-container {
-    display: none;
+    display: none !important;
     position: relative;
     align-items: center;
   }

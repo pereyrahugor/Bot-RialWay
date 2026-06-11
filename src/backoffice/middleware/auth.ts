@@ -5,6 +5,36 @@ let _adminPassPromise: Promise<string> | null = null;
 let _adminPassAt = 0;
 const ADMIN_PASS_TTL = 5 * 60 * 1000;
 
+// Cache temporal para roles de usuarios (userId -> role)
+const _userRoleCache = new Map<string, { role: string; timestamp: number }>();
+const USER_ROLE_TTL = 5 * 60 * 1000;
+
+/** Invalida el cache de contraseña del admin — llamar cuando se actualice ADMIN_PASS en la DB */
+export function invalidateAuthCache() {
+    _adminPassPromise = null;
+    _adminPassAt = 0;
+    console.log('[AUTH] Cache de credenciales invalidado.');
+}
+
+async function _getUserRole(userId: string): Promise<string> {
+    const now = Date.now();
+    const cached = _userRoleCache.get(userId);
+    if (cached && (now - cached.timestamp) < USER_ROLE_TTL) {
+        return cached.role;
+    }
+    let role = 'subuser';
+    try {
+        const user = await HistoryHandler.getUserById(userId);
+        if (user && user.role) {
+            role = user.role;
+        }
+    } catch (e) {
+        console.error('[AUTH] Error obteniendo rol del usuario:', e);
+    }
+    _userRoleCache.set(userId, { role, timestamp: now });
+    return role;
+}
+
 function _fetchAdminPass(): Promise<string> {
     const now = Date.now();
     if (_adminPassPromise !== null && (now - _adminPassAt) < ADMIN_PASS_TTL) {
@@ -48,6 +78,8 @@ export const backofficeAuth = async (req: any, res: any, next: () => void) => {
         token = token.trim();
         if (token.startsWith('token=')) token = token.slice(6);
         else if (token.startsWith('Bearer ')) token = token.slice(7);
+        // Decodear caracteres especiales URL-encodeados (ej: %23 -> #)
+        try { token = decodeURIComponent(token); } catch (_) { /* ya decodificado */ }
     }
 
     // Un solo fetch a Supabase por ventana de TTL, compartido entre todos los requests simultáneos
@@ -65,16 +97,18 @@ export const backofficeAuth = async (req: any, res: any, next: () => void) => {
     let isValid = (token === "neuroadmin25" || (adminPass && token === adminPass));
     let isSubUser = false;
     let userId = null;
+    let userRole = 'subuser';
 
     if (!isValid && typeof token === 'string' && token.startsWith('sub:')) {
         userId = token.split(':')[1];
         isValid = true;
         isSubUser = true;
+        userRole = await _getUserRole(userId);
     }
     
     if (token && isValid) {
         req.auth = {
-            isAdmin: !isSubUser,
+            isAdmin: !isSubUser || userRole === 'admin',
             isSubUser,
             userId
         };
@@ -96,7 +130,7 @@ export const backofficeAuth = async (req: any, res: any, next: () => void) => {
 /**
  * Middleware de autenticación específico para configuración crítica (System-Config).
  */
-export const systemConfigAuth = (req: any, res: any, next: () => void) => {
+export const systemConfigAuth = async (req: any, res: any, next: () => void) => {
     let q: any = {};
     try {
         if (req.query && typeof req.query === 'object') q = req.query;
@@ -115,9 +149,14 @@ export const systemConfigAuth = (req: any, res: any, next: () => void) => {
         token = token.trim();
         if (token.startsWith('token=')) token = token.slice(6);
         else if (token.startsWith('Bearer ')) token = token.slice(7);
+        // Decodear caracteres especiales URL-encodeados
+        try { token = decodeURIComponent(token); } catch (_) { /* ya decodificado */ }
     }
 
-    if (token && token === "neuroadmin25") {
+    const adminPass = await _fetchAdminPass();
+    const isValid = (token === "neuroadmin25" || (adminPass && token === adminPass));
+
+    if (token && isValid) {
         return next();
     }
 

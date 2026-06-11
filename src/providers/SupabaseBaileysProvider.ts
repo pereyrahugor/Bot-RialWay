@@ -15,7 +15,9 @@ const logger = pino({ level: 'error' });
 export class SupabaseBaileysProvider extends BaileysProvider {
     saveCreds: any = null;
     qrCodeString: string | null = null;
+    public preventAutoStart = false;
     private initialized = false;
+    private lidToPnCache = new Map<string, string>();
 
     constructor(args: any = {}) {
         super(args);
@@ -76,11 +78,26 @@ export class SupabaseBaileysProvider extends BaileysProvider {
         return await this.initProvider();
     }
 
+    /**
+     * Anula el registro de listeners automáticos de la clase base.
+     * Evita que se dupliquen las suscripciones al evento `messages.upsert`
+     * y por ende que el bot responda dos veces. Todo el flujo se controla
+     * en nuestro `initProvider` personalizado.
+     */
+    protected listenOnEvents = (vendor: any): void => {
+        // No-op
+    }
+
     protected initProvider = async (): Promise<any> => {
         // Evitar múltiples inicializaciones simultáneas
         if (this.initialized && this.vendor?.ws?.isOpen) {
             console.log(`[SupabaseBaileysProvider] ℹ️ Conexión ya activa para ${this.globalVendorArgs.name}. Saltando.`);
             return this.vendor;
+        }
+
+        if (this.preventAutoStart) {
+            console.log(`[SupabaseBaileysProvider] ℹ️ Auto-start prevenido para ${this.globalVendorArgs.name || 'default'}. Esperando activación manual.`);
+            return null;
         }
 
         const { useSupabaseAuthState } = await import('../db/supabaseAdapter');
@@ -213,9 +230,38 @@ export class SupabaseBaileysProvider extends BaileysProvider {
                         const body = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
                         if (!body) continue;
 
+                        let from = msg.key.remoteJid;
+                        if (from && from.endsWith('@lid')) {
+                            const cachedPn = this.lidToPnCache.get(from);
+                            if (cachedPn) {
+                                from = cachedPn;
+                            } else {
+                                try {
+                                    const { HistoryHandler } = await import('../db/historyHandler');
+                                    const dbSupabase = HistoryHandler.getSupabase();
+                                    if (dbSupabase) {
+                                        const projectId = process.env.RAILWAY_PROJECT_ID || 'local-dev';
+                                        const { data } = await dbSupabase
+                                            .from('chats')
+                                            .select('id')
+                                            .eq('metadata->>lid', from)
+                                            .eq('project_id', projectId)
+                                            .maybeSingle();
+                                        if (data && data.id) {
+                                            const resolvedPn = `${data.id}@s.whatsapp.net`;
+                                            this.lidToPnCache.set(from, resolvedPn);
+                                            from = resolvedPn;
+                                        }
+                                    }
+                                } catch (dbErr) {
+                                    // ignore
+                                }
+                            }
+                        }
+
                         this.emit('message_from_me', {
                             body,
-                            from: msg.key.remoteJid,
+                            from,
                             isManualIntervention: true,
                             id: msg.key.id,
                             platform: 'whatsapp'
@@ -225,12 +271,22 @@ export class SupabaseBaileysProvider extends BaileysProvider {
                 }
 
                 const body = msg.message?.conversation || msg.message?.extendedTextMessage?.text || msg.message?.imageMessage?.caption || '';
-                const from = msg.key.remoteJid;
+                let from = msg.key.remoteJid;
 
                 //--- FILTRADO DE GRUPOS ---
                 // Si el mensaje viene de un grupo (@g.us), lo ignoramos para evitar que el bot responda
                 if (from?.endsWith('@g.us')) {
                     continue;
+                }
+
+                // Si el JID de origen es un LID, lo resolvemos a su número de teléfono real usando senderPn
+                if (from && from.endsWith('@lid')) {
+                    const resolvedPn = msg.key.senderPn;
+                    if (resolvedPn && resolvedPn.endsWith('@s.whatsapp.net')) {
+                        console.log(`[SupabaseBaileysProvider] 🔄 Detectado LID (${from}). Resolviendo a JID de teléfono: ${resolvedPn}`);
+                        this.lidToPnCache.set(from, resolvedPn);
+                        from = resolvedPn;
+                    }
                 }
                 
                 const messageType = Object.keys(msg.message || {})[0] || 'text';
