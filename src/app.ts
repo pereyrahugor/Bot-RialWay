@@ -95,10 +95,12 @@ function registerSafeErrorHandlers() {
  */
 const main = async () => {
     // 1. Storage cleanup and session restoration
-    // Fire-and-forget: initDatabase hace 30+ queries secuenciales y no debe bloquear el startup
-    HistoryHandler.initDatabase().catch(err =>
-        console.warn('[App] initDatabase error (non-fatal):', err)
-    );
+    // Await initDatabase so settings/variables are loaded from DB first
+    try {
+        await HistoryHandler.initDatabase();
+    } catch (err) {
+        console.warn('[App] initDatabase error:', err);
+    }
     const PORT = process.env.PORT || 8080;
     
     // El proceso de sincronización de tools se movió más abajo para asegurar que todas las variables estén recuperadas.
