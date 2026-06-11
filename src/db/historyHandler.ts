@@ -111,6 +111,9 @@ export class HistoryHandler {
         // 0.1. Cargar todas las settings de la DB a process.env para compatibilidad con flujos legacy
         await this.loadSettingsIntoProcessEnv();
 
+        // 0.2. Suscribirse a cambios en tiempo real de la tabla settings
+        this.subscribeToSettingsChanges();
+
         console.log('🔍 [HistoryHandler] Verificando tablas de historial...');
 
         const tables = [
@@ -2009,6 +2012,38 @@ export class HistoryHandler {
     static async getMainToken() {
         const data = await this.getMetaOnboardingData('main_token');
         return data?.access_token || null;
+    }
+
+    static subscribeToSettingsChanges() {
+        if (!supabase) return;
+        const projectId = this.PROJECT_IDENTIFIER;
+        supabase
+            .channel(`settings-changes-${projectId}`)
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'settings',
+                filter: `project_id=eq.${projectId}`
+            }, (payload: any) => {
+                const key = payload.new?.key || payload.old?.key;
+                const value = payload.new?.value;
+                if (!key) return;
+                this.invalidateSettingCache(key);
+                console.log(`📡 [Realtime] Setting cambiado: ${key} = ${value}`);
+                historyEvents.emit('setting_changed', { key, value });
+            })
+            .subscribe((status: string) => {
+                if (status === 'SUBSCRIBED') {
+                    console.log(`✅ [Realtime] Suscrito a cambios de settings para proyecto ${projectId}`);
+                } else if (status === 'CHANNEL_ERROR') {
+                    console.error(`❌ [Realtime] Error en suscripción de settings. Verifica que Realtime esté habilitado en la tabla 'settings' en Supabase.`);
+                }
+            });
+    }
+
+    static invalidateSettingCache(key: string, projectId: string | null = null) {
+        const targetProjectId = projectId || HistoryHandler.PROJECT_IDENTIFIER;
+        this.settingsCache.delete(`${targetProjectId}:${key}`);
     }
 
     static async saveSetting(key: string, value: string, projectId: string | null = null) {

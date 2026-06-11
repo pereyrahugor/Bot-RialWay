@@ -52,7 +52,7 @@ window.metaView = (() => {
                                 <li>Soporte para <strong>Imagenes y Audios</strong> oficiales.</li>
                             </ul>
                         </div>
-                        <button class="btn-primary" onclick="launchMetaOnboardingView()" style="width:100%; padding:13px 20px; display:flex; align-items:center; justify-content:center; gap:10px; font-size:0.95rem; font-weight:600; border-radius:14px;">
+                        <button id="meta-onboard-btn" class="btn-primary" onclick="launchMetaOnboardingView()" style="width:100%; padding:13px 20px; display:flex; align-items:center; justify-content:center; gap:10px; font-size:0.95rem; font-weight:600; border-radius:14px;">
                             <i class="fab fa-meta"></i> Vincular con META
                         </button>
                         <div id="meta-onboard-status" style="display:none; margin-top:1rem; color:var(--text-muted); font-size:0.85rem; text-align:center;">
@@ -60,6 +60,7 @@ window.metaView = (() => {
                         </div>
                     </div>
                 </div>
+
 
                 <!-- Estado: vinculado -->
                 <div id="meta-connected-area" style="display:none;">
@@ -198,6 +199,7 @@ window.metaView = (() => {
         window.toggleMetaAccordion      = toggleMetaAccordion;
         window.showTplPreviewModal      = showTplPreviewModal;
         window.launchMetaOnboardingView = launchMetaOnboardingView;
+        window.syncAndSaveConnection    = syncAndSaveConnection;
 
         await checkMetaConnection();
     }
@@ -206,17 +208,19 @@ window.metaView = (() => {
         if (_popupCheckInterval) { clearInterval(_popupCheckInterval); _popupCheckInterval = null; }
         document.getElementById('tpl-preview-modal')?.remove();
         ['switchMetaTab', 'showTemplateDetail', 'startBulkSend', 'downloadBulkExcel',
-         'toggleTagChip', 'toggleMetaAccordion', 'showTplPreviewModal', 'launchMetaOnboardingView'
+         'toggleTagChip', 'toggleMetaAccordion', 'showTplPreviewModal', 'launchMetaOnboardingView',
+         'syncAndSaveConnection'
         ].forEach(fn => { delete window[fn]; });
     }
 
     // ── Verificacion de conexion ──────────────────────────────────────────
-    async function checkMetaConnection() {
+    async function checkMetaConnection(silent = false) {
         try {
             const res  = await fetch(`/api/backoffice/whatsapp/config?token=${_token}`);
             const data = await res.json();
             _metaConfig = (data && data.config) || {};
-            const connected = !!(_metaConfig.waba_id && _metaConfig.phone_number_id);
+            const validId = (v) => v && v !== 'PENDING';
+            const connected = validId(_metaConfig.waba_id) && validId(_metaConfig.phone_number_id);
 
             if (connected) {
                 const libLink = document.getElementById('link-meta-library');
@@ -235,7 +239,7 @@ window.metaView = (() => {
 
                 loadTags();
                 loadTemplates();
-            } else {
+            } else if (!silent) {
                 const notConn = document.getElementById('meta-not-connected');
                 if (notConn) notConn.style.display = 'block';
             }
@@ -526,15 +530,32 @@ window.metaView = (() => {
 
     // ── Onboarding (estado no-conectado) ─────────────────────────────────
     function launchMetaOnboardingView() {
+        // Abrir popup ANTES del fetch para preservar el gesto del usuario
+        const w = 600, h = 800;
+        const left = (window.screen.width / 2) - (w / 2);
+        const top  = (window.screen.height / 2) - (h / 2);
+        const popup = window.open('about:blank', 'MetaOnboarding',
+            `width=${w},height=${h},top=${top},left=${left},scrollbars=yes,status=no,menubar=no`);
+
+        if (!popup) {
+            showToast('⚠️ El navegador bloqueó la ventana emergente. Permitila e intenta de nuevo.', 'error');
+            return;
+        }
+
+        const statusEl = document.getElementById('meta-onboard-status');
+        if (statusEl) statusEl.style.display = 'block';
+
         fetch('/api/backoffice/whatsapp/config?token=' + _token)
             .then(res => res.json())
             .then(data => {
-                if (!data.appId || !data.railwayProjectId) {
+                if (!data.appId) {
+                    popup.close();
+                    if (statusEl) statusEl.style.display = 'none';
                     showToast('⚠️ Faltan credenciales de Meta en el servidor', 'error');
                     return;
                 }
-                const url = new URL('https://duskcodes.com.ar/meta-auth');
                 const origin = window.location.origin;
+                const url = new URL('https://duskcodes.com.ar/meta-auth');
                 url.searchParams.append('railwayProjectId', data.railwayProjectId);
                 url.searchParams.append('RAILWAY_PROJECT_ID', data.railwayProjectId);
                 url.searchParams.append('projectId', data.railwayProjectId);
@@ -544,26 +565,68 @@ window.metaView = (() => {
                 url.searchParams.append('projectUrl', origin);
                 url.searchParams.append('redirectUri', `${origin}/api/backoffice/whatsapp/onboard-callback`);
 
-                const w = 600, h = 800;
-                const left = (window.screen.width / 2) - (w / 2);
-                const top  = (window.screen.height / 2) - (h / 2);
-                const popup = window.open(url.toString(), 'MetaOnboarding',
-                    `width=${w},height=${h},top=${top},left=${left},scrollbars=yes,status=no,menubar=no`);
-
-                const statusEl = document.getElementById('meta-onboard-status');
-                if (statusEl) statusEl.style.display = 'block';
+                popup.location.href = url.toString();
 
                 if (_popupCheckInterval) clearInterval(_popupCheckInterval);
                 _popupCheckInterval = setInterval(() => {
-                    if (popup && popup.closed) {
+                    if (popup.closed) {
                         clearInterval(_popupCheckInterval);
                         _popupCheckInterval = null;
                         if (statusEl) statusEl.style.display = 'none';
-                        checkMetaConnection();
+                        const btn = document.getElementById('meta-onboard-btn');
+                        if (btn) {
+                            btn.innerHTML = '<i class="fas fa-rotate"></i> Sincronizar y guardar';
+                            btn.onclick = syncAndSaveConnection;
+                        }
                     }
                 }, 1000);
             })
-            .catch(() => showToast('❌ Error al obtener configuracion', 'error'));
+            .catch(() => {
+                popup.close();
+                if (statusEl) statusEl.style.display = 'none';
+                showToast('❌ Error al obtener configuracion', 'error');
+            });
+    }
+
+    async function syncAndSaveConnection() {
+        const btn = document.getElementById('meta-onboard-btn');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Sincronizando...';
+        }
+        try {
+            const res = await fetch('/api/backoffice/whatsapp/sync-ids?token=' + _token, { method: 'POST' });
+            const data = await res.json();
+            if (!data.success) {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-rotate"></i> Sincronizar y guardar';
+                }
+                showToast('Hubo un problema interno con las credenciales de vinculacion. Soporte sera notificado de este ticket.', 'error');
+                return;
+            }
+            if (data.already) {
+                showToast('Credenciales verificadas correctamente.', 'success');
+            } else {
+                showToast('Credenciales sincronizadas y guardadas correctamente.', 'success');
+            }
+        } catch (_) {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-rotate"></i> Sincronizar y guardar';
+            }
+            showToast('Hubo un problema interno con las credenciales de vinculacion. Soporte sera notificado de este ticket.', 'error');
+            return;
+        }
+        try {
+            await checkMetaConnection(false);
+        } catch (_) {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-rotate"></i> Sincronizar y guardar';
+            }
+            showToast('Hubo un problema interno con las credenciales de vinculacion. Soporte sera notificado de este ticket.', 'error');
+        }
     }
 
     // ── Acordion del panel ────────────────────────────────────────────────
