@@ -5,7 +5,7 @@ import url from 'url';
 import bodyParser from 'body-parser';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
-import { backofficeAuth, systemConfigAuth } from "../middleware/auth";
+import { backofficeAuth, systemConfigAuth, invalidateAuthCache } from "../middleware/auth";
 import { supabase, HistoryHandler as HistoryHandlerClass, historyEvents } from "../db/historyHandler";
 import { invalidateVisibilityCache } from "./static.routes";
 import { getOpenAI } from "../../apis/openai/openaiHelper";
