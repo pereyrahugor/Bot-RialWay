@@ -5,9 +5,16 @@ import url from 'url';
 import bodyParser from 'body-parser';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
-import { backofficeAuth, systemConfigAuth, invalidateAuthCache } from "../middleware/auth";
+import { backofficeAuth, systemConfigAuth } from "../middleware/auth";
 import { supabase, HistoryHandler as HistoryHandlerClass, historyEvents } from "../db/historyHandler";
+import { invalidateVisibilityCache } from "./static.routes";
 import { getOpenAI } from "../../apis/openai/openaiHelper";
+
+// Invalidar visibility cache cuando cambia cualquier setting de visibilidad via Realtime
+const VISIBILITY_KEYS = ['WHATSAPP_VISIBLE', 'INSTAGRAM_VISIBLE', 'MESSENGER_VISIBLE', 'CRM_VISIBLE', 'SYSTEM_CONFIG_VISIBLE'];
+historyEvents.on('setting_changed', ({ key }: { key: string }) => {
+    if (VISIBILITY_KEYS.includes(key)) invalidateVisibilityCache();
+});
 
 // Caché para fotos de perfil (chatId -> {url, timestamp})
 const profilePicCache = new Map<string, { url: string, expires: number }>();
@@ -1403,20 +1410,16 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     app.get('/api/backoffice/whatsapp/config', backofficeAuth, async (req: any, res: any) => {
         const projectId = (req.query.projectId as string) || process.env.RAILWAY_PROJECT_ID || "default";
 
-        // Intentar obtener config de la DB
-        let config = await depsHistoryHandler.getMetaOnboardingData(projectId);
+        // Intentar obtener config de la DB para este proyecto
+        const config = await depsHistoryHandler.getMetaOnboardingData(projectId);
 
-        // Si no hay config específica, intentar la global (projectId=default)
-        if (!config && projectId !== 'default') {
-            config = await depsHistoryHandler.getMetaOnboardingData('default');
-        }
-
-        // Merge: DB tiene prioridad, pero solo si el valor no es vacío/null
+        // Merge: DB tiene prioridad, pero "PENDING" se considera ausente
         const dbConfig: Record<string, any> = config || {};
         const mergedConfig: Record<string, any> = { ...dbConfig };
-        if (!mergedConfig.waba_id        && process.env.META_WABA_ID)      mergedConfig.waba_id        = process.env.META_WABA_ID;
-        if (!mergedConfig.phone_number_id && process.env.META_PHONE_ID)     mergedConfig.phone_number_id = process.env.META_PHONE_ID;
-        if (!mergedConfig.access_token   && process.env.META_ACCESS_TOKEN) mergedConfig.access_token   = process.env.META_ACCESS_TOKEN;
+        const isAbsent = (v: any) => !v || v === 'PENDING';
+        if (isAbsent(mergedConfig.waba_id)        && process.env.META_WABA_ID)      mergedConfig.waba_id        = process.env.META_WABA_ID;
+        if (isAbsent(mergedConfig.phone_number_id) && process.env.META_PHONE_ID)     mergedConfig.phone_number_id = process.env.META_PHONE_ID;
+        if (isAbsent(mergedConfig.access_token)   && process.env.META_ACCESS_TOKEN) mergedConfig.access_token   = process.env.META_ACCESS_TOKEN;
 
         res.json({
             success: true,
@@ -1995,8 +1998,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     // --- ONBOARDING META ---
 
     app.get('/api/backoffice/whatsapp/onboard-callback', async (req: any, res: any) => {
-        const { code, wabaId: queryWabaId, phoneId: queryPhoneId, projectId: queryProjectId } = req.query;
-        const projectId = (queryProjectId as string) || process.env.RAILWAY_PROJECT_ID || 'default_project';
+        const { code, wabaId: queryWabaId, phoneId: queryPhoneId, projectId: queryProjectId, state } = req.query;
+        const projectId = (queryProjectId as string) || (state as string) || process.env.RAILWAY_PROJECT_ID || 'default_project';
         
         console.log(`📡 [CALLBACK] Iniciando onboard-callback para Proyecto: ${projectId}`);
         if (!code) return res.send('<h2>❌ Error: No se recibió el código de Meta</h2>');
@@ -2257,6 +2260,57 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
+    app.post('/api/backoffice/whatsapp/sync-ids', backofficeAuth, async (req: any, res: any) => {
+        const projectId = (req.query.projectId as string) || process.env.RAILWAY_PROJECT_ID || 'default';
+        console.log(`🔄 [SYNC-IDS] Iniciando sincronizacion para proyecto: ${projectId}`);
+        try {
+            const config = await depsHistoryHandler.getMetaOnboardingData(projectId);
+
+            if (!config?.access_token || config.access_token === 'PENDING') {
+                console.warn(`⚠️ [SYNC-IDS] No hay access_token guardado para proyecto: ${projectId}`);
+                return res.status(400).json({ success: false, error: 'No hay token guardado para este proyecto. Completa el proceso de vinculacion primero.' });
+            }
+
+            console.log(`✅ [SYNC-IDS] Token encontrado. waba_id=${config.waba_id || 'null'}, phone_number_id=${config.phone_number_id || 'null'}`);
+
+            const isAbsent = (v: any) => !v || v === 'PENDING';
+            if (!isAbsent(config.waba_id) && !isAbsent(config.phone_number_id)) {
+                console.log(`✅ [SYNC-IDS] IDs ya presentes en Supabase. No requiere discovery.`);
+                return res.json({ success: true, already: true, waba_id: config.waba_id, phone_number_id: config.phone_number_id });
+            }
+
+            console.log(`🔍 [SYNC-IDS] IDs faltantes. Iniciando discovery con token guardado...`);
+            const { discoverMetaIds } = await import('../../apis/meta/metaDiscovery');
+            const mainToken = await depsHistoryHandler.getMainToken();
+            const discovery = await discoverMetaIds(config.access_token, mainToken);
+
+            if (!discovery.found || !discovery.data?.wabaId || !discovery.data?.phoneNumberId) {
+                console.error(`❌ [SYNC-IDS] Discovery fallo para proyecto ${projectId}. No se encontraron IDs.`);
+                return res.status(404).json({ success: false, error: 'No se pudieron descubrir los IDs automaticamente. Ingresalos manualmente.' });
+            }
+
+            console.log(`🔍 [SYNC-IDS] Discovery exitoso: WABA=${discovery.data.wabaId}, Phone=${discovery.data.phoneNumberId}. Guardando en Supabase...`);
+            const saveResult = await depsHistoryHandler.saveMetaOnboardingData(
+                discovery.data.wabaId,
+                discovery.data.phoneNumberId,
+                config.access_token,
+                { verified_name: discovery.data.verifiedName || '' },
+                projectId
+            );
+
+            if (!saveResult.success) {
+                console.error(`❌ [SYNC-IDS] Fallo al guardar en Supabase para proyecto ${projectId}:`, saveResult.error);
+                return res.status(500).json({ success: false, error: 'No se pudieron guardar los IDs en la base de datos.' });
+            }
+
+            console.log(`✅ [SYNC-IDS] IDs guardados exitosamente para proyecto ${projectId}.`);
+            res.json({ success: true, waba_id: discovery.data.wabaId, phone_number_id: discovery.data.phoneNumberId });
+        } catch (error: any) {
+            console.error(`❌ [SYNC-IDS] Error inesperado para proyecto ${projectId}:`, error);
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
     app.post('/api/backoffice/whatsapp/unlink-meta', backofficeAuth, async (req: any, res: any) => {
         const projectId = req.query.projectId || process.env.RAILWAY_PROJECT_ID || "default";
         console.log(`📡 [UNLINK-META] Iniciando desvinculación de Meta para Proyecto: ${projectId}`);
@@ -2402,11 +2456,11 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             if (PROTECTED_KEYS.includes(key)) {
                 return res.status(403).json({ success: false, error: 'Esta variable es estática y solo puede editarse vía base de datos.' });
             }
-            let val = value;
-            if ((key === 'ADMIN_USER' || key === 'ADMIN_PASS') && val) {
-                val = 'b64:' + Buffer.from(val).toString('base64');
+            await depsHistoryHandler.saveSetting(key, value);
+            if (key === 'SYSTEM_CONFIG_VISIBLE') {
+                invalidateVisibilityCache();
+                historyEvents.emit('setting_changed', { key, value });
             }
-            await depsHistoryHandler.saveSetting(key, val);
             res.json({ success: true });
         } catch (error: any) {
             res.status(500).json({ success: false, error: error.message });

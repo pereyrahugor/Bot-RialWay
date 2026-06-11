@@ -1,4 +1,4 @@
-/* global loadViewScript, FB, fetchChats, jumpToCRM */
+/* global loadViewScript, FB, fetchChats, jumpToCRM, _boBotTags, _tagStyle */
 window.backofficeView = {
     title: (window.BOT_NAME || 'Backoffice') + ' - Conversaciones',
 

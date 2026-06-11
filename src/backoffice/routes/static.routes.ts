@@ -5,7 +5,9 @@ import { backofficeAuth } from '../middleware/auth'; // auth vive en backoffice/
 
 let _visibilityCache: { wa: string; ig: string; ms: string; crm: string; sysConfig: string } | null = null;
 let _visibilityCacheAt = 0;
-const VISIBILITY_TTL = 60 * 1000;
+const VISIBILITY_TTL = 10 * 1000;
+
+export const invalidateVisibilityCache = () => { _visibilityCache = null; };
 
 /**
  * Registra las rutas de servicio de HTML y archivos estáticos.
@@ -61,13 +63,16 @@ export const registerStaticRoutes = (app: any, { __dirname, provider, groupProvi
                     // Obtener configuración de visibilidad (cacheada para evitar queries en cada navegación)
                     const now = Date.now();
                     if (!_visibilityCache || (now - _visibilityCacheAt) > VISIBILITY_TTL) {
-                        const [dbWa, dbIg, dbMs, dbCRM] = await Promise.all([
+                        ['WHATSAPP_VISIBLE', 'INSTAGRAM_VISIBLE', 'MESSENGER_VISIBLE', 'CRM_VISIBLE', 'SYSTEM_CONFIG_VISIBLE']
+                            .forEach(k => HistoryHandler.invalidateSettingCache(k));
+                        const [dbWa, dbIg, dbMs, dbCRM, dbSysCfg] = await Promise.all([
                             getSettingSafe('WHATSAPP_VISIBLE'),
                             getSettingSafe('INSTAGRAM_VISIBLE', 'false'),
                             getSettingSafe('MESSENGER_VISIBLE', 'false'),
-                            getSettingSafe('CRM_VISIBLE', 'true')
+                            getSettingSafe('CRM_VISIBLE', 'true'),
+                            getSettingSafe('SYSTEM_CONFIG_VISIBLE', process.env.SYSTEM_CONFIG_VISIBLE ?? 'false')
                         ]);
-                        _visibilityCache = { wa: dbWa, ig: dbIg, ms: dbMs, crm: dbCRM, sysConfig: '' };
+                        _visibilityCache = { wa: dbWa, ig: dbIg, ms: dbMs, crm: dbCRM, sysConfig: dbSysCfg };
                         _visibilityCacheAt = now;
                     }
                     const cache = _visibilityCache!;
@@ -77,9 +82,8 @@ export const registerStaticRoutes = (app: any, { __dirname, provider, groupProvi
                     const isAnyPlatformActive = (dbWa !== 'false') || (dbIg === 'true') || (dbMs === 'true');
                     const showBackoffice = isAnyPlatformActive ? '' : 'hidden-item';
                     const showCRM = (dbCRM === 'false' || (!dbCRM && process.env.CRM_VISIBLE === 'false')) ? 'hidden-item' : '';
-                    const _sysCfgRaw = (process.env.SYSTEM_CONFIG_VISIBLE ?? 'true').trim();
-                    const systemConfigVisible = _sysCfgRaw !== 'false';
-                    console.log('[Static] SYSTEM_CONFIG_VISIBLE raw:', JSON.stringify(_sysCfgRaw), '→ hidden:', !systemConfigVisible);
+                    const systemConfigVisible = cache.sysConfig !== 'false';
+                    console.log('[Static] SYSTEM_CONFIG_VISIBLE desde Supabase:', JSON.stringify(cache.sysConfig), '→ hidden:', !systemConfigVisible);
                     const showSystemConfig = systemConfigVisible ? '' : 'hidden-item';
                     const systemConfigVisibleJs = systemConfigVisible ? 'true' : 'false';
 

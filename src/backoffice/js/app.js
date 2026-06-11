@@ -1,4 +1,4 @@
-/* global toggleLeadsPanel, toggleTicketsPanel, toggleMetaPanel */
+/* global toggleLeadsPanel, toggleTicketsPanel, toggleMetaPanel, io, showToast */
 // app.js - Client-side SPA router
 // Carga views dinamicamente y maneja la navegacion sin recargar la pagina
 
@@ -155,4 +155,20 @@ window.addEventListener('popstate', () => {
 // Iniciar en DOMContentLoaded
 document.addEventListener('DOMContentLoaded', () => {
     mountView(window.location.pathname);
+
+    // Escuchar cambios de settings en tiempo real
+    const _appSocket = io();
+    _appSocket.on('setting_changed', ({ key, value }) => {
+        if (key === 'SYSTEM_CONFIG_VISIBLE') {
+            const enabled = value !== 'false';
+            window.__SYSTEM_CONFIG_VISIBLE = enabled;
+            const navItem = document.querySelector('[data-route="/system-config"]')?.closest('li');
+            if (navItem) navItem.classList.toggle('hidden-item', !enabled);
+            const label = enabled ? 'Activado: Developer Settings' : 'Desactivado: Developer Settings';
+            showToast(label, enabled ? 'success' : 'info');
+            if (!enabled && window.location.pathname === '/system-config') {
+                navigate('/dashboard');
+            }
+        }
+    });
 });
