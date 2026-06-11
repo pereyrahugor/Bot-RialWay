@@ -1,4 +1,4 @@
-/* global toggleLeadsPanel, toggleTicketsPanel, toggleMetaPanel */
+/* global toggleLeadsPanel, toggleTicketsPanel, toggleMetaPanel, io, showToast */
 // app.js - Client-side SPA router
 // Carga views dinamicamente y maneja la navegacion sin recargar la pagina
 
