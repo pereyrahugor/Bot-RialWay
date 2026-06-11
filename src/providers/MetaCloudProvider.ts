@@ -310,9 +310,13 @@ class MetaCloudProvider extends ProviderClass {
      */
     private formatNumberForMeta(number: string): string {
         let clean = number.replace(/\D/g, '');
-        // Caso específico Argentina: Remover el '9' intermedio de móviles (549... -> 54...)
-        if (clean.startsWith('549') && clean.length === 13) {
-            clean = '54' + clean.slice(3);
+        // Caso específico Argentina: WhatsApp requiere el '9' móvil intermedio en producción (549... con 13 dígitos)
+        if (clean.startsWith('54')) {
+            // Si tiene 12 dígitos (ej: 541130792789), le insertamos el '9' móvil para que sea entregable (5491130792789)
+            if (clean.length === 12 && !clean.startsWith('549')) {
+                clean = '549' + clean.slice(2);
+            }
+            // Si ya tiene 13 dígitos y empieza con 549, lo dejamos tal cual (no removemos el '9')
         }
         return clean;
     }
@@ -785,6 +789,19 @@ class MetaCloudProvider extends ProviderClass {
 
                     const messages = value?.messages || value?.message_echoes;
                     const contactData = value?.contacts; // Para smb_app_state_sync
+                    const statuses = value?.statuses;
+
+                    // 0. MANEJO DE ACTUALIZACIONES DE ESTADO (statuses)
+                    if (statuses && Array.isArray(statuses)) {
+                        for (const status of statuses) {
+                            console.log(`📡 [MetaCloudProvider] Webhook de estado para ${status.recipient_id} (${status.id}): ${status.status}`);
+                            if (status.status === 'failed' && status.errors) {
+                                for (const err of status.errors) {
+                                    console.error(`❌ [MetaCloudProvider] Error de entrega para ${status.recipient_id} (ID: ${status.id}): [Código ${err.code}] ${err.message} - ${err.error_data?.details || ''}`);
+                                }
+                            }
+                        }
+                    }
 
                     // 1. MANEJO DE SINCRONIZACIÓN DE CONTACTOS (smb_app_state_sync)
                     if (fieldName === 'smb_app_state_sync' && contactData && Array.isArray(contactData)) {
