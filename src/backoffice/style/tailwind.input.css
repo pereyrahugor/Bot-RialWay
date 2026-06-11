@@ -2927,6 +2927,8 @@
     padding: 8px 10px;
     background: rgba(255,255,255,0.03);
     min-height: 44px;
+    max-height: 140px;
+    overflow-y: auto;
   }
   [data-theme="light"] .bulk-tags-box {
     border-color: rgba(0,0,0,0.12);
