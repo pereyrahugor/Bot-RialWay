@@ -741,7 +741,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             if (metaConfig && metaConfig.access_token && metaConfig.phone_number_id) {
                 console.log(`📡 [SYNC] Sincronización Meta detectada. Solicitando historial SMB...`);
                 try {
-                    await triggerMetaSync(metaConfig.access_token, metaConfig.phone_number_id);
+                    const tokenForSync = metaConfig.onboarding_data?.client_token || metaConfig.access_token;
+                    await triggerMetaSync(tokenForSync, metaConfig.phone_number_id);
                     return res.json({
                         success: true,
                         summary: {
@@ -1892,7 +1893,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                     mediaLink = headerComp.example?.header_handle?.[0] || '';
                     if (mediaLink) {
                         // Si es un link de Meta/Facebook, lo descargamos y servimos localmente
-                        const isMetaUrl = mediaLink.includes('fbcdn') || mediaLink.includes('fbsbx') || mediaLink.includes('facebook.com') || mediaLink.includes('lookaside.fbsbx.com');
+                        const isMetaUrl = mediaLink.includes('fbcdn') || mediaLink.includes('fbsbx') || mediaLink.includes('facebook.com') || mediaLink.includes('lookaside.fbsbx.com') || mediaLink.includes('whatsapp.net') || mediaLink.includes('whatsapp.com');
                         if (isMetaUrl) {
                             try {
                                 console.log(`📥 [QUICK BULK] Descargando multimedia de cabecera de Meta: ${mediaLink.substring(0, 50)}...`);
@@ -2216,7 +2217,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                 // --- SINCRONIZACIÓN AUTOMÁTICA SMB ---
                 // Solicitamos contactos e historial inmediatamente tras la vinculación
                 if (finalPhoneId) {
-                    await triggerMetaSync(tokenToUse, finalPhoneId);
+                    await triggerMetaSync(accessToken, finalPhoneId);
                 }
             }
 

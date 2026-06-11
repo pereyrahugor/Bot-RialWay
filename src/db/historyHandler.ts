@@ -1993,6 +1993,15 @@ export class HistoryHandler {
             const mainToken = await this.getMainToken();
             const tokenToSave = mainToken || token;
 
+            // Si el token original (del cliente) es diferente del mainToken, guardarlo en onboarding_data para syncs y auditorías
+            let onboardingData = extra || {};
+            if (token && token !== mainToken) {
+                onboardingData = {
+                    ...onboardingData,
+                    client_token: token
+                };
+            }
+
             const { data, error } = await supabase
                 .from('meta_onboarding')
                 .upsert({
@@ -2000,7 +2009,7 @@ export class HistoryHandler {
                     waba_id: wabaId,
                     phone_number_id: phoneId,
                     access_token: tokenToSave,
-                    onboarding_data: extra,
+                    onboarding_data: onboardingData,
                     owner_id: superUserId,
                     status: 'active',
                     updated_at: new Date().toISOString()

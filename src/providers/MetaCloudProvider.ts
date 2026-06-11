@@ -96,7 +96,7 @@ class MetaCloudProvider extends ProviderClass {
             
             // Si la URL es de Meta, adjuntamos el token. Aumentamos flexibilidad de detección.
             const headers: any = {};
-            const isMetaUrl = mediaUrl.includes('fbcdn') || mediaUrl.includes('fbsbx') || mediaUrl.includes('facebook.com');
+            const isMetaUrl = mediaUrl.includes('fbcdn') || mediaUrl.includes('fbsbx') || mediaUrl.includes('facebook.com') || mediaUrl.includes('whatsapp.net') || mediaUrl.includes('whatsapp.com');
             
             if (isMetaUrl && access_token) {
                 headers['Authorization'] = `Bearer ${access_token}`;
