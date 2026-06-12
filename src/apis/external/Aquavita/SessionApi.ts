@@ -1,4 +1,3 @@
-// src/apis/external/Aquavita/SessionApi.ts
 import axios from 'axios';
 
 const getBaseUrl = () => process.env.AQUAVITA_SWS_BASE_URL || process.env.SWS_BASE_URL || '';
@@ -6,9 +5,11 @@ const getBaseUrl = () => process.env.AQUAVITA_SWS_BASE_URL || process.env.SWS_BA
 let sessionToken: string | null = null;
 let tokenVencimiento: string | null = null;
 let usuarioId: number | null = null;
+let tokenCreatedAt: Date | null = null;
 
 export function setSessionToken(token: string) {
   sessionToken = token;
+  tokenCreatedAt = token ? new Date() : null;
 }
 
 export function setTokenVencimiento(vencimiento: string) {
@@ -87,18 +88,21 @@ export class SessionApi {
 }
 
 export async function ensureValidToken(username?: string, password?: string): Promise<string | null> {
-  const vencimiento = getTokenVencimiento();
   const token = getSessionToken();
   let vigente = false;
-  if (token && vencimiento) {
-    const venc = new Date(vencimiento.replace(' ', 'T'));
+  
+  if (token && tokenCreatedAt) {
     const ahora = new Date();
-    vigente = venc > ahora;
+    const diffMs = ahora.getTime() - tokenCreatedAt.getTime();
+    const diffMins = diffMs / 60000;
+    vigente = diffMins < 30; // Vigente si pasaron menos de 30 minutos
   }
+  
   const user = username || SessionApi.username;
   const pass = password || SessionApi.password;
   if (!token || !vigente) {
-    console.log(`[SessionApi] Token ${!token ? 'ausente' : 'vencido'}. Solicitando uno nuevo para el usuario: ${user}`);
+    const razon = !token ? 'ausente' : 'vencido (hace más de 30 min)';
+    console.log(`[SessionApi] Token ${razon}. Solicitando uno nuevo para el usuario: ${user}`);
     try {
       const response = await SessionApi.login(user, pass);
       const newToken = getSessionToken();
