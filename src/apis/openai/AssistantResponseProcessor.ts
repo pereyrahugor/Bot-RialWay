@@ -255,7 +255,7 @@ export class AssistantResponseProcessor {
 
                 let newResponse: any;
                 try {
-                    newResponse = await getAssistantResponse(ASSISTANT_ID, feedbackMsg, state, "Error procesando resultado API.", ctx?.from, threadId);
+                    newResponse = await getAssistantResponse(ASSISTANT_ID, feedbackMsg, state, "Error procesando resultado API.", ctx?.from, threadId, projectId, agentName);
                 } catch (err: any) {
                     // Si falla por run activo, intentamos una vez más tras una espera larga
                     if (err?.message?.includes('active')) {

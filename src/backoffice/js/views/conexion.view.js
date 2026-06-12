@@ -45,7 +45,7 @@ window.conexionView = {
                         <div id="qr-section" style="display:none;" class="mt-5">
                             <div class="inline-block bg-white p-5 rounded-2xl shadow-premium">
                                 <h3 class="text-gray-700 text-sm font-heading font-semibold mb-3">Escaneá con WhatsApp</h3>
-                                <img src="/qr.png" class="w-56 h-56 rounded-xl" alt="Codigo QR"
+                                <img src="/qr.png" class="qr w-56 h-56 rounded-xl" alt="Codigo QR"
                                     onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
                                 <p class="qr-error-msg hidden text-orange-400 p-4 text-sm">Generando QR... por favor espera.</p>
                             </div>
