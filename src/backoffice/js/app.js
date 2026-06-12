@@ -16,6 +16,7 @@ const ROUTES = {
     '/mercado-libre': '/js/views/mercado-libre.view.js',
     '/lista-negra':   '/js/views/lista-negra.view.js',
     '/notificaciones': '/js/views/notificaciones.view.js',
+    '/reportes':       '/js/views/reportes.view.js',
     '/tickets':        '/js/views/tickets.view.js',
 };
 

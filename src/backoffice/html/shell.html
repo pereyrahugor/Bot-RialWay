@@ -10,7 +10,7 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
     <script>(function(){var v='?v=2';['link[rel*="icon"]','link[rel="apple-touch-icon"]'].forEach(function(s){document.querySelectorAll(s).forEach(function(e){e.href=e.href.split('?')[0]+v;});});}());</script>
     <link rel="stylesheet" href="/style/vendor/fontawesome/css/all.min.css">
-    <link rel="stylesheet" href="/style/tailwind.css">
+    <link rel="stylesheet" href="/style/tailwind.css?v=6">
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="/js/toast.js"></script>
     <script>window.BOT_NAME = '{{BOT_NAME}}'; window.__SYSTEM_CONFIG_VISIBLE = '{{SYSTEM_CONFIG_VISIBLE_JS}}' !== 'false';</script>
@@ -79,6 +79,13 @@
                                onclick="event.preventDefault(); closeMessagingFlyout(); navigate('/tickets')">
                                 <i class="fas fa-ticket-alt"></i>
                                 <span class="nav-label">Tickets</span>
+                            </a>
+                        </li>
+                        <li class="nav-item" data-route="/reportes">
+                            <a href="#" class="nav-link nav-dropdown-link"
+                               onclick="event.preventDefault(); closeMessagingFlyout(); navigate('/reportes')">
+                                <i class="fas fa-file-lines"></i>
+                                <span class="nav-label">Reportes</span>
                             </a>
                         </li>
                         <li class="nav-item" data-route="/conexion">

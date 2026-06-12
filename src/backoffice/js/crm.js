@@ -332,7 +332,7 @@ function initDragAndDrop() {
     const boardInner = document.getElementById('kanban-board-inner');
     if (boardInner && !Sortable.get(boardInner)) {
         new Sortable(boardInner, {
-            animation: 150,
+            animation: 200,
             draggable: '.kanban-column',
             handle: '.column-header',
             ghostClass: 'sortable-ghost',

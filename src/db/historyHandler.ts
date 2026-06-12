@@ -115,6 +115,7 @@ export class HistoryHandler {
 
         // 0.2. Suscribirse a cambios en tiempo real de la tabla settings
         this.subscribeToSettingsChanges();
+        this.subscribeToReportesChanges();
 
         console.log('🔍 [HistoryHandler] Verificando tablas de historial...');
 
@@ -1309,6 +1310,7 @@ export class HistoryHandler {
             const res = await LocalHistoryStore.listChats(limit, offset, search, tagId, assignedTo, platform, currentProjectId);
             return res.data;
         }
+        for (let _attempt = 0; _attempt < 2; _attempt++) {
         try {
             // Campos mínimos para la lista (se incluyen campos CRM para autocompletado de Excel)
             let selectString = 'id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, crm_status, crm_due_date, notes, email, source, is_lead, cuit_dni, tax_status, address, offered_product, unread_count, chat_tags(tag_id, tags(*))';
@@ -1434,9 +1436,17 @@ export class HistoryHandler {
 
             return finalChats;
         } catch (err) {
+            const isTransient = err instanceof Error && (err.message.includes('fetch failed') || err.message.includes('UND_ERR_SOCKET'));
+            if (isTransient && _attempt === 0) {
+                console.warn('[HistoryHandler] listChats: fetch transient error, retrying...');
+                await new Promise(r => setTimeout(r, 600));
+                continue;
+            }
             console.error('[HistoryHandler] Error en listChats:', err);
             return [];
         }
+        } // end for
+        return [];
     }
 
 
@@ -1680,7 +1690,7 @@ export class HistoryHandler {
     ) {
         const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
         if (process.env.STORAGE_MODE === "local") {
-            const ticket = await LocalHistoryStore.createTicket(null, titulo, descripcion, '', '', currentProjectId, attachments, chats_adjuntos);
+            const ticket = await LocalHistoryStore.createTicket('', titulo, descripcion, '', '', currentProjectId, attachments, chats_adjuntos);
             historyEvents.emit('ticket_updated', { ticket });
             return { success: true, ticket };
         }
@@ -2146,6 +2156,29 @@ export class HistoryHandler {
                     console.log(`✅ [Realtime] Suscrito a cambios de settings para proyecto ${projectId}`);
                 } else if (status === 'CHANNEL_ERROR') {
                     console.error(`❌ [Realtime] Error en suscripción de settings. Verifica que Realtime esté habilitado en la tabla 'settings' en Supabase.`);
+                }
+            });
+    }
+
+    static subscribeToReportesChanges() {
+        if (!supabase) return;
+        const projectId = this.PROJECT_IDENTIFIER;
+        supabase
+            .channel(`reportes-bot-changes-${projectId}`)
+            .on('postgres_changes', {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'reportes_bot',
+                filter: `project_id=eq.${projectId}`
+            }, (payload: any) => {
+                console.log(`📡 [Realtime] Nuevo reporte creado: ${payload.new?.tipo} para ${payload.new?.chat_id}`);
+                historyEvents.emit('reporte_created', { reporte: payload.new, projectId });
+            })
+            .subscribe((status: string) => {
+                if (status === 'SUBSCRIBED') {
+                    console.log(`✅ [Realtime] Suscrito a reportes_bot para proyecto ${projectId}`);
+                } else if (status === 'CHANNEL_ERROR') {
+                    console.error(`❌ [Realtime] Error en suscripción de reportes_bot. Verifica que Realtime esté habilitado en la tabla 'reportes_bot' en Supabase.`);
                 }
             });
     }

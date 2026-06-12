@@ -31,7 +31,7 @@ window.notificacionesView = (() => {
             <div class="meta-view-body">
 
                 <!-- Estado: inactivo -->
-                <div id="notif-onboarding" class="animate-fade" style="display:none; max-width:520px; width:100%; margin:20px auto 28px; padding:clamp(16px,4vw,28px); border-radius:1rem; background:rgba(16,42,67,0.65); border:1px solid rgba(0,153,255,0.12);">
+                <div id="notif-onboarding" class="animate-fade" style="display:none; max-width:520px; width:100%; margin:20px auto 28px; padding:clamp(16px,4vw,28px); border-radius:1rem; background:var(--card-bg); border:1px solid var(--card-border-color);">
 
                     <div style="text-align:center; margin-bottom:20px;">
                         <div style="position:relative; display:inline-flex; align-items:center; justify-content:center; margin-bottom:14px;">
@@ -82,7 +82,7 @@ window.notificacionesView = (() => {
                 </div>
 
                 <!-- Estado: activo -->
-                <div id="notif-active" class="animate-fade" style="display:none; max-width:520px; width:100%; margin:20px auto 28px; padding:clamp(16px,4vw,28px); border-radius:1rem; background:rgba(16,42,67,0.65); border:1px solid rgba(0,153,255,0.12);">
+                <div id="notif-active" class="animate-fade" style="display:none; max-width:520px; width:100%; margin:20px auto 28px; padding:clamp(16px,4vw,28px); border-radius:1rem; background:var(--card-bg); border:1px solid var(--card-border-color);">
 
                     <div style="text-align:center; margin-bottom:20px;">
                         <div style="position:relative; display:inline-flex; align-items:center; justify-content:center; margin-bottom:14px;">

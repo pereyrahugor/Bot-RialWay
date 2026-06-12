@@ -168,6 +168,23 @@ window.backofficeView = {
 
                 <div id="emoji-picker" class="emoji-picker-container" style="display:none;"></div>
 
+                <!-- File preview overlay -->
+                <div id="file-preview-overlay" style="display:none; position:absolute; inset:0; z-index:50; background:#111; flex-direction:column;">
+                    <div id="file-preview-header" style="display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-bottom:1px solid rgba(255,255,255,0.1);">
+                        <button onclick="closeFilePreview()" style="background:none;border:none;color:#fff;font-size:1.2rem;cursor:pointer;"><i class="fas fa-times"></i></button>
+                        <span id="file-preview-name" style="color:#fff;font-size:0.85rem;font-weight:600;flex:1;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0 12px;"></span>
+                        <div style="width:24px;"></div>
+                    </div>
+                    <div id="file-preview-body" style="flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:16px;"></div>
+                    <div id="file-preview-footer" style="padding:12px 16px;border-top:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;gap:8px;">
+                        <input type="text" id="file-preview-caption" placeholder="Escribe un comentario..." style="flex:1;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:20px;padding:8px 14px;color:#fff;font-size:0.9rem;outline:none;"
+                            onkeydown="if(event.key==='Enter') sendFromPreview()">
+                        <button onclick="sendFromPreview()" style="width:42px;height:42px;border-radius:50%;background:#0078D4;border:none;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1rem;">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+
                 <div id="input-area">
                     <button class="btn-icon input-action-btn" id="attach-btn" title="Adjuntar archivo" disabled onclick="document.getElementById('file-input').click()">
                         <i class="fas fa-plus"></i>
@@ -180,6 +197,9 @@ window.backofficeView = {
                         <input type="text" id="message-input" placeholder="Escribe un mensaje" disabled
                             onkeydown="if(event.key === 'Enter') sendMessage()">
                     </div>
+                    <button class="btn-icon input-action-btn" id="mic-btn" title="Grabar audio" disabled onclick="toggleRecording()">
+                        <i class="fas fa-microphone"></i>
+                    </button>
                     <button class="btn-icon input-action-btn" id="send-btn" title="Enviar mensaje" onclick="sendMessage()" disabled>
                         <i class="fas fa-paper-plane"></i>
                     </button>
@@ -493,7 +513,7 @@ window.backofficeView = {
 
         // Cargar backoffice.js si no esta cargado (primera visita)
         if (!window._backofficeScriptLoaded) {
-            await loadViewScript('/js/backoffice.js?v=2');
+            await loadViewScript('/js/backoffice.js?v=14');
             window._backofficeScriptLoaded = true;
         }
         // Siempre re-inicializar: tanto primera visita como re-visitas

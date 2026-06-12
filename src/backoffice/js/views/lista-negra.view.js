@@ -32,7 +32,7 @@ window.listaNegraView = (() => {
             <div class="meta-view-body">
 
                 <!-- Explicacion (visible cuando inactivo) -->
-                <div id="ln-info" class="animate-fade" style="max-width:520px; width:100%; margin:20px auto 28px; padding:clamp(16px,4vw,28px); border-radius:1rem; background:rgba(16,42,67,0.65); border:1px solid rgba(0,153,255,0.12);">
+                <div id="ln-info" class="animate-fade" style="max-width:520px; width:100%; margin:20px auto 28px; padding:clamp(16px,4vw,28px); border-radius:1rem; background:var(--card-bg); border:1px solid var(--card-border-color);">
 
                     <!-- Icono + titulo -->
                     <div style="text-align:center; margin-bottom:20px;">
@@ -97,7 +97,7 @@ window.listaNegraView = (() => {
                     </div>
 
                     <!-- List container -->
-                    <div style="overflow:hidden; border-radius:1rem; background:rgba(16,42,67,0.65); border:1px solid rgba(0,153,255,0.12);">
+                    <div style="overflow:hidden; border-radius:1rem; background:var(--card-bg); border:1px solid var(--card-border-color);">
                         <div id="ln-tbody" class="animate-fade">
                             <div style="padding:32px; text-align:center; color:var(--text-muted);">
                                 <i class="fas fa-circle-notch fa-spin"></i> Cargando...

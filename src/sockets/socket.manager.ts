@@ -38,6 +38,14 @@ export const initSocketIO = (serverInstance: any, { processUserMessage }: any) =
             io.emit('setting_changed', payload);
         });
 
+        historyEvents.on('reporte_created', (payload) => {
+            io.emit('reporte_created', payload);
+        });
+
+        historyEvents.on('message_status_update', (payload) => {
+            io.emit('message_status_update', payload);
+        });
+
         io.on('connection', (socket) => {
             // console.log('💬 Cliente web conectado');
             socket.on('message', async (msg) => {

@@ -67,7 +67,7 @@ export const processSendMessage = async (
     const projectId = req.query.projectId || (req.body && req.body.projectId) || req.headers['x-project-id'] || (req.auth && req.auth.projectId) || null;
     const { adapterProvider, HistoryHandler: depsHistoryHandler, openaiMain } = deps;
     // 1. Determinar tipo y contenido
-    let finalType: 'text' | 'image' | 'video' | 'document' | 'sticker' = 'text';
+    let finalType: 'text' | 'image' | 'video' | 'document' | 'sticker' | 'audio' = 'text';
     if (file) {
         const lowerOrigName = (file.originalname || '').toLowerCase();
         const lowerFileName = (file.filename || '').toLowerCase();
@@ -77,6 +77,8 @@ export const processSendMessage = async (
             finalType = 'image';
         } else if (file.mimetype.startsWith('video/')) {
             finalType = 'video';
+        } else if (file.mimetype.startsWith('audio/')) {
+            finalType = 'audio';
         } else {
             finalType = 'document';
         }
@@ -3113,6 +3115,67 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             historyEvents.emit('notifications_deactivated', { projectId });
 
             res.json({ success: true });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    // REPORTES BOT
+    // ─────────────────────────────────────────────────────────────
+
+    /** GET /api/backoffice/reportes/status */
+    app.get('/api/backoffice/reportes/status', backofficeAuth, async (req: any, res: any) => {
+        try {
+            const active = await depsHistoryHandler.getSetting('REPORTES_ACTIVE');
+            res.json({ active: active === 'true' });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    /** POST /api/backoffice/reportes/activate */
+    app.post('/api/backoffice/reportes/activate', backofficeAuth, async (req: any, res: any) => {
+        try {
+            const projectId = depsHistoryHandler.PROJECT_IDENTIFIER;
+            const { error } = await supabase
+                .from('settings')
+                .upsert({ project_id: projectId, key: 'REPORTES_ACTIVE', value: 'true' }, { onConflict: 'project_id,key' });
+            if (error) throw error;
+            depsHistoryHandler.settingsCache?.delete?.(`${projectId}:REPORTES_ACTIVE`);
+            res.json({ success: true });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    /** POST /api/backoffice/reportes/deactivate */
+    app.post('/api/backoffice/reportes/deactivate', backofficeAuth, async (req: any, res: any) => {
+        try {
+            const projectId = depsHistoryHandler.PROJECT_IDENTIFIER;
+            const { error } = await supabase
+                .from('settings')
+                .upsert({ project_id: projectId, key: 'REPORTES_ACTIVE', value: 'false' }, { onConflict: 'project_id,key' });
+            if (error) throw error;
+            depsHistoryHandler.settingsCache?.delete?.(`${projectId}:REPORTES_ACTIVE`);
+            res.json({ success: true });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    /** GET /api/backoffice/reportes — Lista reportes del bot para este proyecto */
+    app.get('/api/backoffice/reportes', backofficeAuth, async (req: any, res: any) => {
+        try {
+            const projectId = depsHistoryHandler.PROJECT_IDENTIFIER;
+            const limit = Math.min(parseInt(req.query.limit as string) || 100, 500);
+            const { data, error } = await supabase
+                .from('reportes_bot')
+                .select('id, chat_id, nombre, tipo, descripcion, created_at, updated_at')
+                .eq('project_id', projectId)
+                .order('created_at', { ascending: false })
+                .limit(limit);
+            if (error) throw error;
+            res.json({ success: true, reportes: data || [] });
         } catch (e: any) {
             res.status(500).json({ success: false, error: e.message });
         }

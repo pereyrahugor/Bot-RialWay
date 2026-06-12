@@ -5,6 +5,27 @@ import { EVENTS } from "@builderbot/bot";
 import { isSessionInDb } from "./sessionSync";
 import { HistoryHandler } from '../db/historyHandler';
 
+const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+
+// Comprime la imagen en disco y devuelve la ruta web relativa final
+async function compressImageToDisk(absolutePath: string): Promise<string> {
+    const ext = path.extname(absolutePath).toLowerCase();
+    if (!IMAGE_EXTS.has(ext)) return absolutePath;
+    try {
+        const sharp = (await import('sharp')).default;
+        const compressed = await sharp(absolutePath)
+            .resize(1280, 1280, { fit: 'inside', withoutEnlargement: true })
+            .webp({ quality: 80 })
+            .toBuffer();
+        const newPath = absolutePath.replace(/\.[^.]+$/, '.webp');
+        fs.writeFileSync(newPath, compressed);
+        if (newPath !== absolutePath) fs.unlinkSync(absolutePath);
+        return newPath;
+    } catch {
+        return absolutePath; // Si falla, deja el original intacto
+    }
+}
+
 /**
  * Cache temporal para IDs de mensajes enviados desde el backoffice.
  * Evita procesar los "ecos" (message_from_me) de lo que nosotros mismos mandamos.
@@ -124,18 +145,28 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
                     contactName = (chatId === cleanGroupResumenId) ? 'Grupo de Reportes 1' : 'Grupo de Reportes 2';
                 }
                 
-                let contentToSave = ctx.type === 'voice' ? (ctx.localPath || ctx.body) : ctx.body;
-                
-                // Normalizar rutas absolutas del sistema de archivos a URLs relativas web para el navegador
-                if (contentToSave && typeof contentToSave === 'string') {
-                    const normalized = contentToSave.replace(/\\/g, '/');
-                    const tmpIdx = normalized.toLowerCase().indexOf('/tmp/');
-                    if (tmpIdx !== -1) {
-                        contentToSave = normalized.substring(tmpIdx);
-                    } else {
-                        const uploadsIdx = normalized.toLowerCase().indexOf('/uploads/');
-                        if (uploadsIdx !== -1) {
-                            contentToSave = normalized.substring(uploadsIdx);
+                // Para media: preferir localPath sobre el caption/body, igual que se hace para voice
+                const isMediaType = ['voice', 'audio', 'image', 'video', 'document'].includes(ctx.type);
+                let contentToSave = (isMediaType && ctx.localPath) ? ctx.localPath : ctx.body;
+
+                // Normalizar rutas absolutas a URLs relativas web, comprimiendo imágenes en disco
+                if (contentToSave && typeof contentToSave === 'string' && !contentToSave.startsWith('http')) {
+                    let normalized = contentToSave.replace(/\\/g, '/');
+                    const isLocalFile = normalized.includes('/tmp/') || normalized.includes('/uploads/') || path.isAbsolute(contentToSave);
+                    if (isLocalFile) {
+                        // Comprimir imagen en disco si aplica
+                        let absolutePath = contentToSave;
+                        if (normalized.startsWith('/tmp/') || normalized.startsWith('/uploads/')) {
+                            absolutePath = path.join(process.cwd(), normalized);
+                        }
+                        const finalAbsPath = await compressImageToDisk(absolutePath);
+                        normalized = finalAbsPath.replace(/\\/g, '/');
+
+                        const tmpIdx = normalized.toLowerCase().indexOf('/tmp/');
+                        if (tmpIdx !== -1) contentToSave = normalized.substring(tmpIdx);
+                        else {
+                            const uploadsIdx = normalized.toLowerCase().indexOf('/uploads/');
+                            if (uploadsIdx !== -1) contentToSave = normalized.substring(uploadsIdx);
                         }
                     }
                 }
