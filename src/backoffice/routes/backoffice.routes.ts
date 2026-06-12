@@ -1257,9 +1257,10 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         if (!chatId) return res.status(400).json({ success: false, error: 'chatId is required' });
         
         try {
-            await depsHistoryHandler.toggleBot(chatId, enabled);
+            const projectId = resolveProjectId(req);
+            await depsHistoryHandler.toggleBot(chatId, enabled, projectId);
             if ((adapterProvider as any).server?.io) {
-                (adapterProvider as any).server.io.emit('bot_toggled', { chatId, enabled });
+                (adapterProvider as any).server.io.emit('bot_toggled', { chatId, enabled, projectId });
             }
             res.json({ success: true, enabled });
         } catch (e: any) {
@@ -1270,14 +1271,16 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     // --- TAGS ---
 
     app.get('/api/backoffice/tags', backofficeAuth, async (req: any, res: any) => {
-        const tags = await depsHistoryHandler.getTags();
+        const projectId = resolveProjectId(req);
+        const tags = await depsHistoryHandler.getTags(projectId);
         res.json(tags);
     });
 
     app.get('/api/backoffice/chat/:id/contact', backofficeAuth, async (req: any, res: any) => {
         try {
             const { id } = req.params;
-            const contact = await depsHistoryHandler.getChat(id);
+            const projectId = resolveProjectId(req);
+            const contact = await depsHistoryHandler.getChat(id, projectId);
             if (!contact) {
                 return res.status(404).json({ success: false, error: 'Contact not found' });
             }
@@ -1291,12 +1294,13 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         try {
             const { id } = req.params;
             const { name, email, notes, source, cuit_dni, tax_status, address, offered_product, crm_status, crm_due_date } = req.body;
+            const projectId = resolveProjectId(req);
             const result = await depsHistoryHandler.updateContactDetails(id, { 
                 name, email, notes, source, 
                 cuit_dni, tax_status, address, offered_product,
                 crm_status, crm_due_date,
                 is_lead: true 
-            });
+            }, projectId);
             res.json(result);
         } catch (err: any) {
             res.status(500).json({ success: false, error: err.message });
@@ -1307,7 +1311,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         try {
             const { chatId, details } = req.body;
             if (!chatId) return res.status(400).json({ success: false, error: 'chatId (phone) is required' });
-            const result = await depsHistoryHandler.createNewLeadManual(chatId, details);
+            const projectId = resolveProjectId(req);
+            const result = await depsHistoryHandler.createNewLeadManual(chatId, details, projectId);
             res.json(result);
         } catch (err: any) {
             res.status(500).json({ success: false, error: err.message });

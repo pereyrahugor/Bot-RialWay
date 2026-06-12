@@ -95,6 +95,22 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
             // Guardar en el historial de Supabase si no es un comando de sistema (se permite guardar notas de voz que tengan _event_)
             if (ctx.body && (!ctx.body.startsWith('_event_') || ctx.type === 'voice')) {
                 const { HistoryHandler } = await import('../db/historyHandler');
+
+                // Resolver projectId dinámicamente
+                const rawJid = provider?.vendor?.authState?.creds?.me?.id || 
+                               provider?.vendor?.user?.id || 
+                               provider?.globalVendorArgs?.sock?.user?.id || '';
+                const botPhoneNumber = rawJid.split(':')[0].split('@')[0] || 
+                                       provider?.globalVendorArgs?.phone_number_id || 
+                                       provider?.config?.phone_number_id ||
+                                       (ctx.to ? ctx.to.replace(/\D/g, '') : null);
+                let dynamicProjectId = HistoryHandler.PROJECT_IDENTIFIER;
+                if (botPhoneNumber) {
+                    const resolvedId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber);
+                    if (resolvedId) {
+                        dynamicProjectId = resolvedId;
+                    }
+                }
                 
                 // Si es grupo, mantenemos el JID completo. Si es chat privado, extraemos el número.
                 const chatId = isGroup ? (from.includes('@') ? from : `${from}@g.us`) : (from.includes('@') ? from.split('@')[0] : from);
@@ -131,20 +147,21 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
                     contactName, 
                     ctx.userId,
                     externalId,
-                    ctx.platform || 'whatsapp'
+                    ctx.platform || 'whatsapp',
+                    dynamicProjectId
                 );
 
                 // Si el mensaje original provino de un LID, guardamos el mapeo en metadata de chats para poder resolverlo en la intervención manual
                 if (ctx.payload?.key?.remoteJid?.endsWith('@lid')) {
                     const originalLid = ctx.payload.key.remoteJid;
                     try {
-                        const chat = await HistoryHandler.getChat(chatId);
+                        const chat = await HistoryHandler.getChat(chatId, dynamicProjectId);
                         if (chat) {
                             const currentMeta = chat.metadata || {};
                             if (currentMeta.lid !== originalLid) {
                                 currentMeta.lid = originalLid;
-                                await HistoryHandler.updateContactDetails(chatId, { metadata: currentMeta });
-                                console.log(`${prefix} 💾 Guardado mapeo LID en metadata del chat: ${chatId} -> ${originalLid}`);
+                                await HistoryHandler.updateContactDetails(chatId, { metadata: currentMeta }, dynamicProjectId);
+                                console.log(`${prefix} 💾 Guardado mapeo LID en metadata del chat: ${chatId} -> ${originalLid} para proyecto ${dynamicProjectId}`);
                             }
                         }
                     } catch (metaErr: any) {
@@ -170,6 +187,22 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
             }
 
             const { HistoryHandler, recentBotSentMessages, normalizeTextForCache } = await import('../db/historyHandler');
+
+            // Resolver projectId dinámicamente
+            const rawJid = provider?.vendor?.authState?.creds?.me?.id || 
+                           provider?.vendor?.user?.id || 
+                           provider?.globalVendorArgs?.sock?.user?.id || '';
+            const botPhoneNumber = rawJid.split(':')[0].split('@')[0] || 
+                                   provider?.globalVendorArgs?.phone_number_id || 
+                                   provider?.config?.phone_number_id ||
+                                   (ctx.to ? ctx.to.replace(/\D/g, '') : null);
+            let dynamicProjectId = HistoryHandler.PROJECT_IDENTIFIER;
+            if (botPhoneNumber) {
+                const resolvedId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber);
+                if (resolvedId) {
+                    dynamicProjectId = resolvedId;
+                }
+            }
 
             if (isGroup) {
                 // Filtro estricto: solo procedemos si es uno de los grupos de reportes oficiales
@@ -245,15 +278,16 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
                 contactName, 
                 null,
                 externalId,
-                ctx.platform || 'whatsapp'
+                ctx.platform || 'whatsapp',
+                dynamicProjectId
             );
 
             // Si fue una intervención manual desde la app de WhatsApp (y no es grupo),
             // activar automáticamente el modo "Atención Humana"
             if (isManual && !isGroup) {
-                console.log(`${prefix} 🛑 Activando modo Atención Humana para ${chatId} (operador escribió desde la app)`);
-                await HistoryHandler.toggleBot(chatId, false);
-                await HistoryHandler.updateLastHumanMessage(chatId);
+                console.log(`${prefix} 🛑 Activando modo Atención Humana para ${chatId} (operador escribió desde la app) para proyecto ${dynamicProjectId}`);
+                await HistoryHandler.toggleBot(chatId, false, dynamicProjectId);
+                await HistoryHandler.updateLastHumanMessage(chatId, dynamicProjectId);
             }
         } catch (err) {
             console.error(`❌ ${prefix} Error guardando mensaje saliente manual:`, err);

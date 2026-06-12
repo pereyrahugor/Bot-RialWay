@@ -918,9 +918,9 @@ export class HistoryHandler {
                 .from('chats')
                 .update(chatUpdate)
                 .eq('id', chatId)
-                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
+                .eq('project_id', currentProjectId);
 
-            this.invalidateChatCache(chatId);
+            this.invalidateChatCache(chatId, currentProjectId);
 
             // Emitir evento para WebSockets (esto actualiza la UI en tiempo real)
             historyEvents.emit('new_message', { 
@@ -1162,17 +1162,18 @@ export class HistoryHandler {
     /**
      * Crea un lead manualmente desde la interfaz (sin necesidad de chat previo)
      */
-    static async createNewLeadManual(chatId: string, details: any) {
+    static async createNewLeadManual(chatId: string, details: any, projectId: string | null = null) {
+        const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
         try {
             // Invalidar cache
-            this.invalidateChatCache(chatId);
+            this.invalidateChatCache(chatId, currentProjectId);
 
             // 1. Crear o actualizar el chat (Lead)
             const { error: chatErr } = await supabase
                 .from('chats')
                 .upsert({
                     id: chatId,
-                    project_id: HistoryHandler.PROJECT_IDENTIFIER,
+                    project_id: currentProjectId,
                     type: details.type || 'whatsapp',
                     ...details,
                     is_lead: true,
@@ -1185,7 +1186,7 @@ export class HistoryHandler {
             const { data: proyectoRow } = await supabase
                 .from('proyectos_railway')
                 .select('cliente_id')
-                .eq('railway_project_id', HistoryHandler.PROJECT_IDENTIFIER)
+                .eq('railway_project_id', currentProjectId)
                 .maybeSingle();
 
             const clienteId = (proyectoRow as any)?.cliente_id || null;
@@ -1193,7 +1194,7 @@ export class HistoryHandler {
             const { data: ticket, error: ticketErr } = await supabase
                 .from('tickets')
                 .insert({
-                    project_id: HistoryHandler.PROJECT_IDENTIFIER,
+                    project_id: currentProjectId,
                     titulo: `Lead: ${details.name || chatId}`,
                     descripcion: details.notes || 'Lead creado manualmente',
                     estado: 'Abierto',
@@ -1207,7 +1208,7 @@ export class HistoryHandler {
 
             // Emitir eventos para refrescar backoffice y CRM en tiempo real
             historyEvents.emit('ticket_updated', { chatId, ticket });
-            historyEvents.emit('contact_updated', { chatId, project_id: HistoryHandler.PROJECT_IDENTIFIER });
+            historyEvents.emit('contact_updated', { chatId, project_id: currentProjectId });
 
             return { success: true, ticket };
         } catch (err: any) {
@@ -1232,16 +1233,17 @@ export class HistoryHandler {
     /**
      * Cambia el estado del bot (Intervención humana)
      */
-    static async toggleBot(rawChatId: string, enabled: boolean) {
+    static async toggleBot(rawChatId: string, enabled: boolean, projectId: string | null = null) {
         const chatId = this.normalizeId(rawChatId);
+        const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
         if (process.env.STORAGE_MODE === "local") {
-            const res = await LocalHistoryStore.toggleBot(chatId, enabled, this.PROJECT_IDENTIFIER);
-            historyEvents.emit('bot_toggled', { chatId, enabled, assigned_agent: 'asistente1' });
+            const res = await LocalHistoryStore.toggleBot(chatId, enabled, currentProjectId);
+            historyEvents.emit('bot_toggled', { chatId, enabled, assigned_agent: 'asistente1', projectId: currentProjectId });
             return { success: res };
         }
         
         // Invalidar cache
-        this.invalidateChatCache(chatId);
+        this.invalidateChatCache(chatId, currentProjectId);
 
         try {
             const updateData: any = { bot_enabled: enabled };
@@ -1256,12 +1258,11 @@ export class HistoryHandler {
                 .from('chats')
                 .update(updateData)
                 .eq('id', chatId)
-                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
+                .eq('project_id', currentProjectId);
             
             if (error) throw error;
-            
-            // Emitir evento para WebSockets (ahora incluimos el agente para sincronización frontend)
-            historyEvents.emit('bot_toggled', { chatId, enabled, assigned_agent: 'asistente1' });
+            // Emitir evento para WebSockets (ahora incluimos el agente y projectId para sincronización frontend)
+            historyEvents.emit('bot_toggled', { chatId, enabled, assigned_agent: 'asistente1', projectId: currentProjectId });
 
             return { success: true };
         } catch (err: any) {
@@ -1273,23 +1274,27 @@ export class HistoryHandler {
     /**
      * Actualiza la marca de tiempo de la última intervención humana
      */
-    static async updateLastHumanMessage(rawChatId: string) {
+    static async updateLastHumanMessage(rawChatId: string, projectId: string | null = null) {
         const chatId = this.normalizeId(rawChatId);
+        const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
         if (process.env.STORAGE_MODE === "local") {
-            return LocalHistoryStore.updateLastHumanMessage(chatId, this.PROJECT_IDENTIFIER);
+            return LocalHistoryStore.updateLastHumanMessage(chatId, currentProjectId);
         }
         
-        // Invalidar cache
-        this.invalidateChatCache(chatId);
-
         try {
-            await supabase
+            const { error } = await supabase
                 .from('chats')
-                .update({ last_human_message_at: new Date().toISOString() })
+                .update({ 
+                    last_human_message_at: new Date().toISOString()
+                })
                 .eq('id', chatId)
-                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
-        } catch (err) {
+                .eq('project_id', currentProjectId);
+            
+            if (error) throw error;
+            return true;
+        } catch (err: any) {
             console.error('[HistoryHandler] Error en updateLastHumanMessage:', err);
+            return false;
         }
     }
 
@@ -1461,16 +1466,17 @@ export class HistoryHandler {
 
     // --- Tag Management ---
 
-    static async getTags() {
+    static async getTags(projectId: string | null = null) {
+        const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
         if (process.env.STORAGE_MODE === "local") {
-            return LocalHistoryStore.getTags(HistoryHandler.PROJECT_IDENTIFIER);
+            return LocalHistoryStore.getTags(currentProjectId);
         }
         if (!supabase) return [];
         try {
             const { data, error } = await supabase
                 .from('tags')
                 .select('*')
-                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER)
+                .eq('project_id', currentProjectId)
                 .order('name');
             if (error) throw error;
             return data || [];
