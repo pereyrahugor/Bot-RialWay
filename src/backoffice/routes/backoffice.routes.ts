@@ -543,6 +543,12 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
 export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies) => {
     const { adapterProvider, HistoryHandler: depsHistoryHandler, openaiMain, upload } = deps;
 
+    // Helper to dynamically extract projectId from query, body, or headers
+    const resolveProjectId = (req: any): string | null => {
+        const pId = req.query.projectId || (req.body && req.body.projectId) || req.headers['x-project-id'];
+        return (pId && pId !== 'default') ? pId : null;
+    };
+
     // --- AUTH ---
 
     app.post('/api/backoffice/auth', bodyParser.json(), async (req: any, res: any) => {
@@ -1382,7 +1388,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     app.get('/api/backoffice/crm/config', backofficeAuth, async (req: any, res: any) => {
         try {
-            const configStr = await depsHistoryHandler.getSetting('CRM_CONFIG');
+            const projectId = resolveProjectId(req);
+            const configStr = await depsHistoryHandler.getSetting('CRM_CONFIG', projectId);
             const config = configStr ? JSON.parse(configStr) : null;
             res.json({ success: true, config });
         } catch (e: any) {
@@ -1393,7 +1400,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     app.post('/api/backoffice/crm/config', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         try {
             const { config } = req.body;
-            await depsHistoryHandler.saveSetting('CRM_CONFIG', JSON.stringify(config));
+            const projectId = resolveProjectId(req);
+            await depsHistoryHandler.saveSetting('CRM_CONFIG', JSON.stringify(config), projectId);
             res.json({ success: true });
         } catch (e: any) {
             res.status(500).json({ success: false, error: e.message });
@@ -2461,7 +2469,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         const key = req.query.key as string;
         if (!key) return res.status(400).json({ success: false, error: 'key is required' });
         try {
-            const value = await depsHistoryHandler.getSetting(key);
+            const projectId = resolveProjectId(req);
+            const value = await depsHistoryHandler.getSetting(key, projectId);
             res.json({ success: true, value });
         } catch (error: any) {
             res.status(500).json({ success: false, error: error.message });
@@ -2476,7 +2485,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             if (PROTECTED_KEYS.includes(key)) {
                 return res.status(403).json({ success: false, error: 'Esta variable es estática y solo puede editarse vía base de datos.' });
             }
-            await depsHistoryHandler.saveSetting(key, value);
+            const projectId = resolveProjectId(req);
+            await depsHistoryHandler.saveSetting(key, value, projectId);
             if (key === 'SYSTEM_CONFIG_VISIBLE') {
                 invalidateVisibilityCache();
                 historyEvents.emit('setting_changed', { key, value });
@@ -2638,7 +2648,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     app.get('/api/backoffice/crm/config', backofficeAuth, async (req: any, res: any) => {
         try {
-            const config = await depsHistoryHandler.getSetting('CRM_CONFIG');
+            const projectId = resolveProjectId(req);
+            const config = await depsHistoryHandler.getSetting('CRM_CONFIG', projectId);
             res.json({ success: true, config: config ? JSON.parse(config) : null });
         } catch (error: any) {
             res.status(500).json({ success: false, error: error.message });
@@ -2648,7 +2659,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     app.post('/api/backoffice/crm/config', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         const { config } = req.body;
         try {
-            await depsHistoryHandler.saveSetting('CRM_CONFIG', JSON.stringify(config));
+            const projectId = resolveProjectId(req);
+            await depsHistoryHandler.saveSetting('CRM_CONFIG', JSON.stringify(config), projectId);
             res.json({ success: true });
         } catch (error: any) {
             res.status(500).json({ success: false, error: error.message });
@@ -2718,14 +2730,15 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             const PROTECTED_KEYS = ['OPENAI_ADMIN_API_KEY', 'OPENAI_API_KEY_TOOLS'];
             const keysToSave = keys.filter(k => !PROTECTED_KEYS.includes(k));
             
-            console.log(`📡 [HOT-UPDATE] Guardando ${keysToSave.length} variables en la base de datos...`);
+            const projectId = resolveProjectId(req);
+            console.log(`📡 [HOT-UPDATE] Guardando ${keysToSave.length} variables en la base de datos para proyecto ${projectId}...`);
 
             const promises = keysToSave.map(key => {
                 let val = settings[key];
                 if ((key === 'ADMIN_USER' || key === 'ADMIN_PASS') && val) {
                     val = 'b64:' + Buffer.from(val).toString('base64');
                 }
-                return depsHistoryHandler.saveSetting(key, val);
+                return depsHistoryHandler.saveSetting(key, val, projectId);
             });
             await Promise.all(promises);
 
@@ -2745,10 +2758,11 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     app.get('/api/backoffice/settings', backofficeAuth, async (req: any, res: any) => {
         try {
+            const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
             const { data: dbSettings, error } = await supabase
                 .from('settings')
                 .select('key, value')
-                .eq('project_id', depsHistoryHandler.PROJECT_IDENTIFIER);
+                .eq('project_id', projectId);
 
             if (error) throw error;
             const results: any = {};
@@ -2776,7 +2790,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             const settingKey = index === '1' ? 'ASSISTANT_PROMPT' : `ASSISTANT_PROMPT_${index}`;
             const envKey = index === '1' ? 'ASSISTANT_ID' : `ASSISTANT_${index}`;
             
-            const prompt = await depsHistoryHandler.getSetting(settingKey);
+            const projectId = resolveProjectId(req);
+            const prompt = await depsHistoryHandler.getSetting(settingKey, projectId);
             res.json({ 
                 success: true, 
                 prompt: prompt || '',
@@ -2797,11 +2812,12 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             const settingKey = idx === '1' ? 'ASSISTANT_PROMPT' : `ASSISTANT_PROMPT_${idx}`;
             const envKey = idx === '1' ? 'ASSISTANT_ID' : `ASSISTANT_${idx}`;
             
+            const projectId = resolveProjectId(req);
             // Prioridad: 1. DB, 2. Env
-            const assistantId = await depsHistoryHandler.getConfig(envKey) || process.env[envKey];
+            const assistantId = await depsHistoryHandler.getConfig(envKey, projectId) || process.env[envKey];
 
-            console.log(`📡 [HOT-UPDATE] Actualizando prompt para Asistente ${idx} en base de datos...`);
-            await depsHistoryHandler.saveSetting(settingKey, prompt);
+            console.log(`📡 [HOT-UPDATE] Actualizando prompt para Asistente ${idx} en base de datos para proyecto ${projectId}...`);
+            await depsHistoryHandler.saveSetting(settingKey, prompt, projectId);
 
             // Sincronizar hacia OpenAI (Empujar cambio al dashboard de OpenAI)
             const { getOpenAI } = await import("../../apis/openai/openaiHelper");

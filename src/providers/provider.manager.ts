@@ -408,10 +408,27 @@ export const hasActiveSession = async (adapterProvider: any, groupProvider: any 
             }
         }
 
+        let activeProjectId = HistoryHandler.PROJECT_IDENTIFIER;
+        if (metaOnboarding?.project_id) {
+            activeProjectId = metaOnboarding.project_id;
+        } else {
+            const rawJid = adapterProvider?.vendor?.authState?.creds?.me?.id || 
+                           adapterProvider?.vendor?.user?.id || 
+                           adapterProvider?.globalVendorArgs?.sock?.user?.id || '';
+            const phoneNumber = rawJid.split(':')[0].split('@')[0];
+            if (phoneNumber) {
+                const resolvedId = await HistoryHandler.getProjectIdByRecipient(phoneNumber);
+                if (resolvedId) {
+                    activeProjectId = resolvedId;
+                }
+            }
+        }
+
         return {
             adapter: adapterStatus,
             group: groupStatus,
-            metaOnboarding: metaOnboarding || null
+            metaOnboarding: metaOnboarding || null,
+            activeProjectId
         };
     } catch (error: any) {
         return { active: false, error: error.message };

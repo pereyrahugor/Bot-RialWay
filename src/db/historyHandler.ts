@@ -59,8 +59,8 @@ export interface Message {
 }
 
 export class HistoryHandler {
-    static readonly PROJECT_IDENTIFIER = process.env.RAILWAY_PROJECT_ID || "default_project";
-    static readonly PROJECT_ID = process.env.RAILWAY_PROJECT_ID || "default_project";
+    static readonly PROJECT_IDENTIFIER = process.env.PROJECT_ID || process.env.RAILWAY_PROJECT_ID || "default_project";
+    static readonly PROJECT_ID = process.env.PROJECT_ID || process.env.RAILWAY_PROJECT_ID || "default_project";
     static initialized = false;
 
     // In-memory caches to optimize database performance and avoid Disk I/O exhaustion (Supabase Best Practice)
