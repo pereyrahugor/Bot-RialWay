@@ -100,7 +100,8 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
                 const rawJid = provider?.vendor?.authState?.creds?.me?.id || 
                                provider?.vendor?.user?.id || 
                                provider?.globalVendorArgs?.sock?.user?.id || '';
-                const botPhoneNumber = rawJid.split(':')[0].split('@')[0] || 
+                const botPhoneNumber = ctx.recipientPhoneId ||
+                                       rawJid.split(':')[0].split('@')[0] || 
                                        provider?.globalVendorArgs?.phone_number_id || 
                                        provider?.config?.phone_number_id ||
                                        (ctx.to ? ctx.to.replace(/\D/g, '') : null);
@@ -192,7 +193,8 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
             const rawJid = provider?.vendor?.authState?.creds?.me?.id || 
                            provider?.vendor?.user?.id || 
                            provider?.globalVendorArgs?.sock?.user?.id || '';
-            const botPhoneNumber = rawJid.split(':')[0].split('@')[0] || 
+            const botPhoneNumber = ctx.recipientPhoneId ||
+                                   rawJid.split(':')[0].split('@')[0] || 
                                    provider?.globalVendorArgs?.phone_number_id || 
                                    provider?.config?.phone_number_id ||
                                    (ctx.to ? ctx.to.replace(/\D/g, '') : null);

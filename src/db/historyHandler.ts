@@ -929,7 +929,9 @@ export class HistoryHandler {
                 content, 
                 type,
                 created_at: new Date().toISOString(),
-                external_id: external_id || null
+                external_id: external_id || null,
+                project_id: currentProjectId,
+                projectId: currentProjectId
             });
 
         } catch (err) {
@@ -1301,9 +1303,10 @@ export class HistoryHandler {
     /**
      * Lista todos los chats activos (con tags incluidos)
      */
-    static async listChats(limit: number = 20, offset: number = 0, search?: string, tagId?: string, assignedTo?: string | null, platform?: string) {
+    static async listChats(limit: number = 20, offset: number = 0, search?: string, tagId?: string, assignedTo?: string | null, platform?: string, projectId: string | null = null) {
+        const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
         if (process.env.STORAGE_MODE === "local") {
-            const res = await LocalHistoryStore.listChats(limit, offset, search, tagId, assignedTo, platform, this.PROJECT_IDENTIFIER);
+            const res = await LocalHistoryStore.listChats(limit, offset, search, tagId, assignedTo, platform, currentProjectId);
             return res.data;
         }
         try {
@@ -1318,7 +1321,7 @@ export class HistoryHandler {
                 .select(selectString);
             
             // Filtrar estrictamente por el ID único de este bot en Railway
-            query = query.eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
+            query = query.eq('project_id', currentProjectId);
 
             if (platform === 'leads') {
                 // Filtramos por chats que tengan algún estado CRM o estén marcados como leads
@@ -1453,6 +1456,7 @@ export class HistoryHandler {
                 .from('messages')
                 .select('*')
                 .in('chat_id', [chatId, `${chatId}@s.whatsapp.net`, `${chatId}@c.us`])
+                .eq('project_id', targetProjectId)
                 .order('created_at', { ascending: false })
                 .range(offset, offset + limit - 1);
 

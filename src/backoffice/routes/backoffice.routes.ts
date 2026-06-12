@@ -64,6 +64,7 @@ export const processSendMessage = async (
     file: any,
     deps: BackofficeDependencies
 ) => {
+    const projectId = req.query.projectId || (req.body && req.body.projectId) || req.headers['x-project-id'] || (req.auth && req.auth.projectId) || null;
     const { adapterProvider, HistoryHandler: depsHistoryHandler, openaiMain } = deps;
     // 1. Determinar tipo y contenido
     let finalType: 'text' | 'image' | 'video' | 'document' | 'sticker' = 'text';
@@ -152,16 +153,16 @@ export const processSendMessage = async (
             const { trackSentMessage } = await import('../../providers/provider.manager');
             trackSentMessage(externalId);
 
-            await depsHistoryHandler.saveMessage(chatId, 'assistant', finalContent, finalType, null, null, externalId);
-            await depsHistoryHandler.updateLastHumanMessage(chatId);
-            await depsHistoryHandler.toggleBot(chatId, false);
+            await depsHistoryHandler.saveMessage(chatId, 'assistant', finalContent, finalType, null, null, externalId, 'whatsapp', projectId);
+            await depsHistoryHandler.updateLastHumanMessage(chatId, projectId);
+            await depsHistoryHandler.toggleBot(chatId, false, projectId);
 
             res.json({ success: true, fileUrl: file ? fileUrl : undefined });
         } catch (waError) {
             console.error('[BACKOFFICE] Error enviando a Whatsapp:', waError);
             
             // Si falló el envío, igual guardamos pero sin ID externo para que al menos quede el log local
-            await depsHistoryHandler.saveMessage(chatId, 'assistant', finalContent, finalType);
+            await depsHistoryHandler.saveMessage(chatId, 'assistant', finalContent, finalType, null, null, null, 'whatsapp', projectId);
 
             res.json({ 
                 success: true, 
@@ -186,6 +187,7 @@ const sendJson = (res: any, statusCode: number, data: any) => {
 
 /** Función para procesar el envío masivo de plantillas */
 export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDependencies) => {
+    const projectId = req.query.projectId || (req.body && req.body.projectId) || req.headers['x-project-id'] || (req.auth && req.auth.projectId) || null;
     const file = (req as any).file;
     const { templateName, languageCode } = req.body;
     const { adapterProvider, HistoryHandler: depsHistoryHandler } = deps;
@@ -493,7 +495,7 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                         const lowFormat = headerComp.format.toLowerCase();
                         const mediaLink = row.header_media_url || defaultMediaUrl || headerComp.example?.header_handle?.[0];
                         if (mediaLink) {
-                            await depsHistoryHandler.saveMessage(phone, 'assistant', mediaLink, lowFormat, null, null, `${msgId}_media`);
+                            await depsHistoryHandler.saveMessage(phone, 'assistant', mediaLink, lowFormat, null, null, `${msgId}_media`, 'whatsapp', projectId);
                         }
                     }
 
@@ -514,7 +516,7 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                     // Guardar con un prefijo informativo para el asistente
                     const historyContent = `[Campaña: ${templateName}]\n${renderedText}`;
 
-                    await depsHistoryHandler.saveMessage(phone, 'assistant', historyContent, 'text', null, null, msgId);
+                    await depsHistoryHandler.saveMessage(phone, 'assistant', historyContent, 'text', null, null, msgId, 'whatsapp', projectId);
                     sent++;
                 } else {
                     errors++;
@@ -546,7 +548,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     // Helper to dynamically extract projectId from query, body, or headers
     const resolveProjectId = (req: any): string | null => {
-        const pId = req.query.projectId || (req.body && req.body.projectId) || req.headers['x-project-id'];
+        const pId = req.query.projectId || (req.body && req.body.projectId) || req.headers['x-project-id'] || (req.auth && req.auth.projectId);
         return (pId && pId !== 'default') ? pId : null;
     };
 
@@ -629,7 +631,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         // Si es subusuario, aplicamos filtro de asignación (ve lo suyo + lo libre)
         const assignedTo = req.auth.isSubUser ? req.auth.userId : null;
         
-        const chats = await depsHistoryHandler.listChats(limit, offset, search, tag, assignedTo, platform);
+        const projectId = resolveProjectId(req);
+        const chats = await depsHistoryHandler.listChats(limit, offset, search, tag, assignedTo, platform, projectId);
         res.json(chats);
     });
 
@@ -672,7 +675,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     app.get('/api/backoffice/messages/:chatId', backofficeAuth, async (req: any, res: any) => {
         const limit = parseInt(req.query.limit as string) || 50;
         const offset = parseInt(req.query.offset as string) || 0;
-        const messages = await depsHistoryHandler.getMessages(req.params.chatId, limit, offset);
+        const projectId = resolveProjectId(req);
+        const messages = await depsHistoryHandler.getMessages(req.params.chatId, limit, offset, projectId);
         res.json(messages);
     });
 
@@ -1188,9 +1192,10 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             const { trackSentMessage } = await import('../../providers/provider.manager');
             trackSentMessage(externalId);
 
-            await depsHistoryHandler.saveMessage(chatId, 'assistant', mediaUrl, finalType, null, null, externalId);
-            await depsHistoryHandler.updateLastHumanMessage(chatId);
-            await depsHistoryHandler.toggleBot(chatId, false);
+            const projectId = resolveProjectId(req);
+            await depsHistoryHandler.saveMessage(chatId, 'assistant', mediaUrl, finalType, null, null, externalId, 'whatsapp', projectId);
+            await depsHistoryHandler.updateLastHumanMessage(chatId, projectId);
+            await depsHistoryHandler.toggleBot(chatId, false, projectId);
 
             res.json({ success: true, message: 'Archivo reenviado correctamente' });
         } catch (e: any) {
@@ -1513,7 +1518,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     app.get('/api/backoffice/whatsapp/templates', backofficeAuth, async (req: any, res: any) => {
         try {
-            await syncMetaProvider();
+            await syncMetaProvider(resolveProjectId(req));
             if (!adapterProvider) return res.status(503).json({ success: false, error: 'Provider not ready' });
             // Detectar si el provider soporta getTemplates
             const provider = (adapterProvider.constructor.name === 'MetaCloudProvider') ? adapterProvider : deps.groupProvider;
@@ -1530,7 +1535,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     app.get('/api/backoffice/whatsapp/library-templates', backofficeAuth, async (req: any, res: any) => {
         try {
-            await syncMetaProvider();
+            await syncMetaProvider(resolveProjectId(req));
             if (!adapterProvider) return res.status(503).json({ success: false, error: 'Provider not ready' });
             const provider = (adapterProvider.constructor.name === 'MetaCloudProvider') ? adapterProvider : deps.groupProvider;
             if (!provider || typeof provider.getLibraryTemplates !== 'function') {
@@ -1550,7 +1555,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     app.post('/api/backoffice/whatsapp/templates', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         try {
-            await syncMetaProvider();
+            await syncMetaProvider(resolveProjectId(req));
             const { name, category, language, text, examples } = req.body;
             if (!name || !category || !language || !text) {
                 return res.status(400).json({ success: false, error: 'Faltan campos obligatorios para crear la plantilla.' });
@@ -1670,7 +1675,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     app.get('/api/backoffice/whatsapp/template-excel/:templateName', backofficeAuth, async (req: any, res: any) => {
         try {
-            await syncMetaProvider();
+            await syncMetaProvider(resolveProjectId(req));
             const { templateName } = req.params;
             const provider = (adapterProvider.constructor.name === 'MetaCloudProvider') ? adapterProvider : deps.groupProvider;
             if (!provider || typeof provider.getTemplates !== 'function') {
@@ -1817,12 +1822,13 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
 
     app.post('/api/backoffice/whatsapp/send-bulk-template', async (req: any, res: any) => {
-        await syncMetaProvider();
+        await syncMetaProvider(resolveProjectId(req));
         return processBulkTemplate(req, res, deps);
     });
 
     app.post('/api/backoffice/whatsapp/send-quick-template', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
-        await syncMetaProvider();
+        const projectId = resolveProjectId(req);
+        await syncMetaProvider(projectId);
         const { templateName, languageCode, startDate, endDate, tagIds } = req.body;
 
         try {
@@ -1831,7 +1837,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             }
 
             // 1. Obtener contactos reales filtrados
-            let chatsList = await depsHistoryHandler.listChats(5000, 0); 
+            let chatsList = await depsHistoryHandler.listChats(5000, 0, undefined, undefined, undefined, undefined, projectId); 
             if (chatsList && chatsList.length > 0) {
                 // Filtrar por fecha
                 if (startDate || endDate) {
@@ -1974,10 +1980,10 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                             // Si la plantilla tiene cabecera multimedia, guardar primero el mensaje multimedia
                             if (headerComp && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComp.format) && mediaLink) {
                                 const mediaType = headerComp.format.toLowerCase();
-                                await depsHistoryHandler.saveMessage(chat.id, 'assistant', mediaLink, mediaType, null, null, `${msgId}_media`);
+                                await depsHistoryHandler.saveMessage(chat.id, 'assistant', mediaLink, mediaType, null, null, `${msgId}_media`, 'whatsapp', projectId);
                             }
 
-                            await depsHistoryHandler.saveMessage(chat.id, 'assistant', historyContent, 'text', null, null, msgId);
+                            await depsHistoryHandler.saveMessage(chat.id, 'assistant', historyContent, 'text', null, null, msgId, 'whatsapp', projectId);
                             sent++;
                         } else {
                             errors++;

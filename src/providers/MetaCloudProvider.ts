@@ -39,7 +39,23 @@ class MetaCloudProvider extends ProviderClass {
      * Descarga y guarda archivos multimedia recibidos por webhook
      */
     public async saveFile(ctx: any, options: { path?: string } = {}): Promise<string> {
-        const { access_token } = this.config;
+        // Intentar obtener el token del tenant específico para este mensaje
+        let access_token = this.config.access_token;
+        const recipientPhoneId = ctx.recipientPhoneId;
+        if (recipientPhoneId) {
+            try {
+                const { HistoryHandler } = await import('../db/historyHandler');
+                const resolvedProjectId = await HistoryHandler.getProjectIdByRecipient(recipientPhoneId);
+                if (resolvedProjectId) {
+                    const tenantOnboarding = await HistoryHandler.getMetaOnboardingData(resolvedProjectId);
+                    if (tenantOnboarding?.whatsappToken) {
+                        access_token = tenantOnboarding.whatsappToken;
+                    }
+                }
+            } catch (e) {
+                // Silently fallback to this.config.access_token
+            }
+        }
         
         // El payload puede estar en varios lugares según el origen del mensaje
         const msg = ctx.payload || ctx;
@@ -904,8 +920,23 @@ class MetaCloudProvider extends ProviderClass {
                     if (messages && Array.isArray(messages)) {
                         
                         // Filtro de número destino para asegurar que es para nosotros
-                        if (phone_number_id && value.metadata?.phone_number_id && value.metadata?.phone_number_id !== String(phone_number_id)) {
-                            console.log(`⚠️ [MetaCloudProvider] Ignorando mensaje (ID mismatch: ${value.metadata?.phone_number_id} != ${phone_number_id})`);
+                        // En entorno multitenant, el phone_number_id del webhook puede corresponder a cualquiera de nuestros tenants en la DB
+                        let isValidPhoneId = false;
+                        if (value.metadata?.phone_number_id) {
+                            const incomingPhoneId = String(value.metadata.phone_number_id);
+                            if (phone_number_id && incomingPhoneId === String(phone_number_id)) {
+                                isValidPhoneId = true;
+                            } else {
+                                const { HistoryHandler } = await import('../db/historyHandler');
+                                const resolvedProject = await HistoryHandler.getProjectIdByRecipient(incomingPhoneId);
+                                if (resolvedProject) {
+                                    isValidPhoneId = true;
+                                }
+                            }
+                        }
+
+                        if (!isValidPhoneId && phone_number_id && value.metadata?.phone_number_id && value.metadata?.phone_number_id !== String(phone_number_id)) {
+                            console.log(`⚠️ [MetaCloudProvider] Ignorando mensaje (ID mismatch y no registrado: ${value.metadata?.phone_number_id} != ${phone_number_id})`);
                             continue;
                         }
 
@@ -969,10 +1000,10 @@ class MetaCloudProvider extends ProviderClass {
                                 type: type,
                                 payload: msg,
                                 platform: 'whatsapp',
-                                isManualIntervention: isThisChangeEcho && fieldName !== 'history' // Solo marcar intervención si no es historial retroactivo
+                                isManualIntervention: isThisChangeEcho && fieldName !== 'history', // Solo marcar intervención si no es historial retroactivo
+                                recipientPhoneId: value.metadata?.phone_number_id || phone_number_id
                             };
 
-                            // Enriquecer con objeto media para que los flujos (saveFile) tengan lo necesario
                             // Enriquecer con objeto media para que los flujos (saveFile) tengan lo necesario
                             if (mediaObj) {
                                 try {
@@ -1044,7 +1075,8 @@ class MetaCloudProvider extends ProviderClass {
                             name: 'Meta User',
                             type: type === 'image' || type === 'video' ? type : 'text',
                             payload: msgEntry,
-                            platform: platform // Custom field for easier identification
+                            platform: platform, // Custom field for easier identification
+                            recipientPhoneId: entry.id // Page ID / Recipient ID
                         };
 
                         if (msg.attachments) {
