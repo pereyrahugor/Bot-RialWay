@@ -6,8 +6,54 @@ import { MovimientosApi } from "../../apis/external/Aquavita/MovimientosApi";
 import { getMapsUbication } from "../../apis/external/Aquavita/getMapsUbication";
 import { getUsuarioId } from "../../apis/external/Aquavita/SessionApi";
 import { AssistantResponseProcessor } from "../../apis/openai/AssistantResponseProcessor";
+import { ListaDePreciosApi } from "../../apis/external/Aquavita/ListaDePreciosApi";
+import { RepartosApi } from "../../apis/external/Aquavita/RepartosApi";
 import moment from "moment-timezone";
 import util from "util";
+
+// Helpers para fechas
+function toDDMMYYYY(fecha: string): string {
+    if (!fecha) return '';
+    if (fecha.includes('{{HOY_DDMMYYYY}}') || fecha.includes('{{HOY}}')) {
+        const today = new Date();
+        const d = String(today.getDate()).padStart(2, '0');
+        const m = String(today.getMonth() + 1).padStart(2, '0');
+        const y = today.getFullYear();
+        return `${d}/${m}/${y}`;
+    }
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(fecha)) return fecha;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+        const [y, m, d] = fecha.split('-');
+        return `${d}/${m}/${y}`;
+    }
+    if (/^\d{4}\/\d{2}\/\d{2}$/.test(fecha)) {
+        const [y, m, d] = fecha.split('/');
+        return `${d}/${m}/${y}`;
+    }
+    return fecha;
+}
+
+function parseDate(fechaStr: string): Date | null {
+    if (!fechaStr || !/^\d{2}\/\d{2}\/\d{4}$/.test(fechaStr)) return null;
+    const [d, m, y] = fechaStr.split('/').map(Number);
+    return new Date(y, m - 1, d);
+}
+
+function validarRangoFechas(desdeStr: string, hastaStr: string): { desde: string, hasta: string } {
+    const desde = toDDMMYYYY(desdeStr);
+    let hasta = toDDMMYYYY(hastaStr);
+    if (!hasta) {
+        hasta = toDDMMYYYY('{{HOY}}');
+    }
+    if (desde && hasta) {
+        const dDate = parseDate(desde);
+        const hDate = parseDate(hasta);
+        if (dDate && hDate && hDate < dDate) {
+            hasta = toDDMMYYYY('{{HOY}}');
+        }
+    }
+    return { desde, hasta };
+}
 
 // Helpers específicos del módulo
 function getFechaCierreEstimado(): string {
@@ -320,6 +366,181 @@ export const aquavitaModule = {
       return JSON.stringify(apiResponse.data);
     },
 
+    // 11. precio
+    precio: async (args: any) => {
+      const clientId = args.ClienteId ?? args.cliente_id ?? args.clienteId;
+      const apiResponse = await ListaDePreciosApi.obtenerListaDePrecios(clientId);
+      logApiResponse('PRECIO', apiResponse);
+      const data = apiResponse.data || {};
+      if (esRespuestaExitosa(data, apiResponse)) {
+        const precios = Array.isArray(data) ? data : (Array.isArray(data.precios) ? data.precios : data);
+        return `Precios: ${JSON.stringify(precios)}`;
+      } else {
+        return "No se pudo obtener la lista de precios.";
+      }
+    },
+
+    // 12. matrizListaDePrecios
+    matrizListaDePrecios: async (args: any) => {
+      const tipoListaId = args.tipoLista_id ?? 1;
+      const filtroListaId = args.lista_id ? parseInt(args.lista_id, 10) : null;
+      const apiResponse = await ListaDePreciosApi.obtenerMatrizListaDePrecios(tipoListaId);
+      logApiResponse('MATRIZ_LISTA_PRECIOS', apiResponse);
+      
+      const data = apiResponse.data || {};
+      const success = esRespuestaExitosa(data, apiResponse);
+      if (success && filtroListaId != null && data.matriz && Array.isArray(data.matriz.articulos)) {
+        data.matriz.articulos = data.matriz.articulos
+          .map((art: any) => {
+            if (Array.isArray(art.precios)) {
+              art.precios = art.precios.filter((p: any) => p.lista_id === filtroListaId);
+            }
+            return art;
+          })
+          .filter((art: any) => Array.isArray(art.precios) && art.precios.length > 0);
+      }
+      return success ? `Matriz de lista de precios: ${JSON.stringify(data)}` : "No se pudo obtener la matriz de lista de precios.";
+    },
+
+    // 13. abonosTipos
+    abonosTipos: async (args: any) => {
+      const { desde, hasta } = validarRangoFechas(args.desde ?? '', args.hasta ?? '');
+      const apiResponse = await ListaDePreciosApi.obtenerAbonosTipos(
+        desde || null,
+        hasta || null,
+        args.concepto ?? null,
+        typeof args.activo === 'boolean' ? args.activo : true
+      );
+      logApiResponse('ABONOS_TIPOS', apiResponse);
+      const data = apiResponse.data || {};
+      return esRespuestaExitosa(data, apiResponse) ? `Tipos de abonos: ${JSON.stringify(data)}` : "No se pudo obtener los tipos de abonos.";
+    },
+
+    // 14. historialFacturas
+    historialFacturas: async (args: any) => {
+      const clientId = args.cliente_id ?? args.ClienteId ?? args.clienteId;
+      const { desde, hasta } = validarRangoFechas(args.fechaDesde ?? '', args.fechaHasta ?? '');
+      const apiResponse = await AdministracionApi.historialFacturasCliente(
+        clientId,
+        desde,
+        hasta,
+        typeof args.saldoPendiente === 'boolean' ? args.saldoPendiente : false
+      );
+      logApiResponse('HISTORIAL_FACTURAS', apiResponse);
+      const data = apiResponse.data || {};
+      return esRespuestaExitosa(data, apiResponse) ? `Historial de facturas: ${JSON.stringify(data)}` : "No se pudo obtener el historial de facturas.";
+    },
+
+    // 15. recibosPago
+    recibosPago: async (args: any) => {
+      const clientId = args.cliente_id ?? args.clienteId ?? args.ClienteId;
+      const { desde, hasta } = validarRangoFechas(args.fechaReciboDesde ?? '', args.fechaReciboHasta ?? '');
+      const apiResponse = await AdministracionApi.recibosPagoCliente(
+        clientId,
+        desde,
+        hasta,
+        typeof args.saldoDisponible === 'boolean' ? args.saldoDisponible : false
+      );
+      logApiResponse('RECIBOS_PAGO', apiResponse);
+      const data = apiResponse.data || {};
+      return esRespuestaExitosa(data, apiResponse) ? `Recibos de pago: ${JSON.stringify(data)}` : "No se pudo obtener los recibos de pago.";
+    },
+
+    // 16. reenviarFacturaPorMail
+    reenviarFacturaPorMail: async (args: any) => {
+      const apiResponse = await AdministracionApi.reenviarFacturaPorMail(args.facturaId);
+      logApiResponse('REENVIAR_FACTURA_POR_MAIL', apiResponse);
+      const data = apiResponse.data || {};
+      return esRespuestaExitosa(data, apiResponse) ? "Factura reenviada por mail exitosamente." : "No se pudo reenviar la factura por mail.";
+    },
+
+    // 17. linkPago
+    linkPago: async (args: any) => {
+      const clientId = args.cliente_id ?? args.ClienteId ?? args.clienteId;
+      const apiResponse = await AdministracionApi.obtenerLinkPago(clientId, args.monto);
+      logApiResponse('LINK_PAGO', apiResponse);
+      const data = apiResponse.data || {};
+      return esRespuestaExitosa(data, apiResponse) ? `Link de pago generado: ${JSON.stringify(data)}` : "No se pudo generar el link de pago.";
+    },
+
+    // 18. productos
+    productos: async (args: any) => {
+      const clientId = args.ClienteId ?? args.cliente_id ?? args.clienteId;
+      const apiResponse = await ListaDePreciosApi.obtenerListaDePrecios(clientId);
+      logApiResponse('PRODUCTOS', apiResponse);
+      const data = apiResponse.data || {};
+      let resumen = "No se pudieron obtener los productos.";
+      if (esRespuestaExitosa(data, apiResponse)) {
+        let productos = Array.isArray(data) ? data : (Array.isArray(data.precios) ? data.precios : (data.ArticulosDeListaDePrecio || data));
+        if (!Array.isArray(productos) && typeof productos === 'object') {
+          productos = Object.entries(productos).map(([nombre, precio]) => ({ nombre, precio }));
+        }
+        if (args.categoria && Array.isArray(productos)) {
+          const categoria = args.categoria.toLowerCase();
+          productos = productos.filter((p: any) =>
+            (p.nombre && p.nombre.toLowerCase().includes(categoria)) ||
+            (p.categoria && p.categoria.toLowerCase().includes(categoria))
+          );
+        }
+        resumen = `Productos disponibles${args.categoria ? ` (categoría: ${args.categoria})` : ''}: ${JSON.stringify(productos)}`;
+      }
+      return resumen;
+    },
+
+    // 19. reparto
+    reparto: async (args: any, context: any) => {
+      const { state } = context;
+      let resumen = "No se encuentra en zona habitual de reparto.";
+      
+      let calleYAltura = args.calleYAltura || `${args.calle ?? ''} ${args.numero ?? ''}`;
+      if (calleYAltura && !calleYAltura.toLowerCase().includes("córdoba capital")) {
+        calleYAltura = `Córdoba Capital, ${calleYAltura}`;
+      }
+
+      const apiResponse = await RepartosApi.obtenerClientesCercanosPorDireccion(
+        calleYAltura,
+        args.codigoPostal ?? '',
+        args.localidad ?? '',
+        args.provincia ?? '',
+        args.pais ?? '',
+        typeof args.excluir === 'boolean' ? args.excluir : false
+      );
+      logApiResponse('REPARTO', apiResponse);
+      
+      let clienteSeleccionado = null;
+      let preciosCliente = null;
+      
+      const resData = apiResponse.data || apiResponse;
+      
+      if (resData.clientesCercanos && Array.isArray(resData.clientesCercanos) && resData.clientesCercanos.length > 0) {
+        const clientes = resData.clientesCercanos;
+        clienteSeleccionado = clientes.reduce((min: any, c: any) => c.distanciaMetros < min.distanciaMetros ? c : min, clientes[0]);
+        try {
+          const preciosResp = await ListaDePreciosApi.obtenerListaDePrecios(clienteSeleccionado.cliente_id);
+          preciosCliente = preciosResp.data || {};
+        } catch (err) {
+          console.error('[API Debug] Error obteniendo lista de precios:', err);
+        }
+        resumen = `La dirección está dentro de la zona de cobertura.\nCliente más cercano: ${clienteSeleccionado.cliente_id}, Reparto: ${clienteSeleccionado.nombreReparto}`;
+        const datosCliente = {
+          cliente_id: clienteSeleccionado.cliente_id,
+          nombreReparto: clienteSeleccionado.nombreReparto,
+          visitas: clienteSeleccionado.visitas,
+          proximaVisita: clienteSeleccionado.proximaVisita,
+          diasProximaVisita: clienteSeleccionado.diasProximaVisita,
+          precios: preciosCliente
+        };
+        state.datosClienteReparto = datosCliente;
+        resumen += `\nPrecios: ${JSON.stringify(preciosCliente)}`;
+      } else if (resData.diasHorarios && resData.diasHorarios.length > 0) {
+        resumen = resData.diasHorarios.map((dh: any) => `Día: ${dh.dia}, Horario: ${dh.horario}`).join(" | ");
+      } else if (resData.error === 0 || resData.success === true) {
+        resumen = "Se encuentra en zona habitual de reparto.";
+      }
+      
+      return resumen;
+    },
+
     // Aliases para retrocompatibilidad con etiquetas legacy del Asistente (UPPERCASE)
     BUSCAR_CLIENTE: async (args: any, context: any) => aquavitaModule.tools.buscarCliente(args, context),
     BUSCAR_CLEINTE: async (args: any, context: any) => aquavitaModule.tools.buscarCliente(args, context),
@@ -332,6 +553,16 @@ export const aquavitaModule = {
     INCIDENCIA: async (args: any, context: any) => aquavitaModule.tools.crearIncidencia(args, context),
     BUSCAR_INCIDENCIA: async (args: any) => aquavitaModule.tools.buscarIncidencia(args),
     SALDO_CUENTA: async (args: any, context: any) => aquavitaModule.tools.obtenerSaldoCuenta(args, context),
-    OBTENER_DATOS_CLIENTE: async (args: any) => aquavitaModule.tools.obtenerDatosCliente(args)
+    OBTENER_DATOS_CLIENTE: async (args: any) => aquavitaModule.tools.obtenerDatosCliente(args),
+    PRECIO: async (args: any) => aquavitaModule.tools.precio(args),
+    MATRIZ_LISTA_PRECIOS: async (args: any) => aquavitaModule.tools.matrizListaDePrecios(args),
+    ABONOS_TIPOS: async (args: any) => aquavitaModule.tools.abonosTipos(args),
+    HISTORIAL_FACTURAS: async (args: any) => aquavitaModule.tools.historialFacturas(args),
+    RECIBOS_PAGO: async (args: any) => aquavitaModule.tools.recibosPago(args),
+    REENVIAR_FACTURA_POR_MAIL: async (args: any) => aquavitaModule.tools.reenviarFacturaPorMail(args),
+    LINK_PAGO: async (args: any) => aquavitaModule.tools.linkPago(args),
+    OBTENER_LINK_MERCADO_PAGO: async (args: any) => aquavitaModule.tools.linkPago(args),
+    PRODUCTOS: async (args: any) => aquavitaModule.tools.productos(args),
+    REPARTO: async (args: any, context: any) => aquavitaModule.tools.reparto(args, context)
   }
 };
