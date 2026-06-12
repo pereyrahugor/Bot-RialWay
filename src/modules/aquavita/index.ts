@@ -318,6 +318,20 @@ export const aquavitaModule = {
       const apiResponse = await ClientesApi.obtenerDatosCliente(id);
       logApiResponse('OBTENER_DATOS_CLIENTE', apiResponse);
       return JSON.stringify(apiResponse.data);
-    }
+    },
+
+    // Aliases para retrocompatibilidad con etiquetas legacy del Asistente (UPPERCASE)
+    BUSCAR_CLIENTE: async (args: any, context: any) => aquavitaModule.tools.buscarCliente(args, context),
+    BUSCAR_CLEINTE: async (args: any, context: any) => aquavitaModule.tools.buscarCliente(args, context),
+    BUSCAR_CLIENTE_POR_CONTACTO: async (args: any, context: any) => aquavitaModule.tools.buscarClientePorContacto(args, context),
+    CREAR_CLIENTE: async (args: any, context: any) => aquavitaModule.tools.crearCliente(args, context),
+    AGREGAR_CONTACTO: async (args: any) => aquavitaModule.tools.agregarContacto(args),
+    OBTENER_CREDENCIALES_AUTOGESTION: async (args: any) => aquavitaModule.tools.obtenerCredencialesAutogestion(args),
+    OBTENER_SUCURSALES: async (args: any) => aquavitaModule.tools.obtenerSucursales(args),
+    OBTENER_SUCURSALES_CLIENTE: async (args: any) => aquavitaModule.tools.obtenerSucursales(args),
+    INCIDENCIA: async (args: any, context: any) => aquavitaModule.tools.crearIncidencia(args, context),
+    BUSCAR_INCIDENCIA: async (args: any) => aquavitaModule.tools.buscarIncidencia(args),
+    SALDO_CUENTA: async (args: any, context: any) => aquavitaModule.tools.obtenerSaldoCuenta(args, context),
+    OBTENER_DATOS_CLIENTE: async (args: any) => aquavitaModule.tools.obtenerDatosCliente(args)
   }
 };
