@@ -510,7 +510,7 @@ export const aquavitaModule = {
       let clienteSeleccionado = null;
       let preciosCliente = null;
       
-      const resData = apiResponse.data || apiResponse;
+      const resData = (apiResponse as any).data || apiResponse;
       
       if (resData.clientesCercanos && Array.isArray(resData.clientesCercanos) && resData.clientesCercanos.length > 0) {
         const clientes = resData.clientesCercanos;

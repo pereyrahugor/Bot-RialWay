@@ -30,6 +30,9 @@ let allMessages = [];
 let _boBotTags = [];
 let selectedFile = null;
 let isSending = false;
+let _mediaRecorder = null;
+let _audioChunks = [];
+let _isRecording = false;
 
 async function initCRMData() {
     try {
@@ -102,6 +105,7 @@ const MSG_LIMIT = 50;
 let loadingMessages = false;
 let allMessagesLoaded = false;
 let _fetchMessagesController = null;
+let _seenMessageIds = new Set();
 
 // Paginación de chats
 const CHAT_LIMIT = 20;
@@ -124,6 +128,17 @@ socket.on('new_message', (msg) => {
 
     // 1. Si es el chat activo, añadir mensaje a la vista
     if (normChatId(cid) === normChatId(activeChatId)) {
+        // Quitar el pending optimista que coincida con este mensaje real
+        if (msg.role === 'assistant') {
+            const pendingIdx = allMessages.findIndex(m =>
+                m._pending && m.role === 'assistant' && m.content === (msg.content || '')
+            );
+            if (pendingIdx !== -1) {
+                allMessages.splice(pendingIdx, 1);
+                msg._noAnimate = true; // replacing a pending - no slide-in
+            }
+        }
+
         const isDuplicate = allMessages.some(m =>
             (m.id === msg.id && msg.id !== undefined) ||
             (m.external_id === msg.external_id && msg.external_id !== undefined && msg.external_id !== null)
@@ -179,6 +194,25 @@ socket.on('message_deleted', (payload) => {
     const extId = payload.externalId;
     allMessages = allMessages.filter(m => m.id !== mId && m.external_id !== extId);
     if (activeChatId === payload.chatId) {
+        renderMessages();
+    }
+});
+
+socket.on('message_status_update', ({ externalId, chatId, status }) => {
+    const msg = allMessages.find(m => m.external_id === externalId || m.id === externalId);
+    if (!msg) return;
+    msg.status = status;
+    if (normChatId(chatId) !== normChatId(activeChatId)) return;
+    // Patch only the icon in place - avoids full re-render and scroll jump
+    const dataId = CSS.escape(String(msg.id || msg.external_id || ''));
+    const msgEl = document.querySelector(`.msg[data-id="${dataId}"]`);
+    if (msgEl) {
+        const icon = msgEl.querySelector('.msg-time i');
+        if (icon && status === 'read') {
+            icon.style.color = '#53bdeb';
+            icon.style.opacity = '';
+        }
+    } else {
         renderMessages();
     }
 });
@@ -619,6 +653,8 @@ function updateInputState(botEnabled) {
     attachBtn.disabled = isBotEnabled;
     const emojiBtn = document.getElementById('emoji-btn');
     if (emojiBtn) emojiBtn.disabled = isBotEnabled;
+    const micBtn = document.getElementById('mic-btn');
+    if (micBtn && !_isRecording) micBtn.disabled = isBotEnabled;
 
     if (isBotEnabled) {
         input.parentElement.style.borderColor = 'var(--accent)';
@@ -670,6 +706,7 @@ async function fetchMessages(chatId, reset = false) {
 
         if (reset) {
             allMessages = newMessages;
+            _seenMessageIds = new Set(newMessages.map(m => m.id || m.external_id).filter(Boolean));
         } else {
             allMessages = [...newMessages, ...allMessages];
         }
@@ -724,23 +761,23 @@ const mediaCache = {
                 const request = store.get(url);
                 
                 request.onsuccess = async (e) => {
-                    const cachedBlob = e.target.result;
-                    if (cachedBlob) {
-                        resolve(URL.createObjectURL(cachedBlob));
-                    } else {
-                        try {
-                            const res = await fetch(url);
-                            if (!res.ok) throw new Error('Status not 200');
-                            const blob = await res.blob();
-                            
-                            const writeTx = this.db.transaction(['media'], 'readwrite');
-                            const writeStore = writeTx.objectStore('media');
-                            writeStore.put(blob, url);
-                            
-                            resolve(URL.createObjectURL(blob));
-                        } catch (fetchErr) {
-                            resolve(url);
+                    const cached = e.target.result;
+                    if (cached === 'NOT_FOUND') { resolve(null); return; }
+                    if (cached) { resolve(URL.createObjectURL(cached)); return; }
+                    try {
+                        const res = await fetch(url);
+                        if (!res.ok) {
+                            const tx = this.db.transaction(['media'], 'readwrite');
+                            tx.objectStore('media').put('NOT_FOUND', url);
+                            resolve(null);
+                            return;
                         }
+                        const blob = await res.blob();
+                        const tx = this.db.transaction(['media'], 'readwrite');
+                        tx.objectStore('media').put(blob, url);
+                        resolve(URL.createObjectURL(blob));
+                    } catch (fetchErr) {
+                        resolve(null);
                     }
                 };
                 request.onerror = () => resolve(url);
@@ -761,40 +798,127 @@ async function loadCachedMedia() {
             if (finalSrc) {
                 el.src = finalSrc;
                 el.removeAttribute('data-media-src');
-                
-                const parent = el.closest('.image-container, .video-container, .msg-audio');
+                const parent = el.closest('.image-container, .video-container, .msg-audio, .wa-audio-player');
                 if (parent) {
                     const downloadBtn = parent.querySelector('.cached-download');
                     if (downloadBtn) downloadBtn.href = finalSrc;
+                    if (parent.classList.contains('wa-audio-player')) _initWaPlayer(parent);
                 }
+            } else {
+                const parent = el.closest('.image-container, .video-container, .msg-audio, .wa-audio-player');
+                if (parent) parent.style.display = 'none';
             }
         } catch (e) {
-            el.src = src;
+            // silently ignore
         }
     });
+}
+
+// --- WhatsApp-style audio player ---
+function _waWaveform(url) {
+    let h = 0;
+    for (let i = 0; i < url.length; i++) h = ((h << 5) - h + url.charCodeAt(i)) | 0;
+    let out = '';
+    for (let i = 0; i < 30; i++) {
+        h = (h * 1664525 + 1013904223) | 0;
+        out += `<span class="wa-bar" style="height:${18 + (Math.abs(h) % 65)}%"></span>`;
+    }
+    return out;
+}
+
+function _waFmtTime(s) {
+    if (!isFinite(s) || s < 0) return '0:00';
+    return `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
+}
+
+function _initWaPlayer(playerEl) {
+    const audio  = playerEl.querySelector('audio');
+    const timeEl = playerEl.querySelector('.wa-audio-time');
+    const bars   = playerEl.querySelectorAll('.wa-bar');
+    const icon   = playerEl.querySelector('.wa-play-btn i');
+    if (!audio || !timeEl) return;
+
+    const updateBars = () => {
+        if (!audio.duration) return;
+        const filled = Math.floor((audio.currentTime / audio.duration) * bars.length);
+        bars.forEach((b, i) => { b.style.opacity = i < filled ? '1' : '0.35'; });
+    };
+
+    audio.addEventListener('loadedmetadata', () => { timeEl.textContent = _waFmtTime(audio.duration); });
+    audio.addEventListener('timeupdate', () => { updateBars(); timeEl.textContent = _waFmtTime(audio.currentTime); });
+    audio.addEventListener('ended', () => {
+        icon.className = 'fas fa-play';
+        playerEl.classList.remove('wa-playing');
+        bars.forEach(b => { b.style.opacity = '0.35'; });
+        timeEl.textContent = _waFmtTime(audio.duration);
+    });
+}
+
+function waTogglePlay(pid) {
+    const box = document.getElementById(pid);
+    if (!box) return;
+    const audio = box.querySelector('audio');
+    const icon  = box.querySelector('.wa-play-btn i');
+    document.querySelectorAll('.wa-audio-player').forEach(p => {
+        if (p.id !== pid) {
+            const a = p.querySelector('audio');
+            if (a && !a.paused) {
+                a.pause();
+                const i = p.querySelector('.wa-play-btn i');
+                if (i) i.className = 'fas fa-play';
+                p.classList.remove('wa-playing');
+            }
+        }
+    });
+    if (!audio) return;
+    if (audio.paused) {
+        audio.play();
+        icon.className = 'fas fa-pause';
+        box.classList.add('wa-playing');
+    } else {
+        audio.pause();
+        icon.className = 'fas fa-play';
+        box.classList.remove('wa-playing');
+    }
+}
+
+function waSeek(pid, e) {
+    const box = document.getElementById(pid);
+    const audio = box?.querySelector('audio');
+    if (!audio?.duration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    audio.currentTime = ((e.clientX - rect.left) / rect.width) * audio.duration;
 }
 
 function renderMessages() {
     const container = document.getElementById('messages');
+    const wasAtBottom = !container || container.scrollTop >= container.scrollHeight - container.clientHeight - 60;
+    const prevScrollTop = container ? container.scrollTop : 0;
     let html = '';
     let lastDate = null;
 
+    const newIds = [];
     allMessages.forEach(m => {
         const date = new Date(m.created_at);
         const dateStr = date.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' });
-        
+
         if (dateStr !== lastDate) {
             html += `<div class="date-separator"><span>${dateStr}</span></div>`;
             lastDate = dateStr;
         }
-        html += generateMessageHtml(m);
+        const msgId = m.id || m.external_id;
+        const isNew = !!(msgId && !_seenMessageIds.has(msgId) && !m._noAnimate);
+        if (isNew && msgId) newIds.push(msgId);
+        html += generateMessageHtml(m, isNew);
     });
 
     container.innerHTML = html;
+    newIds.forEach(id => _seenMessageIds.add(id));
+    container.scrollTop = wasAtBottom ? container.scrollHeight : prevScrollTop;
     loadCachedMedia();
 }
 
-function generateMessageHtml(m) {
+function generateMessageHtml(m, isNew = false) {
     const date = new Date(m.created_at);
     const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     
@@ -805,8 +929,9 @@ function generateMessageHtml(m) {
     const looksLikeUrl = contentHtml.startsWith('/') || contentHtml.startsWith('http://') || contentHtml.startsWith('https://') || contentHtml.includes('/uploads/') || contentHtml.includes('/tmp/');
 
     const isImageUrl = looksLikeUrl && (type === 'image' || type === 'sticker' || contentHtml.match(/\.(jpeg|jpg|gif|png|webp|svg)($|\?)/i));
-    const isVideoUrl = looksLikeUrl && (type === 'video' || contentHtml.match(/\.(mp4|webm)($|\?)/i));
-    const isAudioUrl = looksLikeUrl && (type === 'voice' || type === 'audio' || contentHtml.match(/\.(ogg|opus|mp3|wav|aac|m4a)($|\?)/i));
+    const isAudioType = type === 'voice' || type === 'audio';
+    const isVideoUrl = looksLikeUrl && !isAudioType && (type === 'video' || contentHtml.match(/\.(mp4|webm)($|\?)/i));
+    const isAudioUrl = looksLikeUrl && (isAudioType || contentHtml.match(/\.(ogg|opus|mp3|wav|aac|m4a|webm)($|\?)/i));
     const isFileUrl = looksLikeUrl && (type === 'document' || (contentHtml.includes('/uploads/') && !isImageUrl && !isVideoUrl && !isAudioUrl));
 
     if (isImageUrl && contentHtml) {
@@ -836,27 +961,41 @@ function generateMessageHtml(m) {
                 </div>
             </div>`;
     } else if (isAudioUrl && contentHtml) {
+        const audioUrl = contentHtml;
+        const pid = 'wap-' + (m.id || m.external_id || Date.now()).toString().replace(/\W/g, '_');
+        const chat = chats.find(c => c.id === (m.chat_id || activeChatId));
+        const name = chat?.contact_name || chat?.name || '';
+        const initial = name ? name.charAt(0).toUpperCase() : '<i class="fas fa-user"></i>';
+        const avatarHtml = m.role === 'user'
+            ? (name ? `<span>${initial}</span>` : '<i class="fas fa-user"></i>')
+            : '<i class="fas fa-microphone"></i>';
         contentHtml = `
-            <div class="msg-audio">
-                <audio data-media-src="${contentHtml}" controls preload="metadata" class="cached-media"></audio>
-                <div class="audio-download-row" style="display: flex; align-items: center; gap: 15px; margin-top: 6px;">
-                    <button onclick="event.stopPropagation(); openForwardModal('${contentHtml}', 'voice')" class="media-download-link" title="Reenviar Audio" style="background: none; border: none; color: var(--accent); cursor: pointer; display: flex; align-items: center; gap: 5px; font-size: 0.85rem; padding: 0;">
-                        <i class="fas fa-share"></i> Reenviar
-                    </button>
-                    <a href="${contentHtml}" download class="media-download-link cached-download" title="Descargar Audio">
-                        <i class="fas fa-download"></i> Descargar Audio
-                    </a>
+            <div class="wa-audio-player" id="${pid}">
+                <audio class="cached-media" data-media-src="${audioUrl}" preload="metadata"></audio>
+                <button class="wa-play-btn" onclick="waTogglePlay('${pid}')">
+                    <i class="fas fa-play"></i>
+                </button>
+                <div class="wa-audio-body">
+                    <div class="wa-waveform" onclick="waSeek('${pid}', event)">${_waWaveform(audioUrl)}</div>
+                    <span class="wa-audio-time">0:00</span>
                 </div>
+                <div class="wa-avatar">${avatarHtml}</div>
             </div>`;
     } else if (isFileUrl && contentHtml) {
-        const fileName = contentHtml.split('/').pop();
+        const fileUrl = contentHtml;
+        const fileName = fileUrl.split('/').pop() || 'archivo';
+        const ext = fileName.split('.').pop()?.toLowerCase() || '';
+        const iconMap = { pdf: 'fa-file-pdf', doc: 'fa-file-word', docx: 'fa-file-word', xls: 'fa-file-excel', xlsx: 'fa-file-excel', csv: 'fa-file-csv', zip: 'fa-file-zipper', rar: 'fa-file-zipper', txt: 'fa-file-lines', png: 'fa-file-image', jpg: 'fa-file-image', jpeg: 'fa-file-image' };
+        const icon = iconMap[ext] || 'fa-file';
         contentHtml = `
             <div class="msg-file">
-                <div style="display: flex; align-items: center; justify-content: space-between;">
-                    <a href="${contentHtml}" target="_blank">📄 Documento adjunto (${fileName})</a>
-                    <button onclick="event.stopPropagation(); openForwardModal('${contentHtml}', 'document')" class="media-action-btn" title="Reenviar Documento" style="background: none; border: none; color: var(--accent); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; margin-left: 10px; font-size: 1rem;">
-                        <i class="fas fa-share"></i>
-                    </button>
+                <a href="${fileUrl}" target="_blank" class="msg-file-link">
+                    <div class="msg-file-icon"><i class="fas ${icon}"></i></div>
+                    <span class="msg-file-name">${fileName}</span>
+                </a>
+                <div class="msg-file-actions">
+                    <a href="${fileUrl}" download title="Descargar" class="msg-file-action-btn"><i class="fas fa-download"></i></a>
+                    <button onclick="event.stopPropagation(); openForwardModal('${fileUrl}', 'document')" class="msg-file-action-btn" title="Reenviar"><i class="fas fa-share"></i></button>
                 </div>
             </div>`;
     }
@@ -867,11 +1006,17 @@ function generateMessageHtml(m) {
         </button>
     ` : '';
 
+    let checkHtml = '';
+    if (m._failed) checkHtml = ' <i class="fas fa-exclamation-circle" style="color:#ef4444;font-size:0.62rem;"></i>';
+    else if (m._pending) checkHtml = ' <i class="fas fa-check" style="opacity:0.55;font-size:0.62rem;"></i>';
+    else if (m.status === 'read') checkHtml = ' <i class="fas fa-check-double" style="color:#53bdeb;font-size:0.62rem;"></i>';
+    else checkHtml = ' <i class="fas fa-check-double" style="opacity:0.75;font-size:0.62rem;"></i>';
+
     return `
-        <div class="msg ${m.role}" data-id="${m.id || m.external_id}">
+        <div class="msg ${m.role}${isNew ? ' msg-animate' : ''}" data-id="${m.id || m.external_id || ''}">
             ${deleteBtn}
             <div class="msg-content">${contentHtml}</div>
-            <span class="msg-time">${time}</span>
+            <span class="msg-time">${time}${checkHtml}</span>
         </div>
     `;
 }
@@ -898,9 +1043,167 @@ async function toggleBot(enabled) {
 function handleFileSelect(input) {
     if (input.files && input.files[0]) {
         selectedFile = input.files[0];
-        document.getElementById('message-input').placeholder = `Archivo: ${selectedFile.name} (Escribe un comentario opcional)`;
-        document.getElementById('message-input').focus();
+        openFilePreview(selectedFile);
     }
+}
+
+function openFilePreview(file) {
+    const overlay = document.getElementById('file-preview-overlay');
+    if (!overlay) return;
+    const body = document.getElementById('file-preview-body');
+    const name = document.getElementById('file-preview-name');
+    if (!body || !name) return;
+
+    name.textContent = file.name;
+    body.innerHTML = '';
+
+    const mime = file.type || '';
+    if (mime.startsWith('image/')) {
+        const img = document.createElement('img');
+        img.style.cssText = 'max-width:100%;max-height:100%;object-fit:contain;border-radius:4px;';
+        img.src = URL.createObjectURL(file);
+        body.appendChild(img);
+    } else if (mime.startsWith('video/')) {
+        const vid = document.createElement('video');
+        vid.controls = true;
+        vid.style.cssText = 'max-width:100%;max-height:100%;border-radius:4px;';
+        vid.src = URL.createObjectURL(file);
+        body.appendChild(vid);
+    } else {
+        const ext = file.name.split('.').pop()?.toUpperCase() || 'FILE';
+        const sizeKb = Math.round(file.size / 1024);
+        const sizeStr = sizeKb >= 1024 ? `${(sizeKb / 1024).toFixed(1)} MB` : `${sizeKb} kB`;
+        body.innerHTML = `
+            <div style="display:flex;flex-direction:column;align-items:center;gap:16px;padding:32px;background:rgba(255,255,255,0.05);border-radius:12px;min-width:220px;">
+                <div style="width:72px;height:80px;background:rgba(255,255,255,0.1);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;">
+                    <i class="fas fa-file" style="font-size:1.8rem;color:rgba(255,255,255,0.6);"></i>
+                </div>
+                <div style="text-align:center;">
+                    <div style="color:rgba(255,255,255,0.5);font-size:0.85rem;margin-bottom:4px;">No preview available</div>
+                    <div style="color:rgba(255,255,255,0.7);font-size:0.8rem;">${sizeStr} - ${ext}</div>
+                </div>
+            </div>`;
+    }
+
+    overlay.style.display = 'flex';
+    document.getElementById('file-preview-caption').value = '';
+    document.getElementById('file-preview-caption').focus();
+}
+
+function closeFilePreview() {
+    const overlay = document.getElementById('file-preview-overlay');
+    if (overlay) overlay.style.display = 'none';
+    selectedFile = null;
+    const fileInput = document.getElementById('file-input');
+    if (fileInput) fileInput.value = '';
+}
+
+async function sendFromPreview() {
+    const caption = document.getElementById('file-preview-caption')?.value.trim() || '';
+    const input = document.getElementById('message-input');
+    if (input) input.value = caption;
+    const overlay = document.getElementById('file-preview-overlay');
+    if (overlay) overlay.style.display = 'none';
+    await sendMessage();
+}
+
+async function toggleRecording() {
+    if (_isRecording) {
+        stopRecording();
+    } else {
+        await startRecording();
+    }
+}
+
+async function startRecording() {
+    if (!activeChatId) return;
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        _audioChunks = [];
+        _mediaRecorder = new MediaRecorder(stream);
+        _mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) _audioChunks.push(e.data);
+        };
+        _mediaRecorder.onstop = async () => {
+            stream.getTracks().forEach(t => t.stop());
+            const mimeType = _mediaRecorder.mimeType || 'audio/webm';
+            const ext = mimeType.includes('ogg') ? 'ogg' : 'webm';
+            const blob = new Blob(_audioChunks, { type: mimeType });
+            const file = new File([blob], `audio_${Date.now()}.${ext}`, { type: mimeType });
+            await sendAudioFile(file);
+        };
+        _mediaRecorder.start();
+        _isRecording = true;
+        const micBtn = document.getElementById('mic-btn');
+        micBtn.classList.add('recording');
+        micBtn.querySelector('i').className = 'fas fa-stop';
+        micBtn.title = 'Detener grabacion';
+    } catch (err) {
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+            alert('Permiso de microfono denegado. Habilitalo en la configuracion del navegador.');
+        } else {
+            console.error('Error al iniciar grabacion:', err);
+        }
+    }
+}
+
+function stopRecording() {
+    if (_mediaRecorder && _isRecording) {
+        _mediaRecorder.stop();
+        _isRecording = false;
+        const micBtn = document.getElementById('mic-btn');
+        micBtn.classList.remove('recording');
+        micBtn.querySelector('i').className = 'fas fa-microphone';
+        micBtn.title = 'Grabar audio';
+    }
+}
+
+async function sendAudioFile(file) {
+    if (isSending) return;
+    isSending = true;
+    const micBtn = document.getElementById('mic-btn');
+    if (micBtn) micBtn.disabled = true;
+    try {
+        const token = localStorage.getItem('backoffice_token');
+        const formData = new FormData();
+        formData.append('chatId', activeChatId);
+        formData.append('file', file);
+        const res = await fetch('/api/backoffice/send-message', {
+            method: 'POST',
+            headers: { 'Authorization': 'token=' + token },
+            body: formData
+        });
+        if (res.ok) {
+            const data = await res.json();
+            if (data.warning) alert('⚠️ ' + data.warning);
+        } else {
+            let errorMsg = 'Error desconocido';
+            const text = await res.text();
+            try { errorMsg = JSON.parse(text).error || errorMsg; } catch (_) { errorMsg = text || errorMsg; }
+            alert('Error al enviar audio: ' + errorMsg);
+        }
+    } catch (err) {
+        console.error('Error al enviar audio:', err);
+        alert('Error de conexion al enviar el audio');
+    } finally {
+        isSending = false;
+        if (micBtn) micBtn.disabled = false;
+    }
+}
+
+function _clearSendUI() {
+    const input = document.getElementById('message-input');
+    if (input) { input.value = ''; input.placeholder = 'Escribe un mensaje aquí'; }
+    selectedFile = null;
+    const fi = document.getElementById('file-input');
+    if (fi) fi.value = '';
+    const po = document.getElementById('file-preview-overlay');
+    if (po) po.style.display = 'none';
+    const mic = document.getElementById('mic-btn');
+    if (mic) mic.style.display = '';
+    updateInputState(false);
+    const toggle = document.getElementById('bot-toggle');
+    if (toggle) toggle.checked = false;
 }
 
 async function sendMessage() {
@@ -909,92 +1212,75 @@ async function sendMessage() {
 
     const input = document.getElementById('message-input');
     const content = input.value.trim();
-    if (!content && !selectedFile) {
-        console.log('⚠️ Intento de envío vacío ignorado');
-        isSending = false;
-        return;
-    }
-    if (!activeChatId) {
-        console.warn('⚠️ No hay chat activo seleccionado');
-        isSending = false;
-        return;
-    }
+    if (!content && !selectedFile) { isSending = false; return; }
+    if (!activeChatId) { isSending = false; return; }
 
-    console.log(`📤 Enviando mensaje a ${activeChatId}...`, { hasFile: !!selectedFile });
-    const btn = document.getElementById('send-btn');
-    const originalBtnText = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '...';
+    const token = localStorage.getItem('backoffice_token');
+    const chatId = activeChatId;
 
-    try {
-        let res;
-        const token = localStorage.getItem('backoffice_token');
-
-        if (!selectedFile) {
-            // Enviar como JSON simple (más confiable para texto)
-            res = await fetch('/api/backoffice/send-message', {
-                method: 'POST',
-                headers: { 
-                    'Authorization': 'token=' + token,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    chatId: activeChatId,
-                    message: content
-                })
-            });
-        } else {
-            // Enviar como FormData (necesario para archivos)
+    if (selectedFile) {
+        // Archivo: esperar respuesta (necesitamos la URL real para mostrar)
+        const btn = document.getElementById('send-btn');
+        const origHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '...';
+        try {
             const formData = new FormData();
-            formData.append('chatId', activeChatId);
+            formData.append('chatId', chatId);
             if (content) formData.append('message', content);
             formData.append('file', selectedFile);
-
-            res = await fetch('/api/backoffice/send-message', {
+            const res = await fetch('/api/backoffice/send-message', {
                 method: 'POST',
-                headers: { 
-                    'Authorization': 'token=' + token
-                },
+                headers: { 'Authorization': 'token=' + token },
                 body: formData
             });
-        }
-
-        if (res.ok) {
-            const data = await res.json();
-            if (data.warning) {
-                console.warn('⚠️ Advertencia del servidor:', data.warning);
-                alert('⚠️ ' + data.warning);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.warning) alert('⚠️ ' + data.warning);
             } else {
-                console.log('✅ Mensaje enviado exitosamente');
+                const text = await res.text();
+                let msg = 'Error desconocido';
+                try { msg = JSON.parse(text).error || msg; } catch (_) { msg = text || msg; }
+                alert('Error al enviar: ' + msg);
             }
-            input.value = '';
-            input.placeholder = "Escribe un mensaje aquí";
-            selectedFile = null;
-            document.getElementById('file-input').value = '';
-            
-            // Forzar habilitación inmediata del input para mejor UX
-            updateInputState(false);
-            const toggle = document.getElementById('bot-toggle');
-            if (toggle) toggle.checked = false;
-        } else {
-            let errorMsg = 'Error desconocido';
-            const text = await res.text();
-            try {
-                const errorData = JSON.parse(text);
-                errorMsg = errorData.error || errorMsg;
-            } catch (e) {
-                errorMsg = text || res.statusText || 'Error del servidor';
-            }
-            console.error('❌ Error del servidor:', errorMsg);
-            alert('Error al enviar mensaje: ' + errorMsg);
+        } catch (_) {
+            alert('Error de conexión al enviar el archivo');
+        } finally {
+            isSending = false;
+            btn.disabled = false;
+            btn.innerHTML = origHtml;
+            _clearSendUI();
         }
-    } catch (err) {
-        console.error('❌ Error de red:', err);
-        alert('Error de conexión al enviar el mensaje');
-    } finally {
-        isSending = false;
-        btn.disabled = false;
-        btn.innerHTML = originalBtnText;
+        return;
+    }
+
+    // Texto: UI optimista - mostrar inmediatamente con check simple
+    const tempId = '_p_' + Date.now();
+    allMessages.push({
+        id: tempId, chat_id: chatId, role: 'assistant',
+        content, type: 'text',
+        created_at: new Date().toISOString(),
+        _pending: true
+    });
+    renderMessages();
+    _clearSendUI();
+    scrollToBottom();
+    isSending = false;
+
+    // POST en background
+    try {
+        const res = await fetch('/api/backoffice/send-message', {
+            method: 'POST',
+            headers: { 'Authorization': 'token=' + token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chatId: chatId, message: content })
+        });
+        if (!res.ok) {
+            const idx = allMessages.findIndex(m => m.id === tempId);
+            if (idx !== -1) { allMessages[idx]._failed = true; allMessages[idx]._pending = false; renderMessages(); }
+        }
+    } catch (_) {
+        const idx = allMessages.findIndex(m => m.id === tempId);
+        if (idx !== -1) { allMessages[idx]._failed = true; allMessages[idx]._pending = false; renderMessages(); }
     }
 }
 
@@ -1402,6 +1688,7 @@ async function fetchPendingTicketsCount() {
         const { count } = await res.json();
         
         const badge = document.getElementById('tickets-badge');
+        if (!badge) return;
         if (count > 0) {
             badge.innerText = count > 99 ? '99+' : count;
             badge.style.display = 'block';
@@ -3017,6 +3304,15 @@ window.initBackofficeView = function() {
             if (this.scrollTop < 50 && !loadingMessages && !allMessagesLoaded) {
                 fetchMessages(activeChatId);
             }
+        });
+    }
+
+    // Ocultar mic al escribir, mostrar al vaciar (como WhatsApp)
+    const msgInput = document.getElementById('message-input');
+    const micBtn = document.getElementById('mic-btn');
+    if (msgInput && micBtn) {
+        msgInput.addEventListener('input', function() {
+            micBtn.style.display = this.value.length > 0 ? 'none' : '';
         });
     }
 };

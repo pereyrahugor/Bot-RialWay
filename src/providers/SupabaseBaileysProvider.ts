@@ -47,6 +47,7 @@ export class SupabaseBaileysProvider extends BaileysProvider {
     /**
      * Envía un sticker de forma nativa usando Baileys
      */
+    // @ts-ignore - signature differs from base class intentionally
     public sendSticker = async (number: string, mediaPath: string): Promise<any> => {
         try {
             const isReady = !!(this.vendor?.authState?.creds?.me?.id || this.vendor?.user?.id);
@@ -324,7 +325,7 @@ export class SupabaseBaileysProvider extends BaileysProvider {
             } catch (e) {
                 // Ignore close errors
             }
-            this.vendor = null;
+            (this as any).vendor = null;
         }
         
         // Limpiar archivo QR local

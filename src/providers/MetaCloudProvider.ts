@@ -2,7 +2,9 @@ import { ProviderClass } from '@builderbot/bot';
 import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as child_process from 'child_process';
 import FormData from 'form-data';
+import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 
 /**
  * Proveedor para Meta Cloud API (WhatsApp Business API)
@@ -471,7 +473,7 @@ class MetaCloudProvider extends ProviderClass {
 
         const apiVersion = process.env.META_API_VERSION || 'v22.0';
         const url = `https://graph.facebook.com/${apiVersion}/${phone_number_id}/media`;
-        
+        let tempOgg: string | null = null;
         try {
             const form = new FormData();
             form.append('messaging_product', 'whatsapp');
@@ -486,8 +488,27 @@ class MetaCloudProvider extends ProviderClass {
             else if (lowerPath.endsWith('.mp3')) contentType = 'audio/mpeg';
             else if (lowerPath.endsWith('.ogg')) contentType = 'audio/ogg';
             else if (lowerPath.endsWith('.opus')) contentType = 'audio/ogg; codecs=opus';
+            else if (lowerPath.endsWith('.aac')) contentType = 'audio/aac';
 
-            form.append('file', fs.createReadStream(filePath), { contentType, filename: path.basename(filePath) });
+            // Meta no acepta audio/webm — convertir a ogg antes de subir
+            let uploadPath = filePath;
+            if (lowerPath.endsWith('.webm')) {
+                try {
+                    tempOgg = filePath.replace(/\.webm$/i, '_converted.ogg');
+                    await new Promise<void>((resolve, reject) => {
+                        child_process.execFile(ffmpegInstaller.path, ['-y', '-i', filePath, '-c:a', 'libopus', tempOgg!], (err) => {
+                            if (err) reject(err); else resolve();
+                        });
+                    });
+                    uploadPath = tempOgg;
+                    contentType = 'audio/ogg; codecs=opus';
+                } catch (convErr: any) {
+                    console.error('❌ [MetaCloudProvider] Error convirtiendo webm a ogg:', convErr.message);
+                    tempOgg = null;
+                }
+            }
+
+            form.append('file', fs.createReadStream(uploadPath), { contentType, filename: path.basename(uploadPath) });
 
             const response = await axios.post(url, form, {
                 headers: {
@@ -495,9 +516,11 @@ class MetaCloudProvider extends ProviderClass {
                     'Authorization': `Bearer ${access_token}`
                 }
             });
+            if (tempOgg && fs.existsSync(tempOgg)) fs.unlinkSync(tempOgg);
             return response.data.id;
         } catch (error: any) {
             console.error('❌ [MetaCloudProvider] Error subiendo media a Meta:', error?.response?.data || error.message);
+            if (tempOgg && fs.existsSync(tempOgg)) try { fs.unlinkSync(tempOgg); } catch (_) { /* ignore */ }
             return null;
         }
     }
@@ -799,6 +822,16 @@ class MetaCloudProvider extends ProviderClass {
                                 for (const err of status.errors) {
                                     console.error(`❌ [MetaCloudProvider] Error de entrega para ${status.recipient_id} (ID: ${status.id}): [Código ${err.code}] ${err.message} - ${err.error_data?.details || ''}`);
                                 }
+                            }
+                            if (status.status === 'read' || status.status === 'delivered') {
+                                try {
+                                    const { historyEvents } = await import('../db/historyHandler');
+                                    historyEvents.emit('message_status_update', {
+                                        externalId: status.id,
+                                        chatId: status.recipient_id,
+                                        status: status.status
+                                    });
+                                } catch (e) { console.warn('[MetaCloudProvider] historyEvents emit failed', e); }
                             }
                         }
                     }
