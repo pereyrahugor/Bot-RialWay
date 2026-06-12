@@ -11,76 +11,105 @@ window.notificacionesView = (() => {
             <div class="kanban-header animate-fade">
                 <div class="header-info">
                     <h1>
-                        <span style="position:relative; display:inline-flex; align-items:center; margin-right:6px;">
-                            <i class="fas fa-bell kanban-header-icon" style="color:#25D366;"></i>
-                        </span>
+                        <i class="fas fa-bell kanban-header-icon" style="color:#0099FF;"></i>
                         Notificaciones de Chats
                     </h1>
                     <p>Control de notificaciones de mensajes sin leer en el Backoffice</p>
                 </div>
+                <div id="notif-header-actions" style="display:flex; gap:10px; align-items:center;">
+                    <span id="notif-status-label" style="font-size:0.88rem; font-weight:500; color:var(--text-muted);">Apagado</span>
+                    <label class="switch flex-shrink-0">
+                        <input type="checkbox" id="notif-toggle" onchange="notificacionesView._onToggle(this.checked)">
+                        <span class="slider round">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>
+                        </span>
+                    </label>
+                </div>
             </div>
 
-            <div class="meta-view-body" style="padding: 20px;">
-                <!-- Estado: inactivo (onboarding) -->
-                <div id="notif-onboarding" style="display:none;">
-                    <div class="meta-onboarding-wrap glass-card animate-fade" style="border-top: 4px solid #25D366; max-width: 500px; margin: 2rem auto; padding: 2rem; border-radius: 16px; background: var(--bg-card); box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2); border: 1px solid var(--border);">
-                        <div style="font-size:3.5rem; margin-bottom:1.25rem; text-align:center; width:100%; position:relative; display:inline-block;">
-                            <i class="fas fa-bell" style="color:#25D366;"></i>
-                            <i class="fas fa-envelope-open-text" style="font-size:1.2rem; color:#128C7E; position:absolute; bottom:4px; right:calc(50% - 28px);"></i>
+            <div class="meta-view-body">
+
+                <!-- Estado: inactivo -->
+                <div id="notif-onboarding" class="animate-fade" style="display:none; max-width:520px; width:100%; margin:20px auto 28px; padding:clamp(16px,4vw,28px); border-radius:1rem; background:rgba(16,42,67,0.65); border:1px solid rgba(0,153,255,0.12);">
+
+                    <div style="text-align:center; margin-bottom:20px;">
+                        <div style="position:relative; display:inline-flex; align-items:center; justify-content:center; margin-bottom:14px;">
+                            <span style="width:56px; height:56px; border-radius:16px; background:rgba(0,153,255,0.1); border:1px solid rgba(0,153,255,0.2); display:flex; align-items:center; justify-content:center; position:relative;">
+                                <i class="fas fa-bell" style="font-size:1.4rem; color:#0099FF;"></i>
+                                <i class="fas fa-envelope-open-text" style="font-size:0.6rem; color:#0078D4; position:absolute; bottom:8px; right:6px;"></i>
+                            </span>
                         </div>
-                        <div style="margin-bottom:1.5rem; text-align:center; width:100%;">
-                            <h2 style="margin:0 0 8px; color:var(--text-main); font-size:1.45rem; font-weight:700;">Notificaciones de Mensajes</h2>
-                            <div style="height:3px; width:50px; background:linear-gradient(90deg,#25D366,#128C7E); border-radius:10px; margin:0 auto 12px;"></div>
-                            <p style="color:var(--text-muted); font-size:0.95rem; line-height:1.6; margin:0;">
-                                Activa esta integración para visualizar el número de mensajes sin leer en cada chat y filtrar de manera rápida las conversaciones pendientes.
-                            </p>
+                        <h2 style="margin:0 0 6px; font-size:1.25rem; font-weight:700; color:var(--text-main);">Notificaciones de Mensajes</h2>
+                        <div style="height:3px; width:40px; background:linear-gradient(90deg,#0099FF,#0078D4); border-radius:10px; margin:0 auto 10px;"></div>
+                        <p style="margin:0; font-size:0.88rem; color:var(--text-muted); line-height:1.6; max-width:380px; margin-inline:auto;">
+                            Activa esta integración para visualizar el número de mensajes sin leer en cada chat y filtrar de manera rápida las conversaciones pendientes.
+                        </p>
+                    </div>
+
+                    <div style="height:1px; background:rgba(255,255,255,0.07); margin:0 0 18px;"></div>
+
+                    <p style="margin:0 0 12px; font-size:0.72rem; text-transform:uppercase; letter-spacing:1.5px; font-weight:700; color:#0099FF;">Características clave</p>
+                    <div style="display:flex; flex-direction:column; gap:14px;">
+                        <div style="display:flex; align-items:flex-start; gap:12px;">
+                            <span style="min-width:32px; height:32px; border-radius:8px; background:rgba(0,153,255,0.1); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                                <i class="fas fa-comment-dots" style="color:#0099FF; font-size:0.85rem;"></i>
+                            </span>
+                            <div style="min-width:0;">
+                                <p style="margin:0 0 3px; font-weight:600; font-size:0.85rem; color:var(--text-main);">Globos de chat</p>
+                                <p style="margin:0; font-size:0.82rem; color:var(--text-muted); line-height:1.6;">Muestra un contador en verde con la cantidad de mensajes sin leer de cada cliente.</p>
+                            </div>
                         </div>
-                        <div style="background:var(--bg-header); padding:1rem 1.25rem; border-radius:16px; border:1px solid var(--border); width:100%; margin-bottom:1.5rem;">
-                            <h4 style="margin:0 0 8px; color:#25D366; font-size:0.78rem; text-transform:uppercase; letter-spacing:1.5px; font-weight:700;">Características clave</h4>
-                            <ul style="font-size:0.88rem; color:var(--text-main); margin:0; display:flex; flex-direction:column; gap:8px; list-style:none; padding:0;">
-                                <li style="display:flex; align-items:flex-start; gap:8px;">
-                                    <i class="fas fa-check" style="color:#25D366; margin-top:2px; flex-shrink:0;"></i>
-                                    <span><strong>Globos de chat:</strong> Muestra un contador en verde con la cantidad de mensajes sin leer de cada cliente.</span>
-                                </li>
-                                <li style="display:flex; align-items:flex-start; gap:8px;">
-                                    <i class="fas fa-check" style="color:#25D366; margin-top:2px; flex-shrink:0;"></i>
-                                    <span><strong>Totalizador en cabecera:</strong> Muestra la suma total de mensajes sin leer arriba de tu lista de chats.</span>
-                                </li>
-                                <li style="display:flex; align-items:flex-start; gap:8px;">
-                                    <i class="fas fa-check" style="color:#25D366; margin-top:2px; flex-shrink:0;"></i>
-                                    <span><strong>Filtro rápido:</strong> Agrega un interruptor sobre el buscador para ver únicamente chats con mensajes pendientes.</span>
-                                </li>
-                            </ul>
+                        <div style="display:flex; align-items:flex-start; gap:12px;">
+                            <span style="min-width:32px; height:32px; border-radius:8px; background:rgba(0,153,255,0.1); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                                <i class="fas fa-layer-group" style="color:#0099FF; font-size:0.85rem;"></i>
+                            </span>
+                            <div style="min-width:0;">
+                                <p style="margin:0 0 3px; font-weight:600; font-size:0.85rem; color:var(--text-main);">Totalizador en cabecera</p>
+                                <p style="margin:0; font-size:0.82rem; color:var(--text-muted); line-height:1.6;">Muestra la suma total de mensajes sin leer arriba de tu lista de chats.</p>
+                            </div>
                         </div>
-                        <button id="notif-activate-btn" class="btn-primary" onclick="notificacionesView._activar()" style="width:100%; padding:13px 20px; display:flex; align-items:center; justify-content:center; gap:10px; font-size:0.95rem; font-weight:600; border-radius:14px; background:linear-gradient(135deg,#25D366,#128C7E); color:white; border:none; cursor:pointer; transition: transform 0.2s, filter 0.2s;">
-                            <i class="fas fa-power-off"></i> Activar Notificaciones
-                        </button>
+                        <div style="display:flex; align-items:flex-start; gap:12px;">
+                            <span style="min-width:32px; height:32px; border-radius:8px; background:rgba(0,153,255,0.1); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                                <i class="fas fa-filter" style="color:#0099FF; font-size:0.85rem;"></i>
+                            </span>
+                            <div style="min-width:0;">
+                                <p style="margin:0 0 3px; font-weight:600; font-size:0.85rem; color:var(--text-main);">Filtro rápido</p>
+                                <p style="margin:0; font-size:0.82rem; color:var(--text-muted); line-height:1.6;">Agrega un interruptor sobre el buscador para ver únicamente chats con mensajes pendientes.</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Estado: activo -->
-                <div id="notif-active" style="display:none;">
-                    <div class="meta-onboarding-wrap glass-card animate-fade" style="border-top: 4px solid #10b981; max-width: 500px; margin: 2rem auto; padding: 2rem; border-radius: 16px; background: var(--bg-card); box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2); border: 1px solid var(--border);">
-                        <div style="font-size:3.5rem; margin-bottom:1.25rem; text-align:center; width:100%; position:relative; display:inline-block;">
-                            <i class="fas fa-bell" style="color:#10b981;"></i>
-                            <i class="fas fa-check-circle" style="font-size:1.2rem; color:#10b981; position:absolute; bottom:4px; right:calc(50% - 28px);"></i>
+                <div id="notif-active" class="animate-fade" style="display:none; max-width:520px; width:100%; margin:20px auto 28px; padding:clamp(16px,4vw,28px); border-radius:1rem; background:rgba(16,42,67,0.65); border:1px solid rgba(0,153,255,0.12);">
+
+                    <div style="text-align:center; margin-bottom:20px;">
+                        <div style="position:relative; display:inline-flex; align-items:center; justify-content:center; margin-bottom:14px;">
+                            <span style="width:56px; height:56px; border-radius:16px; background:rgba(34,197,94,0.1); border:1px solid rgba(34,197,94,0.2); display:flex; align-items:center; justify-content:center; position:relative;">
+                                <i class="fas fa-bell" style="font-size:1.4rem; color:#22c55e;"></i>
+                                <i class="fas fa-check-circle" style="font-size:0.6rem; color:#22c55e; position:absolute; bottom:8px; right:6px;"></i>
+                            </span>
                         </div>
-                        <div style="margin-bottom:1.5rem; text-align:center; width:100%;">
-                            <h2 style="margin:0 0 8px; color:var(--text-main); font-size:1.45rem; font-weight:700;">Integración Activa</h2>
-                            <div style="height:3px; width:50px; background:#10b981; border-radius:10px; margin:0 auto 12px;"></div>
-                            <p style="color:var(--text-muted); font-size:0.95rem; line-height:1.6; margin:0;">
-                                La integración de notificaciones está funcionando correctamente. Los mensajes sin leer de tus usuarios se mostrarán en la barra lateral del Backoffice en tiempo real.
-                            </p>
+                        <h2 style="margin:0 0 6px; font-size:1.25rem; font-weight:700; color:var(--text-main);">Integración Activa</h2>
+                        <div style="height:3px; width:40px; background:#22c55e; border-radius:10px; margin:0 auto 10px;"></div>
+                        <p style="margin:0; font-size:0.88rem; color:var(--text-muted); line-height:1.6; max-width:380px; margin-inline:auto;">
+                            Las notificaciones están funcionando. Los mensajes sin leer se mostrarán en la barra lateral en tiempo real.
+                        </p>
+                    </div>
+
+                    <div style="height:1px; background:rgba(255,255,255,0.07); margin:0 0 18px;"></div>
+
+                    <div style="display:flex; align-items:flex-start; gap:12px;">
+                        <span style="min-width:32px; height:32px; border-radius:8px; background:rgba(34,197,94,0.1); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                            <i class="fas fa-info-circle" style="color:#22c55e; font-size:0.85rem;"></i>
+                        </span>
+                        <div style="min-width:0;">
+                            <p style="margin:0; font-size:0.82rem; color:var(--text-muted); line-height:1.6;">Las notificaciones se reinician a 0 en cuanto entres a chatear con el contacto correspondiente.</p>
                         </div>
-                        <div style="background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.2); padding:1rem 1.25rem; border-radius:16px; width:100%; margin-bottom:1.5rem; display:flex; align-items:center; gap:12px;">
-                            <i class="fas fa-info-circle" style="color:#10b981; font-size:1.2rem; flex-shrink:0;"></i>
-                            <span style="font-size:0.88rem; color:var(--text-main);">Las notificaciones se reinician a 0 en cuanto entres a chatear con el contacto correspondiente.</span>
-                        </div>
-                        <button id="notif-deactivate-btn" onclick="notificacionesView._desactivar()" style="width:100%; padding:13px 20px; display:flex; align-items:center; justify-content:center; gap:10px; font-size:0.95rem; font-weight:600; border-radius:14px; background:transparent; border:1.5px solid var(--border); color:var(--text-muted); cursor:pointer; transition: background-color 0.2s;">
-                            <i class="fas fa-power-off"></i> Desactivar Notificaciones
-                        </button>
                     </div>
                 </div>
+
             </div>
         </main>
         `;
@@ -92,10 +121,8 @@ window.notificacionesView = (() => {
         if (!_token) {
             _token = (typeof window.getAuthToken === 'function' ? decodeURIComponent(window.getAuthToken()) : '') || localStorage.getItem('backoffice_token') || localStorage.getItem('system_config_token') || '';
         }
-        if (_token === 'undefined') {
-            _token = '';
-        }
-        _renderLoading();
+        if (_token === 'undefined') _token = '';
+
         try {
             const res = await fetch(`/api/backoffice/notifications/status?token=${encodeURIComponent(_token)}`);
             const data = await res.json();
@@ -107,56 +134,44 @@ window.notificacionesView = (() => {
         }
     }
 
-    function _renderLoading() {
-        const wrap = document.querySelector('.meta-view-body');
-        if (wrap) {
-            wrap.innerHTML = `
-                <div style="display:flex; justify-content:center; align-items:center; height:200px; color:var(--text-muted);">
-                    <i class="fas fa-circle-notch fa-spin" style="font-size:2rem; margin-right:10px;"></i> Cargando...
-                </div>
-            `;
+    function _render() {
+        const onboarding = document.getElementById('notif-onboarding');
+        const active = document.getElementById('notif-active');
+        const toggle = document.getElementById('notif-toggle');
+        const statusLabel = document.getElementById('notif-status-label');
+
+        if (_isActive) {
+            if (onboarding) onboarding.style.display = 'none';
+            if (active) active.style.display = 'block';
+            if (toggle) toggle.checked = true;
+            if (statusLabel) { statusLabel.textContent = 'Encendido'; statusLabel.style.color = '#22c55e'; }
+        } else {
+            if (onboarding) onboarding.style.display = 'block';
+            if (active) active.style.display = 'none';
+            if (toggle) toggle.checked = false;
+            if (statusLabel) { statusLabel.textContent = 'Apagado'; statusLabel.style.color = 'var(--text-muted)'; }
         }
     }
 
-    function _render() {
-        const wrap = document.querySelector('.meta-view-body');
-        if (!wrap) return;
-
-        // Volver a renderizar la estructura si se cargó la animación de carga
-        wrap.innerHTML = `
-            <!-- Estado: inactivo (onboarding) -->
-            <div id="notif-onboarding" style="display:none;"></div>
-            <!-- Estado: activo -->
-            <div id="notif-active" style="display:none;"></div>
-        `;
-
-        const html = getHTML();
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
-
-        const onboardingSrc = doc.querySelector('#notif-onboarding').innerHTML;
-        const activeSrc = doc.querySelector('#notif-active').innerHTML;
-
-        const onboardingEl = document.getElementById('notif-onboarding');
-        const activeEl = document.getElementById('notif-active');
-
-        if (onboardingEl) {
-            onboardingEl.innerHTML = onboardingSrc;
-            onboardingEl.style.display = _isActive ? 'none' : 'block';
-        }
-        if (activeEl) {
-            activeEl.innerHTML = activeSrc;
-            activeEl.style.display = _isActive ? 'block' : 'none';
+    // ── TOGGLE ────────────────────────────────────────────────────────────
+    function _onToggle(checked) {
+        if (checked) {
+            _activar();
+        } else {
+            const confirmed = confirm('¿Desactivar las Notificaciones? Esto reseteará todos los mensajes sin leer a 0.');
+            if (!confirmed) {
+                const toggle = document.getElementById('notif-toggle');
+                if (toggle) toggle.checked = true;
+                return;
+            }
+            _desactivar();
         }
     }
 
     // ── OPERATIONS ────────────────────────────────────────────────────────
     async function _activar() {
-        const btn = document.getElementById('notif-activate-btn');
-        if (btn) {
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Activando...';
-        }
+        const toggle = document.getElementById('notif-toggle');
+        if (toggle) toggle.disabled = true;
         try {
             const res = await fetch(`/api/backoffice/notifications/activate?token=${encodeURIComponent(_token)}`, { method: 'POST' });
             const data = await res.json();
@@ -164,35 +179,23 @@ window.notificacionesView = (() => {
                 _isActive = true;
                 _render();
                 showToast && showToast('Notificaciones activadas', 'success');
-                // Forzar reload de la barra de chats para reflejar que la integración está activa
                 if (window.backofficeController && typeof window.backofficeController.loadNotificationsStatus === 'function') {
                     await window.backofficeController.loadNotificationsStatus();
                     window.backofficeController.refreshChatsList && window.backofficeController.refreshChatsList();
                 }
             } else {
                 showToast && showToast('Error al activar: ' + (data.error || ''), 'error');
-                if (btn) {
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-power-off"></i> Activar Notificaciones';
-                }
+                if (toggle) toggle.checked = false;
             }
         } catch (e) {
             showToast && showToast('Error de red al activar', 'error');
-            if (btn) {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-power-off"></i> Activar Notificaciones';
-            }
+            if (toggle) toggle.checked = false;
+        } finally {
+            if (toggle) toggle.disabled = false;
         }
     }
 
     async function _desactivar() {
-        if (!confirm('¿Desactivar la integración de Notificaciones? Esto reseteará todos los mensajes sin leer a 0.')) return;
-
-        const btn = document.getElementById('notif-deactivate-btn');
-        if (btn) {
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Desactivando...';
-        }
         try {
             const res = await fetch(`/api/backoffice/notifications/deactivate?token=${encodeURIComponent(_token)}`, { method: 'POST' });
             const data = await res.json();
@@ -200,37 +203,30 @@ window.notificacionesView = (() => {
                 _isActive = false;
                 _render();
                 showToast && showToast('Notificaciones desactivadas', 'success');
-                // Forzar reload de la barra de chats para reflejar que la integración está inactiva
                 if (window.backofficeController && typeof window.backofficeController.loadNotificationsStatus === 'function') {
                     await window.backofficeController.loadNotificationsStatus();
                     window.backofficeController.refreshChatsList && window.backofficeController.refreshChatsList();
                 }
             } else {
                 showToast && showToast('Error al desactivar: ' + (data.error || ''), 'error');
-                if (btn) {
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-power-off"></i> Desactivar Notificaciones';
-                }
+                const toggle = document.getElementById('notif-toggle');
+                if (toggle) toggle.checked = true;
             }
         } catch (e) {
             showToast && showToast('Error de red al desactivar', 'error');
-            if (btn) {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-power-off"></i> Desactivar Notificaciones';
-            }
+            const toggle = document.getElementById('notif-toggle');
+            if (toggle) toggle.checked = true;
         }
     }
 
-    function destroy() {
-        // Nada que liberar por ahora
-    }
+    function destroy() {}
 
     return {
         title: 'Notificaciones',
         getHTML,
         init,
         destroy,
-        // Exponer handlers
+        _onToggle,
         _activar,
         _desactivar
     };

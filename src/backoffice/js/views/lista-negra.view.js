@@ -12,103 +12,106 @@ window.listaNegraView = (() => {
             <div class="kanban-header animate-fade">
                 <div class="header-info">
                     <h1>
-                        <span style="position:relative; display:inline-flex; align-items:center; margin-right:6px;">
-                            <i class="fas fa-list-ul kanban-header-icon" style="color:#25D366;"></i>
-                            <i class="fas fa-pencil" style="font-size:0.7em; color:#128C7E; position:absolute; bottom:-2px; right:-6px;"></i>
-                        </span>
+                        <i class="fas fa-ban kanban-header-icon" style="color:#0099FF;"></i>
                         Lista Negra
                     </h1>
                     <p>Control de contactos excluidos del bot o del CRM</p>
                 </div>
-                <div id="ln-header-actions" style="display:none; gap:8px; align-items:center;">
-                    <button onclick="listaNegraView._confirmDeactivate()" style="display:flex; align-items:center; gap:6px; padding:8px 16px; font-size:0.88rem; border-radius:10px; background:transparent; border:1.5px solid var(--border); color:var(--text-muted); cursor:pointer;">
-                        <i class="fas fa-power-off"></i> Desactivar
-                    </button>
+                <div id="ln-header-actions" style="display:flex; gap:10px; align-items:center;">
+                    <span id="ln-status-label" style="font-size:0.88rem; font-weight:500; color:var(--text-muted);">Apagado</span>
+                    <label class="switch flex-shrink-0">
+                        <input type="checkbox" id="ln-toggle" onchange="listaNegraView._onToggle(this.checked)">
+                        <span class="slider round">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>
+                        </span>
+                    </label>
                 </div>
             </div>
 
             <div class="meta-view-body">
 
-                <!-- Estado: inactivo (onboarding) -->
-                <div id="ln-onboarding" style="display:none;">
-                    <div class="meta-onboarding-wrap glass-card animate-fade" style="border-top: 4px solid #25D366;">
-                        <div style="font-size:3.5rem; margin-bottom:1.25rem; text-align:center; width:100%; position:relative; display:inline-block;">
-                            <i class="fas fa-list-ul" style="color:#25D366;"></i>
-                            <i class="fas fa-pencil" style="font-size:1.2rem; color:#128C7E; position:absolute; bottom:4px; right:calc(50% - 28px);"></i>
+                <!-- Explicacion (visible cuando inactivo) -->
+                <div id="ln-info" class="animate-fade" style="max-width:520px; width:100%; margin:20px auto 28px; padding:clamp(16px,4vw,28px); border-radius:1rem; background:rgba(16,42,67,0.65); border:1px solid rgba(0,153,255,0.12);">
+
+                    <!-- Icono + titulo -->
+                    <div style="text-align:center; margin-bottom:20px;">
+                        <div style="position:relative; display:inline-flex; align-items:center; justify-content:center; margin-bottom:14px;">
+                            <span style="width:56px; height:56px; border-radius:16px; background:rgba(0,153,255,0.1); border:1px solid rgba(0,153,255,0.2); display:flex; align-items:center; justify-content:center; position:relative;">
+                                <i class="fas fa-ban" style="font-size:1.4rem; color:#0099FF;"></i>
+                            </span>
                         </div>
-                        <div style="margin-bottom:1.5rem; text-align:center; width:100%;">
-                            <h2 style="margin:0 0 8px; color:var(--text-main); font-size:1.45rem; font-weight:700;">Lista Negra</h2>
-                            <div style="height:3px; width:50px; background:linear-gradient(90deg,#25D366,#128C7E); border-radius:10px; margin:0 auto 12px;"></div>
-                            <p style="color:var(--text-muted); font-size:0.95rem; line-height:1.6; margin:0; max-width:440px;">
-                                Aquí puedes gestionar qué contactos no reciben atención automática del bot o qué contactos quieres que queden excluidos totalmente de los chats del CRM.
-                            </p>
+                        <h2 style="margin:0 0 6px; font-size:1.25rem; font-weight:700; color:var(--text-main);">Lista Negra</h2>
+                        <div style="height:3px; width:40px; background:linear-gradient(90deg,#0099FF,#0078D4); border-radius:10px; margin:0 auto 10px;"></div>
+                        <p style="margin:0; font-size:0.88rem; color:var(--text-muted); line-height:1.6; max-width:380px; margin-inline:auto;">
+                            Gestioná qué contactos no reciben atención automática del bot o quedan excluidos de los chats del CRM.
+                        </p>
+                    </div>
+
+                    <!-- Separador -->
+                    <div style="height:1px; background:rgba(255,255,255,0.07); margin:0 0 18px;"></div>
+
+                    <!-- Como funciona -->
+                    <p style="margin:0 0 12px; font-size:0.72rem; text-transform:uppercase; letter-spacing:1.5px; font-weight:700; color:#0099FF;">¿Cómo funciona?</p>
+                    <div style="display:flex; flex-direction:column; gap:14px;">
+                        <div style="display:flex; align-items:flex-start; gap:12px;">
+                            <span style="min-width:32px; height:32px; border-radius:8px; background:rgba(37,211,102,0.12); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                                <i class="fas fa-robot" style="color:#25D366; font-size:0.85rem;"></i>
+                            </span>
+                            <div style="min-width:0;">
+                                <p style="margin:0 0 3px; font-weight:600; font-size:0.85rem; color:var(--text-main);">Sin Bot</p>
+                                <p style="margin:0; font-size:0.82rem; color:var(--text-muted); line-height:1.6;">El chat sigue visible en el CRM pero el bot nunca retoma el control. Permanece en atención humana.</p>
+                            </div>
                         </div>
-                        <div style="background:var(--bg-header); padding:1rem 1.25rem; border-radius:16px; border:1px solid var(--border); width:100%; margin-bottom:1.5rem;">
-                            <h4 style="margin:0 0 8px; color:#25D366; font-size:0.78rem; text-transform:uppercase; letter-spacing:1.5px; font-weight:700;">¿Cómo funciona?</h4>
-                            <ul style="font-size:0.88rem; color:var(--text-main); margin:0; display:flex; flex-direction:column; gap:6px; list-style:none; padding:0;">
-                                <li style="display:flex; align-items:flex-start; gap:8px;">
-                                    <i class="fas fa-robot" style="color:#25D366; margin-top:2px; flex-shrink:0;"></i>
-                                    <span><strong>Sin Bot:</strong> El chat sigue visible en el CRM pero el bot nunca retoma el control. Permanece en atención humana.</span>
-                                </li>
-                                <li style="display:flex; align-items:flex-start; gap:8px;">
-                                    <i class="fas fa-eye-slash" style="color:#ef4444; margin-top:2px; flex-shrink:0;"></i>
-                                    <span><strong>Bloqueado CRM:</strong> Además de lo anterior, el contacto queda completamente oculto en el backoffice.</span>
-                                </li>
-                                <li style="display:flex; align-items:flex-start; gap:8px;">
-                                    <i class="fas fa-toggle-on" style="color:#128C7E; margin-top:2px; flex-shrink:0;"></i>
-                                    <span><strong>¿Cómo agregar?</strong> Abrí un chat en el backoffice y usá el ícono <i class="fas fa-check-circle" style="color:#25D366;"></i> del encabezado para agregar o quitar ese contacto.</span>
-                                </li>
-                            </ul>
+                        <div style="display:flex; align-items:flex-start; gap:12px;">
+                            <span style="min-width:32px; height:32px; border-radius:8px; background:rgba(239,68,68,0.1); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                                <i class="fas fa-eye-slash" style="color:#ef4444; font-size:0.85rem;"></i>
+                            </span>
+                            <div style="min-width:0;">
+                                <p style="margin:0 0 3px; font-weight:600; font-size:0.85rem; color:var(--text-main);">Bloqueado CRM</p>
+                                <p style="margin:0; font-size:0.82rem; color:var(--text-muted); line-height:1.6;">Además de lo anterior, el contacto queda completamente oculto en el backoffice.</p>
+                            </div>
                         </div>
-                        <button id="ln-activate-btn" class="btn-primary" onclick="listaNegraView._activar()" style="width:100%; padding:13px 20px; display:flex; align-items:center; justify-content:center; gap:10px; font-size:0.95rem; font-weight:600; border-radius:14px; background:linear-gradient(135deg,#25D366,#128C7E);">
-                            <i class="fas fa-power-off"></i> Activar Lista Negra
-                        </button>
+                        <div style="display:flex; align-items:flex-start; gap:12px;">
+                            <span style="min-width:32px; height:32px; border-radius:8px; background:rgba(18,140,126,0.12); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                                <i class="fas fa-toggle-on" style="color:#128C7E; font-size:0.85rem;"></i>
+                            </span>
+                            <div style="min-width:0;">
+                                <p style="margin:0 0 3px; font-weight:600; font-size:0.85rem; color:var(--text-main);">¿Cómo agregar?</p>
+                                <p style="margin:0; font-size:0.82rem; color:var(--text-muted); line-height:1.6;">Abrí un chat en el backoffice y usá el ícono <i class="fas fa-ban" style="color:var(--text-muted);"></i> del encabezado para agregar o quitar ese contacto.</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Estado: activo (grilla) -->
                 <div id="ln-active" style="display:none;">
-                    <div class="glass-card animate-fade" style="padding:0; overflow:hidden; border-top:4px solid #25D366;">
 
-                        <!-- Search bar -->
-                        <div style="padding:16px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; background:var(--bg-header);">
-                            <i class="fas fa-search" style="color:var(--text-muted);"></i>
-                            <input id="ln-search" type="text" placeholder="Buscar contacto..." oninput="listaNegraView._renderTable()" style="flex:1; background:transparent; border:none; outline:none; color:var(--text-main); font-size:0.9rem;">
+                    <!-- Search -->
+                    <div style="position:relative; margin-bottom:14px;">
+                        <i class="fas fa-search" style="position:absolute; left:14px; top:50%; transform:translateY(-50%); color:var(--text-muted); font-size:0.82rem; pointer-events:none;"></i>
+                        <input id="ln-search" type="text" placeholder="Buscar contacto..."
+                            oninput="listaNegraView._renderTable()"
+                            style="width:100%; box-sizing:border-box; padding:10px 14px 10px 38px; border-radius:12px; background:rgba(255,255,255,0.04); border:1px solid var(--border); color:var(--text-main); font-size:0.88rem; outline:none; transition:border-color 0.2s;"
+                            onfocus="this.style.borderColor='rgba(0,153,255,0.4)'" onblur="this.style.borderColor='var(--border)'">
+                    </div>
+
+                    <!-- List container -->
+                    <div style="overflow:hidden; border-radius:1rem; background:rgba(16,42,67,0.65); border:1px solid rgba(0,153,255,0.12);">
+                        <div id="ln-tbody" class="animate-fade">
+                            <div style="padding:32px; text-align:center; color:var(--text-muted);">
+                                <i class="fas fa-circle-notch fa-spin"></i> Cargando...
+                            </div>
                         </div>
-
-                        <!-- Table -->
-                        <div style="overflow-x:auto;">
-                            <table id="ln-table" style="width:100%; border-collapse:collapse; font-size:0.88rem;">
-                                <thead>
-                                    <tr style="background:var(--bg-header); border-bottom:2px solid var(--border);">
-                                        <th style="padding:12px 16px; text-align:left; font-weight:700; color:var(--text-muted); font-size:0.78rem; text-transform:uppercase; letter-spacing:1px;">Contacto</th>
-                                        <th style="padding:12px 16px; text-align:center; font-weight:700; color:#25D366; font-size:0.78rem; text-transform:uppercase; letter-spacing:1px; white-space:nowrap;">
-                                            <i class="fas fa-robot"></i> Sin Bot
-                                        </th>
-                                        <th style="padding:12px 16px; text-align:center; font-weight:700; color:#ef4444; font-size:0.78rem; text-transform:uppercase; letter-spacing:1px; white-space:nowrap;">
-                                            <i class="fas fa-eye-slash"></i> Bloqueado CRM
-                                        </th>
-                                        <th style="padding:12px 16px; text-align:left; font-weight:700; color:var(--text-muted); font-size:0.78rem; text-transform:uppercase; letter-spacing:1px;">Notas</th>
-                                        <th style="padding:12px 16px; text-align:center; font-weight:700; color:var(--text-muted); font-size:0.78rem; text-transform:uppercase; letter-spacing:1px;">Quitar</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="ln-tbody">
-                                    <tr><td colspan="5" style="padding:32px; text-align:center; color:var(--text-muted);">
-                                        <i class="fas fa-circle-notch fa-spin"></i> Cargando...
-                                    </td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <!-- Empty state -->
                         <div id="ln-empty" style="display:none; padding:48px 24px; text-align:center;">
                             <i class="fas fa-list-check" style="font-size:2.5rem; color:var(--text-muted); margin-bottom:12px; display:block;"></i>
                             <p style="color:var(--text-muted); margin:0;">No hay contactos en la lista negra.</p>
-                            <p style="color:var(--text-muted); font-size:0.85rem; margin:4px 0 0;">
-                                Abrí un chat en el backoffice y usá el ícono <i class="fas fa-check-circle" style="color:#25D366;"></i> del encabezado para agregar un contacto.
+                            <p style="color:var(--text-muted); font-size:0.82rem; margin:6px 0 0;">
+                                Abrí un chat y usá el ícono <i class="fas fa-ban" style="color:var(--text-muted);"></i> del encabezado para agregar un contacto.
                             </p>
                         </div>
                     </div>
+
                 </div>
 
             </div>
@@ -136,18 +139,21 @@ window.listaNegraView = (() => {
     }
 
     function _render() {
-        const onboarding = document.getElementById('ln-onboarding');
         const active = document.getElementById('ln-active');
-        const headerActions = document.getElementById('ln-header-actions');
+        const info = document.getElementById('ln-info');
+        const toggle = document.getElementById('ln-toggle');
+        const statusLabel = document.getElementById('ln-status-label');
 
         if (_isActive) {
-            if (onboarding) onboarding.style.display = 'none';
             if (active) active.style.display = 'block';
-            if (headerActions) headerActions.style.display = 'flex';
+            if (info) info.style.display = 'none';
+            if (toggle) toggle.checked = true;
+            if (statusLabel) { statusLabel.textContent = 'Encendido'; statusLabel.style.color = '#22c55e'; }
         } else {
-            if (onboarding) onboarding.style.display = 'block';
             if (active) active.style.display = 'none';
-            if (headerActions) headerActions.style.display = 'none';
+            if (info) info.style.display = 'block';
+            if (toggle) toggle.checked = false;
+            if (statusLabel) { statusLabel.textContent = 'Apagado'; statusLabel.style.color = 'var(--text-muted)'; }
         }
     }
 
@@ -180,96 +186,87 @@ window.listaNegraView = (() => {
             return;
         }
 
-        tbody.innerHTML = filtered.map(entry => {
-            const sinBotChecked = entry.sin_bot ? 'checked' : '';
-            const bloqCrmChecked = entry.bloqueado_crm ? 'checked' : '';
+        const svgX = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>`;
+        const svgCheck = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>`;
+
+        tbody.innerHTML = filtered.map((entry, i) => {
             const displayName = entry.name || entry.chat_id;
+            const idSinBot = `ln-sinbot-${i}`;
+            const idBloq = `ln-bloq-${i}`;
 
             return `
-            <tr style="border-bottom:1px solid var(--border); transition:background 0.15s;" onmouseenter="this.style.background='var(--bg-header)'" onmouseleave="this.style.background='transparent'">
-                <td style="padding:12px 16px;">
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <div style="width:34px; height:34px; border-radius:50%; background:linear-gradient(135deg,#25D366,#128C7E); display:flex; align-items:center; justify-content:center; color:white; font-weight:700; font-size:0.85rem; flex-shrink:0;">
-                            ${(displayName[0] || '?').toUpperCase()}
-                        </div>
-                        <div>
-                            <div style="font-weight:600; color:var(--text-main); font-size:0.9rem;">${_escHtml(displayName)}</div>
-                            <div style="font-size:0.75rem; color:var(--text-muted);">${_escHtml(entry.chat_id)}</div>
-                        </div>
+            <div style="padding:14px 16px; border-bottom:1px solid rgba(255,255,255,0.06);">
+
+                <!-- Línea 1: avatar + nombre + delete -->
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+                    <div style="width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg,#0099FF,#0078D4); display:flex; align-items:center; justify-content:center; color:white; font-weight:700; font-size:0.85rem; flex-shrink:0;">
+                        ${(displayName[0] || '?').toUpperCase()}
                     </div>
-                </td>
-                <td style="padding:12px 16px; text-align:center;">
-                    <label class="ln-radio-cell" title="Sin Bot" style="cursor:pointer; display:inline-flex; align-items:center; justify-content:center;">
-                        <input type="checkbox" ${sinBotChecked} onchange="listaNegraView._onSinBotChange('${_escAttr(entry.chat_id)}', this)"
-                            style="width:18px; height:18px; accent-color:#25D366; cursor:pointer;">
-                    </label>
-                </td>
-                <td style="padding:12px 16px; text-align:center;">
-                    <label class="ln-radio-cell" title="Bloqueado CRM" style="cursor:pointer; display:inline-flex; align-items:center; justify-content:center;">
-                        <input type="checkbox" ${bloqCrmChecked} onchange="listaNegraView._onBloqCrmChange('${_escAttr(entry.chat_id)}', this)"
-                            style="width:18px; height:18px; accent-color:#ef4444; cursor:pointer;">
-                    </label>
-                </td>
-                <td style="padding:12px 16px;">
-                    <input type="text" value="${_escAttr(entry.notes || '')}" placeholder="Sin notas..."
-                        style="background:transparent; border:none; border-bottom:1px dashed var(--border); color:var(--text-main); font-size:0.85rem; width:100%; outline:none; padding:2px 4px;"
-                        onblur="listaNegraView._onNotesBlur('${_escAttr(entry.chat_id)}', this.value)"
-                        onkeydown="if(event.key==='Enter') this.blur()">
-                </td>
-                <td style="padding:12px 16px; text-align:center;">
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-weight:600; color:var(--text-main); font-size:0.88rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${_escHtml(displayName)}</div>
+                        <div style="font-size:0.73rem; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${_escHtml(entry.chat_id)}</div>
+                    </div>
                     <button onclick="listaNegraView._deleteEntry('${_escAttr(entry.chat_id)}')"
-                        style="background:transparent; border:none; color:#ef4444; cursor:pointer; padding:6px 10px; border-radius:8px; font-size:0.88rem; transition:background 0.15s;"
-                        onmouseenter="this.style.background='rgba(239,68,68,0.1)'" onmouseleave="this.style.background='transparent'"
-                        title="Eliminar">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </td>
-            </tr>`;
+                        style="background:transparent; border:none; color:var(--text-muted); cursor:pointer; padding:6px 8px; border-radius:8px; font-size:0.85rem; transition:all 0.15s; flex-shrink:0;"
+                        onmouseenter="this.style.color='#ef4444'; this.style.background='rgba(239,68,68,0.1)'"
+                        onmouseleave="this.style.color='var(--text-muted)'; this.style.background='transparent'"
+                        title="Eliminar"><i class="fas fa-trash"></i></button>
+                </div>
+
+                <!-- Línea 2: toggles + notas -->
+                <div style="display:flex; align-items:center; gap:14px; padding-left:46px; flex-wrap:wrap;">
+
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-size:0.78rem; color:var(--text-muted); font-weight:500; white-space:nowrap;">Sin Bot</span>
+                        <label class="switch" style="cursor:pointer; transform:scale(0.78); transform-origin:left center; margin-right:-12px;">
+                            <input type="checkbox" id="${idSinBot}" ${entry.sin_bot ? 'checked' : ''} onchange="listaNegraView._onSinBotChange('${_escAttr(entry.chat_id)}', this.checked, '${idBloq}')">
+                            <span class="slider">${svgX}${svgCheck}</span>
+                        </label>
+                    </div>
+
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-size:0.78rem; color:var(--text-muted); font-weight:500; white-space:nowrap;">Bloqueado CRM</span>
+                        <label class="switch" style="cursor:pointer; transform:scale(0.78); transform-origin:left center; margin-right:-12px;">
+                            <input type="checkbox" id="${idBloq}" ${entry.bloqueado_crm ? 'checked' : ''} onchange="listaNegraView._onBloqCrmChange('${_escAttr(entry.chat_id)}', this.checked, '${idSinBot}')">
+                            <span class="slider">${svgX}${svgCheck}</span>
+                        </label>
+                    </div>
+
+                    <input type="text" value="${_escAttr(entry.notes || '')}" placeholder="Sin notas..."
+                        style="flex:1; min-width:80px; background:transparent; border:none; border-bottom:1px dashed rgba(255,255,255,0.12); color:var(--text-muted); font-size:0.8rem; outline:none; padding:3px 2px; transition:all 0.2s;"
+                        onfocus="this.style.borderBottomColor='rgba(0,153,255,0.4)'; this.style.color='var(--text-main)'"
+                        onblur="listaNegraView._onNotesBlur('${_escAttr(entry.chat_id)}', this.value); this.style.borderBottomColor='rgba(255,255,255,0.12)'; this.style.color='var(--text-muted)'"
+                        onkeydown="if(event.key==='Enter') this.blur()">
+
+                </div>
+            </div>`;
         }).join('');
     }
 
     // ── CHECKBOX LOGIC (mutually exclusive) ───────────────────────────────
 
-    async function _onSinBotChange(chatId, checkbox) {
+    async function _onSinBotChange(chatId, newValue, pairedId) {
         const entry = _entries.find(e => e.chat_id === chatId);
         if (!entry) return;
-
-        // Si activa Sin Bot, desactiva Bloqueado CRM
-        if (checkbox.checked) {
-            entry.sin_bot = true;
+        entry.sin_bot = newValue;
+        if (newValue) {
             entry.bloqueado_crm = false;
-        } else {
-            entry.sin_bot = false;
+            const paired = document.getElementById(pairedId);
+            if (paired) paired.checked = false;
         }
-
-        // Actualizar otro checkbox en el DOM
-        _syncRowCheckboxes(chatId, entry.sin_bot, entry.bloqueado_crm);
         await _upsertEntry(entry);
     }
 
-    async function _onBloqCrmChange(chatId, checkbox) {
+    async function _onBloqCrmChange(chatId, newValue, pairedId) {
         const entry = _entries.find(e => e.chat_id === chatId);
         if (!entry) return;
-
-        if (checkbox.checked) {
-            entry.bloqueado_crm = true;
+        entry.bloqueado_crm = newValue;
+        if (newValue) {
             entry.sin_bot = false;
-        } else {
-            entry.bloqueado_crm = false;
+            const paired = document.getElementById(pairedId);
+            if (paired) paired.checked = false;
         }
-
-        _syncRowCheckboxes(chatId, entry.sin_bot, entry.bloqueado_crm);
         await _upsertEntry(entry);
-    }
-
-    function _syncRowCheckboxes(chatId, sinBot, bloqCrm) {
-        // Re-renderizar para mantener consistencia sin flickering
-        const entry = _entries.find(e => e.chat_id === chatId);
-        if (entry) {
-            entry.sin_bot = sinBot;
-            entry.bloqueado_crm = bloqCrm;
-        }
-        _renderTable();
     }
 
     async function _onNotesBlur(chatId, notes) {
@@ -395,9 +392,23 @@ window.listaNegraView = (() => {
 
     // ── ACTIVAR / DESACTIVAR ──────────────────────────────────────────────
 
+    function _onToggle(checked) {
+        if (checked) {
+            _activar();
+        } else {
+            const confirmed = confirm('¿Desactivar la Lista Negra? Se eliminarán TODOS los registros de contactos en la lista.');
+            if (!confirmed) {
+                const toggle = document.getElementById('ln-toggle');
+                if (toggle) toggle.checked = true;
+                return;
+            }
+            _desactivar();
+        }
+    }
+
     async function _activar() {
-        const btn = document.getElementById('ln-activate-btn');
-        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Activando...'; }
+        const toggle = document.getElementById('ln-toggle');
+        if (toggle) toggle.disabled = true;
         try {
             const res = await fetch(`/api/backoffice/blacklist/activate?token=${_token}`, { method: 'POST' });
             const data = await res.json();
@@ -408,17 +419,14 @@ window.listaNegraView = (() => {
                 showToast && showToast('Lista Negra activada', 'success');
             } else {
                 showToast && showToast('Error activando: ' + (data.error || ''), 'error');
-                if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-power-off"></i> Activar Lista Negra'; }
+                if (toggle) { toggle.checked = false; }
             }
         } catch (e) {
             showToast && showToast('Error de red', 'error');
-            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-power-off"></i> Activar Lista Negra'; }
+            if (toggle) { toggle.checked = false; }
+        } finally {
+            if (toggle) toggle.disabled = false;
         }
-    }
-
-    function _confirmDeactivate() {
-        if (!confirm('¿Desactivar la Lista Negra? Se eliminarán TODOS los registros de contactos en la lista.')) return;
-        _desactivar();
     }
 
     async function _desactivar() {
@@ -457,9 +465,7 @@ window.listaNegraView = (() => {
         getHTML,
         init,
         destroy,
-        // Exponer métodos para handlers inline
-        _activar,
-        _confirmDeactivate,
+        _onToggle,
         _openAddModal,
         _closeModal,
         _toggleModalMode,

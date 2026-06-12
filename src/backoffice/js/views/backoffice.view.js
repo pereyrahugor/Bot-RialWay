@@ -12,7 +12,7 @@ window.backofficeView = {
                 <div class="sidebar-header">
                     <div style="display:flex; align-items:center; gap:8px;">
                         <h2 class="sidebar-title">Chats</h2>
-                        <span id="unread-total-badge" style="display:none; background:#10b981; color:white; font-size:0.75rem; font-weight:700; padding:2px 8px; border-radius:12px;">0</span>
+                        <span id="unread-total-badge" style="display:none; background:#ef4444; color:white; font-size:0.75rem; font-weight:700; font-family:'Montserrat',sans-serif; padding:2px 8px; border-radius:12px;">0</span>
                     </div>
                     <div class="sidebar-header-actions">
                         <button class="btn-icon-wa" title="Sincronizar Contactos" onclick="startContactSync()" id="btn-sync-baileys">
@@ -41,8 +41,8 @@ window.backofficeView = {
 
                 <!-- Unread filter container -->
                 <div id="unread-filter-container" style="display:none; align-items:center; justify-content:space-between; padding: 8px 16px; border-bottom: 1px solid var(--border); background: var(--bg-header);">
-                    <span style="font-size:0.85rem; font-weight:600; color:var(--text-muted); display:flex; align-items:center; gap:6px;">
-                        <i class="fas fa-envelope" style="color:#6366f1;"></i> Filtrar no leídos
+                    <span style="font-size:0.82rem; font-weight:600; color:var(--text-muted); font-family:'Montserrat',sans-serif; display:flex; align-items:center; gap:6px;">
+                        <i class="fas fa-envelope" style="color:#0099FF;"></i> Filtrar no leídos
                     </span>
                     <label style="width: 36px; height: 20px; position: relative; display: inline-block; cursor: pointer;">
                         <input type="checkbox" id="unread-filter-checkbox" onchange="toggleUnreadFilter(this.checked)" style="opacity: 0; width: 0; height: 0; position: absolute;">
@@ -96,16 +96,13 @@ window.backofficeView = {
                                 style="display:none;"
                                 onclick="toggleBlacklist()"
                                 disabled>
-                                <i class="fas fa-check-circle" style="color:#25D366;"></i>
+                                <i class="fas fa-ban" style="color:var(--text-muted);"></i>
                             </button>
                             <button class="btn-icon" id="open-tags-btn" onclick="toggleTagsPanel()" title="Gestionar Etiquetas" disabled>
                                 <i class="fas fa-tags"></i>
                             </button>
                             <button class="btn-icon" id="open-crm-btn" onclick="toggleCRMPanel()" title="Ficha del Cliente" disabled>
                                 <i class="fas fa-user-pen"></i>
-                            </button>
-                            <button class="btn-icon" id="open-ticket-btn" onclick="openTicketModal()" title="Generar Ticket" disabled>
-                                <i class="fas fa-plus-circle"></i>
                             </button>
                             <div id="crm-jump-container" style="display: none !important;">
                                 <select id="crm-lead-jump" style="display:none;"></select>
@@ -132,12 +129,12 @@ window.backofficeView = {
                                     <li onclick="toggleCRMPanel(); _closeMobileHeaderMenu()">
                                         <i class="fas fa-user-pen"></i> Ficha del Cliente
                                     </li>
-                                    <li onclick="openTicketModal(); _closeMobileHeaderMenu()">
-                                        <i class="fas fa-plus-circle"></i> Nuevo Ticket
+                                    <li id="mobile-blacklist-li" style="display:none;" onclick="toggleBlacklist(); _closeMobileHeaderMenu()">
+                                        <i class="fas fa-ban"></i> <span id="mobile-blacklist-label">Lista Negra</span>
                                     </li>
                                     <li class="mobile-bot-toggle-row" onclick="_mobileToggleBotClick()">
                                         <i class="fas fa-robot"></i>
-                                        <span>Switch</span>
+                                        <span id="mobile-bot-label">Bot: off</span>
                                         <label class="switch" onclick="event.stopPropagation()" style="margin-left:auto;">
                                             <input type="checkbox" id="mobile-bot-toggle" onchange="toggleBot(this.checked); const r=document.getElementById('bot-toggle'); if(r) r.checked=this.checked;">
                                             <span class="slider round">
@@ -379,77 +376,6 @@ window.backofficeView = {
             </div>
         </div>
 
-        <!-- Modal Generar Ticket -->
-        <div id="ticket-modal" class="modal-overlay">
-            <div class="modal-content animate-pop-in">
-                <div class="modal-header">
-                    <h3><i class="fas fa-ticket-alt modal-h3-icon"></i> Generar Nuevo Ticket</h3>
-                    <button class="btn-close-modal" onclick="closeTicketModal()"><i class="fas fa-times"></i></button>
-                </div>
-                <div class="modal-body">
-                    <div class="modal-section">
-                        <label><i class="fas fa-heading"></i> Titulo del Ticket</label>
-                        <input type="text" id="ticket-title" class="crm-input" placeholder="Ej: Problema con el pago">
-                    </div>
-                    <div class="ticket-modal-row">
-                        <div class="ticket-modal-col">
-                            <div class="modal-section">
-                                <label><i class="fas fa-tag"></i> Tipo</label>
-                                <div class="csd-wrap">
-                                    <select id="ticket-type" hidden>
-                                        <option value="Soporte">Soporte</option>
-                                        <option value="Ventas">Ventas</option>
-                                        <option value="Tecnico">Tecnico</option>
-                                        <option value="Asistencia Externa">Asistencia Externa</option>
-                                        <option value="Otro">Otro</option>
-                                    </select>
-                                    <button class="csd-btn" type="button" onclick="_csdToggle(this)">
-                                        <span class="csd-label">Soporte</span>
-                                        <i class="fas fa-chevron-down csd-chevron"></i>
-                                    </button>
-                                    <div class="csd-menu">
-                                        <button class="csd-item selected" type="button" data-val="Soporte" onclick="_csdSelect(this,'Soporte')">Soporte</button>
-                                        <button class="csd-item" type="button" data-val="Ventas" onclick="_csdSelect(this,'Ventas')">Ventas</button>
-                                        <button class="csd-item" type="button" data-val="Tecnico" onclick="_csdSelect(this,'Tecnico')">Tecnico</button>
-                                        <button class="csd-item" type="button" data-val="Asistencia Externa" onclick="_csdSelect(this,'Asistencia Externa')">Asistencia Externa</button>
-                                        <button class="csd-item" type="button" data-val="Otro" onclick="_csdSelect(this,'Otro')">Otro</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="ticket-modal-col">
-                            <div class="modal-section">
-                                <label><i class="fas fa-flag"></i> Prioridad</label>
-                                <div class="csd-wrap">
-                                    <select id="ticket-priority" hidden>
-                                        <option value="Baja">Baja</option>
-                                        <option value="Media" selected>Media</option>
-                                        <option value="Alta">Alta</option>
-                                    </select>
-                                    <button class="csd-btn" type="button" onclick="_csdToggle(this)">
-                                        <span class="csd-label">Media</span>
-                                        <i class="fas fa-chevron-down csd-chevron"></i>
-                                    </button>
-                                    <div class="csd-menu">
-                                        <button class="csd-item" type="button" data-val="Baja" onclick="_csdSelect(this,'Baja')">Baja</button>
-                                        <button class="csd-item selected" type="button" data-val="Media" onclick="_csdSelect(this,'Media')">Media</button>
-                                        <button class="csd-item" type="button" data-val="Alta" onclick="_csdSelect(this,'Alta')">Alta</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="modal-section">
-                        <label><i class="fas fa-align-left"></i> Descripcion</label>
-                        <textarea id="ticket-desc" class="crm-input" rows="4" placeholder="Detalles de la incidencia..."></textarea>
-                    </div>
-                    <button class="btn-primary btn-full-mt" onclick="createTicket()">
-                        <i class="fas fa-save icon-mr"></i> Crear Ticket
-                    </button>
-                </div>
-            </div>
-        </div>
-
         <!-- Modal Sincronizar -->
         <div id="sync-modal" class="modal-overlay">
             <div class="modal-content animate-pop-in" style="max-width:400px;">
@@ -582,7 +508,7 @@ window.backofficeView = {
             const knob = document.getElementById('unread-slider-knob');
             if (bg && knob) {
                 if (enabled) {
-                    bg.style.backgroundColor = '#6366f1';
+                    bg.style.backgroundColor = '#0099FF';
                     knob.style.transform = 'translateX(16px)';
                 } else {
                     bg.style.backgroundColor = '#cbd5e1';
@@ -601,6 +527,8 @@ window.backofficeView = {
             const real = document.getElementById('bot-toggle');
             const mob = document.getElementById('mobile-bot-toggle');
             if (real && mob) { mob.checked = real.checked; mob.disabled = real.disabled; }
+            const label = document.getElementById('mobile-bot-label');
+            if (label && real) label.textContent = real.checked ? 'Bot: on' : 'Bot: off';
             const isOpen = d.classList.toggle('open');
             if (isOpen) document.addEventListener('click', window._closeMobileHeaderMenu, { once: true });
         };

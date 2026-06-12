@@ -168,6 +168,7 @@ function renderBoard() {
         board.appendChild(colEl);
     });
     distributeCards();
+    _initKanbanScrollBehaviorTareas();
 }
 
 function distributeCards() {
@@ -923,5 +924,16 @@ if (typeof io !== 'undefined') {
         console.log('📡 [Socket Tareas] Ticket actualizado');
         syncCRM();
     });
+}
+
+function _initKanbanScrollBehaviorTareas() {
+    const board = document.getElementById('kanban-board');
+    if (!board || board._scrollBound) return;
+    board._scrollBound = true;
+    board.addEventListener('wheel', (e) => {
+        if (e.target.closest('.kanban-cards')) return;
+        e.preventDefault();
+        board.scrollLeft += e.deltaY + e.deltaX;
+    }, { passive: false });
 }
 })();

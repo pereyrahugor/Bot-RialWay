@@ -188,6 +188,7 @@ function renderBoard() {
 
     distributeCards();
     try { initDragAndDrop(); } catch (e) { console.error('[CRM] initDragAndDrop error:', e); }
+    _initKanbanScrollBehavior();
 }
 
 function distributeCards() {
@@ -1092,6 +1093,17 @@ window.openCardModalFromTask = openCardModalFromTask;
 
 // --- Real-time Updates via Socket.IO ---
 /* global io */
+function _initKanbanScrollBehavior() {
+    const board = document.getElementById('kanban-board');
+    if (!board || board._scrollBound) return;
+    board._scrollBound = true;
+    board.addEventListener('wheel', (e) => {
+        if (e.target.closest('.kanban-cards')) return;
+        e.preventDefault();
+        board.scrollLeft += e.deltaY + e.deltaX;
+    }, { passive: false });
+}
+
 if (typeof io !== 'undefined') {
     const socket = io();
     console.log('📡 [Socket] Conectado para actualizaciones en tiempo real');

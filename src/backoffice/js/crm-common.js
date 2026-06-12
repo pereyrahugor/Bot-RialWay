@@ -133,6 +133,8 @@ function _csdRebuild(id) {
 function initTheme() {
     const savedTheme = localStorage.getItem('theme') || 'light';
     document.documentElement.setAttribute('data-theme', savedTheme);
+    const cb = document.getElementById('theme-toggle-input');
+    if (cb) cb.checked = savedTheme === 'dark';
 }
 
 function toggleTheme() {
@@ -141,7 +143,8 @@ function toggleTheme() {
     document.documentElement.setAttribute('data-theme', newTheme);
     localStorage.setItem('theme', newTheme);
     
-    // Disparar evento para que otros módulos se enteren
+    const cb = document.getElementById('theme-toggle-input');
+    if (cb) cb.checked = newTheme === 'dark';
     window.dispatchEvent(new Event('themeChanged'));
 }
 
@@ -497,15 +500,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     highlightActiveNav();
     updateMetaNavButton();
 
-    // Iniciales del bot en el avatar del header
-    const avatar = document.getElementById('nav-brand-avatar');
-    if (avatar) {
-        const name = (window.BOT_NAME || '').trim();
-        const words = name.split(/\s+/).filter(Boolean);
-        avatar.textContent = words.length >= 2
-            ? (words[0][0] + words[1][0]).toUpperCase()
-            : (words[0] || 'B').slice(0, 2).toUpperCase();
-    }
 
     await window.fetchCRMConfig();
     window.applyCRMConfig();

@@ -169,36 +169,34 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                         }
                     }
 
-                    // 2. Verificar si ya existe un ticket (lead) activo para este contacto
-                    console.log(`[idleFlow] 🔍 Verificando si existe ticket activo para ${userId}`);
-                    const activeTicket = await HistoryHandler.getActiveTicketForContact(userId, dynamicProjectId);
-                    
-                    if (activeTicket) {
-                        console.log(`[idleFlow] 🎟️ Ticket activo encontrado (ID: ${activeTicket.id}). Agregando resumen...`);
-                        const previousDesc = activeTicket.descripcion ? `${activeTicket.descripcion}\n\n---\n\n` : '';
+                    // 2. Verificar si ya existe un reporte activo para este contacto
+                    console.log(`[idleFlow] 🔍 Verificando si existe reporte activo para ${userId}`);
+                    const activeReporte = await HistoryHandler.getActiveReporteBot(userId, dynamicProjectId);
+
+                    if (activeReporte) {
+                        console.log(`[idleFlow] 📋 Reporte activo encontrado (ID: ${activeReporte.id}). Agregando resumen...`);
+                        const previousDesc = activeReporte.descripcion ? `${activeReporte.descripcion}\n\n---\n\n` : '';
                         const updatedDesc = previousDesc + newSummary;
-                        
-                        const updateTicketRes = await HistoryHandler.updateTicketDescription(activeTicket.id, updatedDesc, dynamicProjectId);
-                        if (!updateTicketRes.success) {
-                            console.error(`❌ Error al actualizar la descripción del ticket existente:`, updateTicketRes.error);
+
+                        const updateRes = await HistoryHandler.updateReporteBotDescription(activeReporte.id, updatedDesc);
+                        if (!updateRes.success) {
+                            console.error(`❌ Error al actualizar reporte existente:`, updateRes.error);
                         } else {
-                            console.log(`🚀 Resumen agregado con éxito al ticket activo ${activeTicket.id}`);
+                            console.log(`🚀 Resumen agregado con éxito al reporte ${activeReporte.id}`);
                         }
                     } else {
-                        console.log(`[idleFlow] 🎟️ No hay ticket activo para ${userId}. Creando nuevo ticket de Lead...`);
-                        const ticketResult = await HistoryHandler.createTicket(
-                            userId, 
-                            '', // Dejar vacío el título para que solo tenga nombre/título si se agrega manualmente
-                            newSummary, // Usar solo el resumen nuevo en el ticket
-                            'Nuevo Lead', 
-                            'Alta',
+                        console.log(`[idleFlow] 📋 No hay reporte activo para ${userId}. Creando nuevo reporte...`);
+                        const reporteResult = await HistoryHandler.createReporteBot(
+                            userId,
+                            newSummary,
+                            'Nuevo Lead',
                             dynamicProjectId
                         );
 
-                        if (!ticketResult.success) {
-                            console.error(`❌ Error creando ticket:`, ticketResult.error);
+                        if (!reporteResult.success) {
+                            console.error(`❌ Error creando reporte:`, reporteResult.error);
                         } else {
-                            console.log(`🚀 Ticket de Lead creado automáticamente para ${userId}`);
+                            console.log(`🚀 Reporte de Lead creado automáticamente para ${userId}`);
                         }
                     }
                 }
