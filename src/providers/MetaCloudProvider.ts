@@ -669,10 +669,10 @@ class MetaCloudProvider extends ProviderClass {
                     if (mediaId) {
                         const mediaData = { id: mediaId };
                         const finalLowerPath = finalPath.toLowerCase();
-                        const isSticker = finalLowerPath.endsWith('.webp') || mimeType.includes('webp') || mimeType.includes('sticker') || options.type === 'sticker' || (options.media && options.media.type === 'sticker');
-                        const isImage = !isSticker && (finalLowerPath.endsWith('.jpg') || finalLowerPath.endsWith('.png') || finalLowerPath.endsWith('.jpeg') || mimeType.includes('image'));
-                        const isVideo = finalLowerPath.endsWith('.mp4') || finalLowerPath.endsWith('.3gp') || finalLowerPath.endsWith('.mkv') || finalLowerPath.endsWith('.webm') || finalLowerPath.endsWith('.mov') || finalLowerPath.endsWith('.avi') || finalLowerPath.endsWith('.flv') || mimeType.includes('video');
-                        const isAudio = !isVideo && (finalLowerPath.endsWith('.mp3') || finalLowerPath.endsWith('.m4a') || finalLowerPath.endsWith('.aac') || finalLowerPath.endsWith('.amr') || finalLowerPath.endsWith('.ogg') || finalLowerPath.endsWith('.opus') || finalLowerPath.endsWith('.wav') || mimeType.includes('audio'));
+                        const isSticker = mimeType.includes('webp') || mimeType.includes('sticker') || options.type === 'sticker' || (options.media && options.media.type === 'sticker') || finalLowerPath.endsWith('.webp');
+                        const isImage = !isSticker && (mimeType.includes('image') || finalLowerPath.endsWith('.jpg') || finalLowerPath.endsWith('.png') || finalLowerPath.endsWith('.jpeg'));
+                        const isAudio = !isSticker && !isImage && (mimeType.includes('audio') || mimeType.includes('voice') || finalLowerPath.endsWith('.mp3') || finalLowerPath.endsWith('.m4a') || finalLowerPath.endsWith('.aac') || finalLowerPath.endsWith('.amr') || finalLowerPath.endsWith('.ogg') || finalLowerPath.endsWith('.opus') || finalLowerPath.endsWith('.wav') || (finalLowerPath.endsWith('.webm') && (mimeType === '' || mimeType.includes('audio'))));
+                        const isVideo = !isSticker && !isImage && !isAudio && (mimeType.includes('video') || finalLowerPath.endsWith('.mp4') || finalLowerPath.endsWith('.3gp') || finalLowerPath.endsWith('.mkv') || finalLowerPath.endsWith('.webm') || finalLowerPath.endsWith('.mov') || finalLowerPath.endsWith('.avi') || finalLowerPath.endsWith('.flv'));
 
                         if (isSticker) {
                             body.type = 'sticker';
@@ -684,7 +684,7 @@ class MetaCloudProvider extends ProviderClass {
                             body.type = 'video';
                             body.video = { ...mediaData, caption: finalCaption };
                         } else if (isAudio) {
-                            body.type = (finalLowerPath.endsWith('.opus') || mimeType.includes('voice')) ? 'voice' : 'audio';
+                            body.type = 'audio';
                             body.audio = { ...mediaData };
                         } else {
                             body.type = 'document';
@@ -724,7 +724,7 @@ class MetaCloudProvider extends ProviderClass {
                 body.type = 'image';
                 body.image = { ...mediaData, caption: finalCaption };
             } else if (mimeType.includes('audio') || mimeType.includes('voice') || lowerMediaUrl.endsWith('.mp3') || lowerMediaUrl.endsWith('.ogg') || lowerMediaUrl.endsWith('.opus')) {
-                body.type = (mimeType.includes('voice') || lowerMediaUrl.endsWith('.opus')) ? 'voice' : 'audio';
+                body.type = 'audio';
                 body.audio = { ...mediaData };
             } else if (mimeType.includes('video') || lowerMediaUrl.endsWith('.mp4')) {
                 body.type = 'video';
@@ -800,6 +800,10 @@ class MetaCloudProvider extends ProviderClass {
 
     public async sendVideo(number: string, media: string, caption: string = ''): Promise<any> {
         return this.sendMessage(number, caption, { media: { url: media, mimetype: 'video/mp4' } });
+    }
+
+    public async sendAudio(number: string, media: string, caption: string = ''): Promise<any> {
+        return this.sendMessage(number, caption, { media: { url: media, mimetype: 'audio/mp4' } });
     }
 
     public async sendFile(number: string, media: string, caption: string = ''): Promise<any> {

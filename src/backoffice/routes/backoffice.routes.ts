@@ -136,6 +136,12 @@ export const processSendMessage = async (
                     } else {
                         providerResponse = await providerToSend.sendMessage(jid, message || '', { media: absolutePath });
                     }
+                } else if (finalType === 'audio') {
+                    if (typeof (providerToSend as any).sendAudio === 'function') {
+                        providerResponse = await (providerToSend as any).sendAudio(jid, absolutePath, message || file.originalname);
+                    } else {
+                        providerResponse = await providerToSend.sendMessage(jid, message || '', { media: { url: absolutePath, mimetype: file.mimetype } });
+                    }
                 } else {
                     if (typeof (providerToSend as any).sendFile === 'function') {
                         providerResponse = await (providerToSend as any).sendFile(jid, absolutePath, message || file.originalname);
