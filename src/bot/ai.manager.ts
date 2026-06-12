@@ -201,7 +201,7 @@ export class AiManager {
             // --- FILTRO DE BOT GLOBAL ---
             const isGlobalBotEnabledSetting = await HistoryHandler.getSetting('GLOBAL_BOT_ENABLED', dynamicProjectId);
             const isGlobalBotEnabled = isGlobalBotEnabledSetting !== 'false';
-            const isBotActiveForUser = await HistoryHandler.isBotEnabled(ctx.from);
+            const isBotActiveForUser = await HistoryHandler.isBotEnabled(ctx.from, dynamicProjectId);
 
             if (!isGlobalBotEnabled || !isBotActiveForUser) {
                 if (!isGlobalBotEnabled) {
@@ -226,9 +226,9 @@ export class AiManager {
                         console.log(`[AiManager] ⛔ Contacto ${ctx.from} en lista negra (sin_bot=${blEntry.sin_bot}, bloqueado_crm=${blEntry.bloqueado_crm}). Activando intervención humana permanente.`);
                         // Asegurar que el chat esté en modo intervención humana (bot_enabled=false)
                         // El worker de inactividad lo excluye, por lo que permanecerá así indefinidamente.
-                        const currentBotState = await HistoryHandler.isBotEnabled(ctx.from);
+                        const currentBotState = await HistoryHandler.isBotEnabled(ctx.from, dynamicProjectId);
                         if (currentBotState) {
-                            await HistoryHandler.toggleBot(ctx.from, false);
+                            await HistoryHandler.toggleBot(ctx.from, false, dynamicProjectId);
                         }
                         return state;
                     }

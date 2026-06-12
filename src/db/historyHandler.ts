@@ -1223,9 +1223,9 @@ export class HistoryHandler {
     /**
      * Verifica si el bot está habilitado para un usuario
      */
-    static async isBotEnabled(rawChatId: string): Promise<boolean> {
+    static async isBotEnabled(rawChatId: string, projectId?: string | null): Promise<boolean> {
         try {
-            const chat = await this.getChat(rawChatId);
+            const chat = await this.getChat(rawChatId, projectId || undefined);
             return chat ? (chat.bot_enabled !== false) : true;
         } catch (err) {
             console.error('[HistoryHandler] Error en isBotEnabled:', err);
