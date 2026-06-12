@@ -41,7 +41,23 @@ class MetaCloudProvider extends ProviderClass {
      * Descarga y guarda archivos multimedia recibidos por webhook
      */
     public async saveFile(ctx: any, options: { path?: string } = {}): Promise<string> {
-        const { access_token } = this.config;
+        // Intentar obtener el token del tenant específico para este mensaje
+        let access_token = this.config.access_token;
+        const recipientPhoneId = ctx.recipientPhoneId;
+        if (recipientPhoneId) {
+            try {
+                const { HistoryHandler } = await import('../db/historyHandler');
+                const resolvedProjectId = await HistoryHandler.getProjectIdByRecipient(recipientPhoneId);
+                if (resolvedProjectId) {
+                    const tenantOnboarding = await HistoryHandler.getMetaOnboardingData(resolvedProjectId);
+                    if (tenantOnboarding?.whatsappToken) {
+                        access_token = tenantOnboarding.whatsappToken;
+                    }
+                }
+            } catch (e) {
+                // Silently fallback to this.config.access_token
+            }
+        }
         
         // El payload puede estar en varios lugares según el origen del mensaje
         const msg = ctx.payload || ctx;
@@ -462,6 +478,63 @@ class MetaCloudProvider extends ProviderClass {
     }
 
     /**
+     * Convierte archivos de formatos no soportados a formatos compatibles con Meta (MP4 para video, MP3 para audio)
+     */
+    private async transcodeToSupportedFormat(filePath: string): Promise<{ outputPath: string; isTemporary: boolean }> {
+        const ext = path.extname(filePath).toLowerCase();
+        
+        const isVideo = ['.mkv', '.webm', '.mov', '.avi', '.flv', '.wmv', '.gif'].includes(ext);
+        const isAudio = ['.wav', '.wma', '.flac', '.m4r'].includes(ext);
+
+        if (!isVideo && !isAudio) {
+            return { outputPath: filePath, isTemporary: false };
+        }
+
+        // Si es video no soportado, convertir a MP4
+        if (isVideo) {
+            const outPath = path.join(path.dirname(filePath), `converted_${Date.now()}_${path.basename(filePath, ext)}.mp4`);
+            console.log(`🎬 [MetaCloudProvider] Transcodificando video no soportado: ${filePath} -> ${outPath}`);
+            try {
+                const { exec } = await import('child_process');
+                const { promisify } = await import('util');
+                const execPromise = promisify(exec);
+                
+                // Comando ffmpeg optimizado para MP4 compatible con WhatsApp (yuv420p y H.264)
+                await execPromise(`ffmpeg -y -i "${filePath}" -c:v libx264 -pix_fmt yuv420p -c:a aac -map 0:v:0? -map 0:a? "${outPath}"`);
+                
+                if (fs.existsSync(outPath)) {
+                    console.log(`✅ [MetaCloudProvider] Transcodificación completada: ${outPath}`);
+                    return { outputPath: outPath, isTemporary: true };
+                }
+            } catch (err: any) {
+                console.error(`❌ [MetaCloudProvider] Error transcodificando video con ffmpeg:`, err.message);
+            }
+        }
+
+        // Si es audio no soportado, convertir a MP3
+        if (isAudio) {
+            const outPath = path.join(path.dirname(filePath), `converted_${Date.now()}_${path.basename(filePath, ext)}.mp3`);
+            console.log(`🎵 [MetaCloudProvider] Transcodificando audio no soportado: ${filePath} -> ${outPath}`);
+            try {
+                const { exec } = await import('child_process');
+                const { promisify } = await import('util');
+                const execPromise = promisify(exec);
+                
+                await execPromise(`ffmpeg -y -i "${filePath}" -c:a libmp3lame -b:a 128k "${outPath}"`);
+                
+                if (fs.existsSync(outPath)) {
+                    console.log(`✅ [MetaCloudProvider] Transcodificación completada: ${outPath}`);
+                    return { outputPath: outPath, isTemporary: true };
+                }
+            } catch (err: any) {
+                console.error(`❌ [MetaCloudProvider] Error transcodificando audio con ffmpeg:`, err.message);
+            }
+        }
+
+        return { outputPath: filePath, isTemporary: false };
+    }
+
+    /**
      * Sube un archivo local a Meta para obtener un media_id
      */
     private async uploadMedia(filePath: string): Promise<string | null> {
@@ -471,6 +544,17 @@ class MetaCloudProvider extends ProviderClass {
             return null;
         }
 
+        let finalPath = filePath;
+        let isTemp = false;
+
+        try {
+            const transcodeResult = await this.transcodeToSupportedFormat(filePath);
+            finalPath = transcodeResult.outputPath;
+            isTemp = transcodeResult.isTemporary;
+        } catch (transcodeErr: any) {
+            console.error(`⚠️ [MetaCloudProvider] Error durante transcodificación, usando archivo original:`, transcodeErr.message);
+        }
+
         const apiVersion = process.env.META_API_VERSION || 'v22.0';
         const url = `https://graph.facebook.com/${apiVersion}/${phone_number_id}/media`;
         let tempOgg: string | null = null;
@@ -478,14 +562,19 @@ class MetaCloudProvider extends ProviderClass {
             const form = new FormData();
             form.append('messaging_product', 'whatsapp');
 
-            const lowerPath = filePath.toLowerCase();
-            let contentType = 'application/octet-stream';
+            const lowerPath = finalPath.toLowerCase();
+            let contentType = 'text/plain'; // Fallback por defecto a text/plain para evitar OAuthException de application/octet-stream
+            
             if (lowerPath.endsWith('.webp')) contentType = 'image/webp';
             else if (lowerPath.endsWith('.png')) contentType = 'image/png';
             else if (lowerPath.endsWith('.jpg') || lowerPath.endsWith('.jpeg')) contentType = 'image/jpeg';
             else if (lowerPath.endsWith('.pdf')) contentType = 'application/pdf';
             else if (lowerPath.endsWith('.mp4')) contentType = 'video/mp4';
+            else if (lowerPath.endsWith('.3gp')) contentType = 'video/3gpp';
             else if (lowerPath.endsWith('.mp3')) contentType = 'audio/mpeg';
+            else if (lowerPath.endsWith('.m4a')) contentType = 'audio/mp4';
+            else if (lowerPath.endsWith('.aac')) contentType = 'audio/aac';
+            else if (lowerPath.endsWith('.amr')) contentType = 'audio/amr';
             else if (lowerPath.endsWith('.ogg')) contentType = 'audio/ogg';
             else if (lowerPath.endsWith('.opus')) contentType = 'audio/ogg; codecs=opus';
             else if (lowerPath.endsWith('.aac')) contentType = 'audio/aac';
@@ -581,22 +670,22 @@ class MetaCloudProvider extends ProviderClass {
                         const mediaData = { id: mediaId };
                         const finalLowerPath = finalPath.toLowerCase();
                         const isSticker = finalLowerPath.endsWith('.webp') || mimeType.includes('webp') || mimeType.includes('sticker') || options.type === 'sticker' || (options.media && options.media.type === 'sticker');
-                        
+                        const isImage = !isSticker && (finalLowerPath.endsWith('.jpg') || finalLowerPath.endsWith('.png') || finalLowerPath.endsWith('.jpeg') || mimeType.includes('image'));
+                        const isVideo = finalLowerPath.endsWith('.mp4') || finalLowerPath.endsWith('.3gp') || finalLowerPath.endsWith('.mkv') || finalLowerPath.endsWith('.webm') || finalLowerPath.endsWith('.mov') || finalLowerPath.endsWith('.avi') || finalLowerPath.endsWith('.flv') || mimeType.includes('video');
+                        const isAudio = !isVideo && (finalLowerPath.endsWith('.mp3') || finalLowerPath.endsWith('.m4a') || finalLowerPath.endsWith('.aac') || finalLowerPath.endsWith('.amr') || finalLowerPath.endsWith('.ogg') || finalLowerPath.endsWith('.opus') || finalLowerPath.endsWith('.wav') || mimeType.includes('audio'));
+
                         if (isSticker) {
                             body.type = 'sticker';
                             body.sticker = { ...mediaData };
-                        } else if (finalLowerPath.endsWith('.pdf') || mimeType.includes('pdf')) {
-                            body.type = 'document';
-                            body.document = { ...mediaData, filename: path.basename(finalPath), caption: finalCaption };
-                        } else if (finalLowerPath.endsWith('.jpg') || finalLowerPath.endsWith('.png') || finalLowerPath.endsWith('.jpeg') || mimeType.includes('image')) {
+                        } else if (isImage) {
                             body.type = 'image';
                             body.image = { ...mediaData, caption: finalCaption };
-                        } else if (finalLowerPath.endsWith('.mp4') || finalLowerPath.endsWith('.ogg') || finalLowerPath.endsWith('.opus') || finalLowerPath.endsWith('.mp3') || finalLowerPath.endsWith('.wav') || mimeType.includes('audio')) {
-                            body.type = (finalLowerPath.endsWith('.opus') || mimeType.includes('voice')) ? 'voice' : 'audio';
-                            body.audio = { ...mediaData };
-                        } else if (finalLowerPath.endsWith('.mp4') || mimeType.includes('video')) {
+                        } else if (isVideo) {
                             body.type = 'video';
                             body.video = { ...mediaData, caption: finalCaption };
+                        } else if (isAudio) {
+                            body.type = (finalLowerPath.endsWith('.opus') || mimeType.includes('voice')) ? 'voice' : 'audio';
+                            body.audio = { ...mediaData };
                         } else {
                             body.type = 'document';
                             body.document = { ...mediaData, filename: path.basename(finalPath), caption: finalCaption };
@@ -847,8 +936,23 @@ class MetaCloudProvider extends ProviderClass {
                     if (messages && Array.isArray(messages)) {
                         
                         // Filtro de número destino para asegurar que es para nosotros
-                        if (phone_number_id && value.metadata?.phone_number_id && value.metadata?.phone_number_id !== String(phone_number_id)) {
-                            console.log(`⚠️ [MetaCloudProvider] Ignorando mensaje (ID mismatch: ${value.metadata?.phone_number_id} != ${phone_number_id})`);
+                        // En entorno multitenant, el phone_number_id del webhook puede corresponder a cualquiera de nuestros tenants en la DB
+                        let isValidPhoneId = false;
+                        if (value.metadata?.phone_number_id) {
+                            const incomingPhoneId = String(value.metadata.phone_number_id);
+                            if (phone_number_id && incomingPhoneId === String(phone_number_id)) {
+                                isValidPhoneId = true;
+                            } else {
+                                const { HistoryHandler } = await import('../db/historyHandler');
+                                const resolvedProject = await HistoryHandler.getProjectIdByRecipient(incomingPhoneId);
+                                if (resolvedProject) {
+                                    isValidPhoneId = true;
+                                }
+                            }
+                        }
+
+                        if (!isValidPhoneId && phone_number_id && value.metadata?.phone_number_id && value.metadata?.phone_number_id !== String(phone_number_id)) {
+                            console.log(`⚠️ [MetaCloudProvider] Ignorando mensaje (ID mismatch y no registrado: ${value.metadata?.phone_number_id} != ${phone_number_id})`);
                             continue;
                         }
 
@@ -912,10 +1016,10 @@ class MetaCloudProvider extends ProviderClass {
                                 type: type,
                                 payload: msg,
                                 platform: 'whatsapp',
-                                isManualIntervention: isThisChangeEcho && fieldName !== 'history' // Solo marcar intervención si no es historial retroactivo
+                                isManualIntervention: isThisChangeEcho && fieldName !== 'history', // Solo marcar intervención si no es historial retroactivo
+                                recipientPhoneId: value.metadata?.phone_number_id || phone_number_id
                             };
 
-                            // Enriquecer con objeto media para que los flujos (saveFile) tengan lo necesario
                             // Enriquecer con objeto media para que los flujos (saveFile) tengan lo necesario
                             if (mediaObj) {
                                 try {
@@ -987,7 +1091,8 @@ class MetaCloudProvider extends ProviderClass {
                             name: 'Meta User',
                             type: type === 'image' || type === 'video' ? type : 'text',
                             payload: msgEntry,
-                            platform: platform // Custom field for easier identification
+                            platform: platform, // Custom field for easier identification
+                            recipientPhoneId: entry.id // Page ID / Recipient ID
                         };
 
                         if (msg.attachments) {

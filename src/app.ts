@@ -257,7 +257,8 @@ const main = async () => {
                     const deps: BackofficeDependencies = { adapterProvider, groupProvider, HistoryHandler, openaiMain: openaiMainDynamic, upload };
 
                     // Sincronizar Meta Provider antes de procesar si es necesario
-                    const metaOnboarding = await HistoryHandler.getMetaOnboardingData();
+                    const pId = req.query.projectId || (req.body && req.body.projectId) || req.headers['x-project-id'] || (req.auth && req.auth.projectId) || null;
+                    const metaOnboarding = await HistoryHandler.getMetaOnboardingData(pId);
                     if (metaOnboarding && adapterProvider && adapterProvider.updateConfig) {
                         adapterProvider.updateConfig({
                             access_token: metaOnboarding.whatsappToken,
