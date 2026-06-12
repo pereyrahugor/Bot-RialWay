@@ -59,8 +59,8 @@ export interface Message {
 }
 
 export class HistoryHandler {
-    static readonly PROJECT_IDENTIFIER = process.env.RAILWAY_PROJECT_ID || "default_project";
-    static readonly PROJECT_ID = process.env.RAILWAY_PROJECT_ID || "default_project";
+    static readonly PROJECT_IDENTIFIER = process.env.PROJECT_ID || process.env.RAILWAY_PROJECT_ID || "default_project";
+    static readonly PROJECT_ID = process.env.PROJECT_ID || process.env.RAILWAY_PROJECT_ID || "default_project";
     static initialized = false;
 
     // In-memory caches to optimize database performance and avoid Disk I/O exhaustion (Supabase Best Practice)
@@ -89,7 +89,8 @@ export class HistoryHandler {
         'DB_TABLES', 'OPENAI_TOOLS_DEFINITION', 'msjCierre', 'msjSeguimiento1', 'msjSeguimiento2', 'msjSeguimiento3',
         'timeOutCierre', 'timeOutSeguimiento2', 'timeOutSeguimiento3', 'ID_GRUPO_RESUMEN', 'ID_GRUPO_RESUMEN_2',
         'SHEET_ID_RESUMEN', 'SHEET_ID_UPDATE', 'DOCX_ID_UPDATE', 'GOOGLE_CALENDAR_ID',
-        'ADMIN_USER', 'ADMIN_PASS', 'WHATSAPP_VISIBLE', 'INSTAGRAM_VISIBLE', 'MESSENGER_VISIBLE', 'CRM_FIELDS_CONFIG'
+        'ADMIN_USER', 'ADMIN_PASS', 'WHATSAPP_VISIBLE', 'INSTAGRAM_VISIBLE', 'MESSENGER_VISIBLE', 'CRM_FIELDS_CONFIG',
+        'CLIENT_SLUG', 'AQUAVITA_SWS_BASE_URL', 'AQUAVITA_SWS_USERNAME', 'AQUAVITA_SWS_PASSWORD'
     ];
 
     static readonly FIXED_KEYS = [
@@ -512,6 +513,105 @@ export class HistoryHandler {
         let cleanId = id.replace(/@s\.whatsapp\.net$/, '');
         cleanId = cleanId.replace(/@c\.us$/, '');
         return cleanId;
+    }
+
+    static async getClientContext(rawChatId: string): Promise<any | null> {
+        const chatId = this.normalizeId(rawChatId);
+        if (process.env.STORAGE_MODE === "local") {
+            const chat = await LocalHistoryStore.getChat(chatId, this.PROJECT_IDENTIFIER);
+            if (!chat) return null;
+            const meta = chat.metadata || {};
+            return {
+                nombre: chat.name || meta.nombre,
+                direccion: meta.direccion,
+                email: meta.email,
+                dni_cuit: meta.dni_cuit,
+                tax_status: meta.tax_status,
+                offered_product: meta.offered_product,
+                tipoCliente: meta.tipoCliente,
+                incidencias_ids: meta.incidencias_ids || []
+            };
+        }
+        
+        try {
+            const chat = await this.getChat(chatId);
+            if (!chat) return null;
+            
+            const meta = chat.metadata || {};
+            return {
+                nombre: chat.name || meta.nombre,
+                direccion: meta.direccion,
+                email: meta.email,
+                dni_cuit: meta.dni_cuit,
+                tax_status: meta.tax_status,
+                offered_product: meta.offered_product,
+                tipoCliente: meta.tipoCliente,
+                incidencias_ids: meta.incidencias_ids || []
+            };
+        } catch (err) {
+            return null;
+        }
+    }
+
+    static async saveClientContext(rawChatId: string, contextData: any) {
+        const chatId = this.normalizeId(rawChatId);
+        
+        if (process.env.STORAGE_MODE === "local") {
+            const chat = await LocalHistoryStore.getChat(chatId, this.PROJECT_IDENTIFIER);
+            const currentMeta = chat?.metadata || {};
+            const updatedMeta = {
+                ...currentMeta,
+                nombre: contextData.nombre || currentMeta.nombre || chat?.name,
+                direccion: contextData.direccion || contextData.address || currentMeta.direccion,
+                email: contextData.email || currentMeta.email,
+                dni_cuit: contextData.numCliente || contextData.cuit_dni || currentMeta.dni_cuit,
+                tax_status: contextData.tax_status || currentMeta.tax_status,
+                offered_product: contextData.offered_product || currentMeta.offered_product,
+                tipoCliente: contextData.tipoCliente || contextData.tipo_cliente || currentMeta.tipoCliente,
+                incidencias_ids: contextData.incidencias_ids || currentMeta.incidencias_ids || []
+            };
+            const updatePayload: any = {
+                metadata: updatedMeta
+            };
+            if (contextData.nombre) {
+                updatePayload.name = contextData.nombre;
+            }
+            await LocalHistoryStore.updateContactDetails(chatId, updatePayload, this.PROJECT_IDENTIFIER);
+            return;
+        }
+
+        try {
+            const chat = await this.getChat(chatId);
+            const currentMeta = chat?.metadata || {};
+            const updatedMeta = {
+                ...currentMeta,
+                nombre: contextData.nombre || currentMeta.nombre || chat?.name,
+                direccion: contextData.direccion || contextData.address || currentMeta.direccion,
+                email: contextData.email || currentMeta.email,
+                dni_cuit: contextData.numCliente || contextData.cuit_dni || currentMeta.dni_cuit,
+                tax_status: contextData.tax_status || currentMeta.tax_status,
+                offered_product: contextData.offered_product || currentMeta.offered_product,
+                tipoCliente: contextData.tipoCliente || contextData.tipo_cliente || currentMeta.tipoCliente,
+                incidencias_ids: contextData.incidencias_ids || currentMeta.incidencias_ids || []
+            };
+
+            const updatePayload: any = {
+                metadata: updatedMeta
+            };
+            if (contextData.nombre) {
+                updatePayload.name = contextData.nombre;
+            }
+
+            this.invalidateChatCache(chatId, this.PROJECT_IDENTIFIER);
+
+            await supabase
+                .from('chats')
+                .update(updatePayload)
+                .eq('id', chatId)
+                .eq('project_id', this.PROJECT_IDENTIFIER);
+        } catch (err) {
+            console.error('[HistoryHandler] Error en saveClientContext:', err);
+        }
     }
 
     /**
@@ -1871,14 +1971,27 @@ export class HistoryHandler {
                 if (admin) superUserId = admin.id;
             } catch (e) { /* ignore */ }
 
+            // Obtener el mainToken del sistema de una vez si existe
+            const mainToken = await this.getMainToken();
+            const tokenToSave = mainToken || token;
+
+            // Si el token original (del cliente) es diferente del mainToken, guardarlo en onboarding_data para syncs y auditorías
+            let onboardingData = extra || {};
+            if (token && token !== mainToken) {
+                onboardingData = {
+                    ...onboardingData,
+                    client_token: token
+                };
+            }
+
             const { data, error } = await supabase
                 .from('meta_onboarding')
                 .upsert({
                     project_id: targetProjectId,
                     waba_id: wabaId,
                     phone_number_id: phoneId,
-                    access_token: token,
-                    onboarding_data: extra,
+                    access_token: tokenToSave,
+                    onboarding_data: onboardingData,
                     owner_id: superUserId,
                     status: 'active',
                     updated_at: new Date().toISOString()
@@ -1910,7 +2023,7 @@ export class HistoryHandler {
 
             // --- PASO ADICIONAL 2: Asegurar suscripción a la WABA vía API de Meta ---
             // Esto garantiza que Meta envíe los webhooks al enrutador
-            if (wabaId && token) {
+            if (wabaId && tokenToSave) {
                 try {
                     const axios = (await import('axios')).default;
                     // Suscribir a messages + smb_message_echoes para capturar mensajes
@@ -1918,7 +2031,7 @@ export class HistoryHandler {
                     await axios.post(`https://graph.facebook.com/v22.0/${wabaId}/subscribed_apps`, 
                         {}, 
                         { 
-                            headers: { 'Authorization': `Bearer ${token}` },
+                            headers: { 'Authorization': `Bearer ${tokenToSave}` },
                             params: { subscribed_fields: 'messages,smb_message_echoes' }
                         }
                     );
@@ -1928,13 +2041,9 @@ export class HistoryHandler {
                 }
             }
 
-            // --- PASO ADICIONAL 3: Migrar al token maestro si existe ---
-            // Se desactiva la migración automática al token maestro ya que si el mainToken no tiene permisos explícitos
-            // compartidos sobre la WABA del cliente, todas las llamadas a la API de Meta fallarán para este proyecto.
-            /*
+            // --- PASO ADICIONAL 3: Migrar al token maestro si existe (Fallback) ---
             try {
-                const mainToken = await this.getMainToken();
-                if (mainToken && token !== mainToken) {
+                if (mainToken && tokenToSave !== mainToken) {
                     console.log(`📡 [HistoryHandler] Migrando token de cliente a 'main_token' para WABA ${wabaId}...`);
                     await supabase
                         .from('meta_onboarding')
@@ -1944,7 +2053,6 @@ export class HistoryHandler {
             } catch (swapErr) {
                 console.warn('⚠️ [HistoryHandler] No se pudo migrar al main_token:', swapErr);
             }
-            */
 
             return { success: true, data };
         } catch (err: any) {

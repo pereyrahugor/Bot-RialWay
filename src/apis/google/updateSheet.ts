@@ -276,6 +276,32 @@ async function processSheetById(SHEET_ID: string, options: { forceRecreate?: boo
                 const { error } = await supabase.from(tableName).insert(supabaseData);
                 if (error) {
                     console.error(`❌ Error uploading to Supabase table '${tableName}':`, error.message);
+                    
+                    // Si el error es por columnas diferentes o no existentes (ej. code 42703 o palabra 'column')
+                    if (error.code === '42703' || (error.message && error.message.toLowerCase().includes('column'))) {
+                        console.log(`⚠️ Detectado conflicto de esquema (columnas diferentes o no existentes) en '${tableName}'. Recreando tabla...`);
+                        
+                        // 1. Eliminar la tabla existente
+                        const dropRes = await supabase.rpc('exec_sql', { query: `DROP TABLE IF EXISTS ${tableName}` });
+                        if (dropRes.error) {
+                            console.error(`❌ Error al eliminar tabla '${tableName}' durante la recuperación:`, dropRes.error);
+                        } else {
+                            console.log(`✅ Tabla '${tableName}' eliminada para recuperación.`);
+                            
+                            // 2. Recrear la tabla con las columnas actualizadas
+                            const tableRecreated = await ensureTableExists(tableName, headersSanitized);
+                            if (tableRecreated) {
+                                // 3. Reintentar la inserción de datos
+                                console.log(`🚀 Reintentando inserción en tabla recreada '${tableName}'...`);
+                                const retryRes = await supabase.from(tableName).insert(supabaseData);
+                                if (retryRes.error) {
+                                    console.error(`❌ Error en el reintento de carga para '${tableName}':`, retryRes.error.message);
+                                } else {
+                                    console.log(`✅ Datos cargados exitosamente tras recrear la tabla '${tableName}'.`);
+                                }
+                            }
+                        }
+                    }
                 } else {
                     console.log(`✅ Datos cargados exitosamente en Supabase tabla '${tableName}'.`);
                 }

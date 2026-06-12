@@ -98,7 +98,26 @@ async function _initSystemConfigPage() {
         });
     }
 
+    function updateClientSlugVisibility() {
+        const clientSlugSel = document.getElementById('CLIENT_SLUG');
+        const aquavitaContainer = document.getElementById('aquavita-credentials-container');
+        if (!clientSlugSel || !aquavitaContainer) return;
+        
+        const val = clientSlugSel.value;
+        if (val === 'aquavita') {
+            aquavitaContainer.style.display = 'grid';
+        } else {
+            aquavitaContainer.style.display = 'none';
+        }
+    }
+
+    const clientSlugSel = document.getElementById('CLIENT_SLUG');
+    if (clientSlugSel) {
+        clientSlugSel.addEventListener('change', updateClientSlugVisibility);
+    }
+
     await loadVariables();
+    updateClientSlugVisibility();
 
     // Lógica del Panel Lateral
     window.togglePromptPanel = () => {

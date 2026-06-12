@@ -202,6 +202,7 @@ window.metaView = (() => {
         window.showTplPreviewModal      = showTplPreviewModal;
         window.launchMetaOnboardingView = launchMetaOnboardingView;
         window.syncAndSaveConnection    = syncAndSaveConnection;
+        window.startQuickBulkSend       = startQuickBulkSend;
 
         await checkMetaConnection();
     }
@@ -211,7 +212,7 @@ window.metaView = (() => {
         document.getElementById('tpl-preview-modal')?.remove();
         ['switchMetaTab', 'showTemplateDetail', 'startBulkSend', 'downloadBulkExcel',
          'toggleTagChip', 'toggleMetaAccordion', 'showTplPreviewModal', 'launchMetaOnboardingView',
-         'syncAndSaveConnection'
+         'syncAndSaveConnection', 'startQuickBulkSend'
         ].forEach(fn => { delete window[fn]; });
     }
 

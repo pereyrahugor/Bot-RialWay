@@ -23,6 +23,7 @@ import moment from 'moment';
 import OpenAI from "openai";
 import { transcribeAudioFile } from './audioTranscriptior';
 import { HistoryHandler } from '../../db/historyHandler';
+import { executeClientTool } from "../../bot/toolRouter";
 //import { handleToolFunctionCall } from '../Api-BotAsistente/handleToolFunctionCall.js';
 
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({
@@ -93,6 +94,47 @@ function esFechaFutura(fechaReservaStr: string): boolean {
 }
 
 export class AssistantResponseProcessor {
+    public static async actualizarContextoCliente(state: any, data: any, chatId?: string) {
+        if (!state || typeof state.get !== 'function' || typeof state.update !== 'function') return;
+        
+        const rawContext = state.get('datosClienteContext');
+        const contextAny: any = rawContext;
+        const current = contextAny || {
+            nombre: '',
+            apellido: '',
+            direccion: '',
+            numCliente: '',
+            tipoCliente: '',
+            incidencias_ids: [],
+            esCliente: 'No'
+        };
+
+        const updated = {
+            ...current,
+            nombre: data.nombre || data.nombreCliente || current.nombre,
+            apellido: data.apellido || current.apellido,
+            direccion: data.direccion || data.domicilioCompleto || data.domicilio || current.direccion,
+            numCliente: data.cliente_id || data.numCliente || current.numCliente,
+            tipoCliente: data.tipoCliente || current.tipoCliente,
+            esCliente: (data.esCliente || (data.cliente_id || data.numCliente ? 'Si' : current.esCliente))
+        };
+
+        if (data.incidencia_generada) {
+            updated.incidencias_ids = Array.isArray(updated.incidencias_ids) ? updated.incidencias_ids : [];
+            updated.incidencias_ids.push(String(data.incidencia_generada));
+        }
+
+        if ('numIncidencias' in updated) {
+            delete updated.numIncidencias;
+        }
+
+        await state.update({ datosClienteContext: updated });
+
+        if (chatId) {
+            await HistoryHandler.saveClientContext(chatId, updated);
+        }
+    }
+
     static async analizarYProcesarRespuestaAsistente(
         response: any,
         ctx: any,
@@ -182,8 +224,23 @@ export class AssistantResponseProcessor {
                     });
                 } else if (tipo === "cancel_event") {
                     apiResponse = await CalendarEvents.deleteEvent(jsonData.id);
+                } else {
+                    // Ruta a herramientas específicas del cliente usando el router modular
+                    const routerRes = await executeClientTool(tipo, jsonData, { 
+                        state, 
+                        ctx, 
+                        flowDynamic, 
+                        provider, 
+                        gotoFlow, 
+                        getAssistantResponse, 
+                        ASSISTANT_ID 
+                    });
+                    
+                    // Si el handler retorna un string, lo envolvemos en un objeto resultado; si es objeto, lo pasamos directo
+                    apiResponse = typeof routerRes === 'string' ? { result: routerRes } : routerRes;
                 }
             } catch (err: any) {
+                console.error(`[AssistantResponseProcessor] Error ejecutando tool '${tipo}':`, err.message);
                 apiResponse = { error: "Error en operación API: " + err.message };
             }
 
@@ -198,7 +255,7 @@ export class AssistantResponseProcessor {
 
                 let newResponse: any;
                 try {
-                    newResponse = await getAssistantResponse(ASSISTANT_ID, feedbackMsg, state, "Error procesando resultado API.", ctx?.from, threadId);
+                    newResponse = await getAssistantResponse(ASSISTANT_ID, feedbackMsg, state, "Error procesando resultado API.", ctx?.from, threadId, projectId, agentName);
                 } catch (err: any) {
                     // Si falla por run activo, intentamos una vez más tras una espera larga
                     if (err?.message?.includes('active')) {
@@ -352,6 +409,100 @@ export class AssistantResponseProcessor {
                     console.error('[AssistantResponseProcessor] Error enviando PDF:', err);
                 }
             }
+        }
+    }
+
+    public static async procesarHandoverYDerivacion(
+        response: string,
+        ctx: any,
+        flowDynamic: any,
+        state: any,
+        provider: any,
+        gotoFlow: any,
+        getAssistantResponse: Function,
+        currentAssistantId: string,
+        assignedAgentName: string,
+        assistantMap: Record<string, string | undefined>,
+        projectId: string
+    ) {
+        if (!response) return;
+
+        const lower = response.toLowerCase();
+        
+        // Regex robusto para detectar derivación (sincronizado con ai.manager.ts)
+        const matchAsistente = lower.match(/(?:derivar|derivando|derivo)(?:\s+(?:a|al|el|a\s+la))?\s+asistente\s*([1-5])(?:\.|\b|$)/i);
+        let nextAgentName: string | null = null;
+        if (matchAsistente) {
+            nextAgentName = `asistente${matchAsistente[1]}`;
+        } else if (/(?:derivar|derivando|derivo)(?:\s+(?:a|al|el|a\s+la))?\s+(?:asesor|agente|humano|atencion|soporte)\s+humano\b/i.test(lower)) {
+            nextAgentName = 'asistente_humano';
+        }
+
+        const matchResumen = response.match(/GET_RESUMEN[\s\S]+/i);
+        const resumen = matchResumen ? matchResumen[0].trim() : "Continúa con la atención del cliente.";
+
+        if (nextAgentName) {
+            if (nextAgentName === 'asistente_humano') {
+                console.log(`🚀 [MultiAgent] Handover a HUMANO: Apagando bot para ${ctx.from}`);
+                await HistoryHandler.toggleBot(ctx.from, false);
+                
+                await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
+                    response, ctx, flowDynamic, state, provider, gotoFlow,
+                    getAssistantResponse, currentAssistantId, assignedAgentName, 0, projectId
+                );
+                return;
+            }
+
+            const nextAssistantId = assistantMap[nextAgentName];
+            
+            if (!nextAssistantId) {
+                console.warn(`⚠️ [MultiAgent] Handover fallido: No hay Assistant ID configurado para '${nextAgentName}' en el proyecto ${projectId}.`);
+                await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
+                    response, ctx, flowDynamic, state, provider, gotoFlow,
+                    getAssistantResponse, currentAssistantId, assignedAgentName, 0, projectId
+                );
+            } else if (nextAgentName === assignedAgentName) {
+                console.log(`[MultiAgent] El destino '${nextAgentName}' es el mismo que el actual (${assignedAgentName}). Ignorando handover.`);
+                await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
+                    response, ctx, flowDynamic, state, provider, gotoFlow,
+                    getAssistantResponse, currentAssistantId, assignedAgentName, 0, projectId
+                );
+            } else {
+                console.log(`🚀 [MultiAgent] Handover detectado: ${assignedAgentName} -> ${nextAgentName} (User: ${ctx.from})`);
+                
+                // 1. Persistir cambio de agente en DB y state
+                await HistoryHandler.setAssignedAgent(ctx.from, nextAgentName, projectId);
+                await state.update({ assignedAgent: nextAgentName });
+
+                // 2. Procesar respuesta del agente saliente
+                await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
+                    response, ctx, flowDynamic, state, provider, gotoFlow,
+                    getAssistantResponse, currentAssistantId, assignedAgentName, 0, projectId
+                );
+
+                // 3. Transición inmediata al nuevo agente
+                const resumenContextual = `RESUMEN DE LA CONVERSACIÓN PREVIA (PARA TU CONTEXTO):\n\n${resumen}`;
+                console.log(`🚀 [MultiAgent] Iniciando respuesta inmediata del nuevo agente: ${nextAgentName}`);
+                
+                let threadId = ctx?.thread_id;
+                if (!threadId && state?.get) threadId = state.get('thread_id');
+
+                const nextResponseRaw = await getAssistantResponse(
+                    nextAssistantId, resumenContextual, state, undefined, ctx.from, threadId, projectId, nextAgentName
+                );
+                
+                if (nextResponseRaw) {
+                    await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
+                        nextResponseRaw, ctx, flowDynamic, state, provider, gotoFlow,
+                        getAssistantResponse, nextAssistantId, nextAgentName, 0, projectId
+                    );
+                }
+            }
+        } else {
+            await AssistantResponseProcessor.analizarYProcesarRespuestaAsistente(
+                response, ctx, flowDynamic, state, provider, gotoFlow,
+                getAssistantResponse, currentAssistantId, assignedAgentName, 0, projectId
+            );
         }
     }
 }

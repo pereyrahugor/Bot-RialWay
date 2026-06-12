@@ -3,10 +3,11 @@ FROM node:22-slim AS builder
 
 WORKDIR /app
 
-# Instalar dependencias del sistema necesarias para compilar (sharp, baileys, etc)
+# Instalar dependencias del sistema necesarias
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 make g++ git ca-certificates poppler-utils && \
-    update-ca-certificates
+    python3 make g++ git ca-certificates && \
+    update-ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
 
 # Instalar pnpm
 RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
@@ -15,7 +16,7 @@ ENV PNPM_HOME=/usr/local/bin
 # Copiar configuración de dependencias para aprovechar la cache de Docker
 COPY package.json .npmrc pnpm-lock.yaml* package-lock.json* ./
 
-# Configurar pnpm para permitir dependencias exóticas si es necesario y realizar la instalación
+# Instalar dependencias (se aprovecha la cache de capas de Docker)
 RUN pnpm config set block-exotic-subdeps false && \
     pnpm install
 
@@ -30,7 +31,7 @@ RUN pnpm run build
 # Stage 2: Production stage
 FROM node:22-slim AS deploy
 
-# Instalar dependencias de runtime necesarias (ffmpeg para audios, poppler para pdfs)
+# Instalar dependencias de runtime necesarias
 RUN apt-get update && apt-get install -y --no-install-recommends \
     poppler-utils ffmpeg && \
     rm -rf /var/lib/apt/lists/*
@@ -48,7 +49,6 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 
 # Copiar archivos estáticos y recursos necesarios según la nueva estructura
-# Nota: Según static.routes.ts, el servidor busca en src/backoffice/ y src/assets/
 COPY --from=builder /app/src/backoffice/html ./src/backoffice/html
 COPY --from=builder /app/src/backoffice/js ./src/backoffice/js
 COPY --from=builder /app/src/backoffice/style ./src/backoffice/style

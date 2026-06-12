@@ -487,6 +487,16 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                     const msgId = resApi.messages[0].id;
                     console.log(`✅ [BULK] Mensaje aceptado por Meta para ${phone}. ID: ${msgId}`);
                     
+                    // Si la plantilla tiene cabecera multimedia, guardar primero el mensaje multimedia
+                    const headerComp = template.components.find((c: any) => c.type === 'HEADER');
+                    if (headerComp && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComp.format)) {
+                        const lowFormat = headerComp.format.toLowerCase();
+                        const mediaLink = row.header_media_url || defaultMediaUrl || headerComp.example?.header_handle?.[0];
+                        if (mediaLink) {
+                            await depsHistoryHandler.saveMessage(phone, 'assistant', mediaLink, lowFormat, null, null, `${msgId}_media`);
+                        }
+                    }
+
                     // --- RENDERIZAR TEXTO PARA EL ASISTENTE ---
                     let renderedText = "";
                     const bodyComp = template.components.find((c: any) => c.type === 'BODY');
@@ -533,6 +543,12 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
  */
 export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies) => {
     const { adapterProvider, HistoryHandler: depsHistoryHandler, openaiMain, upload } = deps;
+
+    // Helper to dynamically extract projectId from query, body, or headers
+    const resolveProjectId = (req: any): string | null => {
+        const pId = req.query.projectId || (req.body && req.body.projectId) || req.headers['x-project-id'];
+        return (pId && pId !== 'default') ? pId : null;
+    };
 
     // --- AUTH ---
 
@@ -732,7 +748,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             if (metaConfig && metaConfig.access_token && metaConfig.phone_number_id) {
                 console.log(`📡 [SYNC] Sincronización Meta detectada. Solicitando historial SMB...`);
                 try {
-                    await triggerMetaSync(metaConfig.access_token, metaConfig.phone_number_id);
+                    const tokenForSync = metaConfig.onboarding_data?.client_token || metaConfig.access_token;
+                    await triggerMetaSync(tokenForSync, metaConfig.phone_number_id);
                     return res.json({
                         success: true,
                         summary: {
@@ -1363,7 +1380,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     app.get('/api/backoffice/crm/config', backofficeAuth, async (req: any, res: any) => {
         try {
-            const configStr = await depsHistoryHandler.getSetting('CRM_CONFIG');
+            const projectId = resolveProjectId(req);
+            const configStr = await depsHistoryHandler.getSetting('CRM_CONFIG', projectId);
             const config = configStr ? JSON.parse(configStr) : null;
             res.json({ success: true, config });
         } catch (e: any) {
@@ -1374,7 +1392,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     app.post('/api/backoffice/crm/config', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         try {
             const { config } = req.body;
-            await depsHistoryHandler.saveSetting('CRM_CONFIG', JSON.stringify(config));
+            const projectId = resolveProjectId(req);
+            await depsHistoryHandler.saveSetting('CRM_CONFIG', JSON.stringify(config), projectId);
             res.json({ success: true });
         } catch (e: any) {
             res.status(500).json({ success: false, error: e.message });
@@ -1867,13 +1886,14 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
                 // Construir componentes (como multimedia por defecto)
                 const components: any[] = [];
+                let mediaLink = "";
                 const headerComp = template.components?.find((c: any) => c.type === 'HEADER');
                 if (headerComp && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComp.format)) {
                     const lowFormat = headerComp.format.toLowerCase();
-                    let mediaLink = headerComp.example?.header_handle?.[0] || '';
+                    mediaLink = headerComp.example?.header_handle?.[0] || '';
                     if (mediaLink) {
                         // Si es un link de Meta/Facebook, lo descargamos y servimos localmente
-                        const isMetaUrl = mediaLink.includes('fbcdn') || mediaLink.includes('fbsbx') || mediaLink.includes('facebook.com') || mediaLink.includes('lookaside.fbsbx.com');
+                        const isMetaUrl = mediaLink.includes('fbcdn') || mediaLink.includes('fbsbx') || mediaLink.includes('facebook.com') || mediaLink.includes('lookaside.fbsbx.com') || mediaLink.includes('whatsapp.net') || mediaLink.includes('whatsapp.com');
                         if (isMetaUrl) {
                             try {
                                 console.log(`📥 [QUICK BULK] Descargando multimedia de cabecera de Meta: ${mediaLink.substring(0, 50)}...`);
@@ -1945,6 +1965,13 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                         const resApi = await provider.sendTemplate(phone, templateName, languageCode || template.language || 'es', components);
                         if (resApi?.messages) {
                             const msgId = resApi.messages[0].id;
+                            
+                            // Si la plantilla tiene cabecera multimedia, guardar primero el mensaje multimedia
+                            if (headerComp && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComp.format) && mediaLink) {
+                                const mediaType = headerComp.format.toLowerCase();
+                                await depsHistoryHandler.saveMessage(chat.id, 'assistant', mediaLink, mediaType, null, null, `${msgId}_media`);
+                            }
+
                             await depsHistoryHandler.saveMessage(chat.id, 'assistant', historyContent, 'text', null, null, msgId);
                             sent++;
                         } else {
@@ -2155,17 +2182,18 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             }
 
             // Registrar y suscribir WhatsApp si se encontró
+            const tokenToUse = mainToken || accessToken;
             if (finalPhoneId) {
                 await axios.post(`https://graph.facebook.com/v22.0/${finalPhoneId}/register`, 
                     { messaging_product: 'whatsapp', pin: '' }, 
-                    { headers: { 'Authorization': `Bearer ${accessToken}` } }
+                    { headers: { 'Authorization': `Bearer ${tokenToUse}` } }
                 ).catch(() => {});
             }
 
             if (finalWabaId) {
                 await axios.post(`https://graph.facebook.com/v22.0/${finalWabaId}/subscribed_apps`, 
                     {}, 
-                    { headers: { 'Authorization': `Bearer ${accessToken}` } }
+                    { headers: { 'Authorization': `Bearer ${tokenToUse}` } }
                 ).catch(() => {});
 
                 // Suscribir también a smb_message_echoes para capturar mensajes
@@ -2175,7 +2203,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                     await axios.post(`https://graph.facebook.com/v22.0/${finalWabaId}/subscribed_apps`, 
                         { override_callback_uri: undefined }, 
                         { 
-                            headers: { 'Authorization': `Bearer ${accessToken}` },
+                            headers: { 'Authorization': `Bearer ${tokenToUse}` },
                             params: { subscribed_fields: 'messages,smb_message_echoes' }
                         }
                     );
@@ -2184,7 +2212,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                     console.warn('⚠️ [CALLBACK] No se pudo suscribir a smb_message_echoes:', smbErr?.response?.data || smbErr.message);
                 }
 
-                await depsHistoryHandler.saveMetaOnboardingData(finalWabaId, finalPhoneId, accessToken, { verified_name: finalVerifiedName }, projectId);
+                await depsHistoryHandler.saveMetaOnboardingData(finalWabaId, finalPhoneId, tokenToUse, { verified_name: finalVerifiedName }, projectId);
                 
                 // --- SINCRONIZACIÓN AUTOMÁTICA SMB ---
                 // Solicitamos contactos e historial inmediatamente tras la vinculación
@@ -2433,7 +2461,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         const key = req.query.key as string;
         if (!key) return res.status(400).json({ success: false, error: 'key is required' });
         try {
-            const value = await depsHistoryHandler.getSetting(key);
+            const projectId = resolveProjectId(req);
+            const value = await depsHistoryHandler.getSetting(key, projectId);
             res.json({ success: true, value });
         } catch (error: any) {
             res.status(500).json({ success: false, error: error.message });
@@ -2448,7 +2477,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             if (PROTECTED_KEYS.includes(key)) {
                 return res.status(403).json({ success: false, error: 'Esta variable es estática y solo puede editarse vía base de datos.' });
             }
-            await depsHistoryHandler.saveSetting(key, value);
+            const projectId = resolveProjectId(req);
+            await depsHistoryHandler.saveSetting(key, value, projectId);
             if (key === 'SYSTEM_CONFIG_VISIBLE') {
                 invalidateVisibilityCache();
                 historyEvents.emit('setting_changed', { key, value });
@@ -2610,7 +2640,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     app.get('/api/backoffice/crm/config', backofficeAuth, async (req: any, res: any) => {
         try {
-            const config = await depsHistoryHandler.getSetting('CRM_CONFIG');
+            const projectId = resolveProjectId(req);
+            const config = await depsHistoryHandler.getSetting('CRM_CONFIG', projectId);
             res.json({ success: true, config: config ? JSON.parse(config) : null });
         } catch (error: any) {
             res.status(500).json({ success: false, error: error.message });
@@ -2620,7 +2651,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     app.post('/api/backoffice/crm/config', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         const { config } = req.body;
         try {
-            await depsHistoryHandler.saveSetting('CRM_CONFIG', JSON.stringify(config));
+            const projectId = resolveProjectId(req);
+            await depsHistoryHandler.saveSetting('CRM_CONFIG', JSON.stringify(config), projectId);
             res.json({ success: true });
         } catch (error: any) {
             res.status(500).json({ success: false, error: error.message });
@@ -2688,14 +2720,15 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             const PROTECTED_KEYS = ['OPENAI_ADMIN_API_KEY', 'OPENAI_API_KEY_TOOLS'];
             const keysToSave = keys.filter(k => !PROTECTED_KEYS.includes(k));
             
-            console.log(`📡 [HOT-UPDATE] Guardando ${keysToSave.length} variables en la base de datos...`);
+            const projectId = resolveProjectId(req);
+            console.log(`📡 [HOT-UPDATE] Guardando ${keysToSave.length} variables en la base de datos para proyecto ${projectId}...`);
 
             const promises = keysToSave.map(key => {
                 let val = settings[key];
                 if ((key === 'ADMIN_USER' || key === 'ADMIN_PASS') && val) {
                     val = 'b64:' + Buffer.from(val).toString('base64');
                 }
-                return depsHistoryHandler.saveSetting(key, val);
+                return depsHistoryHandler.saveSetting(key, val, projectId);
             });
             await Promise.all(promises);
 
@@ -2715,10 +2748,11 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     app.get('/api/backoffice/settings', backofficeAuth, async (req: any, res: any) => {
         try {
+            const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
             const { data: dbSettings, error } = await supabase
                 .from('settings')
                 .select('key, value')
-                .eq('project_id', depsHistoryHandler.PROJECT_IDENTIFIER);
+                .eq('project_id', projectId);
 
             if (error) throw error;
             const results: any = {};
@@ -2744,7 +2778,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             const settingKey = index === '1' ? 'ASSISTANT_PROMPT' : `ASSISTANT_PROMPT_${index}`;
             const envKey = index === '1' ? 'ASSISTANT_ID' : `ASSISTANT_${index}`;
             
-            const prompt = await depsHistoryHandler.getSetting(settingKey);
+            const projectId = resolveProjectId(req);
+            const prompt = await depsHistoryHandler.getSetting(settingKey, projectId);
             res.json({ 
                 success: true, 
                 prompt: prompt || '',
@@ -2765,11 +2800,12 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             const settingKey = idx === '1' ? 'ASSISTANT_PROMPT' : `ASSISTANT_PROMPT_${idx}`;
             const envKey = idx === '1' ? 'ASSISTANT_ID' : `ASSISTANT_${idx}`;
             
+            const projectId = resolveProjectId(req);
             // Prioridad: 1. DB, 2. Env
-            const assistantId = await depsHistoryHandler.getConfig(envKey) || process.env[envKey];
+            const assistantId = await depsHistoryHandler.getConfig(envKey, projectId) || process.env[envKey];
 
-            console.log(`📡 [HOT-UPDATE] Actualizando prompt para Asistente ${idx} en base de datos...`);
-            await depsHistoryHandler.saveSetting(settingKey, prompt);
+            console.log(`📡 [HOT-UPDATE] Actualizando prompt para Asistente ${idx} en base de datos para proyecto ${projectId}...`);
+            await depsHistoryHandler.saveSetting(settingKey, prompt, projectId);
 
             // Sincronizar hacia OpenAI (Empujar cambio al dashboard de OpenAI)
             const { getOpenAI } = await import("../../apis/openai/openaiHelper");

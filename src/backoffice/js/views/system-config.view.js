@@ -170,6 +170,52 @@ window.systemConfigView = {
                                 <span id="btn-load-groups-text">Cargar Grupos de WhatsApp</span>
                             </button>
                         </div>
+                        
+                        <!-- Módulo Cliente (CLIENT_SLUG) -->
+                        <div class="variable-group">
+                            <h3>CLIENT_SLUG</h3>
+                            <p class="description">Módulo cliente activo para este bot.</p>
+                            <div class="csd-wrap csd-sm">
+                                <select name="CLIENT_SLUG" id="CLIENT_SLUG" hidden>
+                                    <option value="">(Ninguno / Base)</option>
+                                    <option value="aquavita">Aquavita (SWS API)</option>
+                                </select>
+                                <button class="csd-btn" type="button" onclick="_csdToggle(this)">
+                                    <span class="csd-label">(Ninguno / Base)</span>
+                                    <i class="fas fa-chevron-down csd-chevron"></i>
+                                </button>
+                                <div class="csd-menu">
+                                    <button class="csd-item selected" type="button" data-val="" onclick="_csdSelect(this,'')">(Ninguno / Base)</button>
+                                    <button class="csd-item" type="button" data-val="aquavita" onclick="_csdSelect(this,'aquavita')">Aquavita (SWS API)</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Credenciales dinámicas del módulo Aquavita -->
+                        <div id="aquavita-credentials-container" style="display:none; grid-column:1/-1; gap:16px; background:var(--bg-header); border:1.5px solid var(--border); border-radius:14px; padding:20px; margin-bottom:14px;">
+                            <h3 style="margin-top:0; color:var(--text-main);"><i class="fas fa-key"></i> Credenciales de Aquavita (SWS API)</h3>
+                            <p class="description" style="margin-bottom:14px;">Configura las credenciales de acceso para la sincronización con la API de SWS.</p>
+                            <div style="display:grid; grid-template-columns:1fr; gap:14px;">
+                                <div class="variable-group" style="padding:0; background:none; border:none;">
+                                    <h3>AQUAVITA_SWS_BASE_URL</h3>
+                                    <p class="description">URL base de la API SWS (ej. https://api.sws.com/v1)</p>
+                                    <input type="text" name="AQUAVITA_SWS_BASE_URL" id="AQUAVITA_SWS_BASE_URL" style="width:100%;">
+                                </div>
+                                <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+                                    <div class="variable-group" style="padding:0; background:none; border:none;">
+                                        <h3>AQUAVITA_SWS_USERNAME</h3>
+                                        <p class="description">Usuario de autenticación en SWS</p>
+                                        <input type="text" name="AQUAVITA_SWS_USERNAME" id="AQUAVITA_SWS_USERNAME" style="width:100%;">
+                                    </div>
+                                    <div class="variable-group" style="padding:0; background:none; border:none;">
+                                        <h3>AQUAVITA_SWS_PASSWORD</h3>
+                                        <p class="description">Contraseña de autenticación en SWS</p>
+                                        <input type="password" name="AQUAVITA_SWS_PASSWORD" id="AQUAVITA_SWS_PASSWORD" autocomplete="new-password" style="width:100%;">
+                                        <button type="button" class="toggle-password-inline" onclick="toggleFieldVisibility('AQUAVITA_SWS_PASSWORD', this)"><i class="fas fa-eye"></i> Mostrar</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                         <div class="variable-group">
                             <h3>GRUPO RESUMEN <span style="opacity:0.5;font-weight:400;">1</span></h3>
                             <div class="csd-wrap csd-sm">

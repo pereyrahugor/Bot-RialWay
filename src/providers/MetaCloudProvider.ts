@@ -96,7 +96,7 @@ class MetaCloudProvider extends ProviderClass {
             
             // Si la URL es de Meta, adjuntamos el token. Aumentamos flexibilidad de detección.
             const headers: any = {};
-            const isMetaUrl = mediaUrl.includes('fbcdn') || mediaUrl.includes('fbsbx') || mediaUrl.includes('facebook.com');
+            const isMetaUrl = mediaUrl.includes('fbcdn') || mediaUrl.includes('fbsbx') || mediaUrl.includes('facebook.com') || mediaUrl.includes('whatsapp.net') || mediaUrl.includes('whatsapp.com');
             
             if (isMetaUrl && access_token) {
                 headers['Authorization'] = `Bearer ${access_token}`;
@@ -306,6 +306,22 @@ class MetaCloudProvider extends ProviderClass {
     }
 
     /**
+     * Formatea un número telefónico para la API de Meta (remueve el 9 de Argentina)
+     */
+    private formatNumberForMeta(number: string): string {
+        let clean = number.replace(/\D/g, '');
+        // Caso específico Argentina: WhatsApp requiere el '9' móvil intermedio en producción (549... con 13 dígitos)
+        if (clean.startsWith('54')) {
+            // Si tiene 12 dígitos (ej: 541130792789), le insertamos el '9' móvil para que sea entregable (5491130792789)
+            if (clean.length === 12 && !clean.startsWith('549')) {
+                clean = '549' + clean.slice(2);
+            }
+            // Si ya tiene 13 dígitos y empieza con 549, lo dejamos tal cual (no removemos el '9')
+        }
+        return clean;
+    }
+
+    /**
      * Envía un mensaje basado en una plantilla oficial
      */
     public async sendTemplate(number: string, templateName: string, languageCode: string = 'es', components: any[] = []): Promise<any> {
@@ -317,8 +333,8 @@ class MetaCloudProvider extends ProviderClass {
 
         const url = `https://graph.facebook.com/v22.0/${phone_number_id}/messages`;
         
-        // Limpiar número: solo dígitos
-        const cleanNumber = number.replace(/\D/g, '');
+        // Limpiar número: solo dígitos y remover el '9' si corresponde
+        const cleanNumber = this.formatNumberForMeta(number);
         
         const body: any = {
             messaging_product: "whatsapp",
@@ -499,7 +515,7 @@ class MetaCloudProvider extends ProviderClass {
 
         const apiVersion = process.env.META_API_VERSION || 'v22.0';
         const url = `https://graph.facebook.com/${apiVersion}/${phone_number_id}/messages`;
-        const cleanNumber = number.replace(/\D/g, '');
+        const cleanNumber = this.formatNumberForMeta(number);
         const toFormat = `+${cleanNumber}`;
         
         // Detectar si el mensaje es una ruta de archivo local
@@ -773,6 +789,19 @@ class MetaCloudProvider extends ProviderClass {
 
                     const messages = value?.messages || value?.message_echoes;
                     const contactData = value?.contacts; // Para smb_app_state_sync
+                    const statuses = value?.statuses;
+
+                    // 0. MANEJO DE ACTUALIZACIONES DE ESTADO (statuses)
+                    if (statuses && Array.isArray(statuses)) {
+                        for (const status of statuses) {
+                            console.log(`📡 [MetaCloudProvider] Webhook de estado para ${status.recipient_id} (${status.id}): ${status.status}`);
+                            if (status.status === 'failed' && status.errors) {
+                                for (const err of status.errors) {
+                                    console.error(`❌ [MetaCloudProvider] Error de entrega para ${status.recipient_id} (ID: ${status.id}): [Código ${err.code}] ${err.message} - ${err.error_data?.details || ''}`);
+                                }
+                            }
+                        }
+                    }
 
                     // 1. MANEJO DE SINCRONIZACIÓN DE CONTACTOS (smb_app_state_sync)
                     if (fieldName === 'smb_app_state_sync' && contactData && Array.isArray(contactData)) {
