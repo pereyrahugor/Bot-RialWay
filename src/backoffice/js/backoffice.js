@@ -598,6 +598,8 @@ function updateBotStatusText(enabled) {
         ? '<i class="fas fa-robot"></i>'
         : '<i class="fas fa-user"></i>';
     txt.className = isEnabled ? 'status-bot' : 'status-human';
+    const mobileLabel = document.getElementById('mobile-bot-label');
+    if (mobileLabel) mobileLabel.textContent = isEnabled ? 'Bot: on' : 'Bot: off';
 }
 
 function updateInputState(botEnabled) {
@@ -1344,7 +1346,7 @@ function renderTagManager() {
     if (!editorList) return;
     
     editorList.innerHTML = `
-        <div style="max-height: 200px; overflow-y: auto; margin-top: 10px;">
+        <div style="max-height: 280px; overflow-y: auto; overflow-x: hidden; margin-top: 10px;">
             ${_boBotTags.map(t => `
                 <div class="tag-item-edit">
                     <span class="tag-pill" style="${_tagStyle(t.color)}">${t.name}</span>
@@ -1427,7 +1429,7 @@ async function fetchTickets() {
     
     try {
         const estadoParam = currentTicketsFilter === 'pending' ? '' : `&estado=${currentTicketsFilter}`;
-        const res = await fetch(`/api/backoffice/tickets?token=${token}${estadoParam}&tipo=Asistencia Externa`);
+        const res = await fetch(`/api/backoffice/tickets?token=${token}${estadoParam}`);
         const tickets = await res.json();
 
         if (!Array.isArray(tickets) || tickets.length === 0) {
@@ -1436,23 +1438,39 @@ async function fetchTickets() {
         }
 
         list.innerHTML = tickets.map(t => {
-            const date = new Date(t.created_at).toLocaleDateString();
-            const contactName = t.chats?.name || (t.chat_id ? t.chat_id.split('@')[0] : 'Sin contacto');
-            
+            const date = new Date(t.created_at).toLocaleDateString('es-AR');
+            const contactName = t.chats?.name || (t.chat_id ? t.chat_id.split('@')[0] : '—');
+            const attachments = t.attachments ? (typeof t.attachments === 'string' ? JSON.parse(t.attachments) : t.attachments) : [];
+            const chatsAdj = t.chats_adjuntos ? (typeof t.chats_adjuntos === 'string' ? JSON.parse(t.chats_adjuntos) : t.chats_adjuntos) : [];
+
+            const attachHtml = attachments.length ? `
+                <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">
+                    ${attachments.map(url => `<a href="${url}" target="_blank" style="display:block; width:56px; height:56px; border-radius:6px; overflow:hidden; border:1px solid var(--border);">
+                        <img src="${url}" style="width:100%; height:100%; object-fit:cover;" onerror="this.parentElement.innerHTML='<i class=\\'fas fa-file\\' style=\\'color:var(--text-muted); font-size:1.2rem; width:100%; height:100%; display:flex; align-items:center; justify-content:center;\\'></i>'">
+                    </a>`).join('')}
+                </div>` : '';
+
+            const chatsAdjHtml = chatsAdj.length ? `
+                <div style="display:flex; flex-wrap:wrap; gap:5px; margin-top:6px;">
+                    ${chatsAdj.map(c => `<span onclick="goToTicketChat('${c.chat_id}')" style="display:inline-flex; align-items:center; gap:5px; padding:3px 9px; border-radius:99px; background:rgba(0,153,255,0.1); border:1px solid rgba(0,153,255,0.2); font-size:0.75rem; color:#0099FF; cursor:pointer;">
+                        <i class="fas fa-comment" style="font-size:0.7rem;"></i>${c.name}
+                    </span>`).join('')}
+                </div>` : '';
+
             return `
                 <div class="ticket-item">
-                    <div onclick="${t.chat_id ? `goToTicketChat('${t.chat_id}')` : ''}" style="cursor:pointer;">
+                    <div>
                         <div class="ticket-header">
                             <div class="ticket-title">${t.titulo}</div>
-                            <div class="ticket-badge priority-${t.prioridad}">${t.prioridad}</div>
                         </div>
-                        <div style="font-size:0.85rem; color:var(--text-main); margin-bottom:4px;">${contactName}</div>
-                        <div class="ticket-meta">
+                        ${t.descripcion ? `<div style="font-size:0.82rem; color:var(--text-muted); margin:4px 0 6px; line-height:1.5;">${t.descripcion}</div>` : ''}
+                        <div class="ticket-meta" style="margin-bottom:2px;">
                             <span><i class="far fa-calendar-alt"></i> ${date}</span>
-                            <span><i class="fas fa-tag"></i> ${t.tipo}</span>
+                            <span onclick="${t.chat_id ? `goToTicketChat('${t.chat_id}')` : ''}" style="${t.chat_id ? 'cursor:pointer; color:#0099FF;' : ''}"><i class="fas fa-user"></i> ${contactName}</span>
                         </div>
+                        ${chatsAdjHtml}
+                        ${attachHtml}
                     </div>
-                    
                     <div class="ticket-status-row">
                         <span style="font-size:0.75rem; color:var(--text-muted);">Estado:</span>
                         <div class="csd-wrap csd-sm" style="width:auto; min-width:120px;">
@@ -1517,53 +1535,117 @@ function goToTicketChat(chatId) {
     }
 }
 
+let _ticketSelectedChats = [];
+let _ticketFiles = [];
+
 function openTicketModal() {
+    _ticketSelectedChats = [];
+    _ticketFiles = [];
     document.getElementById('ticket-modal').classList.add('active');
     document.getElementById('ticket-title').focus();
+    document.getElementById('ticket-chat-chips').innerHTML = '';
+    document.getElementById('ticket-file-preview').innerHTML = '';
+    document.getElementById('ticket-chat-search').value = '';
+    document.getElementById('ticket-files').value = '';
 }
 
 function closeTicketModal() {
     document.getElementById('ticket-modal').classList.remove('active');
+    document.getElementById('ticket-chat-suggestions').style.display = 'none';
+}
+
+function _ticketChatSearch(query) {
+    const box = document.getElementById('ticket-chat-suggestions');
+    if (!query.trim()) { box.style.display = 'none'; return; }
+    const q = query.toLowerCase();
+    const matches = chats.filter(c => {
+        const name = (c.name || c.id || '').toLowerCase();
+        const num = (c.id || '').toLowerCase();
+        return (name.includes(q) || num.includes(q)) && !_ticketSelectedChats.find(s => s.chat_id === c.id);
+    }).slice(0, 8);
+    if (!matches.length) { box.style.display = 'none'; return; }
+    box.style.display = 'block';
+    box.innerHTML = matches.map(c => {
+        const label = c.name || c.id.split('@')[0];
+        return `<div onclick="_ticketAddChat('${c.id}', '${label.replace(/'/g,"\\'")}'); document.getElementById('ticket-chat-search').value=''; document.getElementById('ticket-chat-suggestions').style.display='none';"
+                     style="padding:10px 14px; cursor:pointer; font-size:0.85rem; color:var(--text-main); transition:background 0.15s;"
+                     onmouseover="this.style.background='rgba(0,153,255,0.1)'" onmouseout="this.style.background=''">
+                <i class="fas fa-comment" style="color:#0099FF; margin-right:8px;"></i>${label}
+                <span style="color:var(--text-muted); font-size:0.78rem; margin-left:6px;">${c.id.split('@')[0]}</span>
+            </div>`;
+    }).join('');
+}
+
+function _ticketAddChat(chatId, name) {
+    if (_ticketSelectedChats.find(s => s.chat_id === chatId)) return;
+    _ticketSelectedChats.push({ chat_id: chatId, name });
+    _renderTicketChips();
+}
+
+function _ticketRemoveChat(chatId) {
+    _ticketSelectedChats = _ticketSelectedChats.filter(s => s.chat_id !== chatId);
+    _renderTicketChips();
+}
+
+function _renderTicketChips() {
+    const box = document.getElementById('ticket-chat-chips');
+    box.innerHTML = _ticketSelectedChats.map(s =>
+        `<span style="display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:99px; background:rgba(0,153,255,0.12); border:1px solid rgba(0,153,255,0.25); font-size:0.8rem; color:var(--text-main);">
+            <i class="fas fa-comment" style="color:#0099FF; font-size:0.75rem;"></i>
+            ${s.name}
+            <button onclick="_ticketRemoveChat('${s.chat_id}')" style="background:none; border:none; cursor:pointer; color:var(--text-muted); padding:0; line-height:1; font-size:0.85rem;">&times;</button>
+        </span>`
+    ).join('');
+}
+
+function _ticketFilesSelected(fileList) {
+    _ticketFiles = Array.from(fileList);
+    const preview = document.getElementById('ticket-file-preview');
+    preview.innerHTML = _ticketFiles.map((f, i) => {
+        const isImg = f.type.startsWith('image/');
+        const icon = isImg ? '' : '<i class="fas fa-file-pdf" style="font-size:1.5rem; color:#ef4444;"></i>';
+        return `<div style="position:relative; width:72px; height:72px; border-radius:8px; overflow:hidden; border:1px solid var(--border); background:var(--bg-card); display:flex; align-items:center; justify-content:center;" id="ticket-fp-${i}">
+            ${isImg ? `<img src="${URL.createObjectURL(f)}" style="width:100%; height:100%; object-fit:cover;">` : icon}
+            <button onclick="_ticketRemoveFile(${i})" style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.6); border:none; border-radius:50%; width:18px; height:18px; cursor:pointer; color:white; font-size:10px; display:flex; align-items:center; justify-content:center;">&times;</button>
+        </div>`;
+    }).join('');
+}
+
+function _ticketRemoveFile(index) {
+    _ticketFiles.splice(index, 1);
+    _ticketFilesSelected(_ticketFiles);
 }
 
 async function createTicket() {
     const titulo = document.getElementById('ticket-title').value.trim();
     const descripcion = document.getElementById('ticket-desc').value.trim();
-    const tipo = document.getElementById('ticket-type').value;
-    const prioridad = document.getElementById('ticket-priority').value;
 
     if (!titulo) {
-        showToast('⚠️ El título es obligatorio', 'error');
+        showToast('El asunto es obligatorio', 'error');
         return;
     }
 
-    try {
-        const res = await fetch(`/api/backoffice/tickets?token=${token}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                chatId: activeChatId,
-                titulo,
-                descripcion,
-                tipo,
-                prioridad
-            })
-        });
+    const fd = new FormData();
+    fd.append('chatId', activeChatId || '');
+    fd.append('titulo', titulo);
+    fd.append('descripcion', descripcion);
+    fd.append('chats_adjuntos', JSON.stringify(_ticketSelectedChats));
+    for (const file of _ticketFiles) fd.append('attachments', file);
 
+    try {
+        const res = await fetch(`/api/backoffice/tickets?token=${token}`, { method: 'POST', body: fd });
         if (res.ok) {
-            showToast('✅ Ticket generado correctamente');
+            showToast('Ticket enviado correctamente');
             closeTicketModal();
             fetchPendingTicketsCount();
-            
-            // Limpiar campos
             document.getElementById('ticket-title').value = '';
             document.getElementById('ticket-desc').value = '';
         } else {
-            showToast('❌ Error al generar ticket', 'error');
+            showToast('Error al enviar ticket', 'error');
         }
     } catch (e) {
         console.error(e);
-        showToast('❌ Error de conexión', 'error');
+        showToast('Error de conexión', 'error');
     }
 }
 
@@ -2968,8 +3050,9 @@ async function initBlacklist() {
 
 function _updateBlacklistBtnVisibility() {
     const btn = document.getElementById('blacklist-toggle-btn');
-    if (!btn) return;
-    btn.style.display = _blacklistActive ? 'inline-flex' : 'none';
+    if (btn) btn.style.display = _blacklistActive ? 'inline-flex' : 'none';
+    const mobileLi = document.getElementById('mobile-blacklist-li');
+    if (mobileLi) mobileLi.style.display = _blacklistActive ? '' : 'none';
 }
 
 /** Llamada al seleccionar un chat: verifica si está en la lista negra y actualiza el botón */
@@ -2995,10 +3078,10 @@ function _updateBlacklistBtn(isBlacklisted) {
     const btn = document.getElementById('blacklist-toggle-btn');
     if (!btn) return;
     if (isBlacklisted) {
-        btn.innerHTML = '<i class="fas fa-times-circle" style="color:#ef4444;"></i>';
+        btn.innerHTML = '<i class="fas fa-ban" style="color:#25D366;"></i>';
         btn.title = 'Lista Negra: contacto bloqueado — Clic para quitar';
     } else {
-        btn.innerHTML = '<i class="fas fa-check-circle" style="color:#25D366;"></i>';
+        btn.innerHTML = '<i class="fas fa-ban" style="color:var(--text-muted);"></i>';
         btn.title = 'Lista Negra: contacto habilitado — Clic para agregar';
     }
 }

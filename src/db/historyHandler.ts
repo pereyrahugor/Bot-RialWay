@@ -387,6 +387,15 @@ export class HistoryHandler {
                         }
                     }
 
+                    // Migración para attachments y chats_adjuntos en tickets
+                    if (table.name === 'tickets') {
+                        const { error: ticketAttachErr } = await supabase.from('tickets').select('attachments').limit(1);
+                        if (ticketAttachErr && ticketAttachErr.code === '42703') {
+                            console.log(`🔧 Agregando columnas attachments y chats_adjuntos a tickets...`);
+                            await supabase.rpc('exec_sql', { query: `ALTER TABLE tickets ADD COLUMN IF NOT EXISTS attachments TEXT DEFAULT '[]', ADD COLUMN IF NOT EXISTS chats_adjuntos TEXT DEFAULT '[]';` });
+                        }
+                    }
+
                     // Migración para owner_id en meta_onboarding
                     if (table.name === 'meta_onboarding') {
                         const { error: ownerErr } = await supabase.from('meta_onboarding').select('owner_id').limit(1);
@@ -1073,28 +1082,23 @@ export class HistoryHandler {
             if (chatErr) throw chatErr;
 
             // 2. Crear un ticket inicial "NUEVO LEAD" para que aparezca en el CRM
-            // FIX: buscar el cliente por telefono para asignar cliente_id al ticket
-            const { data: clienteData } = await supabase
-                .from('clientes')
-                .select('id')
-                .eq('telefono', chatId)
+            const { data: proyectoRow } = await supabase
+                .from('proyectos_railway')
+                .select('cliente_id')
+                .eq('railway_project_id', HistoryHandler.PROJECT_IDENTIFIER)
                 .maybeSingle();
 
-            const allowedTypes = ['Soporte', 'Ventas', 'Técnico', 'Otro', 'Asistencia Externa', 'Comercial', 'Nuevo Lead'];
-            const ticketType = allowedTypes.includes(details.offered_product) ? details.offered_product : 'Nuevo Lead';
+            const clienteId = (proyectoRow as any)?.cliente_id || null;
 
             const { data: ticket, error: ticketErr } = await supabase
                 .from('tickets')
                 .insert({
-                    chat_id: chatId,
                     project_id: HistoryHandler.PROJECT_IDENTIFIER,
                     titulo: `Lead: ${details.name || chatId}`,
                     descripcion: details.notes || 'Lead creado manualmente',
-                    tipo: ticketType,
-                    prioridad: 'Media',
                     estado: 'Abierto',
                     created_at: new Date().toISOString(),
-                    cliente_id: clienteData?.id ?? null // FIX: uuid del cliente o null si no hay match
+                    ...(clienteId ? { cliente_id: clienteId } : {})
                 })
                 .select()
                 .single();
@@ -1554,41 +1558,46 @@ export class HistoryHandler {
      /**
      * Crea un nuevo ticket
      */
-    static async createTicket(rawChatId: string, titulo: string, descripcion: string, tipo: string = 'Soporte', prioridad: string = 'Media', forcedProjectId?: string) {
-        const chatId = this.normalizeId(rawChatId);
+    static async createTicket(
+        _rawChatId: string | null,
+        titulo: string,
+        descripcion: string,
+        _tipo: string = 'Soporte',
+        _prioridad: string = 'Media',
+        forcedProjectId?: string,
+        attachments: string[] = [],
+        chats_adjuntos: { chat_id: string; name: string }[] = []
+    ) {
         const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
         if (process.env.STORAGE_MODE === "local") {
-            const ticket = await LocalHistoryStore.createTicket(chatId, titulo, descripcion, tipo, prioridad, currentProjectId);
-            historyEvents.emit('ticket_updated', { chatId, ticket });
+            const ticket = await LocalHistoryStore.createTicket(null, titulo, descripcion, '', '', currentProjectId, attachments, chats_adjuntos);
+            historyEvents.emit('ticket_updated', { ticket });
             return { success: true, ticket };
         }
-        try { // FIX: buscar el cliente por telefono para asignar cliente_id al ticket
-            const { data: clienteData } = await supabase
-                .from('clientes')
-                .select('id')
-                .eq('telefono', chatId)
+        try {
+            const { data: proyectoRow } = await supabase
+                .from('proyectos_railway')
+                .select('cliente_id')
+                .eq('railway_project_id', currentProjectId)
                 .maybeSingle();
+            const clienteId = proyectoRow?.cliente_id || null;
 
             const { data, error } = await supabase
                 .from('tickets')
                 .insert({
-                    chat_id: chatId,
                     project_id: currentProjectId,
                     titulo,
                     descripcion,
-                    tipo,
-                    prioridad,
                     estado: 'Abierto',
-                    cliente_id: clienteData?.id ?? null // FIX: uuid del cliente o null si no hay match
+                    attachments: JSON.stringify(attachments),
+                    chats_adjuntos: JSON.stringify(chats_adjuntos),
+                    ...(clienteId ? { cliente_id: clienteId } : {})
                 })
                 .select()
                 .single();
 
             if (error) throw error;
-            
-            // Emitir evento para WebSockets
-            historyEvents.emit('ticket_updated', { chatId, ticket: data });
-            
+            historyEvents.emit('ticket_updated', { ticket: data });
             return { success: true, ticket: data };
         } catch (err: any) {
             console.error('[HistoryHandler] Error en createTicket:', err);
@@ -1599,22 +1608,16 @@ export class HistoryHandler {
     /**
      * Obtiene el conteo de tickets pendientes (Abiertos o En progreso)
      */
-    static async getPendingTicketsCount(tipo?: string) {
+    static async getPendingTicketsCount() {
         if (process.env.STORAGE_MODE === "local") {
-            return LocalHistoryStore.getPendingTicketsCount(tipo, this.PROJECT_IDENTIFIER);
+            return LocalHistoryStore.getPendingTicketsCount('', this.PROJECT_IDENTIFIER);
         }
         try {
-            let query = supabase
+            const { count, error } = await supabase
                 .from('tickets')
                 .select('*', { count: 'exact', head: true })
                 .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER)
                 .in('estado', ['Abierto', 'En progreso']);
-
-            if (tipo) {
-                query = query.eq('tipo', tipo);
-            }
-
-            const { count, error } = await query;
             if (error) throw error;
             return count || 0;
         } catch (err) {
@@ -1626,19 +1629,54 @@ export class HistoryHandler {
     /**
      * Obtiene el ticket activo (no Cerrado) para un contacto específico
      */
-    static async getActiveTicketForContact(rawChatId: string, forcedProjectId?: string) {
+    static async createReporteBot(
+        rawChatId: string,
+        descripcion: string,
+        tipo: string = 'Resumen',
+        forcedProjectId?: string
+    ) {
         const chatId = this.normalizeId(rawChatId);
         const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
-        if (process.env.STORAGE_MODE === "local") {
-            return LocalHistoryStore.getActiveTicketForContact(chatId, currentProjectId);
+        try {
+            const { data: proyectoRow } = await supabase
+                .from('proyectos_railway')
+                .select('cliente_id, clientes(nombre)')
+                .eq('railway_project_id', currentProjectId)
+                .maybeSingle();
+
+            const clienteId = (proyectoRow as any)?.cliente_id || null;
+            const nombre = (proyectoRow as any)?.clientes?.nombre || null;
+
+            const { data, error } = await supabase
+                .from('reportes_bot')
+                .insert({
+                    project_id: currentProjectId,
+                    chat_id: chatId,
+                    descripcion,
+                    tipo,
+                    ...(clienteId ? { cliente_id: clienteId } : {}),
+                    ...(nombre ? { nombre } : {})
+                })
+                .select()
+                .single();
+
+            if (error) throw error;
+            return { success: true, reporte: data };
+        } catch (err: any) {
+            console.error('[HistoryHandler] Error en createReporteBot:', err);
+            return { success: false, error: err.message };
         }
+    }
+
+    static async getActiveReporteBot(rawChatId: string, forcedProjectId?: string) {
+        const chatId = this.normalizeId(rawChatId);
+        const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
         try {
             const { data, error } = await supabase
-                .from('tickets')
+                .from('reportes_bot')
                 .select('*')
                 .eq('chat_id', chatId)
                 .eq('project_id', currentProjectId)
-                .neq('estado', 'Cerrado')
                 .order('created_at', { ascending: false })
                 .limit(1)
                 .maybeSingle();
@@ -1646,41 +1684,24 @@ export class HistoryHandler {
             if (error) throw error;
             return data || null;
         } catch (err) {
-            console.error('[HistoryHandler] Error en getActiveTicketForContact:', err);
+            console.error('[HistoryHandler] Error en getActiveReporteBot:', err);
             return null;
         }
     }
 
-    /**
-     * Actualiza la descripción de un ticket específico
-     */
-    static async updateTicketDescription(ticketId: string, descripcion: string, forcedProjectId?: string) {
-        const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
-        if (process.env.STORAGE_MODE === "local") {
-            const success = await LocalHistoryStore.updateTicketDescription(ticketId, descripcion, currentProjectId);
-            if (success) {
-                const ticket = await LocalHistoryStore.getActiveTicketForContact(ticketId, currentProjectId) || { id: ticketId, descripcion };
-                historyEvents.emit('ticket_updated', { chatId: (ticket as any).chat_id, ticket });
-            }
-            return { success };
-        }
+    static async updateReporteBotDescription(reporteId: string, descripcion: string) {
         try {
             const { data, error } = await supabase
-                .from('tickets')
+                .from('reportes_bot')
                 .update({ descripcion, updated_at: new Date().toISOString() })
-                .eq('id', ticketId)
-                .eq('project_id', currentProjectId)
+                .eq('id', reporteId)
                 .select()
                 .single();
 
             if (error) throw error;
-            
-            // Emitir evento para WebSockets
-            historyEvents.emit('ticket_updated', { chatId: data.chat_id, ticket: data });
-            
-            return { success: true, ticket: data };
+            return { success: true, reporte: data };
         } catch (err: any) {
-            console.error('[HistoryHandler] Error en updateTicketDescription:', err);
+            console.error('[HistoryHandler] Error en updateReporteBotDescription:', err);
             return { success: false, error: err.message };
         }
     }
@@ -1688,81 +1709,39 @@ export class HistoryHandler {
     /**
      * Lista los tickets del proyecto
      */
-    static async listTickets(limit: number = 50, offset: number = 0, estado?: string, tipo?: string, chatId?: string, ticketId?: string) {
-        console.log(`[HistoryHandler] listTickets -> req: estado=${estado}, tipo=${tipo}, chatId=${chatId}, ticketId=${ticketId}, project=${HistoryHandler.PROJECT_IDENTIFIER}`);
+    static async listTickets(limit: number = 50, offset: number = 0, estado?: string, _tipo?: string, _chatId?: string, ticketId?: string) {
         if (process.env.STORAGE_MODE === "local") {
-            const res = await LocalHistoryStore.listTickets(limit, offset, estado, tipo, chatId, ticketId, this.PROJECT_IDENTIFIER);
+            const res = await LocalHistoryStore.listTickets(limit, offset, estado, '', '', ticketId, this.PROJECT_IDENTIFIER);
             return res.data;
         }
         try {
             let query = supabase
                 .from('tickets')
-                .select('*, chats(name, id)')
+                .select('*')
                 .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
 
             if (ticketId && ticketId !== 'null' && ticketId !== 'undefined' && ticketId !== '') {
                 query = query.eq('id', ticketId);
             }
 
-            if (chatId && chatId !== 'null' && chatId !== 'undefined' && chatId !== '') {
-                query = query.eq('chat_id', chatId);
-            }
-
-            // Filtro de estado robusto
             if (estado && estado !== 'null' && estado !== 'undefined' && estado !== '') {
-                // Forzamos comparación exacta
                 query = query.eq('estado', estado);
             } else {
-                // Por defecto, solo lo que no esté cerrado
                 query = query.in('estado', ['Abierto', 'En progreso']);
-            }
-
-            if (tipo && tipo !== 'null' && tipo !== 'undefined' && tipo !== '') {
-                query = query.eq('tipo', tipo);
             }
 
             const { data, error } = await query
                 .order('created_at', { ascending: false })
                 .range(offset, offset + limit - 1);
-            
-            if (error) {
-                // Si falla por problemas de relación (JOIN), intentamos sin join
-                if (error.code === 'PGRST200' || error.message.includes('relationship')) {
-                    console.warn('[HistoryHandler] Reintentando listTickets sin JOIN debido a:', error.message);
-                    let fallbackQuery = supabase
-                        .from('tickets')
-                        .select('*')
-                        .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
-                    
-                    if (ticketId) fallbackQuery = fallbackQuery.eq('id', ticketId);
-                    if (chatId) fallbackQuery = fallbackQuery.eq('chat_id', chatId);
-                    if (estado) fallbackQuery = fallbackQuery.eq('estado', estado);
-                    else fallbackQuery = fallbackQuery.in('estado', ['Abierto', 'En progreso']);
 
-                    if (tipo) fallbackQuery = fallbackQuery.eq('tipo', tipo);
-
-                    const { data: fallbackData, error: fallbackError } = await fallbackQuery
-                        .order('created_at', { ascending: false })
-                        .range(offset, offset + limit - 1);
-                    
-                    if (fallbackError) throw fallbackError;
-                    return fallbackData || [];
-                }
-                throw error;
-            }
-            
+            if (error) throw error;
             return data || [];
         } catch (err) {
             console.error('[HistoryHandler] Error en listTickets:', err);
             return [];
         }
     }
-    /**
-     * Actualiza el estado de un ticket
-     */
-    /**
-     * Actualiza tanto los detalles del ticket como los del contacto asociado (Lead)
-     */
+
     static async updateLeadAndTicket(ticketId: string, details: any) {
         if (process.env.STORAGE_MODE === "local") {
             const success = await LocalHistoryStore.updateLeadAndTicket(ticketId, details, HistoryHandler.PROJECT_IDENTIFIER);
@@ -1771,82 +1750,28 @@ export class HistoryHandler {
         try {
             console.log(`[HistoryHandler] Actualizando Lead/Ticket ${ticketId}`);
             
-            // 1. Obtener el ticket para saber el chat_id y el project_id real de forma única (UUID)
             const { data: ticket, error: tError } = await supabase
                 .from('tickets')
-                .select('chat_id, project_id')
+                .select('project_id')
                 .eq('id', ticketId)
                 .single();
-            
+
             if (tError || !ticket) throw new Error('Ticket no encontrado');
             const currentProjectId = ticket.project_id || HistoryHandler.PROJECT_IDENTIFIER;
 
-            // 2. Actualizar Ticket
             const ticketUpdate: any = { updated_at: new Date().toISOString() };
             if (details.titulo !== undefined) ticketUpdate.titulo = details.titulo;
             if (details.notas !== undefined) ticketUpdate.descripcion = details.notas;
-            
-            // Soportar tanto priority (frontend) como prioridad (db)
-            const priorityVal = details.priority || details.prioridad;
-            if (priorityVal !== undefined) ticketUpdate.prioridad = priorityVal;
-            
-            // Mapeo opcional: si el crm_status es algo que implique cerrar el ticket
-            if (details.contact?.crm_status === 'Cerrado' || details.contact?.crm_status === 'Vendido') {
-                ticketUpdate.estado = 'Cerrado';
-            }
+            if (details.crm_status === 'Cerrado' || details.crm_status === 'Vendido') ticketUpdate.estado = 'Cerrado';
 
             const { error: upTicketErr } = await supabase
                 .from('tickets')
                 .update(ticketUpdate)
                 .eq('id', ticketId)
                 .eq('project_id', currentProjectId);
-            
+
             if (upTicketErr) throw upTicketErr;
 
-            // 3. Actualizar Contacto (Chat)
-            if (details.contact) {
-                const chatUpdate: any = {
-                    name: details.contact.name,
-                    email: details.contact.email,
-                    cuit_dni: details.contact.cuit_dni,
-                    address: details.contact.address,
-                    tax_status: details.contact.tax_status,
-                    offered_product: details.contact.offered_product,
-                    crm_status: details.contact.crm_status,
-                    notes: details.notas, // Sincronizar notas también en el chat si se desea
-                    crm_due_date: details.contact.crm_due_date
-                };
-
-                if (details.contact.source) chatUpdate.source = details.contact.source;
-
-                const { error: upChatErr } = await supabase
-                    .from('chats')
-                    .update(chatUpdate)
-                    .eq('id', ticket.chat_id)
-                    .eq('project_id', currentProjectId);
-                
-                if (upChatErr) throw upChatErr;
-                
-                this.invalidateChatCache(ticket.chat_id, currentProjectId);
-                
-                // Si el estado es cerrado, aplicar lógica de reset de bot y limpiar caché de BD
-                if (ticketUpdate.estado === 'Cerrado') {
-                    this.invalidateChatCache(ticket.chat_id, currentProjectId);
-                    await supabase
-                        .from('chats')
-                        .update({ 
-                            assigned_agent: 'asistente1', 
-                            bot_enabled: true,
-                            last_db_result: null
-                        })
-                        .eq('id', ticket.chat_id)
-                        .eq('project_id', currentProjectId);
-                    
-                    historyEvents.emit('bot_toggled', { chatId: ticket.chat_id, enabled: true, assigned_agent: 'asistente1' });
-                }
-            }
-
-            // Notificar cambios
             historyEvents.emit('ticket_updated', { id: ticketId, ...ticketUpdate });
             
             return { success: true };
@@ -1856,49 +1781,6 @@ export class HistoryHandler {
         }
     }
 
-    static async updateTicketStatus(ticketId: string, nuevoEstado: string) {
-        if (process.env.STORAGE_MODE === "local") {
-            const success = await LocalHistoryStore.updateTicketStatus(ticketId, nuevoEstado, HistoryHandler.PROJECT_IDENTIFIER);
-            return { success };
-        }
-        try {
-            const { data, error } = await supabase
-                .from('tickets')
-                .update({ estado: nuevoEstado, updated_at: new Date().toISOString() })
-                .eq('id', ticketId)
-                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER)
-                .select()
-                .maybeSingle();
-
-            if (error) throw error;
-            
-            // Si el ticket se cierra, reseteamos el agente en el chat asociado y limpiamos caché de BD
-            if (nuevoEstado === 'Cerrado' && data?.chat_id) {
-                console.log(`[HistoryHandler] Ticket ${ticketId} cerrado. Reseteando agente para chat ${data.chat_id} a asistente1 y limpiando caché de BD`);
-                this.invalidateChatCache(data.chat_id);
-                await supabase
-                    .from('chats')
-                    .update({ 
-                        assigned_agent: 'asistente1',
-                        bot_enabled: true, // Re-activamos bot por defecto al cerrar thread
-                        last_db_result: null
-                    })
-                    .eq('id', data.chat_id)
-                    .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
-                    
-                // Emitir también el evento de bot_toggled para que el front se refresque
-                historyEvents.emit('bot_toggled', { chatId: data.chat_id, enabled: true, assigned_agent: 'asistente1' });
-            }
-
-            // Notificar cambios del ticket
-            historyEvents.emit('ticket_updated', data);
-            
-            return { success: true, data };
-        } catch (err: any) {
-            console.error('[HistoryHandler] Error en updateTicketStatus:', err);
-            return { success: false, error: err.message };
-        }
-    }
     /**
      * Lista los leads que tienen datos de CRM (editados y marcados explicitamente como leads)
      */

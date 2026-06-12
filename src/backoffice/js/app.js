@@ -13,10 +13,10 @@ const ROUTES = {
     '/documentacion': '/js/views/docs.view.js',
     '/webchat':       '/js/views/webchat.view.js',
     '/meta':          '/js/views/meta.view.js',
-    '/mercado-pago':  '/js/views/mercado-pago.view.js',
-    '/meli':          '/js/views/meli.view.js',
+    '/mercado-libre': '/js/views/mercado-libre.view.js',
     '/lista-negra':   '/js/views/lista-negra.view.js',
     '/notificaciones': '/js/views/notificaciones.view.js',
+    '/tickets':        '/js/views/tickets.view.js',
 };
 
 const _loadedScripts = {};

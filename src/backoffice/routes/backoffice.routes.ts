@@ -5,7 +5,7 @@ import url from 'url';
 import bodyParser from 'body-parser';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
-import { backofficeAuth, systemConfigAuth } from "../middleware/auth";
+import { backofficeAuth, systemConfigAuth, invalidateAuthCache } from "../middleware/auth";
 import { supabase, HistoryHandler as HistoryHandlerClass, historyEvents } from "../db/historyHandler";
 import { invalidateVisibilityCache } from "./static.routes";
 import { getOpenAI } from "../../apis/openai/openaiHelper";
@@ -15,6 +15,7 @@ const VISIBILITY_KEYS = ['WHATSAPP_VISIBLE', 'INSTAGRAM_VISIBLE', 'MESSENGER_VIS
 historyEvents.on('setting_changed', ({ key }: { key: string }) => {
     if (VISIBILITY_KEYS.includes(key)) invalidateVisibilityCache();
 });
+
 
 // Caché para fotos de perfil (chatId -> {url, timestamp})
 const profilePicCache = new Map<string, { url: string, expires: number }>();
@@ -1326,27 +1327,25 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     // --- TICKETS ---
 
-    app.get('/api/backoffice/tickets/pending-count', backofficeAuth, async (req: any, res: any) => {
-        const tipo = req.query.tipo as string;
-        const count = await depsHistoryHandler.getPendingTicketsCount(tipo);
+    app.get('/api/backoffice/tickets/pending-count', backofficeAuth, async (_req: any, res: any) => {
+        const count = await depsHistoryHandler.getPendingTicketsCount();
         res.json({ count });
     });
 
     app.get('/api/backoffice/tickets', backofficeAuth, async (req: any, res: any) => {
         const estado = req.query.estado as string;
-        const tipo = req.query.tipo as string;
-        const chatId = req.query.chatId as string;
         const id = req.query.id as string;
         const limit = parseInt(req.query.limit as string) || 50;
         const offset = parseInt(req.query.offset as string) || 0;
-        const result = await depsHistoryHandler.listTickets(limit, offset, estado, tipo, chatId, id);
+        const result = await depsHistoryHandler.listTickets(limit, offset, estado, undefined, undefined, id);
         res.json(result);
     });
 
     app.post('/api/backoffice/tickets', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
-        const { chatId, titulo, descripcion, tipo, prioridad } = req.body;
-        if (!chatId || !titulo) return res.status(400).json({ success: false, error: 'chatId and titulo are required' });
-        const result = await depsHistoryHandler.createTicket(chatId, titulo, descripcion, tipo, prioridad);
+        const { chatId, titulo, descripcion, chats_adjuntos } = req.body;
+        if (!titulo) return sendJson(res, 400, { success: false, error: 'titulo is required' });
+        const adjuntos = Array.isArray(chats_adjuntos) ? chats_adjuntos : [];
+        const result = await depsHistoryHandler.createTicket(chatId, titulo, descripcion, 'Soporte', 'Media', undefined, [], adjuntos);
         res.json(result);
     });
 
@@ -1358,13 +1357,6 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         } catch (err: any) {
             res.status(500).json({ success: false, error: err.message });
         }
-    });
-
-    app.put('/api/backoffice/tickets/:id', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
-        const { id } = req.params;
-        const { estado } = req.body;
-        const result = await depsHistoryHandler.updateTicketStatus(id, estado);
-        res.json(result);
     });
 
     // --- CRM CONFIG & DASHBOARD ---
@@ -2669,7 +2661,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                     if ((s.key === 'ADMIN_USER' || s.key === 'ADMIN_PASS') && typeof val === 'string' && val.startsWith('b64:')) {
                         try {
                             val = Buffer.from(val.slice(4), 'base64').toString('utf-8');
-                        } catch (e) {}
+                        } catch (_e) { /* intentional */ }
                     }
                     mergedConfig[s.key] = val;
                 }
@@ -2735,7 +2727,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                 if ((s.key === 'ADMIN_USER' || s.key === 'ADMIN_PASS') && typeof val === 'string' && val.startsWith('b64:')) {
                     try {
                         val = Buffer.from(val.slice(4), 'base64').toString('utf-8');
-                    } catch (e) {}
+                    } catch (_e) { /* intentional */ }
                 }
                 results[s.key] = val;
             });
@@ -2908,7 +2900,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             if (error) throw error;
             // Enriquecer con nombre del contacto desde chats
             const chatIds = (data || []).map((r: any) => r.chat_id);
-            let chatNames: Record<string, string> = {};
+            const chatNames: Record<string, string> = {};
             if (chatIds.length > 0) {
                 const { data: chatRows } = await supabase
                     .from('chats')

@@ -79,6 +79,8 @@ export interface LocalTicket {
     tipo: string;
     estado: string;
     prioridad: string;
+    attachments: string[];
+    chats_adjuntos: { chat_id: string; name: string }[];
     created_at: string;
     updated_at: string;
 }
@@ -323,18 +325,22 @@ export class LocalHistoryStore {
         descripcion: string,
         tipo: string,
         prioridad: string,
-        projectId: string
+        projectId: string,
+        attachments: string[] = [],
+        chats_adjuntos: { chat_id: string; name: string }[] = []
     ): Promise<LocalTicket> {
         const tickets = this.getTicketsList(projectId);
         const newTicket: LocalTicket = {
             id: crypto.randomUUID(),
             project_id: projectId,
             chat_id: chatId,
-            titulo: titulo,
-            descripcion: descripcion,
-            tipo: tipo,
-            estado: "Abierto",
-            prioridad: prioridad,
+            titulo,
+            descripcion,
+            tipo,
+            estado: 'Abierto',
+            prioridad,
+            attachments,
+            chats_adjuntos,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
         };

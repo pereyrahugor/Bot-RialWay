@@ -18,7 +18,6 @@ window.metaView = (() => {
                     <p>Herramientas para negocios</p>
                 </div>
                 <div id="meta-view-badge-bar" class="meta-badge-bar" style="display:none;">
-                    <span class="meta-badge-title">Ver en META</span>
                     <a id="link-meta-library" href="https://business.facebook.com/latest/whatsapp_manager/template_library" target="_blank" class="meta-link-item">
                         <i class="fas fa-book"></i> Biblioteca <span class="meta-library-badge">SDK</span>
                     </a>
@@ -103,9 +102,6 @@ window.metaView = (() => {
                                 <div class="tpl-actions-col">
                                     <!-- Cabecera: back + nombre + edit -->
                                     <div class="tpl-compact-header">
-                                        <button class="btn-icon flex-shrink-0" onclick="switchMetaTab('my')">
-                                            <i class="fas fa-arrow-left"></i>
-                                        </button>
                                         <div class="min-w-0 flex-1">
                                             <h2 id="detail-tpl-name" class="tpl-name-compact">Nombre de Plantilla</h2>
                                             <div class="tpl-detail-badges" style="margin-top:4px;">
@@ -409,7 +405,7 @@ window.metaView = (() => {
                 const fmt = headerComp.format.toLowerCase();
                 if (fmt === 'image') {
                     const imgUrl = headerComp.example?.header_handle?.[0] || '';
-                    if (imgUrl) html += `<img src="${imgUrl}" style="width:calc(100% + 30px); margin:-12px -15px 12px -15px; display:block; object-fit:cover; max-height:180px;">`;
+                    if (imgUrl) html += `<img src="${imgUrl}" style="width:calc(100% + 30px); margin:-12px -15px 12px -15px; display:block;">`;
                 } else if (fmt === 'video') {
                     html += `<div style="width:calc(100% + 30px); margin:-12px -15px 12px -15px; aspect-ratio:16/9; background:#000; display:flex; align-items:center; justify-content:center; color:white;"><i class="fas fa-play-circle fa-3x"></i></div>`;
                 } else if (fmt === 'document') {
