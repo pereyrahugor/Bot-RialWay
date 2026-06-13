@@ -1858,7 +1858,7 @@ export class HistoryHandler {
     static async listTickets(limit: number = 50, offset: number = 0, estado?: string, _tipo?: string, _chatId?: string, ticketId?: string, projectId?: string | null) {
         const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
         if (process.env.STORAGE_MODE === "local") {
-            const res = await LocalHistoryStore.listTickets(limit, offset, estado, '', '', ticketId, currentProjectId);
+            const res = await LocalHistoryStore.listTickets(limit, offset, estado, '', _chatId, ticketId, currentProjectId);
             return res.data;
         }
         try {
@@ -1871,8 +1871,14 @@ export class HistoryHandler {
                 query = query.eq('id', ticketId);
             }
 
+            if (_chatId && _chatId !== 'null' && _chatId !== 'undefined' && _chatId !== '') {
+                query = query.eq('chat_id', this.normalizeId(_chatId));
+            }
+
             if (estado && estado !== 'null' && estado !== 'undefined' && estado !== '') {
                 query = query.eq('estado', estado);
+            } else if (estado === 'null' || estado === 'undefined') {
+                // No aplicar filtro de estado (trae todos)
             } else {
                 query = query.in('estado', ['Abierto', 'En progreso']);
             }

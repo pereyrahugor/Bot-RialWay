@@ -1374,8 +1374,9 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         const id = req.query.id as string;
         const limit = parseInt(req.query.limit as string) || 50;
         const offset = parseInt(req.query.offset as string) || 0;
+        const chatId = req.query.chatId as string;
         const projectId = resolveProjectId(req);
-        const result = await depsHistoryHandler.listTickets(limit, offset, estado, undefined, undefined, id, projectId);
+        const result = await depsHistoryHandler.listTickets(limit, offset, estado, undefined, chatId, id, projectId);
         res.json(result);
     });
 

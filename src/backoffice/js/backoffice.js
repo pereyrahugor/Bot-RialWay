@@ -1705,6 +1705,26 @@ socket.on('ticket_updated', (payload) => {
         fetchTickets();
     }
 });
+socket.on('contact_updated', (payload) => {
+    console.log('📡 Contacto actualizado:', payload);
+    const chatId = payload.chatId;
+    const details = payload.details || {};
+    
+    // Buscar y actualizar el chat local en el array de chats
+    const chatIndex = chats.findIndex(c => normChatId(c.id) === normChatId(chatId));
+    if (chatIndex !== -1) {
+        // Combinar datos nuevos
+        chats[chatIndex] = { ...chats[chatIndex], ...details };
+        
+        // Si es el chat activo, actualizar la vista
+        if (normChatId(chatId) === normChatId(activeChatId)) {
+            populateCRMFields(chats[chatIndex]);
+        }
+        
+        // Re-renderizar lista de chats
+        renderChatList();
+    }
+});
 
 // --- TICKETS LOGIC ---
 
