@@ -1,5 +1,6 @@
 
 import { BaileysProvider } from 'builderbot-provider-sherpa';
+import { utils } from '@builderbot/bot';
 import whaileys from 'whaileys';
 const makeWASocket = (whaileys as any).default || whaileys;
 import { 
@@ -292,9 +293,28 @@ export class SupabaseBaileysProvider extends BaileysProvider {
                 
                 const messageType = Object.keys(msg.message || {})[0] || 'text';
                 
-                const typeMapping: any = { audioMessage: 'voice', imageMessage: 'image', videoMessage: 'video' };
-                const finalType = typeMapping[messageType] || 'text';
-                const finalBody = body || (finalType !== 'text' ? `_event_${finalType}_` : '');
+                let finalType = 'text';
+                let finalBody = body || '';
+
+                if (msg.message?.imageMessage) {
+                    finalType = 'image';
+                    finalBody = utils.generateRefProvider('_event_media_');
+                } else if (msg.message?.videoMessage) {
+                    finalType = 'video';
+                    finalBody = utils.generateRefProvider('_event_media_');
+                } else if (msg.message?.audioMessage) {
+                    finalType = 'voice';
+                    finalBody = utils.generateRefProvider('_event_voice_note_');
+                } else if (msg.message?.documentMessage || msg.message?.documentWithCaptionMessage) {
+                    finalType = 'document';
+                    finalBody = utils.generateRefProvider('_event_document_');
+                } else if (msg.message?.locationMessage) {
+                    finalType = 'location';
+                    finalBody = utils.generateRefProvider('_event_location_');
+                } else if (msg.message?.stickerMessage) {
+                    finalType = 'image';
+                    finalBody = utils.generateRefProvider('_event_media_');
+                }
 
                 const payload = { body: finalBody, from, phoneNumber: from?.split('@')[0], name: msg.pushName || 'User', type: finalType, payload: msg };
                 if (msg.message) this.emit('message', payload);

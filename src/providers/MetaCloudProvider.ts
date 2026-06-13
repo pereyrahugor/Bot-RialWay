@@ -1,4 +1,4 @@
-import { ProviderClass } from '@builderbot/bot';
+import { ProviderClass, utils } from '@builderbot/bot';
 import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -1029,8 +1029,17 @@ class MetaCloudProvider extends ProviderClass {
                                 console.log(`📋 [MetaCloudProvider] HISTORY (User) DETECTADO. De: ${msg.from}. Result chatId: ${msg.from}`);
                             }
 
-                            // Forzar que el body no esté vacío para eventos de voz para que el core del bot los procese
-                            const bodyText = type === 'voice' ? '_event_voice_note_' : (messageBody || '');
+                            // Forzar el body correcto para eventos multimedia/sistema de Builderbot para que coincida con los disparadores
+                            let bodyText = messageBody || '';
+                            if (type === 'image') {
+                                bodyText = utils.generateRefProvider('_event_media_');
+                            } else if (type === 'video') {
+                                bodyText = utils.generateRefProvider('_event_media_');
+                            } else if (type === 'voice') {
+                                bodyText = utils.generateRefProvider('_event_voice_note_');
+                            } else if (type === 'document') {
+                                bodyText = utils.generateRefProvider('_event_document_');
+                            }
 
                             const formatedMessage: any = {
                                 from: wa_id || msg.from,

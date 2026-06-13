@@ -50,9 +50,15 @@ export const registerWebchatRoutes = (app: any, {
                             console.warn("⚠️ IA Vision Desactivada: Saltando análisis de imagen en webchat.");
                             message = `[Imagen recibida (Sin procesar)]: \n${message}`;
                         } else {
+                            const { HistoryHandler } = await import("../../db/historyHandler");
+                            let visionModel = await HistoryHandler.getConfig('OPENAI_MODEL') || "gpt-4o-mini";
+                            if (visionModel.startsWith('o1') || visionModel.startsWith('o3')) {
+                                visionModel = "gpt-4o-mini";
+                            }
+
                             const visionResponse = await withRetry(async () => {
                                 return await openaiVision.chat.completions.create({
-                                    model: "gpt-4o",
+                                    model: visionModel,
                                     messages: [{
                                         role: "user",
                                         content: [

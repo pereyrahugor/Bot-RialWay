@@ -33,7 +33,7 @@ const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
     const openai = await getOpenAIVision();
     if (!openai) {
       console.warn("⚠️ IA Vision Desactivada: Saltando análisis de imagen en flujo.");
-      const caption = ctx.body && !ctx.body.includes('_event_') ? ctx.body : '';
+      const caption = (ctx.body && !ctx.body.includes('_event_')) ? ctx.body : (ctx.payload?.message?.imageMessage?.caption || ctx.payload?.image?.caption || '');
       ctx.body = `[Imagen recibida (Sin procesar para IA)]${caption ? ': ' + caption : ''}`;
       // Continuar al flujo de texto para no romper la experiencia
       return gotoFlow(welcomeFlowTxt);
@@ -138,7 +138,7 @@ const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
       const result = response.choices[0].message.content || "No se pudo obtener una descripción de la imagen.";
 
       // Enviar el mensaje al asistente principal para que lo procese y mantenga el contexto
-      const caption = ctx.body && !ctx.body.includes('_event_') ? ctx.body : '';
+      const caption = (ctx.body && !ctx.body.includes('_event_')) ? ctx.body : (ctx.payload?.message?.imageMessage?.caption || ctx.payload?.image?.caption || '');
       ctx.body = `[Imagen recibida]${caption ? ': ' + caption : ''}. (Análisis): ${result}`;
 
       // Guardar el análisis en la base de datos para que el asistente tenga el historial en siguientes turnos
