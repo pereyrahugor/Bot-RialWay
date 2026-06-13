@@ -667,7 +667,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     app.get('/api/backoffice/chats/:id', backofficeAuth, async (req: any, res: any) => {
         try {
             const { id } = req.params;
-            const chat = await depsHistoryHandler.getChat(id);
+            const projectId = resolveProjectId(req);
+            const chat = await depsHistoryHandler.getChat(id, projectId);
             if (!chat) return res.status(404).json({ success: false, error: 'Chat not found' });
             res.json(chat);
         } catch (err: any) {
@@ -1391,6 +1392,27 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         try {
             const { id } = req.params;
             const result = await depsHistoryHandler.updateLeadAndTicket(id, req.body);
+            res.json(result);
+        } catch (err: any) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
+    app.put('/api/backoffice/tickets/:id', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
+        try {
+            const { id } = req.params;
+            const result = await depsHistoryHandler.updateTicket(id, req.body);
+            res.json(result);
+        } catch (err: any) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
+    app.delete('/api/backoffice/tickets/:id', backofficeAuth, async (req: any, res: any) => {
+        try {
+            const { id } = req.params;
+            const projectId = resolveProjectId(req);
+            const result = await depsHistoryHandler.deleteTicket(id, projectId);
             res.json(result);
         } catch (err: any) {
             res.status(500).json({ success: false, error: err.message });
@@ -3077,8 +3099,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     /** GET /api/backoffice/notifications/status — ¿Está activa la integración? */
     app.get('/api/backoffice/notifications/status', backofficeAuth, async (req: any, res: any) => {
         try {
-            const active = await depsHistoryHandler.getSetting('NOTIFICATIONS_ACTIVE');
-            res.json({ active: active === 'true' });
+            res.json({ active: true });
         } catch (e: any) {
             res.status(500).json({ success: false, error: e.message });
         }

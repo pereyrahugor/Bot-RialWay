@@ -16,7 +16,7 @@ let allTickets = [];
 let crmData = {};
 let botTags = [];
 let standardColumns = [
-    { id: 'UNASSIGNED', title: 'Tickets Nuevos', fixed: true },
+    { id: 'UNASSIGNED', title: 'Leads Nuevos', fixed: true },
     { id: 'contactado', title: 'Contactado' },
     { id: 'negociacion', title: 'En Negociación' },
     { id: 'propuesta', title: 'Propuesta Enviada' },
@@ -97,7 +97,7 @@ async function loadCRMState() {
         if (data.success && data.value) {
             standardColumns = JSON.parse(data.value);
             if (!standardColumns.some(c => c.id === 'UNASSIGNED')) {
-                standardColumns.unshift({ id: 'UNASSIGNED', title: 'Tickets Nuevos', fixed: true });
+                standardColumns.unshift({ id: 'UNASSIGNED', title: 'Leads Nuevos', fixed: true });
             }
         }
     } catch (e) {

@@ -434,6 +434,17 @@ export class LocalHistoryStore {
         return false;
     }
 
+    static async deleteTicket(ticketId: string, projectId: string): Promise<boolean> {
+        const tickets = this.getTicketsList(projectId);
+        const idx = tickets.findIndex(t => t.id === ticketId);
+        if (idx !== -1) {
+            tickets.splice(idx, 1);
+            this.saveTicketsList(projectId, tickets);
+            return true;
+        }
+        return false;
+    }
+
     static async updateLeadAndTicket(ticketId: string, details: any, projectId: string): Promise<boolean> {
         const tickets = this.getTicketsList(projectId);
         const idx = tickets.findIndex(t => t.id === ticketId);
@@ -455,6 +466,12 @@ export class LocalHistoryStore {
             if (details.crm_status) contactUpdate.crm_status = details.crm_status;
             if (details.crm_due_date) contactUpdate.crm_due_date = details.crm_due_date;
             if (details.is_lead !== undefined) contactUpdate.is_lead = details.is_lead;
+
+            if (tickets[idx].estado === 'Cerrado') {
+                contactUpdate.assigned_agent = 'asistente1';
+                contactUpdate.bot_enabled = true;
+                contactUpdate.last_db_result = null;
+            }
 
             if (Object.keys(contactUpdate).length > 0) {
                 await this.updateContactDetails(chatId, contactUpdate, projectId);

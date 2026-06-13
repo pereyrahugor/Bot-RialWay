@@ -21,7 +21,7 @@ if (!token) window.location.href = '/login';
 
 let activeChatId = null;
 let activeTicketId = null;
-let _notificationsActive = false;
+let _notificationsActive = true;
 let _showOnlyUnreadChats = false;
 let crmColumns = [];
 let _boCrmData = {};
@@ -45,7 +45,7 @@ async function initCRMData() {
             crmColumns = JSON.parse(colSettingValue);
         } else {
             crmColumns = [
-                { id: 'UNASSIGNED', title: 'Tickets Nuevos' },
+                { id: 'UNASSIGNED', title: 'Leads Nuevos' },
                 { id: 'contactado', title: 'Contactado' },
                 { id: 'negociacion', title: 'En Negociación' },
                 { id: 'propuesta', title: 'Propuesta Enviada' },
@@ -563,7 +563,28 @@ async function checkPlatformVisibility() {
 async function selectChat(id) {
     activeChatId = id;
     if (window.innerWidth <= 768) document.body.classList.add('mobile-chat-active');
-    const chat = chats.find(c => c.id === id);
+    
+    let chat = chats.find(c => c.id === id);
+    if (!chat) {
+        console.log(`🔍 [UI] Chat ${id} no encontrado en la lista local, buscando en el servidor...`);
+        try {
+            const res = await fetch(`/api/backoffice/chats/${id}?token=${token}`);
+            if (res.ok) {
+                chat = await res.json();
+                if (chat && chat.id) {
+                    chats.unshift(chat);
+                    renderChatList();
+                }
+            }
+        } catch (err) {
+            console.error('Error buscando chat en el servidor:', err);
+        }
+    }
+    
+    if (!chat) {
+        console.error(`❌ Chat ${id} no encontrado en local ni en el servidor.`);
+        return;
+    }
     
     if (_notificationsActive && chat) {
         markChatAsRead(id);

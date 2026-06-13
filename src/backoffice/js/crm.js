@@ -18,7 +18,7 @@ let botTags = [];
 
 let kanbanBoard = null;
 let columns = [
-    { id: 'UNASSIGNED', title: 'Tickets Nuevos', fixed: true },
+    { id: 'UNASSIGNED', title: 'Leads Nuevos', fixed: true },
     { id: 'contactado', title: 'Contactado' },
     { id: 'negociacion', title: 'En Negociación' },
     { id: 'propuesta', title: 'Propuesta Enviada' },
@@ -104,7 +104,7 @@ async function loadCRMState() {
             columns = JSON.parse(data.value);
             // Asegurarse de que UNASSIGNED siempre esté presente primero
             if (!columns.some(c => c.id === 'UNASSIGNED')) {
-                columns.unshift({ id: 'UNASSIGNED', title: 'Tickets Nuevos', fixed: true });
+                columns.unshift({ id: 'UNASSIGNED', title: 'Leads Nuevos', fixed: true });
             }
         }
     } catch (e) {
