@@ -389,8 +389,13 @@ export class HistoryHandler {
                         }
                     }
 
-                    // Migración para attachments y chats_adjuntos en tickets
+                    // Migración para chat_id, attachments y chats_adjuntos en tickets
                     if (table.name === 'tickets') {
+                        const { error: ticketChatIdErr } = await supabase.from('tickets').select('chat_id').limit(1);
+                        if (ticketChatIdErr && ticketChatIdErr.code === '42703') {
+                            console.log(`🔧 Agregando columna chat_id a tickets...`);
+                            await supabase.rpc('exec_sql', { query: `ALTER TABLE tickets ADD COLUMN IF NOT EXISTS chat_id TEXT;` });
+                        }
                         const { error: ticketAttachErr } = await supabase.from('tickets').select('attachments').limit(1);
                         if (ticketAttachErr && ticketAttachErr.code === '42703') {
                             console.log(`🔧 Agregando columnas attachments y chats_adjuntos a tickets...`);
@@ -1198,6 +1203,7 @@ export class HistoryHandler {
                 .from('tickets')
                 .insert({
                     project_id: currentProjectId,
+                    chat_id: chatId,
                     titulo: `Lead: ${details.name || chatId}`,
                     descripcion: details.notes || 'Lead creado manualmente',
                     estado: 'Abierto',
@@ -1679,18 +1685,19 @@ export class HistoryHandler {
      * Crea un nuevo ticket
      */
     static async createTicket(
-        _rawChatId: string | null,
+        rawChatId: string | null,
         titulo: string,
         descripcion: string,
-        _tipo: string = 'Soporte',
-        _prioridad: string = 'Media',
+        tipo: string = 'Soporte',
+        prioridad: string = 'Media',
         forcedProjectId?: string,
         attachments: string[] = [],
         chats_adjuntos: { chat_id: string; name: string }[] = []
     ) {
+        const chatId = rawChatId ? this.normalizeId(rawChatId) : null;
         const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
         if (process.env.STORAGE_MODE === "local") {
-            const ticket = await LocalHistoryStore.createTicket('', titulo, descripcion, '', '', currentProjectId, attachments, chats_adjuntos);
+            const ticket = await LocalHistoryStore.createTicket(chatId || '', titulo, descripcion, tipo, prioridad, currentProjectId, attachments, chats_adjuntos);
             historyEvents.emit('ticket_updated', { ticket });
             return { success: true, ticket };
         }
@@ -1706,8 +1713,11 @@ export class HistoryHandler {
                 .from('tickets')
                 .insert({
                     project_id: currentProjectId,
+                    chat_id: chatId,
                     titulo,
                     descripcion,
+                    tipo,
+                    prioridad,
                     estado: 'Abierto',
                     attachments: JSON.stringify(attachments),
                     chats_adjuntos: JSON.stringify(chats_adjuntos),
@@ -1874,7 +1884,7 @@ export class HistoryHandler {
             
             const { data: ticket, error: tError } = await supabase
                 .from('tickets')
-                .select('project_id')
+                .select('chat_id, project_id')
                 .eq('id', ticketId)
                 .single();
 
@@ -1883,8 +1893,16 @@ export class HistoryHandler {
 
             const ticketUpdate: any = { updated_at: new Date().toISOString() };
             if (details.titulo !== undefined) ticketUpdate.titulo = details.titulo;
-            if (details.notas !== undefined) ticketUpdate.descripcion = details.notas;
-            if (details.crm_status === 'Cerrado' || details.crm_status === 'Vendido') ticketUpdate.estado = 'Cerrado';
+            
+            const notesVal = details.notas !== undefined ? details.notas : details.notes;
+            if (notesVal !== undefined) ticketUpdate.descripcion = notesVal;
+
+            const priorityVal = details.priority || details.prioridad;
+            if (priorityVal !== undefined) ticketUpdate.prioridad = priorityVal;
+
+            if (details.contact?.crm_status === 'Cerrado' || details.contact?.crm_status === 'Vendido') {
+                ticketUpdate.estado = 'Cerrado';
+            }
 
             const { error: upTicketErr } = await supabase
                 .from('tickets')
@@ -1893,6 +1911,48 @@ export class HistoryHandler {
                 .eq('project_id', currentProjectId);
 
             if (upTicketErr) throw upTicketErr;
+
+            // 3. Actualizar Contacto (Chat) en Supabase si corresponde
+            if (details.contact && ticket.chat_id) {
+                const chatUpdate: any = {};
+                if (details.contact.name !== undefined) chatUpdate.name = details.contact.name;
+                if (details.contact.email !== undefined) chatUpdate.email = details.contact.email;
+                if (details.contact.cuit_dni !== undefined) chatUpdate.cuit_dni = details.contact.cuit_dni;
+                if (details.contact.address !== undefined) chatUpdate.address = details.contact.address;
+                if (details.contact.tax_status !== undefined) chatUpdate.tax_status = details.contact.tax_status;
+                if (details.contact.offered_product !== undefined) chatUpdate.offered_product = details.contact.offered_product;
+                if (details.contact.crm_status !== undefined) chatUpdate.crm_status = details.contact.crm_status;
+                if (details.contact.crm_due_date !== undefined) chatUpdate.crm_due_date = details.contact.crm_due_date;
+                if (notesVal !== undefined) chatUpdate.notes = notesVal;
+                if (details.contact.source !== undefined) chatUpdate.source = details.contact.source;
+
+                if (Object.keys(chatUpdate).length > 0) {
+                    const { error: upChatErr } = await supabase
+                        .from('chats')
+                        .update(chatUpdate)
+                        .eq('id', ticket.chat_id)
+                        .eq('project_id', currentProjectId);
+                    
+                    if (upChatErr) throw upChatErr;
+                }
+                
+                this.invalidateChatCache(ticket.chat_id, currentProjectId);
+                
+                // Si el estado es cerrado, aplicar lógica de reset de bot y limpiar caché de BD
+                if (ticketUpdate.estado === 'Cerrado') {
+                    await supabase
+                        .from('chats')
+                        .update({ 
+                            assigned_agent: 'asistente1', 
+                            bot_enabled: true,
+                            last_db_result: null
+                        })
+                        .eq('id', ticket.chat_id)
+                        .eq('project_id', currentProjectId);
+                    
+                    historyEvents.emit('bot_toggled', { chatId: ticket.chat_id, enabled: true, assigned_agent: 'asistente1', projectId: currentProjectId });
+                }
+            }
 
             historyEvents.emit('ticket_updated', { id: ticketId, ...ticketUpdate });
             
