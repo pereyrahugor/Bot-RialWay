@@ -91,7 +91,6 @@ window.ticketsView = (() => {
                 margin-top: 2px;
             }
             .tv-col-box {
-                background: rgba(16,42,67,0.65);
                 border: 1px solid rgba(0,153,255,0.12);
                 border-radius: 14px;
                 padding: 18px 16px;
@@ -126,7 +125,7 @@ window.ticketsView = (() => {
                 <div id="tv-columns">
 
                     <!-- Columna Pendientes -->
-                    <div class="tv-col-box">
+                    <div class="tv-col-box bg-white dark:bg-[#102a43a6]">
                         <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding-bottom:10px; border-bottom:2px solid #ef4444;">
                             <span style="width:8px; height:8px; border-radius:50%; background:#ef4444; flex-shrink:0;"></span>
                             <h3 style="margin:0; font-size:0.82rem; font-weight:700; font-family:'Montserrat',sans-serif; text-transform:uppercase; letter-spacing:1px; color:var(--text-main);">Pendientes</h3>
@@ -138,7 +137,7 @@ window.ticketsView = (() => {
                     </div>
 
                     <!-- Columna Cerrados -->
-                    <div class="tv-col-box">
+                    <div class="tv-col-box bg-white dark:bg-[#102a43a6]">
                         <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding-bottom:10px; border-bottom:2px solid #22c55e;">
                             <span style="width:8px; height:8px; border-radius:50%; background:#22c55e; flex-shrink:0;"></span>
                             <h3 style="margin:0; font-size:0.82rem; font-weight:700; font-family:'Montserrat',sans-serif; text-transform:uppercase; letter-spacing:1px; color:var(--text-main);">Cerrados</h3>
@@ -172,7 +171,7 @@ window.ticketsView = (() => {
                             <label><i class="fas fa-comments"></i> Chats con problema <span style="font-size:0.75rem; font-weight:400; color:var(--text-muted);">(opcional)</span></label>
                             <div style="position:relative;">
                                 <input type="text" id="tv-chat-search" class="crm-input" placeholder="Buscar chat por nombre o numero..." oninput="ticketsView._chatSearch(this.value)" autocomplete="off">
-                                <div id="tv-chat-suggestions" style="display:none; position:absolute; top:100%; left:0; right:0; z-index:200; border-radius:10px; overflow:hidden; background:rgb(8,20,40); border:1px solid rgba(0,153,255,0.2); max-height:180px; overflow-y:auto;"></div>
+                                <div id="tv-chat-suggestions" class="bg-white dark:bg-[#081428]" style="display:none; position:absolute; top:100%; left:0; right:0; z-index:200; border-radius:10px; overflow:hidden; border:1px solid rgba(0,153,255,0.2); max-height:180px; overflow-y:auto;"></div>
                             </div>
                             <div id="tv-chat-chips" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;"></div>
                         </div>
@@ -232,7 +231,12 @@ window.ticketsView = (() => {
         const estadoParam = filter === 'pending' ? '' : `&estado=${filter}`;
         try {
             const res = await fetch(`/api/backoffice/tickets?token=${_token}${estadoParam}`);
-            const tickets = await res.json();
+            let tickets = await res.json();
+            
+            if (Array.isArray(tickets)) {
+                tickets = tickets.filter(t => t.tipo === 'Soporte');
+            }
+            
             const count = document.getElementById(countId);
 
             if (!Array.isArray(tickets) || tickets.length === 0) {

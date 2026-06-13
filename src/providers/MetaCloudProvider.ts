@@ -16,7 +16,7 @@ class MetaCloudProvider extends ProviderClass {
 
     constructor(args: any = {}) {
         super();
-        this.config = args; 
+        this.config = args;
         this.globalVendorArgs = args;
     }
 
@@ -58,14 +58,14 @@ class MetaCloudProvider extends ProviderClass {
                 // Silently fallback to this.config.access_token
             }
         }
-        
+
         // El payload puede estar en varios lugares según el origen del mensaje
         const msg = ctx.payload || ctx;
         let mediaType = ctx.type || msg.type;
 
         // Normalización: Para Meta, 'voice' se llama 'audio'
         if (mediaType === 'voice') mediaType = 'audio';
-        
+
         // Buscar el objeto de media (WhatsApp Meta tiene una estructura anidada)
         const mediaObj = msg[mediaType] || ctx.media || msg.media || null;
 
@@ -111,11 +111,11 @@ class MetaCloudProvider extends ProviderClass {
 
         try {
             console.log(`📥 [MetaCloudProvider] Descargando desde: ${mediaUrl.split('?')[0]}...`);
-            
+
             // Si la URL es de Meta, adjuntamos el token. Aumentamos flexibilidad de detección.
             const headers: any = {};
             const isMetaUrl = mediaUrl.includes('fbcdn') || mediaUrl.includes('fbsbx') || mediaUrl.includes('facebook.com') || mediaUrl.includes('whatsapp.net') || mediaUrl.includes('whatsapp.com');
-            
+
             if (isMetaUrl && access_token) {
                 headers['Authorization'] = `Bearer ${access_token}`;
             } else if (isMetaUrl && !access_token) {
@@ -159,7 +159,7 @@ class MetaCloudProvider extends ProviderClass {
         if (m.includes('application/pdf')) return 'pdf';
         if (m.includes('application/msword') || m.includes('wordprocessingml')) return 'doc';
         if (m.includes('spreadsheetml') || m.includes('excel')) return 'xlsx';
-        
+
         // Fallback por tipo general
         if (type === 'image') return 'jpg';
         if (type === 'audio' || type === 'voice') return 'ogg';
@@ -180,7 +180,7 @@ class MetaCloudProvider extends ProviderClass {
         return this.vendor;
     }
 
-    public beforeHttpServerInit() {}
+    public beforeHttpServerInit() { }
 
     public afterHttpServerInit() {
         if (this.server) {
@@ -230,7 +230,7 @@ class MetaCloudProvider extends ProviderClass {
         }
 
         const url = `https://graph.facebook.com/v22.0/${waba_id}/message_templates`;
-        
+
         // Detectar variables en el texto: soporta {{1}}, {{nombre}}, etc.
         const varRegex = /\{\{(\w+)\}\}/g;
         const detectedVars: string[] = [];
@@ -311,7 +311,7 @@ class MetaCloudProvider extends ProviderClass {
                 }
             });
             console.log(`✅ [MetaCloudProvider] Plantilla '${name}' creada. ID: ${response.data?.id} | Estado: ${response.data?.status}`);
-            
+
             // Incluir info de variables en la respuesta para uso posterior
             if (hasNamedVars) {
                 response.data._varNames = detectedVars;
@@ -350,10 +350,10 @@ class MetaCloudProvider extends ProviderClass {
         }
 
         const url = `https://graph.facebook.com/v22.0/${phone_number_id}/messages`;
-        
+
         // Limpiar número: solo dígitos y remover el '9' si corresponde
         const cleanNumber = this.formatNumberForMeta(number);
-        
+
         const body: any = {
             messaging_product: "whatsapp",
             to: cleanNumber,
@@ -398,15 +398,15 @@ class MetaCloudProvider extends ProviderClass {
         try {
             console.log('📡 [MetaCloudProvider] Consultando Biblioteca Global de Meta (Full Fetch)...');
             let nextUrl: string | null = `https://graph.facebook.com/v22.0/message_template_library?fields=id,name,components,language,category,status&limit=100`;
-            
+
             while (nextUrl && allTemplates.length < 2000) { // Limitamos a 2000 para evitar loops infinitos
                 const response: any = await axios.get(nextUrl, {
                     headers: { 'Authorization': `Bearer ${access_token}` }
                 });
-                
+
                 const data = response.data?.data || [];
                 allTemplates = [...allTemplates, ...data];
-                
+
                 nextUrl = response.data?.paging?.next || null;
                 if (nextUrl) console.log(`🔄 [MetaCloudProvider] Cargando siguiente página de la biblioteca... (${allTemplates.length} cargadas)`);
             }
@@ -424,11 +424,11 @@ class MetaCloudProvider extends ProviderClass {
             const MASTER_WABA_ID = '146603058535041';
             console.log(`📡 [MetaCloudProvider] Consultando Biblioteca Maestra RialWay (${MASTER_WABA_ID})...`);
             const urlMaster = `https://graph.facebook.com/v22.0/${MASTER_WABA_ID}/message_templates?fields=id,name,components,language,category,status&limit=100`;
-            
+
             const responseMaster = await axios.get(urlMaster, {
                 headers: { 'Authorization': `Bearer ${access_token}` }
             });
-            
+
             const masterTemplates = responseMaster.data?.data || [];
             if (masterTemplates.length > 0) {
                 console.log(`✅ [MetaCloudProvider] Se cargaron ${masterTemplates.length} plantillas de la Biblioteca Maestra.`);
@@ -482,7 +482,7 @@ class MetaCloudProvider extends ProviderClass {
      */
     private async transcodeToSupportedFormat(filePath: string): Promise<{ outputPath: string; isTemporary: boolean }> {
         const ext = path.extname(filePath).toLowerCase();
-        
+
         const isVideo = ['.mkv', '.webm', '.mov', '.avi', '.flv', '.wmv', '.gif'].includes(ext);
         const isAudio = ['.wav', '.wma', '.flac', '.m4r'].includes(ext);
 
@@ -498,10 +498,10 @@ class MetaCloudProvider extends ProviderClass {
                 const { exec } = await import('child_process');
                 const { promisify } = await import('util');
                 const execPromise = promisify(exec);
-                
+
                 // Comando ffmpeg optimizado para MP4 compatible con WhatsApp (yuv420p y H.264)
                 await execPromise(`ffmpeg -y -i "${filePath}" -c:v libx264 -pix_fmt yuv420p -c:a aac -map 0:v:0? -map 0:a? "${outPath}"`);
-                
+
                 if (fs.existsSync(outPath)) {
                     console.log(`✅ [MetaCloudProvider] Transcodificación completada: ${outPath}`);
                     return { outputPath: outPath, isTemporary: true };
@@ -519,9 +519,9 @@ class MetaCloudProvider extends ProviderClass {
                 const { exec } = await import('child_process');
                 const { promisify } = await import('util');
                 const execPromise = promisify(exec);
-                
+
                 await execPromise(`ffmpeg -y -i "${filePath}" -c:a libmp3lame -b:a 128k "${outPath}"`);
-                
+
                 if (fs.existsSync(outPath)) {
                     console.log(`✅ [MetaCloudProvider] Transcodificación completada: ${outPath}`);
                     return { outputPath: outPath, isTemporary: true };
@@ -564,7 +564,7 @@ class MetaCloudProvider extends ProviderClass {
 
             const lowerPath = finalPath.toLowerCase();
             let contentType = 'text/plain'; // Fallback por defecto a text/plain para evitar OAuthException de application/octet-stream
-            
+
             if (lowerPath.endsWith('.webp')) contentType = 'image/webp';
             else if (lowerPath.endsWith('.png')) contentType = 'image/png';
             else if (lowerPath.endsWith('.jpg') || lowerPath.endsWith('.jpeg')) contentType = 'image/jpeg';
@@ -577,7 +577,6 @@ class MetaCloudProvider extends ProviderClass {
             else if (lowerPath.endsWith('.amr')) contentType = 'audio/amr';
             else if (lowerPath.endsWith('.ogg')) contentType = 'audio/ogg';
             else if (lowerPath.endsWith('.opus')) contentType = 'audio/ogg; codecs=opus';
-            else if (lowerPath.endsWith('.aac')) contentType = 'audio/aac';
 
             // Meta no acepta audio/webm — convertir a ogg antes de subir
             let uploadPath = filePath;
@@ -629,10 +628,10 @@ class MetaCloudProvider extends ProviderClass {
         const url = `https://graph.facebook.com/${apiVersion}/${phone_number_id}/messages`;
         const cleanNumber = this.formatNumberForMeta(number);
         const toFormat = `+${cleanNumber}`;
-        
+
         // Detectar si el mensaje es una ruta de archivo local
         const isMessagePath = typeof message === 'string' && (message.startsWith('/') || message.includes(':\\')) && fs.existsSync(message);
-        
+
         console.log(`[MetaCloudProvider] ENVÍO: to=${toFormat} | IsPath=${isMessagePath} | Msg=${isMessagePath ? '[FILE]' : (message || '').substring(0, 20)} | OptionsKeys=${Object.keys(options || {})}`);
 
         const body: any = {
@@ -646,10 +645,10 @@ class MetaCloudProvider extends ProviderClass {
 
         if (mediaSource) {
             console.log(`[MetaCloudProvider] 📂 Media detectado en sendMessage:`, typeof mediaSource === 'string' ? mediaSource : JSON.stringify(mediaSource));
-            
+
             const mediaUrl = typeof mediaSource === 'string' ? mediaSource : (mediaSource.url || mediaSource.path || mediaSource.link);
             const mimeType = (typeof mediaSource === 'object') ? (mediaSource.mimetype || mediaSource.mimeType || '') : '';
-            
+
             // El caption no debe ser la ruta del archivo si el mensaje era una ruta
             const finalCaption = isMessagePath ? (options.body || options.caption || '') : (message || '');
 
@@ -709,7 +708,7 @@ class MetaCloudProvider extends ProviderClass {
                 } else {
                     console.error(`❌ [MetaCloudProvider] El archivo local NO existe: ${finalPath}`);
                 }
-                
+
                 // Si falló la subida local, no intentamos enviar como link (porque no es una URL)
                 return;
             }
@@ -732,14 +731,14 @@ class MetaCloudProvider extends ProviderClass {
             } else {
                 // Por defecto tratamos como documento (PDF, etc)
                 body.type = 'document';
-                const filename = (typeof mediaSource === 'object') 
-                    ? (mediaSource.fileName || mediaSource.filename || mediaSource.name) 
+                const filename = (typeof mediaSource === 'object')
+                    ? (mediaSource.fileName || mediaSource.filename || mediaSource.name)
                     : null;
 
-                body.document = { 
-                    ...mediaData, 
-                    filename: filename || path.basename(mediaUrl || 'documento.pdf'), 
-                    caption: finalCaption 
+                body.document = {
+                    ...mediaData,
+                    filename: filename || path.basename(mediaUrl || 'documento.pdf'),
+                    caption: finalCaption
                 };
             }
         } else {
@@ -819,7 +818,7 @@ class MetaCloudProvider extends ProviderClass {
     public handleWebhook = async (req: any, res: any) => {
         try {
             const body = req.body;
-            
+
             // Responder 200 OK inmediatamente (Obligatorio para Meta)
             if (!res.headersSent) {
                 res.statusCode = 200;
@@ -869,7 +868,7 @@ class MetaCloudProvider extends ProviderClass {
                 } else {
                     // Detectar si algún change viene de campos SMB
                     const hasSmbField = body.entry?.some((entry: any) =>
-                        entry.changes?.some((change: any) => 
+                        entry.changes?.some((change: any) =>
                             ['smb_message_echoes', 'smb_app_state_sync', 'history'].includes(change.field)
                         )
                     );
@@ -934,7 +933,7 @@ class MetaCloudProvider extends ProviderClass {
 
                     // 2. MANEJO DE HISTORIAL O MENSAJES (messages / history / message_echoes)
                     if (messages && Array.isArray(messages)) {
-                        
+
                         // Filtro de número destino para asegurar que es para nosotros
                         // En entorno multitenant, el phone_number_id del webhook puede corresponder a cualquiera de nuestros tenants en la DB
                         let isValidPhoneId = false;
@@ -972,11 +971,11 @@ class MetaCloudProvider extends ProviderClass {
                             // Mapeo de tipos para eventos de Builderbot
                             if (type === 'audio') type = 'voice';
 
-                            let messageBody = msg.text?.body || 
-                                              msg.interactive?.button_reply?.title || 
-                                              msg.interactive?.list_reply?.title || 
-                                              msg.button?.text || '';
-                            
+                            let messageBody = msg.text?.body ||
+                                msg.interactive?.button_reply?.title ||
+                                msg.interactive?.list_reply?.title ||
+                                msg.button?.text || '';
+
                             // Si es media y no tiene texto (body), intentamos usar el caption o enviamos el evento
                             if (!messageBody && mediaObj) {
                                 messageBody = mediaObj.caption || `_event_${type}_`;
@@ -1027,7 +1026,7 @@ class MetaCloudProvider extends ProviderClass {
                                     // Ponemos un timeout de 5 segundos para no bloquear el webhook si Meta va lento
                                     const downloadPromise = this.saveFile(formatedMessage);
                                     const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000));
-                                    
+
                                     const localPath: any = await Promise.race([downloadPromise, timeoutPromise]);
 
                                     if (localPath && localPath !== "no-file") {
@@ -1035,7 +1034,7 @@ class MetaCloudProvider extends ProviderClass {
                                         // Si el cuerpo era solo un evento que no sea de voz, lo actualizamos con la ruta para que el HistoryHandler lo guarde
                                         if (formatedMessage.body && formatedMessage.body.startsWith('_event_') && formatedMessage.type !== 'voice') {
                                             // Guardamos la ruta relativa para el CRM
-                                            formatedMessage.body = localPath; 
+                                            formatedMessage.body = localPath;
                                         }
                                     }
                                 } catch (err) {
@@ -1073,10 +1072,10 @@ class MetaCloudProvider extends ProviderClass {
                     if (msgEntry.message) {
                         const senderId = msgEntry.sender.id;
                         const msg = msgEntry.message;
-                        
+
                         // Determinar si es Instagram o Messenger basado en el formato del ID o metadata
                         // Usualmente Meta envía info del receptor
-                        const isInstagram = !!msgEntry.recipient?.id && entry.id !== msgEntry.recipient.id; 
+                        const isInstagram = !!msgEntry.recipient?.id && entry.id !== msgEntry.recipient.id;
                         // Nota: Una forma más fiable es ver si el senderId tiene formato numérico largo
                         const platform: 'instagram' | 'messenger' = (senderId.length > 15) ? 'instagram' : 'messenger';
 
@@ -1108,7 +1107,7 @@ class MetaCloudProvider extends ProviderClass {
                                 if (localPath && localPath !== "no-file") {
                                     formatedMessage.localPath = localPath;
                                     if (formatedMessage.body && formatedMessage.body.startsWith('_event_')) {
-                                        formatedMessage.body = localPath; 
+                                        formatedMessage.body = localPath;
                                     }
                                 }
                                 this.emit('message', formatedMessage);

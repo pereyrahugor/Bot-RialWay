@@ -119,8 +119,8 @@ async function syncCRM() {
         const ticketsRaw = await resTickets.json();
         const ticketsData = Array.isArray(ticketsRaw) ? ticketsRaw : [];
         
-        // Excluir Asistencia Externa y Cerrados
-        allTickets = ticketsData.filter(t => t.tipo !== 'Asistencia Externa' && t.estado !== 'Cerrado');
+        // Excluir cerrados y filtrar solo Nuevo Lead
+        allTickets = ticketsData.filter(t => t.tipo === 'Nuevo Lead' && t.estado !== 'Cerrado');
         console.log(`[CRM Tareas] Tickets activos: ${allTickets.length}`);
 
         const resSettings = await fetch(`/api/backoffice/get-setting?key=CRM_METADATA&token=${activeToken}`);
