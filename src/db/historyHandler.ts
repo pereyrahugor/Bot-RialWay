@@ -1936,7 +1936,7 @@ export class HistoryHandler {
     static async listTickets(limit: number = 50, offset: number = 0, estado?: string, _tipo?: string, _chatId?: string, ticketId?: string, projectId?: string | null) {
         const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
         if (process.env.STORAGE_MODE === "local") {
-            const res = await LocalHistoryStore.listTickets(limit, offset, estado, '', _chatId, ticketId, currentProjectId);
+            const res = await LocalHistoryStore.listTickets(limit, offset, estado, _tipo, _chatId, ticketId, currentProjectId);
             return res.data;
         }
         try {
@@ -1951,6 +1951,10 @@ export class HistoryHandler {
 
             if (_chatId && _chatId !== 'null' && _chatId !== 'undefined' && _chatId !== '') {
                 query = query.eq('chat_id', this.normalizeId(_chatId));
+            }
+
+            if (_tipo && _tipo !== 'null' && _tipo !== 'undefined' && _tipo !== '') {
+                query = query.eq('tipo', _tipo);
             }
 
             if (estado && estado !== 'null' && estado !== 'undefined' && estado !== '') {

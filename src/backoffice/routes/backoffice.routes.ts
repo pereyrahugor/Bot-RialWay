@@ -1371,21 +1371,22 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     app.get('/api/backoffice/tickets', backofficeAuth, async (req: any, res: any) => {
         const estado = req.query.estado as string;
+        const tipo = req.query.tipo as string;
         const id = req.query.id as string;
         const limit = parseInt(req.query.limit as string) || 50;
         const offset = parseInt(req.query.offset as string) || 0;
         const chatId = req.query.chatId as string;
         const projectId = resolveProjectId(req);
-        const result = await depsHistoryHandler.listTickets(limit, offset, estado, undefined, chatId, id, projectId);
+        const result = await depsHistoryHandler.listTickets(limit, offset, estado, tipo, chatId, id, projectId);
         res.json(result);
     });
 
     app.post('/api/backoffice/tickets', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
-        const { chatId, titulo, descripcion, chats_adjuntos } = req.body;
+        const { chatId, titulo, descripcion, chats_adjuntos, tipo } = req.body;
         if (!titulo) return sendJson(res, 400, { success: false, error: 'titulo is required' });
         const adjuntos = Array.isArray(chats_adjuntos) ? chats_adjuntos : [];
         const projectId = resolveProjectId(req);
-        const result = await depsHistoryHandler.createTicket(chatId, titulo, descripcion, 'Soporte', 'Media', projectId || undefined, [], adjuntos);
+        const result = await depsHistoryHandler.createTicket(chatId, titulo, descripcion, tipo || 'Asistencia Externa', 'Media', projectId || undefined, [], adjuntos);
         res.json(result);
     });
 

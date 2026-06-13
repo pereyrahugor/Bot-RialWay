@@ -231,7 +231,7 @@ window.ticketsView = (() => {
 
         const estadoParam = filter === 'pending' ? '' : `&estado=${filter}`;
         try {
-            const res = await fetch(`/api/backoffice/tickets?token=${_token}${estadoParam}`);
+            const res = await fetch(`/api/backoffice/tickets?token=${_token}${estadoParam}&tipo=Asistencia+Externa`);
             const tickets = await res.json();
             const count = document.getElementById(countId);
 

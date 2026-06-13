@@ -13,6 +13,7 @@ async function compressImageToDisk(absolutePath: string): Promise<string> {
     if (!IMAGE_EXTS.has(ext)) return absolutePath;
     try {
         const sharp = (await import('sharp')).default;
+        sharp.cache(false);
         const compressed = await sharp(absolutePath)
             .resize(1280, 1280, { fit: 'inside', withoutEnlargement: true })
             .webp({ quality: 80 })
