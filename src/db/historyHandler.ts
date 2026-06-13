@@ -1099,6 +1099,54 @@ export class HistoryHandler {
 
             if (error) throw error;
 
+            if (details.is_lead === true) {
+                // Check if an open ticket exists
+                const { data: existingTicket, error: lookupErr } = await supabase
+                    .from('tickets')
+                    .select('id')
+                    .eq('chat_id', chatId)
+                    .eq('project_id', currentProjectId)
+                    .eq('estado', 'Abierto');
+
+                if (!lookupErr && (!existingTicket || existingTicket.length === 0)) {
+                    console.log(`[HistoryHandler] 🎟️ Auto-creating ticket for lead: ${chatId}`);
+                    
+                    const { data: chatData } = await supabase
+                        .from('chats')
+                        .select('name')
+                        .eq('id', chatId)
+                        .eq('project_id', currentProjectId)
+                        .maybeSingle();
+                    const name = chatData?.name || details.name || chatId;
+
+                    const { data: proyectoRow } = await supabase
+                        .from('proyectos_railway')
+                        .select('cliente_id')
+                        .eq('railway_project_id', currentProjectId)
+                        .maybeSingle();
+                    const clienteId = (proyectoRow as any)?.cliente_id || null;
+
+                    const { data: newTicket, error: ticketErr } = await supabase
+                        .from('tickets')
+                        .insert({
+                            project_id: currentProjectId,
+                            chat_id: chatId,
+                            titulo: `Lead: ${name}`,
+                            descripcion: details.notes || 'Lead detectado automáticamente',
+                            estado: 'Abierto',
+                            prioridad: 'Media',
+                            created_at: new Date().toISOString(),
+                            ...(clienteId ? { cliente_id: clienteId } : {})
+                        })
+                        .select()
+                        .single();
+
+                    if (!ticketErr && newTicket) {
+                        historyEvents.emit('ticket_updated', { id: newTicket.id, chat_id: chatId, ...newTicket });
+                    }
+                }
+            }
+
             // Emitir evento para actualización en tiempo real en el Backoffice/CRM
             historyEvents.emit('contact_updated', { 
                 chatId, 
