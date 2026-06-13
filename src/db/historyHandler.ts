@@ -1069,6 +1069,20 @@ export class HistoryHandler {
         let currentProjectId = forcedProjectId;
         if (process.env.STORAGE_MODE === "local") {
             const success = await LocalHistoryStore.updateContactDetails(chatId, details as any, currentProjectId || HistoryHandler.PROJECT_IDENTIFIER);
+            if (success) {
+                historyEvents.emit('contact_updated', { 
+                    chatId, 
+                    project_id: currentProjectId || HistoryHandler.PROJECT_IDENTIFIER, 
+                    details 
+                });
+                if (details.is_lead === true) {
+                    const tickets = LocalHistoryStore.getTicketsList(currentProjectId || HistoryHandler.PROJECT_IDENTIFIER);
+                    const activeTicket = tickets.find(t => t.chat_id === chatId && t.estado === 'Abierto');
+                    if (activeTicket) {
+                        historyEvents.emit('ticket_updated', { id: activeTicket.id, chat_id: chatId, ...activeTicket });
+                    }
+                }
+            }
             return { success };
         }
         if (details.name === '[-]') details.name = undefined;
@@ -1143,6 +1157,22 @@ export class HistoryHandler {
 
                     if (!ticketErr && newTicket) {
                         historyEvents.emit('ticket_updated', { id: newTicket.id, chat_id: chatId, ...newTicket });
+                    }
+                } else if (!lookupErr && existingTicket && existingTicket.length > 0 && details.notes) {
+                    console.log(`[HistoryHandler] 🎟️ Updating existing open ticket description for lead: ${chatId}`);
+                    const activeTicketId = existingTicket[0].id;
+                    const { error: updateTicketErr } = await supabase
+                        .from('tickets')
+                        .update({ descripcion: details.notes, updated_at: new Date().toISOString() })
+                        .eq('id', activeTicketId)
+                        .eq('project_id', currentProjectId);
+                    if (!updateTicketErr) {
+                        historyEvents.emit('ticket_updated', { 
+                            id: activeTicketId, 
+                            chat_id: chatId, 
+                            descripcion: details.notes, 
+                            updated_at: new Date().toISOString() 
+                        });
                     }
                 }
             }

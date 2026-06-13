@@ -172,8 +172,8 @@ export class LocalHistoryStore {
 
             if (details.is_lead === true) {
                 const tickets = this.getTicketsList(projectId);
-                const hasActiveTicket = tickets.some(t => t.chat_id === chatId && t.estado === 'Abierto');
-                if (!hasActiveTicket) {
+                const activeTicketIdx = tickets.findIndex(t => t.chat_id === chatId && t.estado === 'Abierto');
+                if (activeTicketIdx === -1) {
                     console.log(`[LocalHistoryStore] 🎟️ Auto-creating ticket for lead: ${chatId}`);
                     const newTicket: LocalTicket = {
                         id: crypto.randomUUID(),
@@ -190,6 +190,11 @@ export class LocalHistoryStore {
                         chats_adjuntos: []
                     };
                     tickets.push(newTicket);
+                    this.saveTicketsList(projectId, tickets);
+                } else if (details.notes) {
+                    console.log(`[LocalHistoryStore] 🎟️ Updating existing ticket description for lead: ${chatId}`);
+                    tickets[activeTicketIdx].descripcion = details.notes;
+                    tickets[activeTicketIdx].updated_at = new Date().toISOString();
                     this.saveTicketsList(projectId, tickets);
                 }
             }
