@@ -57,6 +57,10 @@ export interface LocalChat {
     last_db_result?: string | null;
     assigned_to?: string | null;
     unread_count?: number;
+    cuit_dni?: string | null;
+    address?: string | null;
+    tax_status?: string | null;
+    offered_product?: string | null;
 }
 
 export interface LocalMessage {
@@ -165,6 +169,35 @@ export class LocalHistoryStore {
         if (idx !== -1) {
             chats[idx] = { ...chats[idx], ...details };
             this.saveChats(projectId, chats);
+
+            if (details.is_lead === true) {
+                const tickets = this.getTicketsList(projectId);
+                const activeTicketIdx = tickets.findIndex(t => t.chat_id === chatId && t.estado === 'Abierto');
+                if (activeTicketIdx === -1) {
+                    console.log(`[LocalHistoryStore] 🎟️ Auto-creating ticket for lead: ${chatId}`);
+                    const newTicket: LocalTicket = {
+                        id: crypto.randomUUID(),
+                        project_id: projectId,
+                        chat_id: chatId,
+                        titulo: `Lead: ${chats[idx].name || chatId}`,
+                        descripcion: details.notes || 'Lead detectado automáticamente',
+                        estado: 'Abierto',
+                        prioridad: 'Media',
+                        tipo: 'Soporte',
+                        created_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString(),
+                        attachments: [],
+                        chats_adjuntos: []
+                    };
+                    tickets.push(newTicket);
+                    this.saveTicketsList(projectId, tickets);
+                } else if (details.notes) {
+                    console.log(`[LocalHistoryStore] 🎟️ Updating existing ticket description for lead: ${chatId}`);
+                    tickets[activeTicketIdx].descripcion = details.notes;
+                    tickets[activeTicketIdx].updated_at = new Date().toISOString();
+                    this.saveTicketsList(projectId, tickets);
+                }
+            }
             return true;
         }
         return false;
@@ -434,6 +467,17 @@ export class LocalHistoryStore {
         return false;
     }
 
+    static async deleteTicket(ticketId: string, projectId: string): Promise<boolean> {
+        const tickets = this.getTicketsList(projectId);
+        const idx = tickets.findIndex(t => t.id === ticketId);
+        if (idx !== -1) {
+            tickets.splice(idx, 1);
+            this.saveTicketsList(projectId, tickets);
+            return true;
+        }
+        return false;
+    }
+
     static async updateLeadAndTicket(ticketId: string, details: any, projectId: string): Promise<boolean> {
         const tickets = this.getTicketsList(projectId);
         const idx = tickets.findIndex(t => t.id === ticketId);
@@ -441,7 +485,10 @@ export class LocalHistoryStore {
             if (details.titulo) tickets[idx].titulo = details.titulo;
             if (details.descripcion) tickets[idx].descripcion = details.descripcion;
             if (details.tipo) tickets[idx].tipo = details.tipo;
-            if (details.prioridad) tickets[idx].prioridad = details.prioridad;
+            
+            const priorityVal = details.priority || details.prioridad;
+            if (priorityVal) tickets[idx].prioridad = priorityVal;
+            
             if (details.estado) tickets[idx].estado = details.estado;
             tickets[idx].updated_at = new Date().toISOString();
             this.saveTicketsList(projectId, tickets);
@@ -449,12 +496,27 @@ export class LocalHistoryStore {
             // Also update contact details in chats (for leads)
             const chatId = tickets[idx].chat_id;
             const contactUpdate: Partial<LocalChat> = {};
-            if (details.contacto_nombre) contactUpdate.name = details.contacto_nombre;
-            if (details.contacto_email) contactUpdate.email = details.contacto_email;
-            if (details.contacto_notas) contactUpdate.notes = details.contacto_notas;
-            if (details.crm_status) contactUpdate.crm_status = details.crm_status;
-            if (details.crm_due_date) contactUpdate.crm_due_date = details.crm_due_date;
-            if (details.is_lead !== undefined) contactUpdate.is_lead = details.is_lead;
+            const contactDetails = details.contact || {};
+
+            if (details.contacto_nombre || contactDetails.name) contactUpdate.name = details.contacto_nombre || contactDetails.name;
+            if (details.contacto_email || contactDetails.email) contactUpdate.email = details.contacto_email || contactDetails.email;
+            if (details.contacto_notas || contactDetails.notes || details.notes || details.notas) contactUpdate.notes = details.contacto_notas || contactDetails.notes || details.notes || details.notas;
+            if (details.crm_status || contactDetails.crm_status) contactUpdate.crm_status = details.crm_status || contactDetails.crm_status;
+            if (details.crm_due_date || contactDetails.crm_due_date) contactUpdate.crm_due_date = details.crm_due_date || contactDetails.crm_due_date;
+            if (details.is_lead !== undefined || contactDetails.is_lead !== undefined) {
+                contactUpdate.is_lead = details.is_lead !== undefined ? details.is_lead : contactDetails.is_lead;
+            }
+            if (contactDetails.cuit_dni !== undefined) contactUpdate.cuit_dni = contactDetails.cuit_dni;
+            if (contactDetails.address !== undefined) contactUpdate.address = contactDetails.address;
+            if (contactDetails.tax_status !== undefined) contactUpdate.tax_status = contactDetails.tax_status;
+            if (contactDetails.offered_product !== undefined) contactUpdate.offered_product = contactDetails.offered_product;
+            if (contactDetails.source !== undefined) contactUpdate.source = contactDetails.source;
+
+            if (tickets[idx].estado === 'Cerrado') {
+                contactUpdate.assigned_agent = 'asistente1';
+                contactUpdate.bot_enabled = true;
+                contactUpdate.last_db_result = null;
+            }
 
             if (Object.keys(contactUpdate).length > 0) {
                 await this.updateContactDetails(chatId, contactUpdate, projectId);

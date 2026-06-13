@@ -389,12 +389,27 @@ export class HistoryHandler {
                         }
                     }
 
-                    // Migración para attachments y chats_adjuntos en tickets
+                    // Migración para chat_id, attachments y chats_adjuntos en tickets
                     if (table.name === 'tickets') {
+                        const { error: ticketChatIdErr } = await supabase.from('tickets').select('chat_id').limit(1);
+                        if (ticketChatIdErr && ticketChatIdErr.code === '42703') {
+                            console.log(`🔧 Agregando columna chat_id a tickets...`);
+                            await supabase.rpc('exec_sql', { query: `ALTER TABLE tickets ADD COLUMN IF NOT EXISTS chat_id TEXT;` });
+                        }
                         const { error: ticketAttachErr } = await supabase.from('tickets').select('attachments').limit(1);
                         if (ticketAttachErr && ticketAttachErr.code === '42703') {
                             console.log(`🔧 Agregando columnas attachments y chats_adjuntos a tickets...`);
                             await supabase.rpc('exec_sql', { query: `ALTER TABLE tickets ADD COLUMN IF NOT EXISTS attachments TEXT DEFAULT '[]', ADD COLUMN IF NOT EXISTS chats_adjuntos TEXT DEFAULT '[]';` });
+                        }
+                        const { error: ticketPrioridadErr } = await supabase.from('tickets').select('prioridad').limit(1);
+                        if (ticketPrioridadErr && ticketPrioridadErr.code === '42703') {
+                            console.log(`🔧 Agregando columna prioridad a tickets...`);
+                            await supabase.rpc('exec_sql', { query: `ALTER TABLE tickets ADD COLUMN IF NOT EXISTS prioridad TEXT DEFAULT 'Media';` });
+                        }
+                        const { error: ticketTipoErr } = await supabase.from('tickets').select('tipo').limit(1);
+                        if (ticketTipoErr && ticketTipoErr.code === '42703') {
+                            console.log(`🔧 Agregando columna tipo a tickets...`);
+                            await supabase.rpc('exec_sql', { query: `ALTER TABLE tickets ADD COLUMN IF NOT EXISTS tipo TEXT DEFAULT 'Soporte';` });
                         }
                     }
 
@@ -877,15 +892,20 @@ export class HistoryHandler {
             if (recentlySaved && recentlySaved.length > 0) {
                 const existing = recentlySaved[0];
                 
-                // Si el mensaje existente no tiene external_id y ahora lo tenemos, lo actualizamos
-                if (!existing.external_id && external_id) {
-                    console.log(`[HistoryHandler] 🔄 Vinculando ID externo a mensaje existente: ${existing.id} -> ${external_id}`);
-                    await supabase
-                        .from('messages')
-                        .update({ external_id })
-                        .eq('id', existing.id);
+                // Si ambos tienen external_id y son diferentes, NO es un duplicado (son mensajes distintos con el mismo contenido)
+                if (existing.external_id && external_id && existing.external_id !== external_id) {
+                    // Continuar con la inserción normal
+                } else {
+                    // Si el mensaje existente no tiene external_id y ahora lo tenemos, lo actualizamos
+                    if (!existing.external_id && external_id) {
+                        console.log(`[HistoryHandler] 🔄 Vinculando ID externo a mensaje existente: ${existing.id} -> ${external_id}`);
+                        await supabase
+                            .from('messages')
+                            .update({ external_id })
+                            .eq('id', existing.id);
+                    }
+                    return recentlySaved;
                 }
-                return recentlySaved;
             }
 
             // 3. INSERCIÓN NORMAL (Si no se encontró duplicado)
@@ -1049,6 +1069,20 @@ export class HistoryHandler {
         let currentProjectId = forcedProjectId;
         if (process.env.STORAGE_MODE === "local") {
             const success = await LocalHistoryStore.updateContactDetails(chatId, details as any, currentProjectId || HistoryHandler.PROJECT_IDENTIFIER);
+            if (success) {
+                historyEvents.emit('contact_updated', { 
+                    chatId, 
+                    project_id: currentProjectId || HistoryHandler.PROJECT_IDENTIFIER, 
+                    details 
+                });
+                if (details.is_lead === true) {
+                    const tickets = LocalHistoryStore.getTicketsList(currentProjectId || HistoryHandler.PROJECT_IDENTIFIER);
+                    const activeTicket = tickets.find(t => t.chat_id === chatId && t.estado === 'Abierto');
+                    if (activeTicket) {
+                        historyEvents.emit('ticket_updated', { id: activeTicket.id, chat_id: chatId, ...activeTicket });
+                    }
+                }
+            }
             return { success };
         }
         if (details.name === '[-]') details.name = undefined;
@@ -1078,6 +1112,70 @@ export class HistoryHandler {
                 .eq('project_id', currentProjectId);
 
             if (error) throw error;
+
+            if (details.is_lead === true) {
+                // Check if an open ticket exists
+                const { data: existingTicket, error: lookupErr } = await supabase
+                    .from('tickets')
+                    .select('id')
+                    .eq('chat_id', chatId)
+                    .eq('project_id', currentProjectId)
+                    .eq('estado', 'Abierto');
+
+                if (!lookupErr && (!existingTicket || existingTicket.length === 0)) {
+                    console.log(`[HistoryHandler] 🎟️ Auto-creating ticket for lead: ${chatId}`);
+                    
+                    const { data: chatData } = await supabase
+                        .from('chats')
+                        .select('name')
+                        .eq('id', chatId)
+                        .eq('project_id', currentProjectId)
+                        .maybeSingle();
+                    const name = chatData?.name || details.name || chatId;
+
+                    const { data: proyectoRow } = await supabase
+                        .from('proyectos_railway')
+                        .select('cliente_id')
+                        .eq('railway_project_id', currentProjectId)
+                        .maybeSingle();
+                    const clienteId = (proyectoRow as any)?.cliente_id || null;
+
+                    const { data: newTicket, error: ticketErr } = await supabase
+                        .from('tickets')
+                        .insert({
+                            project_id: currentProjectId,
+                            chat_id: chatId,
+                            titulo: `Lead: ${name}`,
+                            descripcion: details.notes || 'Lead detectado automáticamente',
+                            estado: 'Abierto',
+                            prioridad: 'Media',
+                            created_at: new Date().toISOString(),
+                            ...(clienteId ? { cliente_id: clienteId } : {})
+                        })
+                        .select()
+                        .single();
+
+                    if (!ticketErr && newTicket) {
+                        historyEvents.emit('ticket_updated', { id: newTicket.id, chat_id: chatId, ...newTicket });
+                    }
+                } else if (!lookupErr && existingTicket && existingTicket.length > 0 && details.notes) {
+                    console.log(`[HistoryHandler] 🎟️ Updating existing open ticket description for lead: ${chatId}`);
+                    const activeTicketId = existingTicket[0].id;
+                    const { error: updateTicketErr } = await supabase
+                        .from('tickets')
+                        .update({ descripcion: details.notes, updated_at: new Date().toISOString() })
+                        .eq('id', activeTicketId)
+                        .eq('project_id', currentProjectId);
+                    if (!updateTicketErr) {
+                        historyEvents.emit('ticket_updated', { 
+                            id: activeTicketId, 
+                            chat_id: chatId, 
+                            descripcion: details.notes, 
+                            updated_at: new Date().toISOString() 
+                        });
+                    }
+                }
+            }
 
             // Emitir evento para actualización en tiempo real en el Backoffice/CRM
             historyEvents.emit('contact_updated', { 
@@ -1198,6 +1296,7 @@ export class HistoryHandler {
                 .from('tickets')
                 .insert({
                     project_id: currentProjectId,
+                    chat_id: chatId,
                     titulo: `Lead: ${details.name || chatId}`,
                     descripcion: details.notes || 'Lead creado manualmente',
                     estado: 'Abierto',
@@ -1224,9 +1323,9 @@ export class HistoryHandler {
     /**
      * Verifica si el bot está habilitado para un usuario
      */
-    static async isBotEnabled(rawChatId: string): Promise<boolean> {
+    static async isBotEnabled(rawChatId: string, projectId?: string | null): Promise<boolean> {
         try {
-            const chat = await this.getChat(rawChatId);
+            const chat = await this.getChat(rawChatId, projectId || undefined);
             return chat ? (chat.bot_enabled !== false) : true;
         } catch (err) {
             console.error('[HistoryHandler] Error en isBotEnabled:', err);
@@ -1680,18 +1779,19 @@ export class HistoryHandler {
      * Crea un nuevo ticket
      */
     static async createTicket(
-        _rawChatId: string | null,
+        rawChatId: string | null,
         titulo: string,
         descripcion: string,
-        _tipo: string = 'Soporte',
-        _prioridad: string = 'Media',
+        tipo: string = 'Soporte',
+        prioridad: string = 'Media',
         forcedProjectId?: string,
         attachments: string[] = [],
         chats_adjuntos: { chat_id: string; name: string }[] = []
     ) {
+        const chatId = rawChatId ? this.normalizeId(rawChatId) : null;
         const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
         if (process.env.STORAGE_MODE === "local") {
-            const ticket = await LocalHistoryStore.createTicket('', titulo, descripcion, '', '', currentProjectId, attachments, chats_adjuntos);
+            const ticket = await LocalHistoryStore.createTicket(chatId || '', titulo, descripcion, tipo, prioridad, currentProjectId, attachments, chats_adjuntos);
             historyEvents.emit('ticket_updated', { ticket });
             return { success: true, ticket };
         }
@@ -1707,8 +1807,11 @@ export class HistoryHandler {
                 .from('tickets')
                 .insert({
                     project_id: currentProjectId,
+                    chat_id: chatId,
                     titulo,
                     descripcion,
+                    tipo,
+                    prioridad,
                     estado: 'Abierto',
                     tipo: 'Soporte',
                     attachments: JSON.stringify(attachments),
@@ -1730,15 +1833,16 @@ export class HistoryHandler {
     /**
      * Obtiene el conteo de tickets pendientes (Abiertos o En progreso)
      */
-    static async getPendingTicketsCount() {
+    static async getPendingTicketsCount(projectId?: string | null) {
+        const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
         if (process.env.STORAGE_MODE === "local") {
-            return LocalHistoryStore.getPendingTicketsCount('', this.PROJECT_IDENTIFIER);
+            return LocalHistoryStore.getPendingTicketsCount('', currentProjectId);
         }
         try {
             const { count, error } = await supabase
                 .from('tickets')
                 .select('*', { count: 'exact', head: true })
-                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER)
+                .eq('project_id', currentProjectId)
                 .in('estado', ['Abierto', 'En progreso']);
             if (error) throw error;
             return count || 0;
@@ -1831,23 +1935,34 @@ export class HistoryHandler {
     /**
      * Lista los tickets del proyecto
      */
-    static async listTickets(limit: number = 50, offset: number = 0, estado?: string, _tipo?: string, _chatId?: string, ticketId?: string) {
+    static async listTickets(limit: number = 50, offset: number = 0, estado?: string, _tipo?: string, _chatId?: string, ticketId?: string, projectId?: string | null) {
+        const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
         if (process.env.STORAGE_MODE === "local") {
-            const res = await LocalHistoryStore.listTickets(limit, offset, estado, '', '', ticketId, this.PROJECT_IDENTIFIER);
+            const res = await LocalHistoryStore.listTickets(limit, offset, estado, _tipo, _chatId, ticketId, currentProjectId);
             return res.data;
         }
         try {
             let query = supabase
                 .from('tickets')
                 .select('*')
-                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
+                .eq('project_id', currentProjectId);
 
             if (ticketId && ticketId !== 'null' && ticketId !== 'undefined' && ticketId !== '') {
                 query = query.eq('id', ticketId);
             }
 
+            if (_chatId && _chatId !== 'null' && _chatId !== 'undefined' && _chatId !== '') {
+                query = query.eq('chat_id', this.normalizeId(_chatId));
+            }
+
+            if (_tipo && _tipo !== 'null' && _tipo !== 'undefined' && _tipo !== '') {
+                query = query.eq('tipo', _tipo);
+            }
+
             if (estado && estado !== 'null' && estado !== 'undefined' && estado !== '') {
                 query = query.eq('estado', estado);
+            } else if (estado === 'null' || estado === 'undefined') {
+                // No aplicar filtro de estado (trae todos)
             } else {
                 query = query.in('estado', ['Abierto', 'En progreso']);
             }
@@ -1874,7 +1989,7 @@ export class HistoryHandler {
             
             const { data: ticket, error: tError } = await supabase
                 .from('tickets')
-                .select('project_id')
+                .select('chat_id, project_id')
                 .eq('id', ticketId)
                 .single();
 
@@ -1883,8 +1998,18 @@ export class HistoryHandler {
 
             const ticketUpdate: any = { updated_at: new Date().toISOString() };
             if (details.titulo !== undefined) ticketUpdate.titulo = details.titulo;
-            if (details.notas !== undefined) ticketUpdate.descripcion = details.notas;
-            if (details.crm_status === 'Cerrado' || details.crm_status === 'Vendido') ticketUpdate.estado = 'Cerrado';
+            
+            const notesVal = details.notas !== undefined ? details.notas : details.notes;
+            if (notesVal !== undefined) ticketUpdate.descripcion = notesVal;
+
+            const priorityVal = details.priority || details.prioridad;
+            if (priorityVal !== undefined) ticketUpdate.prioridad = priorityVal;
+
+            if (details.estado !== undefined) {
+                ticketUpdate.estado = details.estado;
+            } else if (details.contact?.crm_status === 'Cerrado' || details.contact?.crm_status === 'Vendido') {
+                ticketUpdate.estado = 'Cerrado';
+            }
 
             const { error: upTicketErr } = await supabase
                 .from('tickets')
@@ -1894,7 +2019,54 @@ export class HistoryHandler {
 
             if (upTicketErr) throw upTicketErr;
 
-            historyEvents.emit('ticket_updated', { id: ticketId, ...ticketUpdate });
+            // 3. Actualizar Contacto (Chat) en Supabase si corresponde o si se cierra el ticket
+            const hasContactDetails = details.contact !== undefined;
+            if ((hasContactDetails || ticketUpdate.estado === 'Cerrado') && ticket.chat_id) {
+                const chatUpdate: any = {};
+                if (hasContactDetails) {
+                    if (details.contact.name !== undefined) chatUpdate.name = details.contact.name;
+                    if (details.contact.email !== undefined) chatUpdate.email = details.contact.email;
+                    if (details.contact.cuit_dni !== undefined) chatUpdate.cuit_dni = details.contact.cuit_dni;
+                    if (details.contact.address !== undefined) chatUpdate.address = details.contact.address;
+                    if (details.contact.tax_status !== undefined) chatUpdate.tax_status = details.contact.tax_status;
+                    if (details.contact.offered_product !== undefined) chatUpdate.offered_product = details.contact.offered_product;
+                    if (details.contact.crm_status !== undefined) chatUpdate.crm_status = details.contact.crm_status;
+                    if (details.contact.crm_due_date !== undefined) chatUpdate.crm_due_date = details.contact.crm_due_date;
+                    if (notesVal !== undefined) chatUpdate.notes = notesVal;
+                    if (details.contact.source !== undefined) chatUpdate.source = details.contact.source;
+                }
+
+                // Si el estado es cerrado, aplicar lógica de reset de bot
+                if (ticketUpdate.estado === 'Cerrado') {
+                    chatUpdate.assigned_agent = 'asistente1';
+                    chatUpdate.bot_enabled = true;
+                    chatUpdate.last_db_result = null;
+                }
+
+                if (Object.keys(chatUpdate).length > 0) {
+                    const { error: upChatErr } = await supabase
+                        .from('chats')
+                        .update(chatUpdate)
+                        .eq('id', ticket.chat_id)
+                        .eq('project_id', currentProjectId);
+                    
+                    if (upChatErr) throw upChatErr;
+
+                    historyEvents.emit('contact_updated', {
+                        chatId: ticket.chat_id,
+                        project_id: currentProjectId,
+                        details: chatUpdate
+                    });
+                }
+                
+                this.invalidateChatCache(ticket.chat_id, currentProjectId);
+                
+                if (ticketUpdate.estado === 'Cerrado') {
+                    historyEvents.emit('bot_toggled', { chatId: ticket.chat_id, enabled: true, assigned_agent: 'asistente1', projectId: currentProjectId });
+                }
+            }
+
+            historyEvents.emit('ticket_updated', { id: ticketId, chat_id: ticket.chat_id, ...ticketUpdate });
             
             return { success: true };
         } catch (err: any) {
@@ -1903,12 +2075,42 @@ export class HistoryHandler {
         }
     }
 
+    static async updateTicket(ticketId: string, details: any) {
+        return this.updateLeadAndTicket(ticketId, details);
+    }
+
+    static async deleteTicket(ticketId: string, forcedProjectId?: string) {
+        const currentProjectId = forcedProjectId || HistoryHandler.PROJECT_IDENTIFIER;
+        if (process.env.STORAGE_MODE === "local") {
+            const success = await LocalHistoryStore.deleteTicket(ticketId, currentProjectId);
+            return { success };
+        }
+        try {
+            console.log(`[HistoryHandler] Eliminando ticket ${ticketId}`);
+            
+            const { error } = await supabase
+                .from('tickets')
+                .delete()
+                .eq('id', ticketId)
+                .eq('project_id', currentProjectId);
+
+            if (error) throw error;
+
+            historyEvents.emit('ticket_deleted', { id: ticketId, projectId: currentProjectId });
+            return { success: true };
+        } catch (err: any) {
+            console.error('[HistoryHandler] Error en deleteTicket:', err);
+            return { success: false, error: err.message };
+        }
+    }
+
     /**
      * Lista los leads que tienen datos de CRM (editados y marcados explicitamente como leads)
      */
-    static async listEditedLeads(limit: number = 50, offset: number = 0) {
+    static async listEditedLeads(limit: number = 50, offset: number = 0, projectId?: string | null) {
+        const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
         if (process.env.STORAGE_MODE === "local") {
-            return LocalHistoryStore.listEditedLeads(limit, offset, HistoryHandler.PROJECT_IDENTIFIER);
+            return LocalHistoryStore.listEditedLeads(limit, offset, currentProjectId);
         }
         try {
             // Filtramos para obtener chats marcados como leads O que tengan algún estado CRM/etiquetas
@@ -1916,7 +2118,7 @@ export class HistoryHandler {
             const { data, error } = await supabase
                 .from('chats')
                 .select('*, chat_tags(tag_id, tags(*))')
-                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER)
+                .eq('project_id', currentProjectId)
                 .or('is_lead.eq.true,crm_status.not.is.null')
                 .order('last_message_at', { ascending: false })
                 .range(offset, offset + limit - 1);
@@ -1934,9 +2136,10 @@ export class HistoryHandler {
     /**
      * Obtiene los leads con tareas próximas (hoy + 5 días)
      */
-    static async getTasksDashboard() {
+    static async getTasksDashboard(projectId?: string | null) {
+        const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
         if (process.env.STORAGE_MODE === "local") {
-            const chats = LocalHistoryStore.getChats(this.PROJECT_IDENTIFIER);
+            const chats = LocalHistoryStore.getChats(currentProjectId);
             const fiveDaysLater = new Date();
             fiveDaysLater.setDate(fiveDaysLater.getDate() + 5);
             fiveDaysLater.setHours(23, 59, 59, 999);
@@ -1965,7 +2168,7 @@ export class HistoryHandler {
             const { data, error } = await supabase
                 .from('chats')
                 .select('id, name, type, crm_status, crm_due_date')
-                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER)
+                .eq('project_id', currentProjectId)
                 .eq('is_lead', true)
                 .not('crm_due_date', 'is', null)
                 .lte('crm_due_date', fiveDaysLater.toISOString())
@@ -2306,6 +2509,12 @@ export class HistoryHandler {
 
             const columns = JSON.parse(crmColumnsRaw);
             if (!Array.isArray(columns)) return statusLabel;
+
+            // Force UNASSIGNED column to have 'Leads Nuevos' title dynamically
+            const unassignedCol = columns.find((col: any) => col.id === 'UNASSIGNED');
+            if (unassignedCol) {
+                unassignedCol.title = 'Leads Nuevos';
+            }
 
             // Normalización para comparación (sin espacios extra, minúsculas)
             const normalizedInput = statusLabel.trim().toLowerCase();

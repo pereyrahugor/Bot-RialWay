@@ -21,7 +21,7 @@ if (!token) window.location.href = '/login';
 
 let activeChatId = null;
 let activeTicketId = null;
-let _notificationsActive = false;
+let _notificationsActive = true;
 let _showOnlyUnreadChats = false;
 let crmColumns = [];
 let _boCrmData = {};
@@ -43,9 +43,16 @@ async function initCRMData() {
         const colSettingValue = settings.CRM_COLUMNS;
         if (colSettingValue) {
             crmColumns = JSON.parse(colSettingValue);
+            // Asegurarse de que UNASSIGNED siempre tenga el título "Leads Nuevos"
+            const unassigned = crmColumns.find(c => c.id === 'UNASSIGNED');
+            if (unassigned) {
+                unassigned.title = 'Leads Nuevos';
+            } else {
+                crmColumns.unshift({ id: 'UNASSIGNED', title: 'Leads Nuevos' });
+            }
         } else {
             crmColumns = [
-                { id: 'UNASSIGNED', title: 'Tickets Nuevos' },
+                { id: 'UNASSIGNED', title: 'Leads Nuevos' },
                 { id: 'contactado', title: 'Contactado' },
                 { id: 'negociacion', title: 'En Negociación' },
                 { id: 'propuesta', title: 'Propuesta Enviada' },
@@ -563,7 +570,28 @@ async function checkPlatformVisibility() {
 async function selectChat(id) {
     activeChatId = id;
     if (window.innerWidth <= 768) document.body.classList.add('mobile-chat-active');
-    const chat = chats.find(c => c.id === id);
+    
+    let chat = chats.find(c => c.id === id);
+    if (!chat) {
+        console.log(`🔍 [UI] Chat ${id} no encontrado en la lista local, buscando en el servidor...`);
+        try {
+            const res = await fetch(`/api/backoffice/chats/${id}?token=${token}`);
+            if (res.ok) {
+                chat = await res.json();
+                if (chat && chat.id) {
+                    chats.unshift(chat);
+                    renderChatList();
+                }
+            }
+        } catch (err) {
+            console.error('Error buscando chat en el servidor:', err);
+        }
+    }
+    
+    if (!chat) {
+        console.error(`❌ Chat ${id} no encontrado en local ni en el servidor.`);
+        return;
+    }
     
     if (_notificationsActive && chat) {
         markChatAsRead(id);
@@ -1675,6 +1703,30 @@ socket.on('ticket_updated', (payload) => {
     const _tp = document.getElementById('tickets-panel');
     if (_tp && _tp.classList.contains('active')) {
         fetchTickets();
+    }
+    // Si el ticket pertenece al chat activo, recargar el Salto al CRM para actualizar prioridad, título, etc.
+    if (activeChatId && payload.chat_id && normChatId(payload.chat_id) === normChatId(activeChatId)) {
+        loadCRMJump(activeChatId);
+    }
+});
+socket.on('contact_updated', (payload) => {
+    console.log('📡 Contacto actualizado:', payload);
+    const chatId = payload.chatId;
+    const details = payload.details || {};
+    
+    // Buscar y actualizar el chat local en el array de chats
+    const chatIndex = chats.findIndex(c => normChatId(c.id) === normChatId(chatId));
+    if (chatIndex !== -1) {
+        // Combinar datos nuevos
+        chats[chatIndex] = { ...chats[chatIndex], ...details };
+        
+        // Si es el chat activo, actualizar la vista
+        if (normChatId(chatId) === normChatId(activeChatId)) {
+            populateCRMFields(chats[chatIndex]);
+        }
+        
+        // Re-renderizar lista de chats
+        renderChatList();
     }
 });
 

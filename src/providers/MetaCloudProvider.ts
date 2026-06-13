@@ -1,10 +1,9 @@
-import { ProviderClass } from '@builderbot/bot';
+import { ProviderClass, utils } from '@builderbot/bot';
 import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as child_process from 'child_process';
 import FormData from 'form-data';
-import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 
 /**
  * Proveedor para Meta Cloud API (WhatsApp Business API)
@@ -464,15 +463,6 @@ class MetaCloudProvider extends ProviderClass {
                     { type: "BODY", text: "Hola {{1}}, te recordamos tu cita para el día {{2}} a las {{3}}. ¡Te esperamos!" }
                 ],
                 isDemo: true
-            },
-            {
-                name: "soporte_tecnico",
-                category: "UTILITY",
-                language: "es",
-                components: [
-                    { type: "BODY", text: "Hola {{1}}, hemos recibido tu solicitud de soporte con el ticket {{2}}. Un agente te contactará pronto." }
-                ],
-                isDemo: true
             }
         ];
     }
@@ -480,11 +470,16 @@ class MetaCloudProvider extends ProviderClass {
     /**
      * Convierte archivos de formatos no soportados a formatos compatibles con Meta (MP4 para video, MP3 para audio)
      */
-    private async transcodeToSupportedFormat(filePath: string): Promise<{ outputPath: string; isTemporary: boolean }> {
+    private async transcodeToSupportedFormat(filePath: string, mimeType?: string): Promise<{ outputPath: string; isTemporary: boolean }> {
         const ext = path.extname(filePath).toLowerCase();
 
         const isVideo = ['.mkv', '.webm', '.mov', '.avi', '.flv', '.wmv', '.gif'].includes(ext);
         const isAudio = ['.wav', '.wma', '.flac', '.m4r'].includes(ext);
+
+        // Si es webm pero el mimeType indica que es audio, no tratarlo como video
+        if (ext === '.webm' && mimeType && mimeType.toLowerCase().includes('audio')) {
+            isVideo = false;
+        }
 
         if (!isVideo && !isAudio) {
             return { outputPath: filePath, isTemporary: false };
@@ -537,7 +532,7 @@ class MetaCloudProvider extends ProviderClass {
     /**
      * Sube un archivo local a Meta para obtener un media_id
      */
-    private async uploadMedia(filePath: string): Promise<string | null> {
+    private async uploadMedia(filePath: string, mimeType?: string): Promise<string | null> {
         const { phone_number_id, access_token } = this.config;
         if (!fs.existsSync(filePath)) {
             console.error(`❌ [MetaCloudProvider] uploadMedia: El archivo no existe en ${filePath}`);
@@ -548,7 +543,7 @@ class MetaCloudProvider extends ProviderClass {
         let isTemp = false;
 
         try {
-            const transcodeResult = await this.transcodeToSupportedFormat(filePath);
+            const transcodeResult = await this.transcodeToSupportedFormat(filePath, mimeType);
             finalPath = transcodeResult.outputPath;
             isTemp = transcodeResult.isTemporary;
         } catch (transcodeErr: any) {
@@ -579,13 +574,26 @@ class MetaCloudProvider extends ProviderClass {
             else if (lowerPath.endsWith('.opus')) contentType = 'audio/ogg; codecs=opus';
 
             // Meta no acepta audio/webm — convertir a ogg antes de subir
-            let uploadPath = filePath;
+            let uploadPath = finalPath;
             if (lowerPath.endsWith('.webm')) {
                 try {
-                    tempOgg = filePath.replace(/\.webm$/i, '_converted.ogg');
+                    tempOgg = finalPath.replace(/\.webm$/i, '_converted.ogg');
                     await new Promise<void>((resolve, reject) => {
-                        child_process.execFile(ffmpegInstaller.path, ['-y', '-i', filePath, '-c:a', 'libopus', tempOgg!], (err) => {
-                            if (err) reject(err); else resolve();
+                        // Intentamos primero con ffmpeg del sistema
+                        child_process.exec(`ffmpeg -y -i "${finalPath}" -c:a libopus "${tempOgg}"`, async (err) => {
+                            if (!err) {
+                                resolve();
+                                return;
+                            }
+                            console.warn('⚠️ [MetaCloudProvider] ffmpeg del sistema falló o no está instalado, intentando con @ffmpeg-installer/ffmpeg...');
+                            try {
+                                const ffmpegInstaller = (await import('@ffmpeg-installer/ffmpeg')).default;
+                                child_process.execFile(ffmpegInstaller.path, ['-y', '-i', finalPath, '-c:a', 'libopus', tempOgg!], (err2) => {
+                                    if (err2) reject(err2); else resolve();
+                                });
+                            } catch (fallbackErr: any) {
+                                reject(new Error(`No se pudo encontrar ffmpeg en el sistema ni cargar @ffmpeg-installer/ffmpeg: ${fallbackErr.message}`));
+                            }
                         });
                     });
                     uploadPath = tempOgg;
@@ -604,11 +612,24 @@ class MetaCloudProvider extends ProviderClass {
                     'Authorization': `Bearer ${access_token}`
                 }
             });
-            if (tempOgg && fs.existsSync(tempOgg)) fs.unlinkSync(tempOgg);
+            
+            // Limpieza
+            if (tempOgg && fs.existsSync(tempOgg)) {
+                try { fs.unlinkSync(tempOgg); } catch (_) {}
+            }
+            if (isTemp && finalPath && fs.existsSync(finalPath)) {
+                try { fs.unlinkSync(finalPath); } catch (_) {}
+            }
+            
             return response.data.id;
         } catch (error: any) {
             console.error('❌ [MetaCloudProvider] Error subiendo media a Meta:', error?.response?.data || error.message);
-            if (tempOgg && fs.existsSync(tempOgg)) try { fs.unlinkSync(tempOgg); } catch (_) { /* ignore */ }
+            if (tempOgg && fs.existsSync(tempOgg)) {
+                try { fs.unlinkSync(tempOgg); } catch (_) {}
+            }
+            if (isTemp && finalPath && fs.existsSync(finalPath)) {
+                try { fs.unlinkSync(finalPath); } catch (_) {}
+            }
             return null;
         }
     }
@@ -664,14 +685,14 @@ class MetaCloudProvider extends ProviderClass {
 
                 if (finalPath && fs.existsSync(finalPath)) {
                     console.log(`📤 [MetaCloudProvider] Subiendo archivo local a Meta: ${finalPath}`);
-                    const mediaId = await this.uploadMedia(finalPath);
+                    const mediaId = await this.uploadMedia(finalPath, mimeType);
                     if (mediaId) {
                         const mediaData = { id: mediaId };
                         const finalLowerPath = finalPath.toLowerCase();
-                        const isSticker = finalLowerPath.endsWith('.webp') || mimeType.includes('webp') || mimeType.includes('sticker') || options.type === 'sticker' || (options.media && options.media.type === 'sticker');
-                        const isImage = !isSticker && (finalLowerPath.endsWith('.jpg') || finalLowerPath.endsWith('.png') || finalLowerPath.endsWith('.jpeg') || mimeType.includes('image'));
-                        const isVideo = finalLowerPath.endsWith('.mp4') || finalLowerPath.endsWith('.3gp') || finalLowerPath.endsWith('.mkv') || finalLowerPath.endsWith('.webm') || finalLowerPath.endsWith('.mov') || finalLowerPath.endsWith('.avi') || finalLowerPath.endsWith('.flv') || mimeType.includes('video');
-                        const isAudio = !isVideo && (finalLowerPath.endsWith('.mp3') || finalLowerPath.endsWith('.m4a') || finalLowerPath.endsWith('.aac') || finalLowerPath.endsWith('.amr') || finalLowerPath.endsWith('.ogg') || finalLowerPath.endsWith('.opus') || finalLowerPath.endsWith('.wav') || mimeType.includes('audio'));
+                        const isSticker = mimeType.includes('webp') || mimeType.includes('sticker') || options.type === 'sticker' || (options.media && options.media.type === 'sticker') || finalLowerPath.endsWith('.webp');
+                        const isImage = !isSticker && (mimeType.includes('image') || finalLowerPath.endsWith('.jpg') || finalLowerPath.endsWith('.png') || finalLowerPath.endsWith('.jpeg'));
+                        const isAudio = !isSticker && !isImage && (mimeType.includes('audio') || mimeType.includes('voice') || finalLowerPath.endsWith('.mp3') || finalLowerPath.endsWith('.m4a') || finalLowerPath.endsWith('.aac') || finalLowerPath.endsWith('.amr') || finalLowerPath.endsWith('.ogg') || finalLowerPath.endsWith('.opus') || finalLowerPath.endsWith('.wav') || (finalLowerPath.endsWith('.webm') && (mimeType === '' || mimeType.includes('audio'))));
+                        const isVideo = !isSticker && !isImage && !isAudio && (mimeType.includes('video') || finalLowerPath.endsWith('.mp4') || finalLowerPath.endsWith('.3gp') || finalLowerPath.endsWith('.mkv') || finalLowerPath.endsWith('.webm') || finalLowerPath.endsWith('.mov') || finalLowerPath.endsWith('.avi') || finalLowerPath.endsWith('.flv'));
 
                         if (isSticker) {
                             body.type = 'sticker';
@@ -683,7 +704,7 @@ class MetaCloudProvider extends ProviderClass {
                             body.type = 'video';
                             body.video = { ...mediaData, caption: finalCaption };
                         } else if (isAudio) {
-                            body.type = (finalLowerPath.endsWith('.opus') || mimeType.includes('voice')) ? 'voice' : 'audio';
+                            body.type = 'audio';
                             body.audio = { ...mediaData };
                         } else {
                             body.type = 'document';
@@ -723,7 +744,7 @@ class MetaCloudProvider extends ProviderClass {
                 body.type = 'image';
                 body.image = { ...mediaData, caption: finalCaption };
             } else if (mimeType.includes('audio') || mimeType.includes('voice') || lowerMediaUrl.endsWith('.mp3') || lowerMediaUrl.endsWith('.ogg') || lowerMediaUrl.endsWith('.opus')) {
-                body.type = (mimeType.includes('voice') || lowerMediaUrl.endsWith('.opus')) ? 'voice' : 'audio';
+                body.type = 'audio';
                 body.audio = { ...mediaData };
             } else if (mimeType.includes('video') || lowerMediaUrl.endsWith('.mp4')) {
                 body.type = 'video';
@@ -799,6 +820,10 @@ class MetaCloudProvider extends ProviderClass {
 
     public async sendVideo(number: string, media: string, caption: string = ''): Promise<any> {
         return this.sendMessage(number, caption, { media: { url: media, mimetype: 'video/mp4' } });
+    }
+
+    public async sendAudio(number: string, media: string, caption: string = ''): Promise<any> {
+        return this.sendMessage(number, caption, { media: { url: media, mimetype: 'audio/mp4' } });
     }
 
     public async sendFile(number: string, media: string, caption: string = ''): Promise<any> {
@@ -1003,8 +1028,17 @@ class MetaCloudProvider extends ProviderClass {
                                 console.log(`📋 [MetaCloudProvider] HISTORY (User) DETECTADO. De: ${msg.from}. Result chatId: ${msg.from}`);
                             }
 
-                            // Forzar que el body no esté vacío para eventos de voz para que el core del bot los procese
-                            const bodyText = type === 'voice' ? '_event_voice_note_' : (messageBody || '');
+                            // Forzar el body correcto para eventos multimedia/sistema de Builderbot para que coincida con los disparadores
+                            let bodyText = messageBody || '';
+                            if (type === 'image') {
+                                bodyText = utils.generateRefProvider('_event_media_');
+                            } else if (type === 'video') {
+                                bodyText = utils.generateRefProvider('_event_media_');
+                            } else if (type === 'voice') {
+                                bodyText = utils.generateRefProvider('_event_voice_note_');
+                            } else if (type === 'document') {
+                                bodyText = utils.generateRefProvider('_event_document_');
+                            }
 
                             const formatedMessage: any = {
                                 from: wa_id || msg.from,

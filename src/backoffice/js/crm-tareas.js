@@ -16,7 +16,7 @@ let allTickets = [];
 let crmData = {};
 let botTags = [];
 let standardColumns = [
-    { id: 'UNASSIGNED', title: 'Tickets Nuevos', fixed: true },
+    { id: 'UNASSIGNED', title: 'Leads Nuevos', fixed: true },
     { id: 'contactado', title: 'Contactado' },
     { id: 'negociacion', title: 'En Negociación' },
     { id: 'propuesta', title: 'Propuesta Enviada' },
@@ -79,6 +79,19 @@ async function _initCRMTareasPage() {
     window.closeCardModal = closeCardModal;
     window.closeColumnModal = () => {};
 
+    // Inicializar o re-inicializar sockets
+    if (typeof io !== 'undefined') {
+        if (!window.crmTareasSocket) {
+            window.crmTareasSocket = io();
+        }
+        window.crmTareasSocket.off('contact_updated', onTareasContactUpdated);
+        window.crmTareasSocket.off('ticket_updated', onTareasTicketUpdated);
+
+        window.crmTareasSocket.on('contact_updated', onTareasContactUpdated);
+        window.crmTareasSocket.on('ticket_updated', onTareasTicketUpdated);
+        console.log('📡 [Socket Tareas] Conectado y escuchando eventos');
+    }
+
     console.log('✅ CRM Tareas Listo');
 }
 
@@ -96,8 +109,12 @@ async function loadCRMState() {
         const data = await res.json();
         if (data.success && data.value) {
             standardColumns = JSON.parse(data.value);
-            if (!standardColumns.some(c => c.id === 'UNASSIGNED')) {
-                standardColumns.unshift({ id: 'UNASSIGNED', title: 'Tickets Nuevos', fixed: true });
+            // Asegurarse de que UNASSIGNED siempre esté presente primero y con el título "Leads Nuevos"
+            const unassigned = standardColumns.find(c => c.id === 'UNASSIGNED');
+            if (unassigned) {
+                unassigned.title = 'Leads Nuevos';
+            } else {
+                standardColumns.unshift({ id: 'UNASSIGNED', title: 'Leads Nuevos', fixed: true });
             }
         }
     } catch (e) {
@@ -188,8 +205,8 @@ function distributeCards() {
         const lead = allLeads.find(l => l.id === ticket.chat_id);
         const metadata = crmData[ticket.id] || {};
         
-        // Prioridad: 1. Metadata del Kanban, 2. Campo del Lead en DB (Spliteado de timestamp)
-        let alertDateStr = metadata.alertDate || (lead?.crm_due_date ? lead.crm_due_date.split('T')[0] : null);
+        // Prioridad: 1. Campo del Lead en DB, 2. Metadata del Kanban
+        let alertDateStr = (lead?.crm_due_date ? lead.crm_due_date.split('T')[0] : null) || metadata.alertDate || null;
         
         let columnId = 'nodate';
 
@@ -244,7 +261,7 @@ function createCardElement(ticket, lead, metadata) {
     const cuit = lead?.cuit_dni || '';
     const product = lead?.offered_product || ticket.tipo || '';
     
-    let alertDateStr = metadata.alertDate || (lead?.crm_due_date ? lead.crm_due_date.split('T')[0] : null);
+    let alertDateStr = (lead?.crm_due_date ? lead.crm_due_date.split('T')[0] : null) || metadata.alertDate || null;
     const alertFormatted = alertDateStr ? formatDate(alertDateStr) : 'Sin alerta';
 
     // Helper para verificar visibilidad según configuración dinámica
@@ -254,7 +271,7 @@ function createCardElement(ticket, lead, metadata) {
     };
 
     const priorityIndicatorHtml = isVisible('crm-priority') 
-        ? `<div class="priority-indicator" style="background:${getPriorityColor(metadata.priority || lead?.priority)}"></div>`
+        ? `<div class="priority-indicator" style="background:${getPriorityColor(ticket.prioridad || metadata.priority || 'Media')}"></div>`
         : '';
 
     const productBadgeHtml = isVisible('crm-product')
@@ -354,9 +371,9 @@ function openCardModal(ticketId) {
     
     document.getElementById('edit-ticket-title').value = ticket.titulo || '';
     
-    let alertDateStr = metadata.alertDate || (lead?.crm_due_date ? lead.crm_due_date.split('T')[0] : '');
+    let alertDateStr = (lead?.crm_due_date ? lead.crm_due_date.split('T')[0] : '') || metadata.alertDate || '';
     document.getElementById('edit-alert-date').value = alertDateStr;
-    document.getElementById('edit-priority').value = metadata.priority || lead?.priority || 'Media';
+    document.getElementById('edit-priority').value = ticket.prioridad || metadata.priority || 'Media';
     document.getElementById('edit-custom-notes').value = notes;
     
     // Campos del Lead Expandidos
@@ -380,7 +397,7 @@ function openCardModal(ticketId) {
     const selectStatus = document.getElementById('edit-lead-status');
     if (selectStatus) {
         selectStatus.innerHTML = standardColumns.map(c => `<option value="${c.id}">${c.title}</option>`).join('');
-        selectStatus.value = metadata.columnId || lead?.crm_status || 'UNASSIGNED';
+        selectStatus.value = lead?.crm_status || metadata.columnId || 'UNASSIGNED';
         _csdRebuild('edit-lead-status');
         _csdSync('edit-lead-status');
     }
@@ -541,8 +558,10 @@ window.addTagToLead = async (tagId) => {
     if (!ticket) return;
     
     try {
-        const res = await fetch(`/api/backoffice/chat/${encodeURIComponent(ticket.chat_id)}/tags/${tagId}?token=${activeToken}`, {
-            method: 'POST'
+        const res = await fetch(`/api/backoffice/chats/${encodeURIComponent(ticket.chat_id)}/tags?token=${activeToken}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tagId })
         });
         if (res.ok) {
             const lead = allLeads.find(l => l.id === ticket.chat_id);
@@ -564,7 +583,7 @@ window.removeTagFromLead = async (tagId) => {
     if (!ticket) return;
 
     try {
-        const res = await fetch(`/api/backoffice/chat/${encodeURIComponent(ticket.chat_id)}/tags/${tagId}?token=${activeToken}`, {
+        const res = await fetch(`/api/backoffice/chats/${encodeURIComponent(ticket.chat_id)}/tags/${tagId}?token=${activeToken}`, {
             method: 'DELETE'
         });
         if (res.ok) {
@@ -909,22 +928,27 @@ function formatDate(dateStr) {
 }
 
 
-// --- Real-time Updates via Socket.IO ---
-/* global io */
-if (typeof io !== 'undefined') {
-    const socket = io();
-    console.log('📡 [Socket Tareas] Conectado para actualizaciones en tiempo real');
-
-    socket.on('contact_updated', (payload) => {
-        console.log('📡 [Socket Tareas] Contacto actualizado:', payload.chatId);
-        syncCRM();
-    });
-
-    socket.on('ticket_updated', (payload) => {
-        console.log('📡 [Socket Tareas] Ticket actualizado');
-        syncCRM();
-    });
+function onTareasContactUpdated(payload) {
+    console.log('📡 [Socket Tareas] Contacto actualizado:', payload.chatId);
+    syncCRM();
 }
+
+function onTareasTicketUpdated(payload) {
+    console.log('📡 [Socket Tareas] Ticket actualizado');
+    syncCRM();
+}
+
+window.destroyCRMTareas = function() {
+    console.log('🧹 [CRM Tareas] Limpiando recursos y socket listeners');
+    if (window.crmTareasSocket) {
+        window.crmTareasSocket.off('contact_updated', onTareasContactUpdated);
+        window.crmTareasSocket.off('ticket_updated', onTareasTicketUpdated);
+    }
+    if (window._crmTareasAlertInterval) {
+        clearInterval(window._crmTareasAlertInterval);
+        window._crmTareasAlertInterval = null;
+    }
+};
 
 function _initKanbanScrollBehaviorTareas() {
     const board = document.getElementById('kanban-board');

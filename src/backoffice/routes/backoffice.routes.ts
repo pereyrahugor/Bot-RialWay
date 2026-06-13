@@ -136,6 +136,12 @@ export const processSendMessage = async (
                     } else {
                         providerResponse = await providerToSend.sendMessage(jid, message || '', { media: absolutePath });
                     }
+                } else if (finalType === 'audio') {
+                    if (typeof (providerToSend as any).sendAudio === 'function') {
+                        providerResponse = await (providerToSend as any).sendAudio(jid, absolutePath, message || file.originalname);
+                    } else {
+                        providerResponse = await providerToSend.sendMessage(jid, message || '', { media: { url: absolutePath, mimetype: file.mimetype } });
+                    }
                 } else {
                     if (typeof (providerToSend as any).sendFile === 'function') {
                         providerResponse = await (providerToSend as any).sendFile(jid, absolutePath, message || file.originalname);
@@ -661,7 +667,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     app.get('/api/backoffice/chats/:id', backofficeAuth, async (req: any, res: any) => {
         try {
             const { id } = req.params;
-            const chat = await depsHistoryHandler.getChat(id);
+            const projectId = resolveProjectId(req);
+            const chat = await depsHistoryHandler.getChat(id, projectId);
             if (!chat) return res.status(404).json({ success: false, error: 'Chat not found' });
             res.json(chat);
         } catch (err: any) {
@@ -1356,25 +1363,30 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     // --- TICKETS ---
 
-    app.get('/api/backoffice/tickets/pending-count', backofficeAuth, async (_req: any, res: any) => {
-        const count = await depsHistoryHandler.getPendingTicketsCount();
+    app.get('/api/backoffice/tickets/pending-count', backofficeAuth, async (req: any, res: any) => {
+        const projectId = resolveProjectId(req);
+        const count = await depsHistoryHandler.getPendingTicketsCount(projectId);
         res.json({ count });
     });
 
     app.get('/api/backoffice/tickets', backofficeAuth, async (req: any, res: any) => {
         const estado = req.query.estado as string;
+        const tipo = req.query.tipo as string;
         const id = req.query.id as string;
         const limit = parseInt(req.query.limit as string) || 50;
         const offset = parseInt(req.query.offset as string) || 0;
-        const result = await depsHistoryHandler.listTickets(limit, offset, estado, undefined, undefined, id);
+        const chatId = req.query.chatId as string;
+        const projectId = resolveProjectId(req);
+        const result = await depsHistoryHandler.listTickets(limit, offset, estado, tipo, chatId, id, projectId);
         res.json(result);
     });
 
     app.post('/api/backoffice/tickets', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
-        const { chatId, titulo, descripcion, chats_adjuntos } = req.body;
+        const { chatId, titulo, descripcion, chats_adjuntos, tipo } = req.body;
         if (!titulo) return sendJson(res, 400, { success: false, error: 'titulo is required' });
         const adjuntos = Array.isArray(chats_adjuntos) ? chats_adjuntos : [];
-        const result = await depsHistoryHandler.createTicket(chatId, titulo, descripcion, 'Soporte', 'Media', undefined, [], adjuntos);
+        const projectId = resolveProjectId(req);
+        const result = await depsHistoryHandler.createTicket(chatId, titulo, descripcion, tipo || 'Asistencia Externa', 'Media', projectId || undefined, [], adjuntos);
         res.json(result);
     });
 
@@ -1382,6 +1394,27 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         try {
             const { id } = req.params;
             const result = await depsHistoryHandler.updateLeadAndTicket(id, req.body);
+            res.json(result);
+        } catch (err: any) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
+    app.put('/api/backoffice/tickets/:id', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
+        try {
+            const { id } = req.params;
+            const result = await depsHistoryHandler.updateTicket(id, req.body);
+            res.json(result);
+        } catch (err: any) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
+    app.delete('/api/backoffice/tickets/:id', backofficeAuth, async (req: any, res: any) => {
+        try {
+            const { id } = req.params;
+            const projectId = resolveProjectId(req);
+            const result = await depsHistoryHandler.deleteTicket(id, projectId);
             res.json(result);
         } catch (err: any) {
             res.status(500).json({ success: false, error: err.message });
@@ -1414,7 +1447,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     app.get('/api/backoffice/crm/tasks', backofficeAuth, async (req: any, res: any) => {
         try {
-            const tasks = await depsHistoryHandler.getTasksDashboard();
+            const projectId = resolveProjectId(req);
+            const tasks = await depsHistoryHandler.getTasksDashboard(projectId);
             res.json(tasks);
         } catch (e: any) {
             res.status(500).json({ success: false, error: e.message });
@@ -1424,7 +1458,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     app.get('/api/backoffice/leads', backofficeAuth, async (req: any, res: any) => {
         const limit = parseInt(req.query.limit as string) || 50;
         const offset = parseInt(req.query.offset as string) || 0;
-        const result = await depsHistoryHandler.listEditedLeads(limit, offset);
+        const projectId = resolveProjectId(req);
+        const result = await depsHistoryHandler.listEditedLeads(limit, offset, projectId);
         res.json(result);
     });
 
@@ -2587,7 +2622,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     // --- CRM ROUTES ---
     app.get('/api/backoffice/crm/tasks', backofficeAuth, async (req: any, res: any) => {
         try {
-            const tasks = await depsHistoryHandler.getTasksDashboard();
+            const projectId = resolveProjectId(req);
+            const tasks = await depsHistoryHandler.getTasksDashboard(projectId);
             res.json({ success: true, tasks });
         } catch (error: any) {
             res.status(500).json({ success: false, error: error.message });
@@ -2798,6 +2834,58 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                 prompt: prompt || '',
                 assistantId: process.env[envKey] || ''
             });
+        } catch (error: any) {
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
+    // --- GET AVAILABLE OPENAI MODELS ---
+    app.get('/api/backoffice/openai/models', systemConfigAuth, async (req: any, res: any) => {
+        try {
+            const { getOpenAI } = await import("../../apis/openai/openaiHelper");
+            const dynamicOpenAI = await getOpenAI();
+            
+            let models: string[] = [];
+            
+            if (dynamicOpenAI) {
+                try {
+                    const list = await dynamicOpenAI.models.list();
+                    models = list.data
+                        .map((m: any) => m.id)
+                        .filter((id: string) => {
+                            const cleanId = id.toLowerCase();
+                            // Excluir embeddings, audio, imágenes, moderaciones, etc.
+                            if (
+                                cleanId.includes('embed') || 
+                                cleanId.includes('whisper') || 
+                                cleanId.includes('tts') || 
+                                cleanId.includes('dall-e') || 
+                                cleanId.includes('moderation') || 
+                                cleanId.includes('instruct') || 
+                                cleanId.includes('search') ||
+                                cleanId.includes('realtime') ||
+                                cleanId.includes('babbage') ||
+                                cleanId.includes('davinci')
+                            ) {
+                                return false;
+                            }
+                            // Solo incluir gpt y modelos de razonamiento (o1, o3, etc.)
+                            return cleanId.startsWith('gpt-') || cleanId.startsWith('o1-') || cleanId.startsWith('o3-') || cleanId.includes('chatgpt');
+                        });
+                } catch (apiErr: any) {
+                    console.warn(`[OpenAI Models API] Error al listar modelos desde OpenAI: ${apiErr.message}. Usando fallbacks.`);
+                }
+            }
+            
+            // Fallbacks si la API no devuelve nada o no hay API Key configurada
+            if (models.length === 0) {
+                models = ['gpt-4o', 'gpt-4o-mini', 'o1-mini', 'o3-mini', 'gpt-4', 'gpt-3.5-turbo'];
+            }
+            
+            // Eliminar duplicados y ordenar
+            models = Array.from(new Set(models)).sort();
+            
+            res.json({ success: true, models });
         } catch (error: any) {
             res.status(500).json({ success: false, error: error.message });
         }
@@ -3065,8 +3153,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     /** GET /api/backoffice/notifications/status — ¿Está activa la integración? */
     app.get('/api/backoffice/notifications/status', backofficeAuth, async (req: any, res: any) => {
         try {
-            const active = await depsHistoryHandler.getSetting('NOTIFICATIONS_ACTIVE');
-            res.json({ active: active === 'true' });
+            res.json({ active: true });
         } catch (e: any) {
             res.status(500).json({ success: false, error: e.message });
         }

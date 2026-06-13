@@ -9,21 +9,9 @@ const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 
 // Comprime la imagen en disco y devuelve la ruta web relativa final
 async function compressImageToDisk(absolutePath: string): Promise<string> {
-    const ext = path.extname(absolutePath).toLowerCase();
-    if (!IMAGE_EXTS.has(ext)) return absolutePath;
-    try {
-        const sharp = (await import('sharp')).default;
-        const compressed = await sharp(absolutePath)
-            .resize(1280, 1280, { fit: 'inside', withoutEnlargement: true })
-            .webp({ quality: 80 })
-            .toBuffer();
-        const newPath = absolutePath.replace(/\.[^.]+$/, '.webp');
-        fs.writeFileSync(newPath, compressed);
-        if (newPath !== absolutePath) fs.unlinkSync(absolutePath);
-        return newPath;
-    } catch {
-        return absolutePath; // Si falla, deja el original intacto
-    }
+    // Retornamos el path original directamente para evitar el uso del módulo nativo C++ sharp.
+    // Esto previene los problemas de corrupción de memoria heap (free(): invalid size) en el contenedor.
+    return absolutePath;
 }
 
 /**
@@ -113,8 +101,9 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
                 console.log(`${prefix} 🎙️ NOTA DE VOZ DETECTADA. Enviando a los flujos...`);
             }
 
-            // Guardar en el historial de Supabase si no es un comando de sistema (se permite guardar notas de voz que tengan _event_)
-            if (ctx.body && (!ctx.body.startsWith('_event_') || ctx.type === 'voice')) {
+            // Guardar en el historial de Supabase si no es un comando de sistema (se permite guardar multimedia/ubicación que tengan _event_)
+            const isMediaOrLocation = ['voice', 'audio', 'image', 'video', 'document', 'location'].includes(ctx.type);
+            if (ctx.body && (!ctx.body.startsWith('_event_') || isMediaOrLocation)) {
                 const { HistoryHandler } = await import('../db/historyHandler');
 
                 // Resolver projectId dinámicamente

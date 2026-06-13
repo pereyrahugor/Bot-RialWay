@@ -237,7 +237,7 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
 
         while (continueLoop && attempts < 10) {
             attempts++;
-            const openaiModel = await HistoryHandler.getConfig('OPENAI_MODEL') || "gpt-4o";
+            const openaiModel = await HistoryHandler.getConfig('OPENAI_MODEL') || "gpt-4o-mini";
             const completion = await openai.chat.completions.create({
                 model: openaiModel,
                 messages: messages,

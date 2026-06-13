@@ -329,7 +329,7 @@ const main = async () => {
     });
 
     // 7. Create flow and bot instance
-    const adapterFlow = createFlow([welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowVideo, welcomeFlowDoc, locationFlow, idleFlow, welcomeFlowButton]);
+    const adapterFlow = createFlow([welcomeFlowVoice, welcomeFlowImg, welcomeFlowVideo, welcomeFlowDoc, locationFlow, welcomeFlowButton, idleFlow, welcomeFlowTxt]);
     const adapterDB = new MemoryDB();
 
     const { httpServer } = await createBot({
@@ -383,12 +383,18 @@ const main = async () => {
     // 11. Start Server and Sockets
     try {
         httpServer(+PORT);
-        setTimeout(() => {
+        let checks = 0;
+        const checkInterval = setInterval(() => {
+            checks++;
             if (app?.server) {
-                console.log("✅ [Socket.IO] app.server detected, initializing...");
+                console.log(`✅ [Socket.IO] app.server detectado, lanzando initSocketIO (Intento ${checks})`);
                 initSocketIO(app.server, { processUserMessage: aiManagerInstance.processUserMessage });
+                clearInterval(checkInterval);
+            } else if (checks >= 20) {
+                console.error("❌ [Socket.IO] app.server no detectado tras 10 segundos. Socket.IO falló.");
+                clearInterval(checkInterval);
             }
-        }, 1000);
+        }, 500);
     } catch (err) {
         console.error("❌ [FATAL] Error starting server:", err);
     }
