@@ -1362,8 +1362,9 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     // --- TICKETS ---
 
-    app.get('/api/backoffice/tickets/pending-count', backofficeAuth, async (_req: any, res: any) => {
-        const count = await depsHistoryHandler.getPendingTicketsCount();
+    app.get('/api/backoffice/tickets/pending-count', backofficeAuth, async (req: any, res: any) => {
+        const projectId = resolveProjectId(req);
+        const count = await depsHistoryHandler.getPendingTicketsCount(projectId);
         res.json({ count });
     });
 
@@ -1372,7 +1373,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         const id = req.query.id as string;
         const limit = parseInt(req.query.limit as string) || 50;
         const offset = parseInt(req.query.offset as string) || 0;
-        const result = await depsHistoryHandler.listTickets(limit, offset, estado, undefined, undefined, id);
+        const projectId = resolveProjectId(req);
+        const result = await depsHistoryHandler.listTickets(limit, offset, estado, undefined, undefined, id, projectId);
         res.json(result);
     });
 
@@ -1380,7 +1382,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         const { chatId, titulo, descripcion, chats_adjuntos } = req.body;
         if (!titulo) return sendJson(res, 400, { success: false, error: 'titulo is required' });
         const adjuntos = Array.isArray(chats_adjuntos) ? chats_adjuntos : [];
-        const result = await depsHistoryHandler.createTicket(chatId, titulo, descripcion, 'Soporte', 'Media', undefined, [], adjuntos);
+        const projectId = resolveProjectId(req);
+        const result = await depsHistoryHandler.createTicket(chatId, titulo, descripcion, 'Soporte', 'Media', projectId || undefined, [], adjuntos);
         res.json(result);
     });
 
@@ -1420,7 +1423,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     app.get('/api/backoffice/crm/tasks', backofficeAuth, async (req: any, res: any) => {
         try {
-            const tasks = await depsHistoryHandler.getTasksDashboard();
+            const projectId = resolveProjectId(req);
+            const tasks = await depsHistoryHandler.getTasksDashboard(projectId);
             res.json(tasks);
         } catch (e: any) {
             res.status(500).json({ success: false, error: e.message });
@@ -1430,7 +1434,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     app.get('/api/backoffice/leads', backofficeAuth, async (req: any, res: any) => {
         const limit = parseInt(req.query.limit as string) || 50;
         const offset = parseInt(req.query.offset as string) || 0;
-        const result = await depsHistoryHandler.listEditedLeads(limit, offset);
+        const projectId = resolveProjectId(req);
+        const result = await depsHistoryHandler.listEditedLeads(limit, offset, projectId);
         res.json(result);
     });
 
@@ -2593,7 +2598,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     // --- CRM ROUTES ---
     app.get('/api/backoffice/crm/tasks', backofficeAuth, async (req: any, res: any) => {
         try {
-            const tasks = await depsHistoryHandler.getTasksDashboard();
+            const projectId = resolveProjectId(req);
+            const tasks = await depsHistoryHandler.getTasksDashboard(projectId);
             res.json({ success: true, tasks });
         } catch (error: any) {
             res.status(500).json({ success: false, error: error.message });

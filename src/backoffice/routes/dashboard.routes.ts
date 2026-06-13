@@ -46,9 +46,16 @@ async function getOpenAICost(adminKey: string, year: number, month: number) {
  */
 export const registerDashboardRoutes = (app: any) => {
     
-    app.get('/api/dashboard/openai-usage', async (req: any, res: any) => {
+    // Helper to dynamically extract projectId from query, body, or headers
+    const resolveProjectId = (req: any): string | null => {
+        const pId = req.query.projectId || (req.body && req.body.projectId) || req.headers['x-project-id'] || (req.auth && req.auth.projectId);
+        return (pId && pId !== 'default') ? pId : null;
+    };
+
+    app.get('/api/dashboard/openai-usage', backofficeAuth, async (req: any, res: any) => {
         try {
-            const adminKey = await HistoryHandler.getConfig('OPENAI_ADMIN_API_KEY');
+            const projectId = resolveProjectId(req);
+            const adminKey = await HistoryHandler.getConfig('OPENAI_ADMIN_API_KEY', projectId || undefined);
             if (!adminKey || adminKey === 'PENDING') {
                 res.statusCode = 400;
                 return res.end(JSON.stringify({ success: false, error: 'OPENAI_ADMIN_API_KEY no configurada o en estado PENDING' }));
@@ -74,9 +81,9 @@ export const registerDashboardRoutes = (app: any) => {
         }
     });
 
-    app.get('/api/dashboard/stats', async (req: any, res: any) => {
+    app.get('/api/dashboard/stats', backofficeAuth, async (req: any, res: any) => {
         try {
-            const PROJECT_ID = HistoryHandler.PROJECT_IDENTIFIER;
+            const PROJECT_ID = resolveProjectId(req) || HistoryHandler.PROJECT_IDENTIFIER;
 
             // 1. Tasa de Conversión y Distribución de Leads
             const { data: chats } = await supabase

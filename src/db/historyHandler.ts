@@ -1728,15 +1728,16 @@ export class HistoryHandler {
     /**
      * Obtiene el conteo de tickets pendientes (Abiertos o En progreso)
      */
-    static async getPendingTicketsCount() {
+    static async getPendingTicketsCount(projectId?: string | null) {
+        const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
         if (process.env.STORAGE_MODE === "local") {
-            return LocalHistoryStore.getPendingTicketsCount('', this.PROJECT_IDENTIFIER);
+            return LocalHistoryStore.getPendingTicketsCount('', currentProjectId);
         }
         try {
             const { count, error } = await supabase
                 .from('tickets')
                 .select('*', { count: 'exact', head: true })
-                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER)
+                .eq('project_id', currentProjectId)
                 .in('estado', ['Abierto', 'En progreso']);
             if (error) throw error;
             return count || 0;
@@ -1829,16 +1830,17 @@ export class HistoryHandler {
     /**
      * Lista los tickets del proyecto
      */
-    static async listTickets(limit: number = 50, offset: number = 0, estado?: string, _tipo?: string, _chatId?: string, ticketId?: string) {
+    static async listTickets(limit: number = 50, offset: number = 0, estado?: string, _tipo?: string, _chatId?: string, ticketId?: string, projectId?: string | null) {
+        const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
         if (process.env.STORAGE_MODE === "local") {
-            const res = await LocalHistoryStore.listTickets(limit, offset, estado, '', '', ticketId, this.PROJECT_IDENTIFIER);
+            const res = await LocalHistoryStore.listTickets(limit, offset, estado, '', '', ticketId, currentProjectId);
             return res.data;
         }
         try {
             let query = supabase
                 .from('tickets')
                 .select('*')
-                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
+                .eq('project_id', currentProjectId);
 
             if (ticketId && ticketId !== 'null' && ticketId !== 'undefined' && ticketId !== '') {
                 query = query.eq('id', ticketId);
@@ -1904,9 +1906,10 @@ export class HistoryHandler {
     /**
      * Lista los leads que tienen datos de CRM (editados y marcados explicitamente como leads)
      */
-    static async listEditedLeads(limit: number = 50, offset: number = 0) {
+    static async listEditedLeads(limit: number = 50, offset: number = 0, projectId?: string | null) {
+        const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
         if (process.env.STORAGE_MODE === "local") {
-            return LocalHistoryStore.listEditedLeads(limit, offset, HistoryHandler.PROJECT_IDENTIFIER);
+            return LocalHistoryStore.listEditedLeads(limit, offset, currentProjectId);
         }
         try {
             // Filtramos para obtener chats marcados como leads O que tengan algún estado CRM/etiquetas
@@ -1914,7 +1917,7 @@ export class HistoryHandler {
             const { data, error } = await supabase
                 .from('chats')
                 .select('*, chat_tags(tag_id, tags(*))')
-                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER)
+                .eq('project_id', currentProjectId)
                 .or('is_lead.eq.true,crm_status.not.is.null')
                 .order('last_message_at', { ascending: false })
                 .range(offset, offset + limit - 1);
@@ -1932,9 +1935,10 @@ export class HistoryHandler {
     /**
      * Obtiene los leads con tareas próximas (hoy + 5 días)
      */
-    static async getTasksDashboard() {
+    static async getTasksDashboard(projectId?: string | null) {
+        const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
         if (process.env.STORAGE_MODE === "local") {
-            const chats = LocalHistoryStore.getChats(this.PROJECT_IDENTIFIER);
+            const chats = LocalHistoryStore.getChats(currentProjectId);
             const fiveDaysLater = new Date();
             fiveDaysLater.setDate(fiveDaysLater.getDate() + 5);
             fiveDaysLater.setHours(23, 59, 59, 999);
@@ -1963,7 +1967,7 @@ export class HistoryHandler {
             const { data, error } = await supabase
                 .from('chats')
                 .select('id, name, type, crm_status, crm_due_date')
-                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER)
+                .eq('project_id', currentProjectId)
                 .eq('is_lead', true)
                 .not('crm_due_date', 'is', null)
                 .lte('crm_due_date', fiveDaysLater.toISOString())
