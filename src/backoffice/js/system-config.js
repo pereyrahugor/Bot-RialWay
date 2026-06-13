@@ -25,6 +25,39 @@ async function _initSystemConfigPage() {
 
     const getSafeToken = () => localStorage.getItem('system_config_token') || localStorage.getItem('backoffice_token') || '';
 
+    // Cargar modelos de OpenAI desde la API
+    async function loadOpenAIModels() {
+        const select = document.getElementById('OPENAI_MODEL');
+        if (!select) return;
+        const token = getSafeToken();
+        try {
+            const response = await fetch(`/api/backoffice/openai/models?token=${token}`);
+            const data = await response.json();
+            if (data.success && Array.isArray(data.models)) {
+                select.innerHTML = '';
+                data.models.forEach(model => {
+                    const opt = document.createElement('option');
+                    opt.value = model;
+                    
+                    // Formato descriptivo amigable para modelos comunes
+                    let text = model;
+                    if (model === 'gpt-4o') text = 'GPT-4o (Recomendado - Premium)';
+                    else if (model === 'gpt-4o-mini') text = 'GPT-4o Mini (Recomendado - Económico)';
+                    else if (model === 'o1-mini') text = 'o1 Mini (Razonamiento Lógico)';
+                    else if (model === 'o3-mini') text = 'o3 Mini (Razonamiento Rápido)';
+                    
+                    opt.text = text;
+                    select.appendChild(opt);
+                });
+                
+                // Reconstruir la interfaz de CSD (Custom Select Dropdown)
+                if (typeof _csdRebuild === 'function') _csdRebuild('OPENAI_MODEL');
+            }
+        } catch (err) {
+            console.error('Error fetching OpenAI models:', err);
+        }
+    }
+
     // Cargar variables actuales
     async function loadVariables() {
         const token = getSafeToken();
@@ -116,6 +149,7 @@ async function _initSystemConfigPage() {
         clientSlugSel.addEventListener('change', updateClientSlugVisibility);
     }
 
+    await loadOpenAIModels();
     await loadVariables();
     updateClientSlugVisibility();
 

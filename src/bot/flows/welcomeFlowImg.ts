@@ -134,6 +134,25 @@ const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
       const caption = ctx.body && !ctx.body.includes('_event_') ? ctx.body : '';
       ctx.body = `[Imagen recibida]${caption ? ': ' + caption : ''}. (Análisis): ${result}`;
 
+      // Guardar el análisis en la base de datos para que el asistente tenga el historial en siguientes turnos
+      try {
+        const botPhoneNumber = provider?.globalVendorArgs?.phone_number_id || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
+        const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || HistoryHandler.PROJECT_IDENTIFIER;
+        
+        await HistoryHandler.saveMessage(
+          userId,
+          'user',
+          `📷 Análisis de imagen: "${result}"`,
+          'text',
+          null,
+          ctx.userId,
+          null,
+          ctx.platform || 'whatsapp',
+          dynamicProjectId
+        );
+      } catch (dbErr) {
+        console.error("❌ Error guardando análisis de imagen en base de datos:", dbErr);
+      }
 
       // Reencolar el mensaje para que lo procese el flujo principal (texto)
       if (!userQueues.has(userId)) {

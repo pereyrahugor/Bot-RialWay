@@ -2839,6 +2839,58 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
+    // --- GET AVAILABLE OPENAI MODELS ---
+    app.get('/api/backoffice/openai/models', systemConfigAuth, async (req: any, res: any) => {
+        try {
+            const { getOpenAI } = await import("../../apis/openai/openaiHelper");
+            const dynamicOpenAI = await getOpenAI();
+            
+            let models: string[] = [];
+            
+            if (dynamicOpenAI) {
+                try {
+                    const list = await dynamicOpenAI.models.list();
+                    models = list.data
+                        .map((m: any) => m.id)
+                        .filter((id: string) => {
+                            const cleanId = id.toLowerCase();
+                            // Excluir embeddings, audio, imágenes, moderaciones, etc.
+                            if (
+                                cleanId.includes('embed') || 
+                                cleanId.includes('whisper') || 
+                                cleanId.includes('tts') || 
+                                cleanId.includes('dall-e') || 
+                                cleanId.includes('moderation') || 
+                                cleanId.includes('instruct') || 
+                                cleanId.includes('search') ||
+                                cleanId.includes('realtime') ||
+                                cleanId.includes('babbage') ||
+                                cleanId.includes('davinci')
+                            ) {
+                                return false;
+                            }
+                            // Solo incluir gpt y modelos de razonamiento (o1, o3, etc.)
+                            return cleanId.startsWith('gpt-') || cleanId.startsWith('o1-') || cleanId.startsWith('o3-') || cleanId.includes('chatgpt');
+                        });
+                } catch (apiErr: any) {
+                    console.warn(`[OpenAI Models API] Error al listar modelos desde OpenAI: ${apiErr.message}. Usando fallbacks.`);
+                }
+            }
+            
+            // Fallbacks si la API no devuelve nada o no hay API Key configurada
+            if (models.length === 0) {
+                models = ['gpt-4o', 'gpt-4o-mini', 'o1-mini', 'o3-mini', 'gpt-4', 'gpt-3.5-turbo'];
+            }
+            
+            // Eliminar duplicados y ordenar
+            models = Array.from(new Set(models)).sort();
+            
+            res.json({ success: true, models });
+        } catch (error: any) {
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
     // --- UPDATE PROMPT WITHOUT RESTART ---
     app.post('/api/backoffice/update-prompt', systemConfigAuth, bodyParser.json(), async (req: any, res: any) => {
         const { prompt, index } = req.body;

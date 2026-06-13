@@ -72,6 +72,20 @@ window.systemConfigView = {
                             <h2><i class="fas fa-brain"></i> IA Avanzada &amp; Vision</h2>
                         </div>
                         <div class="variable-group">
+                            <h3>OPENAI_MODEL</h3>
+                            <p class="description">Modelo de OpenAI a utilizar para Chat/Completions.</p>
+                            <div class="csd-wrap csd-sm">
+                                <select name="OPENAI_MODEL" id="OPENAI_MODEL" hidden></select>
+                                <button class="csd-btn" type="button" onclick="_csdToggle(this)">
+                                    <span class="csd-label">Cargando modelos...</span>
+                                    <i class="fas fa-chevron-down csd-chevron"></i>
+                                </button>
+                                <div class="csd-menu">
+                                    <span style="display:block;padding:10px 16px;font-size:0.75rem;opacity:0.45;text-align:center;cursor:default;">Cargando modelos...</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="variable-group">
                             <h3>ASSISTANT_ID_IMG</h3>
                             <p class="description">ID del asistente de Vision (imagenes).</p>
                             <input type="text" name="ASSISTANT_ID_IMG" id="ASSISTANT_ID_IMG">

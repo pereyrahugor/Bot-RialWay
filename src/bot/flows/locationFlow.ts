@@ -101,6 +101,26 @@ export const locationFlow = addKeyword(EVENTS.LOCATION).addAction(
                     }
                     ctx.direccionDetectada = direccionModificada;
                     ctx.body = `Se recibió la siguiente ubicación: ${direccionModificada}`;
+
+                    // Guardar en la base de datos para que el asistente tenga el historial en siguientes turnos
+                    try {
+                        const botPhoneNumber = ctx.provider?.globalVendorArgs?.phone_number_id || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
+                        const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || HistoryHandler.PROJECT_IDENTIFIER;
+                        await HistoryHandler.saveMessage(
+                            ctx.from,
+                            'user',
+                            `📍 Ubicación enviada: "${direccionModificada}"`,
+                            'text',
+                            null,
+                            ctx.userId,
+                            null,
+                            ctx.platform || 'whatsapp',
+                            dynamicProjectId
+                        );
+                    } catch (dbErr) {
+                        console.error("❌ Error guardando ubicación en base de datos:", dbErr);
+                    }
+
                     // Reencolar el mensaje para que lo procese el flujo principal (texto)
                     const userId = ctx.from;
                     if (!userQueues.has(userId)) {

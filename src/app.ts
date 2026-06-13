@@ -329,7 +329,7 @@ const main = async () => {
     });
 
     // 7. Create flow and bot instance
-    const adapterFlow = createFlow([welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowVideo, welcomeFlowDoc, locationFlow, idleFlow, welcomeFlowButton]);
+    const adapterFlow = createFlow([welcomeFlowVoice, welcomeFlowImg, welcomeFlowVideo, welcomeFlowDoc, locationFlow, welcomeFlowButton, idleFlow, welcomeFlowTxt]);
     const adapterDB = new MemoryDB();
 
     const { httpServer } = await createBot({
