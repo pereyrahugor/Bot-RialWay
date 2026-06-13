@@ -401,6 +401,16 @@ export class HistoryHandler {
                             console.log(`🔧 Agregando columnas attachments y chats_adjuntos a tickets...`);
                             await supabase.rpc('exec_sql', { query: `ALTER TABLE tickets ADD COLUMN IF NOT EXISTS attachments TEXT DEFAULT '[]', ADD COLUMN IF NOT EXISTS chats_adjuntos TEXT DEFAULT '[]';` });
                         }
+                        const { error: ticketPrioridadErr } = await supabase.from('tickets').select('prioridad').limit(1);
+                        if (ticketPrioridadErr && ticketPrioridadErr.code === '42703') {
+                            console.log(`🔧 Agregando columna prioridad a tickets...`);
+                            await supabase.rpc('exec_sql', { query: `ALTER TABLE tickets ADD COLUMN IF NOT EXISTS prioridad TEXT DEFAULT 'Media';` });
+                        }
+                        const { error: ticketTipoErr } = await supabase.from('tickets').select('tipo').limit(1);
+                        if (ticketTipoErr && ticketTipoErr.code === '42703') {
+                            console.log(`🔧 Agregando columna tipo a tickets...`);
+                            await supabase.rpc('exec_sql', { query: `ALTER TABLE tickets ADD COLUMN IF NOT EXISTS tipo TEXT DEFAULT 'Soporte';` });
+                        }
                     }
 
                     // Migración para owner_id en meta_onboarding
