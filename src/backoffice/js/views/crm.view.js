@@ -53,7 +53,11 @@ window.crmView = {
         if (typeof window.initCRMView === 'function') await window.initCRMView();
     },
 
-    destroy() {}
+    destroy() {
+        if (typeof window.destroyCRM === 'function') {
+            window.destroyCRM();
+        }
+    }
 };
 
 window._toggleCRMMenu = function(e) {

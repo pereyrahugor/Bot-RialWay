@@ -2404,6 +2404,12 @@ export class HistoryHandler {
             const columns = JSON.parse(crmColumnsRaw);
             if (!Array.isArray(columns)) return statusLabel;
 
+            // Force UNASSIGNED column to have 'Leads Nuevos' title dynamically
+            const unassignedCol = columns.find((col: any) => col.id === 'UNASSIGNED');
+            if (unassignedCol) {
+                unassignedCol.title = 'Leads Nuevos';
+            }
+
             // Normalización para comparación (sin espacios extra, minúsculas)
             const normalizedInput = statusLabel.trim().toLowerCase();
 

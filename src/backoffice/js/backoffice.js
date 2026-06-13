@@ -43,6 +43,13 @@ async function initCRMData() {
         const colSettingValue = settings.CRM_COLUMNS;
         if (colSettingValue) {
             crmColumns = JSON.parse(colSettingValue);
+            // Asegurarse de que UNASSIGNED siempre tenga el título "Leads Nuevos"
+            const unassigned = crmColumns.find(c => c.id === 'UNASSIGNED');
+            if (unassigned) {
+                unassigned.title = 'Leads Nuevos';
+            } else {
+                crmColumns.unshift({ id: 'UNASSIGNED', title: 'Leads Nuevos' });
+            }
         } else {
             crmColumns = [
                 { id: 'UNASSIGNED', title: 'Leads Nuevos' },

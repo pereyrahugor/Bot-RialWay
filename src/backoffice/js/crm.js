@@ -79,6 +79,21 @@ async function _initCRMPage() {
     window.deleteCurrentColumn = deleteCurrentColumn;
     window.saveColumnName = saveColumnName;
 
+    // Inicializar o re-inicializar sockets
+    if (typeof io !== 'undefined') {
+        if (!window.crmSocket) {
+            window.crmSocket = io();
+        }
+        window.crmSocket.off('contact_updated', onContactUpdated);
+        window.crmSocket.off('ticket_updated', onTicketUpdated);
+        window.crmSocket.off('new_message', onNewMessage);
+
+        window.crmSocket.on('contact_updated', onContactUpdated);
+        window.crmSocket.on('ticket_updated', onTicketUpdated);
+        window.crmSocket.on('new_message', onNewMessage);
+        console.log('📡 [Socket CRM] Conectado y escuchando eventos');
+    }
+
     console.log('✅ CRM Listo');
 }
 
@@ -102,8 +117,11 @@ async function loadCRMState() {
         const data = await res.json();
         if (data.success && data.value) {
             columns = JSON.parse(data.value);
-            // Asegurarse de que UNASSIGNED siempre esté presente primero
-            if (!columns.some(c => c.id === 'UNASSIGNED')) {
+            // Asegurarse de que UNASSIGNED siempre esté presente primero y con el título "Leads Nuevos"
+            const unassigned = columns.find(c => c.id === 'UNASSIGNED');
+            if (unassigned) {
+                unassigned.title = 'Leads Nuevos';
+            } else {
                 columns.unshift({ id: 'UNASSIGNED', title: 'Leads Nuevos', fixed: true });
             }
         }
@@ -472,8 +490,10 @@ window.addTagToLead = async (tagId) => {
     if (!ticket) return;
     
     try {
-        const res = await fetch(`/api/backoffice/chat/${encodeURIComponent(ticket.chat_id)}/tags/${tagId}?token=${activeToken}`, {
-            method: 'POST'
+        const res = await fetch(`/api/backoffice/chats/${encodeURIComponent(ticket.chat_id)}/tags?token=${activeToken}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tagId })
         });
         if (res.ok) {
             // Actualizar localmente el lead
@@ -496,7 +516,7 @@ window.removeTagFromLead = async (tagId) => {
     if (!ticket) return;
 
     try {
-        const res = await fetch(`/api/backoffice/chat/${encodeURIComponent(ticket.chat_id)}/tags/${tagId}?token=${activeToken}`, {
+        const res = await fetch(`/api/backoffice/chats/${encodeURIComponent(ticket.chat_id)}/tags/${tagId}?token=${activeToken}`, {
             method: 'DELETE'
         });
         if (res.ok) {
@@ -1104,23 +1124,30 @@ function _initKanbanScrollBehavior() {
     }, { passive: false });
 }
 
-if (typeof io !== 'undefined') {
-    const socket = io();
-    console.log('📡 [Socket] Conectado para actualizaciones en tiempo real');
-
-    socket.on('contact_updated', (payload) => {
-        console.log('📡 [Socket] Contacto actualizado:', payload.chatId);
-        // Si el contacto actualizado es uno de los que estamos viendo, resincronizar
-        syncCRM();
-    });
-
-    socket.on('ticket_updated', (payload) => {
-        console.log('📡 [Socket] Ticket actualizado o nuevo');
-        syncCRM();
-    });
-
-    socket.on('new_message', (payload) => {
-        // Opcional: mostrar una notificación visual si llega un mensaje nuevo a un lead activo
-    });
+function onContactUpdated(payload) {
+    console.log('📡 [Socket CRM] Contacto actualizado:', payload.chatId);
+    syncCRM();
 }
+
+function onTicketUpdated(payload) {
+    console.log('📡 [Socket CRM] Ticket actualizado o nuevo');
+    syncCRM();
+}
+
+function onNewMessage(payload) {
+    // Opcional: mostrar una notificación visual si llega un mensaje nuevo a un lead activo
+}
+
+window.destroyCRM = function() {
+    console.log('🧹 [CRM] Limpiando recursos y socket listeners');
+    if (window.crmSocket) {
+        window.crmSocket.off('contact_updated', onContactUpdated);
+        window.crmSocket.off('ticket_updated', onTicketUpdated);
+        window.crmSocket.off('new_message', onNewMessage);
+    }
+    if (window._crmAlertInterval) {
+        clearInterval(window._crmAlertInterval);
+        window._crmAlertInterval = null;
+    }
+};
 })();
