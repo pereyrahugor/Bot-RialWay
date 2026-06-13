@@ -111,9 +111,16 @@ const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
       await state.update({ lastImage: localPath });
       const buffer = fs.default.readFileSync(localPath);
       
-      console.log("Analizando imagen con GPT-4o...");
+      // Cargar modelo dinámico de la base de datos
+      let visionModel = await HistoryHandler.getConfig('OPENAI_MODEL') || "gpt-4o-mini";
+      // Si el modelo es de razonamiento (o1, o3, etc.), hacemos fallback a gpt-4o-mini porque no soportan entrada de visión en la llamada estándar
+      if (visionModel.startsWith('o1') || visionModel.startsWith('o3')) {
+        visionModel = "gpt-4o-mini";
+      }
+
+      console.log(`Analizando imagen con modelo: ${visionModel}...`);
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: visionModel,
         messages: [
           {
             role: "user",
