@@ -205,8 +205,8 @@ function distributeCards() {
         const lead = allLeads.find(l => l.id === ticket.chat_id);
         const metadata = crmData[ticket.id] || {};
         
-        // Prioridad: 1. Metadata del Kanban, 2. Campo del Lead en DB (Spliteado de timestamp)
-        let alertDateStr = metadata.alertDate || (lead?.crm_due_date ? lead.crm_due_date.split('T')[0] : null);
+        // Prioridad: 1. Campo del Lead en DB, 2. Metadata del Kanban
+        let alertDateStr = (lead?.crm_due_date ? lead.crm_due_date.split('T')[0] : null) || metadata.alertDate || null;
         
         let columnId = 'nodate';
 
@@ -261,7 +261,7 @@ function createCardElement(ticket, lead, metadata) {
     const cuit = lead?.cuit_dni || '';
     const product = lead?.offered_product || ticket.tipo || '';
     
-    let alertDateStr = metadata.alertDate || (lead?.crm_due_date ? lead.crm_due_date.split('T')[0] : null);
+    let alertDateStr = (lead?.crm_due_date ? lead.crm_due_date.split('T')[0] : null) || metadata.alertDate || null;
     const alertFormatted = alertDateStr ? formatDate(alertDateStr) : 'Sin alerta';
 
     // Helper para verificar visibilidad según configuración dinámica
@@ -271,7 +271,7 @@ function createCardElement(ticket, lead, metadata) {
     };
 
     const priorityIndicatorHtml = isVisible('crm-priority') 
-        ? `<div class="priority-indicator" style="background:${getPriorityColor(metadata.priority || lead?.priority)}"></div>`
+        ? `<div class="priority-indicator" style="background:${getPriorityColor(ticket.prioridad || metadata.priority || 'Media')}"></div>`
         : '';
 
     const productBadgeHtml = isVisible('crm-product')
@@ -371,9 +371,9 @@ function openCardModal(ticketId) {
     
     document.getElementById('edit-ticket-title').value = ticket.titulo || '';
     
-    let alertDateStr = metadata.alertDate || (lead?.crm_due_date ? lead.crm_due_date.split('T')[0] : '');
+    let alertDateStr = (lead?.crm_due_date ? lead.crm_due_date.split('T')[0] : '') || metadata.alertDate || '';
     document.getElementById('edit-alert-date').value = alertDateStr;
-    document.getElementById('edit-priority').value = metadata.priority || lead?.priority || 'Media';
+    document.getElementById('edit-priority').value = ticket.prioridad || metadata.priority || 'Media';
     document.getElementById('edit-custom-notes').value = notes;
     
     // Campos del Lead Expandidos
@@ -397,7 +397,7 @@ function openCardModal(ticketId) {
     const selectStatus = document.getElementById('edit-lead-status');
     if (selectStatus) {
         selectStatus.innerHTML = standardColumns.map(c => `<option value="${c.id}">${c.title}</option>`).join('');
-        selectStatus.value = metadata.columnId || lead?.crm_status || 'UNASSIGNED';
+        selectStatus.value = lead?.crm_status || metadata.columnId || 'UNASSIGNED';
         _csdRebuild('edit-lead-status');
         _csdSync('edit-lead-status');
     }

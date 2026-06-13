@@ -1967,6 +1967,12 @@ export class HistoryHandler {
                         .eq('project_id', currentProjectId);
                     
                     if (upChatErr) throw upChatErr;
+
+                    historyEvents.emit('contact_updated', {
+                        chatId: ticket.chat_id,
+                        project_id: currentProjectId,
+                        details: chatUpdate
+                    });
                 }
                 
                 this.invalidateChatCache(ticket.chat_id, currentProjectId);
@@ -1976,7 +1982,7 @@ export class HistoryHandler {
                 }
             }
 
-            historyEvents.emit('ticket_updated', { id: ticketId, ...ticketUpdate });
+            historyEvents.emit('ticket_updated', { id: ticketId, chat_id: ticket.chat_id, ...ticketUpdate });
             
             return { success: true };
         } catch (err: any) {

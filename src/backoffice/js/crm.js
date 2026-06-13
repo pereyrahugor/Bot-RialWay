@@ -216,8 +216,8 @@ function distributeCards() {
     allTickets.forEach(ticket => {
         const lead = allLeads.find(l => l.id === ticket.chat_id);
         const metadata = crmData[ticket.id] || {};
-        // Priorizar el posicionamiento manual del metadata, pero caer al crm_status de la DB si es nuevo
-        const columnId = metadata.columnId || lead?.crm_status || 'UNASSIGNED';
+        // Priorizar el posicionamiento del crm_status de la DB como fuente de verdad, caer al metadata/UNASSIGNED
+        const columnId = lead?.crm_status || metadata.columnId || 'UNASSIGNED';
         
         const container = document.getElementById(`cards-${columnId}`);
         if (container) {
@@ -250,7 +250,10 @@ function createCardElement(ticket, lead, metadata) {
     const email = lead?.email || '';
     const cuit = lead?.cuit_dni || '';
     const product = lead?.offered_product || ticket.tipo || '';
-    const alertDateStr = metadata.alertDate ? formatDate(metadata.alertDate) : 'Sin alerta';
+    
+    const dbAlertDate = lead?.crm_due_date ? lead.crm_due_date.split('T')[0] : null;
+    const finalAlertDate = dbAlertDate || metadata.alertDate || null;
+    const alertDateStr = finalAlertDate ? formatDate(finalAlertDate) : 'Sin alerta';
 
     // Helper para verificar visibilidad según configuración dinámica
     const isVisible = (fieldId) => {
@@ -259,7 +262,7 @@ function createCardElement(ticket, lead, metadata) {
     };
 
     const priorityIndicatorHtml = isVisible('crm-priority') 
-        ? `<div class="priority-indicator" style="background:${getPriorityColor(metadata.priority)}"></div>`
+        ? `<div class="priority-indicator" style="background:${getPriorityColor(ticket.prioridad || metadata.priority || 'Media')}"></div>`
         : '';
 
     const productBadgeHtml = isVisible('crm-product')
@@ -290,7 +293,7 @@ function createCardElement(ticket, lead, metadata) {
     }
 
     const alertHtml = isVisible('crm-due-date')
-        ? `<div class="card-alert ${getAlertClass(metadata.alertDate)}" id="alert-card-${ticket.id}"><i class="fas fa-bell"></i> ${alertDateStr}</div>`
+        ? `<div class="card-alert ${getAlertClass(finalAlertDate)}" id="alert-card-${ticket.id}"><i class="fas fa-bell"></i> ${alertDateStr}</div>`
         : '';
 
     card.innerHTML = `
@@ -403,9 +406,10 @@ function openCardModal(ticketId) {
     const refElement = document.getElementById('modal-ticket-ref');
     if (refElement) refElement.innerText = `REF: ${ticketId.slice(-8).toUpperCase()}`;
     
+    const dbAlertDate = lead?.crm_due_date ? lead.crm_due_date.split('T')[0] : null;
     document.getElementById('edit-ticket-title').value = ticket.titulo || '';
-    document.getElementById('edit-alert-date').value = metadata.alertDate || '';
-    document.getElementById('edit-priority').value = metadata.priority || 'Media';
+    document.getElementById('edit-alert-date').value = dbAlertDate || metadata.alertDate || '';
+    document.getElementById('edit-priority').value = ticket.prioridad || metadata.priority || 'Media';
     document.getElementById('edit-custom-notes').value = notes;
     
     // Campos del Lead Expandidos
@@ -429,7 +433,7 @@ function openCardModal(ticketId) {
     const selectStatus = document.getElementById('edit-lead-status');
     if (selectStatus) {
         selectStatus.innerHTML = columns.map(c => `<option value="${c.id}">${c.title}</option>`).join('');
-        selectStatus.value = metadata.columnId || 'UNASSIGNED';
+        selectStatus.value = lead?.crm_status || metadata.columnId || 'UNASSIGNED';
         _csdRebuild('edit-lead-status');
         _csdSync('edit-lead-status');
     }

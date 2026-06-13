@@ -1704,6 +1704,10 @@ socket.on('ticket_updated', (payload) => {
     if (_tp && _tp.classList.contains('active')) {
         fetchTickets();
     }
+    // Si el ticket pertenece al chat activo, recargar el Salto al CRM para actualizar prioridad, título, etc.
+    if (activeChatId && payload.chat_id && normChatId(payload.chat_id) === normChatId(activeChatId)) {
+        loadCRMJump(activeChatId);
+    }
 });
 socket.on('contact_updated', (payload) => {
     console.log('📡 Contacto actualizado:', payload);

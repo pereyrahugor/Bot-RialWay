@@ -57,6 +57,10 @@ export interface LocalChat {
     last_db_result?: string | null;
     assigned_to?: string | null;
     unread_count?: number;
+    cuit_dni?: string | null;
+    address?: string | null;
+    tax_status?: string | null;
+    offered_product?: string | null;
 }
 
 export interface LocalMessage {
@@ -452,7 +456,10 @@ export class LocalHistoryStore {
             if (details.titulo) tickets[idx].titulo = details.titulo;
             if (details.descripcion) tickets[idx].descripcion = details.descripcion;
             if (details.tipo) tickets[idx].tipo = details.tipo;
-            if (details.prioridad) tickets[idx].prioridad = details.prioridad;
+            
+            const priorityVal = details.priority || details.prioridad;
+            if (priorityVal) tickets[idx].prioridad = priorityVal;
+            
             if (details.estado) tickets[idx].estado = details.estado;
             tickets[idx].updated_at = new Date().toISOString();
             this.saveTicketsList(projectId, tickets);
@@ -460,12 +467,21 @@ export class LocalHistoryStore {
             // Also update contact details in chats (for leads)
             const chatId = tickets[idx].chat_id;
             const contactUpdate: Partial<LocalChat> = {};
-            if (details.contacto_nombre) contactUpdate.name = details.contacto_nombre;
-            if (details.contacto_email) contactUpdate.email = details.contacto_email;
-            if (details.contacto_notas) contactUpdate.notes = details.contacto_notas;
-            if (details.crm_status) contactUpdate.crm_status = details.crm_status;
-            if (details.crm_due_date) contactUpdate.crm_due_date = details.crm_due_date;
-            if (details.is_lead !== undefined) contactUpdate.is_lead = details.is_lead;
+            const contactDetails = details.contact || {};
+
+            if (details.contacto_nombre || contactDetails.name) contactUpdate.name = details.contacto_nombre || contactDetails.name;
+            if (details.contacto_email || contactDetails.email) contactUpdate.email = details.contacto_email || contactDetails.email;
+            if (details.contacto_notas || contactDetails.notes || details.notes || details.notas) contactUpdate.notes = details.contacto_notas || contactDetails.notes || details.notes || details.notas;
+            if (details.crm_status || contactDetails.crm_status) contactUpdate.crm_status = details.crm_status || contactDetails.crm_status;
+            if (details.crm_due_date || contactDetails.crm_due_date) contactUpdate.crm_due_date = details.crm_due_date || contactDetails.crm_due_date;
+            if (details.is_lead !== undefined || contactDetails.is_lead !== undefined) {
+                contactUpdate.is_lead = details.is_lead !== undefined ? details.is_lead : contactDetails.is_lead;
+            }
+            if (contactDetails.cuit_dni !== undefined) contactUpdate.cuit_dni = contactDetails.cuit_dni;
+            if (contactDetails.address !== undefined) contactUpdate.address = contactDetails.address;
+            if (contactDetails.tax_status !== undefined) contactUpdate.tax_status = contactDetails.tax_status;
+            if (contactDetails.offered_product !== undefined) contactUpdate.offered_product = contactDetails.offered_product;
+            if (contactDetails.source !== undefined) contactUpdate.source = contactDetails.source;
 
             if (tickets[idx].estado === 'Cerrado') {
                 contactUpdate.assigned_agent = 'asistente1';
