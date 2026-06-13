@@ -175,7 +175,7 @@ export class LocalHistoryStore {
                 const hasActiveTicket = tickets.some(t => t.chat_id === chatId && t.estado === 'Abierto');
                 if (!hasActiveTicket) {
                     console.log(`[LocalHistoryStore] 🎟️ Auto-creating ticket for lead: ${chatId}`);
-                    const newTicket = {
+                    const newTicket: LocalTicket = {
                         id: crypto.randomUUID(),
                         project_id: projectId,
                         chat_id: chatId,
@@ -186,8 +186,8 @@ export class LocalHistoryStore {
                         tipo: 'Soporte',
                         created_at: new Date().toISOString(),
                         updated_at: new Date().toISOString(),
-                        attachments: '[]',
-                        chats_adjuntos: '[]'
+                        attachments: [],
+                        chats_adjuntos: []
                     };
                     tickets.push(newTicket);
                     this.saveTicketsList(projectId, tickets);
