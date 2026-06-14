@@ -14,8 +14,9 @@ window.ticketsView = (() => {
                 grid-template-columns: 1fr 1fr;
                 gap: 20px;
                 align-items: start;
+                min-width: 0;
             }
-            @media (max-width: 768px) {
+            @media (max-width: 1024px) {
                 #tv-columns { grid-template-columns: 1fr; }
             }
             .tv-scroll-row {
@@ -29,14 +30,35 @@ window.ticketsView = (() => {
                 scrollbar-width: thin;
                 scrollbar-color: rgba(0,153,255,0.3) transparent;
             }
-            .tv-scroll-row::-webkit-scrollbar { height: 4px; }
+            .tv-list-wrapper {
+                min-height: 120px;
+                min-width: 0;
+                width: 100%;
+            }
+            @media (min-width: 1025px) {
+                .tv-list-wrapper {
+                    height: 400px;
+                    display: flex;
+                    flex-direction: column;
+                }
+                .tv-scroll-row {
+                    flex-direction: column;
+                    overflow-x: hidden;
+                    overflow-y: auto;
+                    height: 100%;
+                    max-height: none;
+                    scroll-snap-type: y mandatory;
+                    padding-right: 8px;
+                }
+            }
+            .tv-scroll-row::-webkit-scrollbar { height: 4px; width: 4px; }
             .tv-scroll-row::-webkit-scrollbar-track { background: transparent; }
             .tv-scroll-row::-webkit-scrollbar-thumb { background: rgba(0,153,255,0.3); border-radius: 2px; }
             .tv-card {
                 flex: 0 0 clamp(180px, 70vw, 220px);
                 scroll-snap-align: start;
-                background: rgba(16,42,67,0.65);
-                border: 1px solid rgba(0,153,255,0.12);
+                background: #f8fafc;
+                border: 1px solid rgba(0,0,0,0.08);
                 border-radius: 12px;
                 padding: 16px 14px;
                 display: flex;
@@ -45,6 +67,21 @@ window.ticketsView = (() => {
                 text-align: center;
                 gap: 6px;
                 min-width: 0;
+            }
+            html[data-theme="dark"] .tv-card, html.dark .tv-card {
+                background: rgba(16,42,67,0.65);
+                border: 1px solid rgba(0,153,255,0.12);
+            }
+            @media (min-width: 1025px) {
+                .tv-card {
+                    flex: 0 0 auto;
+                    width: 100%;
+                    align-items: flex-start;
+                    text-align: left;
+                }
+                .tv-card-attachments, .tv-card-chips {
+                    justify-content: flex-start;
+                }
             }
             .tv-card-title {
                 font-size: 0.85rem;
@@ -94,6 +131,7 @@ window.ticketsView = (() => {
                 border: 1px solid rgba(0,153,255,0.12);
                 border-radius: 14px;
                 padding: 18px 16px;
+                min-width: 0;
             }
             #tv-modal.modal-overlay {
                 align-items: flex-start;
@@ -131,8 +169,8 @@ window.ticketsView = (() => {
                             <h3 style="margin:0; font-size:0.82rem; font-weight:700; font-family:'Montserrat',sans-serif; text-transform:uppercase; letter-spacing:1px; color:var(--text-main);">Pendientes</h3>
                             <span id="tv-count-pending" style="margin-left:auto; font-size:0.75rem; color:var(--text-muted);"></span>
                         </div>
-                        <div id="tv-list-pending">
-                            <div style="text-align:center; padding:30px 0; color:var(--text-muted); font-size:0.82rem;">Cargando...</div>
+                        <div id="tv-list-pending" class="tv-list-wrapper">
+                            <div style="text-align:center; color:var(--text-muted); font-size:0.82rem; height:100%; display:flex; align-items:center; justify-content:center;">Cargando...</div>
                         </div>
                     </div>
 
@@ -143,8 +181,8 @@ window.ticketsView = (() => {
                             <h3 style="margin:0; font-size:0.82rem; font-weight:700; font-family:'Montserrat',sans-serif; text-transform:uppercase; letter-spacing:1px; color:var(--text-main);">Cerrados</h3>
                             <span id="tv-count-closed" style="margin-left:auto; font-size:0.75rem; color:var(--text-muted);"></span>
                         </div>
-                        <div id="tv-list-closed">
-                            <div style="text-align:center; padding:30px 0; color:var(--text-muted); font-size:0.82rem;">Cargando...</div>
+                        <div id="tv-list-closed" class="tv-list-wrapper">
+                            <div style="text-align:center; color:var(--text-muted); font-size:0.82rem; height:100%; display:flex; align-items:center; justify-content:center;">Cargando...</div>
                         </div>
                     </div>
 
@@ -241,7 +279,7 @@ window.ticketsView = (() => {
 
             if (!Array.isArray(tickets) || tickets.length === 0) {
                 if (count) count.textContent = '0';
-                list.innerHTML = `<div style="text-align:center; padding:30px 0; color:var(--text-muted); font-size:0.82rem;">Sin tickets</div>`;
+                list.innerHTML = `<div style="text-align:center; color:var(--text-muted); font-size:0.82rem; height:100%; display:flex; align-items:center; justify-content:center;">Sin tickets</div>`;
                 return;
             }
 

@@ -260,7 +260,7 @@
     overflow: hidden;
   }
   body.sidebar-collapsed #view-root { margin-left: 85px; }
-  @media (max-width: 768px) { #view-root { margin-left: 0 !important; } }
+  @media (max-width: 1024px) { #view-root { margin-left: 0 !important; } }
 
   /* Visibility helper used by server-side template */
   .hidden-item { display: none !important; }
@@ -609,7 +609,7 @@
   .mobile-appbar-btn:hover { background: #0099FF; }
   .mobile-back-btn { display: none; }
 
-  @media (max-width: 768px) {
+  @media (max-width: 1024px) {
     .mobile-appbar { display: flex; }
     #view-root { padding-top: 52px; }
     .crm-main-container { min-height: calc(100vh - 52px) !important; }
@@ -1065,13 +1065,13 @@
     @apply grid gap-6 mt-10;
     grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
   }
-  @media (max-width: 768px) {
+  @media (max-width: 1024px) {
     .charts-grid { grid-template-columns: 1fr; }
   }
 
   /* ── Dashboard v2 layout ─────────────────────────────────────── */
   .dashboard-page { @apply flex flex-col gap-7; padding: 2rem 2.5rem; }
-  @media (max-width: 768px) { .dashboard-page { padding: 1.25rem; @apply gap-5; } }
+  @media (max-width: 1024px) { .dashboard-page { padding: 1.25rem; @apply gap-5; } }
 
   .dashboard-header {
     @apply flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-6;
@@ -1481,7 +1481,7 @@
   [data-theme="light"] .kanban-header {
     border-bottom-color: rgba(37,99,235,0.08);
   }
-  @media (max-width: 768px) {
+  @media (max-width: 1024px) {
     .kanban-header { @apply flex-col items-start gap-4 px-5 py-4; }
   }
 
@@ -1572,7 +1572,7 @@
     min-height: 0;
     width: 100%;
   }
-  @media (max-width: 768px) {
+  @media (max-width: 1024px) {
     .kanban-scroll-area { @apply px-4 py-4; height: calc(100vh - 210px); }
   }
 
@@ -1595,7 +1595,7 @@
     border-color: rgba(37,99,235,0.1);
     box-shadow: 0 4px 16px rgba(0,0,0,0.06);
   }
-  @media (max-width: 768px) {
+  @media (max-width: 1024px) {
     .kanban-column { min-width: 270px; max-width: 270px; }
   }
 
@@ -1983,7 +1983,7 @@
     background: rgba(255,255,255,0.97);
   }
   .tasks-dashboard-panel.active { right: 0; }
-  @media (max-width: 768px) {
+  @media (max-width: 1024px) {
     .tasks-dashboard-panel { width: 100%; right: -100%; border-radius: 0; top: 60px; height: calc(100vh - 60px); }
   }
 
