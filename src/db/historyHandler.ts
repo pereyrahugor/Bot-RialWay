@@ -94,7 +94,7 @@ export class HistoryHandler {
     ];
 
     static readonly FIXED_KEYS = [
-        'SUPABASE_URL', 'SUPABASE_KEY', 'RAILWAY_TOKEN', 'BACKOFFICE_TOKEN', 
+        'SUPABASE_URL', 'SUPABASE_KEY', 'RAILWAY_TOKEN', 'BACKOFFICE_TOKEN',
         'GOOGLE_PRIVATE_KEY', 'GOOGLE_CLIENT_EMAIL', 'GOOGLE_MAPS_API_KEY',
         'META_CONFIG_ID', 'META_APP_ID', 'META_APP_SECRET'
     ];
@@ -285,11 +285,11 @@ export class HistoryHandler {
             try {
                 // Verificar si la tabla existe
                 const { error: checkError } = await supabase.from(table.name).select('*').limit(1);
-                
+
                 if (checkError && (checkError.code === '42P01' || checkError.code === 'PGRST204' || checkError.code === 'PGRST205')) {
                     console.log(`⚠️ Tabla '${table.name}' no encontrada. Creándola...`);
                     const { error: rpcError } = await supabase.rpc('exec_sql', { query: table.sql });
-                    
+
                     if (rpcError) {
                         console.error(`❌ Error al crear tabla '${table.name}':`, rpcError.message);
                         if (rpcError.message.includes('function') && rpcError.message.includes('does not exist')) {
@@ -304,8 +304,8 @@ export class HistoryHandler {
                     // Verificar columnas adicionales (Migración)
                     const { error: columnError } = await supabase.from(table.name).select('project_id').limit(1);
                     if (columnError && columnError.code === '42703') {
-                         console.log(`🔧 Actualizando tabla '${table.name}' para incluir project_id...`);
-                         const alterSql = table.name === 'chats' 
+                        console.log(`🔧 Actualizando tabla '${table.name}' para incluir project_id...`);
+                        const alterSql = table.name === 'chats'
                             ? `ALTER TABLE chats ADD COLUMN IF NOT EXISTS project_id TEXT DEFAULT 'default_project'; 
                                DO $$ 
                                BEGIN 
@@ -315,13 +315,13 @@ export class HistoryHandler {
                                END $$;
                                ALTER TABLE chats ADD PRIMARY KEY (id, project_id);`
                             : `ALTER TABLE messages ADD COLUMN IF NOT EXISTS project_id TEXT DEFAULT 'default_project';`;
-                         
-                         const { error: alterError } = await supabase.rpc('exec_sql', { query: alterSql });
-                         if (alterError) {
-                             console.error(`❌ Error en migración de '${table.name}':`, alterError.message);
-                         } else {
-                             console.log(`✅ Tabla '${table.name}' migrada a multitenancy.`);
-                         }
+
+                        const { error: alterError } = await supabase.rpc('exec_sql', { query: alterSql });
+                        if (alterError) {
+                            console.error(`❌ Error en migración de '${table.name}':`, alterError.message);
+                        } else {
+                            console.log(`✅ Tabla '${table.name}' migrada a multitenancy.`);
+                        }
                     }
 
                     // Migración para last_human_message_at y campos CRM
@@ -350,31 +350,31 @@ export class HistoryHandler {
                         const { error: crmExtraErr } = await supabase.from('chats').select('cuit_dni, address, tax_status, offered_product').limit(1);
                         if (crmExtraErr && crmExtraErr.code === '42703') {
                             console.log(`🔧 Agregando columnas adicionales CRM a chats...`);
-                            await supabase.rpc('exec_sql', { 
+                            await supabase.rpc('exec_sql', {
                                 query: `ALTER TABLE chats 
                                         ADD COLUMN IF NOT EXISTS cuit_dni TEXT, 
                                         ADD COLUMN IF NOT EXISTS address TEXT, 
                                         ADD COLUMN IF NOT EXISTS tax_status TEXT, 
-                                        ADD COLUMN IF NOT EXISTS offered_product TEXT;` 
+                                        ADD COLUMN IF NOT EXISTS offered_product TEXT;`
                             });
                         }
 
-                    // Migración para user_id (Meta BSUID)
-                    const { error: bsuidErr } = await supabase.from('chats').select('user_id').limit(1);
-                    if (bsuidErr && bsuidErr.code === '42703') {
-                        console.log(`🔧 Agregando columna user_id (BSUID) a chats...`);
-                        await supabase.rpc('exec_sql', { query: `ALTER TABLE chats ADD COLUMN IF NOT EXISTS user_id TEXT;` });
-                    }
+                        // Migración para user_id (Meta BSUID)
+                        const { error: bsuidErr } = await supabase.from('chats').select('user_id').limit(1);
+                        if (bsuidErr && bsuidErr.code === '42703') {
+                            console.log(`🔧 Agregando columna user_id (BSUID) a chats...`);
+                            await supabase.rpc('exec_sql', { query: `ALTER TABLE chats ADD COLUMN IF NOT EXISTS user_id TEXT;` });
+                        }
 
-                    // Migración para external_id en mensajes (Deduplicación)
-                    const { error: extIdErr } = await supabase.from('messages').select('external_id').limit(1);
-                    if (extIdErr && extIdErr.code === '42703') {
-                        console.log(`🔧 Agregando columna external_id a messages...`);
-                        await supabase.rpc('exec_sql', { query: `ALTER TABLE messages ADD COLUMN IF NOT EXISTS external_id TEXT;` });
-                        await supabase.rpc('exec_sql', { query: `CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_external_id ON messages (external_id);` });
-                    }
+                        // Migración para external_id en mensajes (Deduplicación)
+                        const { error: extIdErr } = await supabase.from('messages').select('external_id').limit(1);
+                        if (extIdErr && extIdErr.code === '42703') {
+                            console.log(`🔧 Agregando columna external_id a messages...`);
+                            await supabase.rpc('exec_sql', { query: `ALTER TABLE messages ADD COLUMN IF NOT EXISTS external_id TEXT;` });
+                            await supabase.rpc('exec_sql', { query: `CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_external_id ON messages (external_id);` });
+                        }
 
-                    // Migración para assigned_to
+                        // Migración para assigned_to
                         const { error: assignedErr } = await supabase.from('chats').select('assigned_to').limit(1);
                         if (assignedErr && assignedErr.code === '42703') {
                             console.log(`🔧 Agregando columna assigned_to a chats...`);
@@ -458,7 +458,7 @@ export class HistoryHandler {
 
     static async activateSystemConfigTemporarily() {
         console.log(`🔑 [HistoryHandler] Activando SYSTEM_CONFIG_VISIBLE por 60 minutos.`);
-        
+
         // 1. Guardar en base de datos
         await this.saveSetting('SYSTEM_CONFIG_VISIBLE', 'true');
 
@@ -471,7 +471,7 @@ export class HistoryHandler {
         this.systemConfigVisibleTimer = setTimeout(async () => {
             console.log(`⏰ [HistoryHandler] Tiempo cumplido. Desactivando SYSTEM_CONFIG_VISIBLE.`);
             await this.deactivateSystemConfig();
-        },60 * 60 * 1000); // 60 minutos
+        }, 60 * 60 * 1000); // 60 minutos
     }
 
     static async deactivateSystemConfig() {
@@ -519,7 +519,7 @@ export class HistoryHandler {
             console.error('[HistoryHandler] Error en checkSystemConfigVisibleOnStartup:', err);
         }
     }
-    
+
     /**
      * Normaliza los IDs de chat para evitar duplicados entre Meta y Baileys
      */
@@ -548,11 +548,11 @@ export class HistoryHandler {
                 incidencias_ids: meta.incidencias_ids || []
             };
         }
-        
+
         try {
             const chat = await this.getChat(chatId);
             if (!chat) return null;
-            
+
             const meta = chat.metadata || {};
             return {
                 nombre: chat.name || meta.nombre,
@@ -571,7 +571,7 @@ export class HistoryHandler {
 
     static async saveClientContext(rawChatId: string, contextData: any) {
         const chatId = this.normalizeId(rawChatId);
-        
+
         if (process.env.STORAGE_MODE === "local") {
             const chat = await LocalHistoryStore.getChat(chatId, this.PROJECT_IDENTIFIER);
             const currentMeta = chat?.metadata || {};
@@ -679,7 +679,7 @@ export class HistoryHandler {
         if (process.env.STORAGE_MODE === "local") {
             return LocalHistoryStore.updateLastDbResult(chatId, result, currentProjectId);
         }
-        
+
         // Invalidar cache del chat
         this.invalidateChatCache(chatId, currentProjectId);
 
@@ -714,7 +714,7 @@ export class HistoryHandler {
         if (process.env.STORAGE_MODE === "local") {
             return LocalHistoryStore.getOrCreateChat(chatId, type, name, userId, currentProjectId) as any;
         }
-            if (name === '[-]') name = null;
+        if (name === '[-]') name = null;
 
         try {
             let data: Chat | null = null;
@@ -728,7 +728,7 @@ export class HistoryHandler {
                     .eq('user_id', userId)
                     .eq('project_id', currentProjectId)
                     .maybeSingle();
-                
+
                 data = byUserId;
                 if (errUser) error = errUser;
             }
@@ -741,7 +741,7 @@ export class HistoryHandler {
                     .eq('id', chatId)
                     .eq('project_id', currentProjectId)
                     .maybeSingle();
-                
+
                 data = byChatId;
                 error = errChat;
 
@@ -774,7 +774,7 @@ export class HistoryHandler {
                     })
                     .select()
                     .single();
-                
+
                 if (insertError) throw insertError;
                 return newData;
             }
@@ -838,9 +838,9 @@ export class HistoryHandler {
             if (!platformType) {
                 if (chatId.includes('@')) {
                     resolvedPlatform = 'whatsapp';
-                } else if (chatId.length > 15) { 
+                } else if (chatId.length > 15) {
                     // IDs de Instagram/Messenger suelen ser más largos que números de teléfono
-                    resolvedPlatform = 'messenger'; 
+                    resolvedPlatform = 'messenger';
                 } else {
                     resolvedPlatform = 'whatsapp';
                 }
@@ -867,7 +867,7 @@ export class HistoryHandler {
                     .select('*')
                     .eq('external_id', external_id)
                     .maybeSingle();
-                
+
                 if (!exactError && exactMatch) {
                     return [exactMatch]; // Ya existe, retornamos sin emitir evento repetido
                 }
@@ -877,7 +877,7 @@ export class HistoryHandler {
             // Esto evita duplicados cuando el sistema guarda el mensaje antes de enviarlo (ID nulo)
             // y luego llega el webhook (ID real) o viceversa, lo cual es común en Meta Cloud API.
             const thirtySecondsAgo = new Date(Date.now() - 30000).toISOString();
-            
+
             const { data: recentlySaved, error: searchError } = await supabase
                 .from('messages')
                 .select('id, external_id')
@@ -891,7 +891,7 @@ export class HistoryHandler {
 
             if (recentlySaved && recentlySaved.length > 0) {
                 const existing = recentlySaved[0];
-                
+
                 // Si ambos tienen external_id y son diferentes, NO es un duplicado (son mensajes distintos con el mismo contenido)
                 if (existing.external_id && external_id && existing.external_id !== external_id) {
                     // Continuar con la inserción normal
@@ -944,10 +944,10 @@ export class HistoryHandler {
             this.invalidateChatCache(chatId, currentProjectId);
 
             // Emitir evento para WebSockets (esto actualiza la UI en tiempo real)
-            historyEvents.emit('new_message', { 
-                chat_id: chatId, 
-                role, 
-                content, 
+            historyEvents.emit('new_message', {
+                chat_id: chatId,
+                role,
+                content,
                 type,
                 created_at: new Date().toISOString(),
                 external_id: external_id || null,
@@ -989,11 +989,11 @@ export class HistoryHandler {
 
             if (data && data.length > 0) {
                 const deletedMsg = data[0];
-                historyEvents.emit('message_deleted', { 
-                    messageId: deletedMsg.id, 
-                    externalId: deletedMsg.external_id, 
+                historyEvents.emit('message_deleted', {
+                    messageId: deletedMsg.id,
+                    externalId: deletedMsg.external_id,
                     chatId: deletedMsg.chat_id,
-                    projectId: currentProjectId 
+                    projectId: currentProjectId
                 });
                 return true;
             }
@@ -1020,12 +1020,12 @@ export class HistoryHandler {
     static async setAssignedAgent(rawChatId: string, agentName: string, forcedProjectId?: string) {
         const chatId = this.normalizeId(rawChatId);
         const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
-        
+
         // Invalidar cache
         this.invalidateChatCache(chatId, currentProjectId);
 
         try {
-            const updateObj: any = { 
+            const updateObj: any = {
                 assigned_agent: agentName,
                 bot_enabled: true // Si asignamos un agente bot, nos aseguramos que el bot esté ON
             };
@@ -1040,9 +1040,9 @@ export class HistoryHandler {
                 .eq('project_id', currentProjectId);
 
             // Emitir evento para refrescar la UI en tiempo real
-            historyEvents.emit('bot_toggled', { 
-                chatId, 
-                enabled: true, 
+            historyEvents.emit('bot_toggled', {
+                chatId,
+                enabled: true,
                 assigned_agent: agentName,
                 project_id: currentProjectId
             });
@@ -1051,11 +1051,11 @@ export class HistoryHandler {
         }
     }
 
-    static async updateContactDetails(rawChatId: string, details: { 
-        name?: string, 
-        email?: string, 
-        notes?: string, 
-        source?: string, 
+    static async updateContactDetails(rawChatId: string, details: {
+        name?: string,
+        email?: string,
+        notes?: string,
+        source?: string,
         is_lead?: boolean,
         cuit_dni?: string,
         tax_status?: string,
@@ -1070,10 +1070,10 @@ export class HistoryHandler {
         if (process.env.STORAGE_MODE === "local") {
             const success = await LocalHistoryStore.updateContactDetails(chatId, details as any, currentProjectId || HistoryHandler.PROJECT_IDENTIFIER);
             if (success) {
-                historyEvents.emit('contact_updated', { 
-                    chatId, 
-                    project_id: currentProjectId || HistoryHandler.PROJECT_IDENTIFIER, 
-                    details 
+                historyEvents.emit('contact_updated', {
+                    chatId,
+                    project_id: currentProjectId || HistoryHandler.PROJECT_IDENTIFIER,
+                    details
                 });
                 if (details.is_lead === true) {
                     const tickets = LocalHistoryStore.getTicketsList(currentProjectId || HistoryHandler.PROJECT_IDENTIFIER);
@@ -1124,7 +1124,7 @@ export class HistoryHandler {
 
                 if (!lookupErr && (!existingTicket || existingTicket.length === 0)) {
                     console.log(`[HistoryHandler] 🎟️ Auto-creating ticket for lead: ${chatId}`);
-                    
+
                     const { data: chatData } = await supabase
                         .from('chats')
                         .select('name')
@@ -1167,21 +1167,21 @@ export class HistoryHandler {
                         .eq('id', activeTicketId)
                         .eq('project_id', currentProjectId);
                     if (!updateTicketErr) {
-                        historyEvents.emit('ticket_updated', { 
-                            id: activeTicketId, 
-                            chat_id: chatId, 
-                            descripcion: details.notes, 
-                            updated_at: new Date().toISOString() 
+                        historyEvents.emit('ticket_updated', {
+                            id: activeTicketId,
+                            chat_id: chatId,
+                            descripcion: details.notes,
+                            updated_at: new Date().toISOString()
                         });
                     }
                 }
             }
 
             // Emitir evento para actualización en tiempo real en el Backoffice/CRM
-            historyEvents.emit('contact_updated', { 
-                chatId, 
-                project_id: currentProjectId, 
-                details 
+            historyEvents.emit('contact_updated', {
+                chatId,
+                project_id: currentProjectId,
+                details
             });
 
             return { success: true };
@@ -1226,9 +1226,9 @@ export class HistoryHandler {
      */
     static async assignTagsToContact(rawChatId: string, tagsList: string[], projectId: string) {
         if (!tagsList || tagsList.length === 0) return;
-        
+
         const chatId = this.normalizeId(rawChatId);
-        
+
         // Invalidar cache
         this.invalidateChatCache(chatId, projectId);
 
@@ -1240,20 +1240,20 @@ export class HistoryHandler {
                     // Usamos upsert o simplemente insert ignorando errores de duplicado
                     await supabase
                         .from('chat_tags')
-                        .upsert({ 
-                            chat_id: chatId, 
-                            tag_id: tagId, 
-                            project_id: projectId 
+                        .upsert({
+                            chat_id: chatId,
+                            tag_id: tagId,
+                            project_id: projectId
                         }, { onConflict: 'chat_id,tag_id,project_id' });
                 }
             }
             console.log(`🏷️ [HistoryHandler] ${tagsList.length} etiquetas procesadas para ${chatId}`);
-            
+
             // Emitir evento para refrescar UI
-            historyEvents.emit('contact_updated', { 
-                chatId, 
-                project_id: projectId, 
-                tags: tagsList 
+            historyEvents.emit('contact_updated', {
+                chatId,
+                project_id: projectId,
+                tags: tagsList
             });
         } catch (err) {
             console.error(`❌ [HistoryHandler] Error asignando etiquetas a ${chatId}:`, err);
@@ -1344,7 +1344,7 @@ export class HistoryHandler {
             historyEvents.emit('bot_toggled', { chatId, enabled, assigned_agent: 'asistente1', projectId: currentProjectId });
             return { success: res };
         }
-        
+
         // Invalidar cache
         this.invalidateChatCache(chatId, currentProjectId);
 
@@ -1362,7 +1362,7 @@ export class HistoryHandler {
                 .update(updateData)
                 .eq('id', chatId)
                 .eq('project_id', currentProjectId);
-            
+
             if (error) throw error;
             // Emitir evento para WebSockets (ahora incluimos el agente y projectId para sincronización frontend)
             historyEvents.emit('bot_toggled', { chatId, enabled, assigned_agent: 'asistente1', projectId: currentProjectId });
@@ -1383,16 +1383,16 @@ export class HistoryHandler {
         if (process.env.STORAGE_MODE === "local") {
             return LocalHistoryStore.updateLastHumanMessage(chatId, currentProjectId);
         }
-        
+
         try {
             const { error } = await supabase
                 .from('chats')
-                .update({ 
+                .update({
                     last_human_message_at: new Date().toISOString()
                 })
                 .eq('id', chatId)
                 .eq('project_id', currentProjectId);
-            
+
             if (error) throw error;
             return true;
         } catch (err: any) {
@@ -1411,140 +1411,140 @@ export class HistoryHandler {
             return res.data;
         }
         for (let _attempt = 0; _attempt < 2; _attempt++) {
-        try {
-            // Campos mínimos para la lista (se incluyen campos CRM para autocompletado de Excel)
-            let selectString = 'id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, crm_status, crm_due_date, notes, email, source, is_lead, cuit_dni, tax_status, address, offered_product, unread_count, chat_tags(tag_id, tags(*))';
-            if (tagId) {
-                selectString = 'id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, crm_status, crm_due_date, notes, email, source, is_lead, cuit_dni, tax_status, address, offered_product, unread_count, chat_tags!inner(tag_id, tags(*))';
-            }
-
-            let query = supabase
-                .from('chats')
-                .select(selectString);
-            
-            // Filtrar estrictamente por el ID único de este bot en Railway
-            query = query.eq('project_id', currentProjectId);
-
-            if (platform === 'leads') {
-                // Filtramos por chats que tengan algún estado CRM o estén marcados como leads
-                query = query.or('crm_status.not.is.null,is_lead.eq.true');
-            } else if (platform && platform !== 'all') {
-                query = query.eq('type', platform);
-            }
-
-            // Filtro por asignación (si se solicita)
-            if (assignedTo) {
-                // El subusuario ve lo suyo O lo que no tiene nadie asignado
-                query = query.or(`assigned_to.eq.${assignedTo},assigned_to.is.null`);
-            }
-
-            if (search) {
-                // Filtro optimizado: solo por nombre o ID (evitamos ILIKE en 'notes' que es pesado)
-                query = query.or(`name.ilike.%${search}%,id.ilike.%${search}%`);
-            }
-
-            if (tagId) {
-                query = query.eq('chat_tags.tag_id', tagId);
-            }
-
-            const { data, error } = await query
-                .order('last_message_at', { ascending: false })
-                .range(offset, offset + limit - 1);
-            
-            if (error) throw error;
-            
-            let finalChats = (data || []).map((chat: any) => ({
-                ...chat,
-                tags: chat.chat_tags ? chat.chat_tags.map((ct: any) => ct.tags).filter((t: any) => t !== null) : []
-            }));
-
-            // --- LÓGICA DE ANCLAJE (PINNED CHATS) ---
-            // Solo si estamos en la primera página (offset === 0) y no hay filtros o búsquedas activas
-            const hasNoFilters = !search && !tagId && (!platform || platform === 'all') && !assignedTo;
-            
-            if (offset === 0 && hasNoFilters) {
-                const groupResumenId = await this.getConfig('ID_GRUPO_RESUMEN') || '';
-                const groupResumenId2 = await this.getConfig('ID_GRUPO_RESUMEN_2') || '';
-                
-                const groupIds = [groupResumenId, groupResumenId2]
-                    .map(id => this.normalizeId(id))
-                    .filter(id => id !== '');
-                
-                if (groupIds.length > 0) {
-                    const pinnedChats: any[] = [];
-                    const normalChats: any[] = [];
-                    
-                    finalChats.forEach(chat => {
-                        if (groupIds.includes(chat.id)) {
-                            pinnedChats.push(chat);
-                        } else {
-                            normalChats.push(chat);
-                        }
-                    });
-                    
-                    // Si algún grupo configurado existe en DB pero no estaba en la primera página, lo buscamos
-                    const missingGroupIds = groupIds.filter(id => !pinnedChats.some(pc => pc.id === id));
-                    
-                    if (missingGroupIds.length > 0) {
-                        const { data: missingGroups } = await supabase
-                            .from('chats')
-                            .select(selectString)
-                            .eq('project_id', this.PROJECT_IDENTIFIER)
-                            .in('id', missingGroupIds);
-                            
-                        if (missingGroups && missingGroups.length > 0) {
-                            missingGroups.forEach((g: any) => {
-                                pinnedChats.push({
-                                    ...g,
-                                    tags: g.chat_tags ? g.chat_tags.map((ct: any) => ct.tags).filter((t: any) => t !== null) : [],
-                                    isPinned: true
-                                });
-                            });
-                        }
-                    }
-                    
-                    pinnedChats.forEach(c => c.isPinned = true);
-                    
-                    // Re-ensamblar la lista: Pinned al principio, luego los normales
-                    finalChats = [...pinnedChats, ...normalChats];
-                    
-                    // Si al re-ensamblar nos pasamos del límite de la página, cortamos para no romper paginación
-                    if (finalChats.length > limit) {
-                        finalChats = finalChats.slice(0, limit);
-                    }
-                }
-            }
-
-            // --- FILTRO LISTA NEGRA (bloqueado_crm) ---
-            // Si la integración está activa, ocultamos los chats bloqueados del CRM
             try {
-                const blacklistActive = await this.getSetting('BLACKLIST_ACTIVE');
-                if (blacklistActive === 'true') {
-                    const { data: blockedEntries } = await supabase
-                        .from('blacklist')
-                        .select('chat_id')
-                        .eq('project_id', this.PROJECT_IDENTIFIER)
-                        .eq('bloqueado_crm', true);
-                    if (blockedEntries && blockedEntries.length > 0) {
-                        const blockedIds = new Set(blockedEntries.map((e: any) => e.chat_id));
-                        finalChats = finalChats.filter((c: any) => !blockedIds.has(c.id));
+                // Campos mínimos para la lista (se incluyen campos CRM para autocompletado de Excel)
+                let selectString = 'id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, crm_status, crm_due_date, notes, email, source, is_lead, cuit_dni, tax_status, address, offered_product, unread_count, chat_tags(tag_id, tags(*))';
+                if (tagId) {
+                    selectString = 'id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, crm_status, crm_due_date, notes, email, source, is_lead, cuit_dni, tax_status, address, offered_product, unread_count, chat_tags!inner(tag_id, tags(*))';
+                }
+
+                let query = supabase
+                    .from('chats')
+                    .select(selectString);
+
+                // Filtrar estrictamente por el ID único de este bot en Railway
+                query = query.eq('project_id', currentProjectId);
+
+                if (platform === 'leads') {
+                    // Filtramos por chats que tengan algún estado CRM o estén marcados como leads
+                    query = query.or('crm_status.not.is.null,is_lead.eq.true');
+                } else if (platform && platform !== 'all') {
+                    query = query.eq('type', platform);
+                }
+
+                // Filtro por asignación (si se solicita)
+                if (assignedTo) {
+                    // El subusuario ve lo suyo O lo que no tiene nadie asignado
+                    query = query.or(`assigned_to.eq.${assignedTo},assigned_to.is.null`);
+                }
+
+                if (search) {
+                    // Filtro optimizado: solo por nombre o ID (evitamos ILIKE en 'notes' que es pesado)
+                    query = query.or(`name.ilike.%${search}%,id.ilike.%${search}%`);
+                }
+
+                if (tagId) {
+                    query = query.eq('chat_tags.tag_id', tagId);
+                }
+
+                const { data, error } = await query
+                    .order('last_message_at', { ascending: false })
+                    .range(offset, offset + limit - 1);
+
+                if (error) throw error;
+
+                let finalChats = (data || []).map((chat: any) => ({
+                    ...chat,
+                    tags: chat.chat_tags ? chat.chat_tags.map((ct: any) => ct.tags).filter((t: any) => t !== null) : []
+                }));
+
+                // --- LÓGICA DE ANCLAJE (PINNED CHATS) ---
+                // Solo si estamos en la primera página (offset === 0) y no hay filtros o búsquedas activas
+                const hasNoFilters = !search && !tagId && (!platform || platform === 'all') && !assignedTo;
+
+                if (offset === 0 && hasNoFilters) {
+                    const groupResumenId = await this.getConfig('ID_GRUPO_RESUMEN') || '';
+                    const groupResumenId2 = await this.getConfig('ID_GRUPO_RESUMEN_2') || '';
+
+                    const groupIds = [groupResumenId, groupResumenId2]
+                        .map(id => this.normalizeId(id))
+                        .filter(id => id !== '');
+
+                    if (groupIds.length > 0) {
+                        const pinnedChats: any[] = [];
+                        const normalChats: any[] = [];
+
+                        finalChats.forEach(chat => {
+                            if (groupIds.includes(chat.id)) {
+                                pinnedChats.push(chat);
+                            } else {
+                                normalChats.push(chat);
+                            }
+                        });
+
+                        // Si algún grupo configurado existe en DB pero no estaba en la primera página, lo buscamos
+                        const missingGroupIds = groupIds.filter(id => !pinnedChats.some(pc => pc.id === id));
+
+                        if (missingGroupIds.length > 0) {
+                            const { data: missingGroups } = await supabase
+                                .from('chats')
+                                .select(selectString)
+                                .eq('project_id', this.PROJECT_IDENTIFIER)
+                                .in('id', missingGroupIds);
+
+                            if (missingGroups && missingGroups.length > 0) {
+                                missingGroups.forEach((g: any) => {
+                                    pinnedChats.push({
+                                        ...g,
+                                        tags: g.chat_tags ? g.chat_tags.map((ct: any) => ct.tags).filter((t: any) => t !== null) : [],
+                                        isPinned: true
+                                    });
+                                });
+                            }
+                        }
+
+                        pinnedChats.forEach(c => c.isPinned = true);
+
+                        // Re-ensamblar la lista: Pinned al principio, luego los normales
+                        finalChats = [...pinnedChats, ...normalChats];
+
+                        // Si al re-ensamblar nos pasamos del límite de la página, cortamos para no romper paginación
+                        if (finalChats.length > limit) {
+                            finalChats = finalChats.slice(0, limit);
+                        }
                     }
                 }
-            } catch (blErr) {
-                console.warn('[HistoryHandler] No se pudo aplicar filtro de lista negra:', blErr);
-            }
 
-            return finalChats;
-        } catch (err) {
-            const isTransient = err instanceof Error && (err.message.includes('fetch failed') || err.message.includes('UND_ERR_SOCKET'));
-            if (isTransient && _attempt === 0) {
-                console.warn('[HistoryHandler] listChats: fetch transient error, retrying...');
-                await new Promise(r => setTimeout(r, 600));
-                continue;
+                // --- FILTRO LISTA NEGRA (bloqueado_crm) ---
+                // Si la integración está activa, ocultamos los chats bloqueados del CRM
+                try {
+                    const blacklistActive = await this.getSetting('BLACKLIST_ACTIVE');
+                    if (blacklistActive === 'true') {
+                        const { data: blockedEntries } = await supabase
+                            .from('blacklist')
+                            .select('chat_id')
+                            .eq('project_id', this.PROJECT_IDENTIFIER)
+                            .eq('bloqueado_crm', true);
+                        if (blockedEntries && blockedEntries.length > 0) {
+                            const blockedIds = new Set(blockedEntries.map((e: any) => e.chat_id));
+                            finalChats = finalChats.filter((c: any) => !blockedIds.has(c.id));
+                        }
+                    }
+                } catch (blErr) {
+                    console.warn('[HistoryHandler] No se pudo aplicar filtro de lista negra:', blErr);
+                }
+
+                return finalChats;
+            } catch (err) {
+                const isTransient = err instanceof Error && (err.message.includes('fetch failed') || err.message.includes('UND_ERR_SOCKET'));
+                if (isTransient && _attempt === 0) {
+                    console.warn('[HistoryHandler] listChats: fetch transient error, retrying...');
+                    await new Promise(r => setTimeout(r, 600));
+                    continue;
+                }
+                console.error('[HistoryHandler] Error en listChats:', err);
+                return [];
             }
-            console.error('[HistoryHandler] Error en listChats:', err);
-            return [];
-        }
         } // end for
         return [];
     }
@@ -1609,9 +1609,9 @@ export class HistoryHandler {
         try {
             const { data, error } = await supabase
                 .from('tags')
-                .insert({ 
-                    name, 
-                    color, 
+                .insert({
+                    name,
+                    color,
                     project_id: HistoryHandler.PROJECT_IDENTIFIER,
                     created_at: new Date().toISOString()
                 })
@@ -1669,7 +1669,7 @@ export class HistoryHandler {
         }
         try {
             const chatId = this.normalizeId(rawChatId);
-            
+
             // Invalidar cache
             this.invalidateChatCache(chatId);
 
@@ -1679,12 +1679,12 @@ export class HistoryHandler {
 
             const { error } = await supabase
                 .from('chat_tags')
-                .insert({ 
-                    chat_id: chatId, 
-                    tag_id: tagId, 
-                    project_id: HistoryHandler.PROJECT_IDENTIFIER 
+                .insert({
+                    chat_id: chatId,
+                    tag_id: tagId,
+                    project_id: HistoryHandler.PROJECT_IDENTIFIER
                 });
-            
+
             if (error) {
                 if (error.code === '23505') return { success: true }; // Ya existe
                 throw error;
@@ -1704,7 +1704,7 @@ export class HistoryHandler {
         }
         try {
             const chatId = this.normalizeId(rawChatId);
-            
+
             // Invalidar cache
             this.invalidateChatCache(chatId);
 
@@ -1736,7 +1736,7 @@ export class HistoryHandler {
 
     static async saveThreadId(chatId: string, threadId: string, forcedProjectId?: string) {
         const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
-        
+
         // Invalidar cache
         this.invalidateChatCache(chatId, currentProjectId);
 
@@ -1775,9 +1775,9 @@ export class HistoryHandler {
         }
     }
 
-     /**
-     * Crea un nuevo ticket
-     */
+    /**
+    * Crea un nuevo ticket
+    */
     static async createTicket(
         rawChatId: string | null,
         titulo: string,
@@ -1810,10 +1810,9 @@ export class HistoryHandler {
                     chat_id: chatId,
                     titulo,
                     descripcion,
-                    tipo,
                     prioridad,
                     estado: 'Abierto',
-                    tipo: 'Soporte',
+                    tipo: tipo,
                     attachments: JSON.stringify(attachments),
                     chats_adjuntos: JSON.stringify(chats_adjuntos),
                     ...(clienteId ? { cliente_id: clienteId } : {})
@@ -1833,17 +1832,23 @@ export class HistoryHandler {
     /**
      * Obtiene el conteo de tickets pendientes (Abiertos o En progreso)
      */
-    static async getPendingTicketsCount(projectId?: string | null) {
+    static async getPendingTicketsCount(projectId?: string | null, tipo?: string) {
         const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
         if (process.env.STORAGE_MODE === "local") {
-            return LocalHistoryStore.getPendingTicketsCount('', currentProjectId);
+            return LocalHistoryStore.getPendingTicketsCount(tipo || '', currentProjectId);
         }
         try {
-            const { count, error } = await supabase
+            let query = supabase
                 .from('tickets')
                 .select('*', { count: 'exact', head: true })
                 .eq('project_id', currentProjectId)
                 .in('estado', ['Abierto', 'En progreso']);
+            
+            if (tipo) {
+                query = query.eq('tipo', tipo);
+            }
+            
+            const { count, error } = await query;
             if (error) throw error;
             return count || 0;
         } catch (err) {
@@ -1986,7 +1991,7 @@ export class HistoryHandler {
         }
         try {
             console.log(`[HistoryHandler] Actualizando Lead/Ticket ${ticketId}`);
-            
+
             const { data: ticket, error: tError } = await supabase
                 .from('tickets')
                 .select('chat_id, project_id')
@@ -1998,7 +2003,7 @@ export class HistoryHandler {
 
             const ticketUpdate: any = { updated_at: new Date().toISOString() };
             if (details.titulo !== undefined) ticketUpdate.titulo = details.titulo;
-            
+
             const notesVal = details.notas !== undefined ? details.notas : details.notes;
             if (notesVal !== undefined) ticketUpdate.descripcion = notesVal;
 
@@ -2049,7 +2054,7 @@ export class HistoryHandler {
                         .update(chatUpdate)
                         .eq('id', ticket.chat_id)
                         .eq('project_id', currentProjectId);
-                    
+
                     if (upChatErr) throw upChatErr;
 
                     historyEvents.emit('contact_updated', {
@@ -2058,16 +2063,16 @@ export class HistoryHandler {
                         details: chatUpdate
                     });
                 }
-                
+
                 this.invalidateChatCache(ticket.chat_id, currentProjectId);
-                
+
                 if (ticketUpdate.estado === 'Cerrado') {
                     historyEvents.emit('bot_toggled', { chatId: ticket.chat_id, enabled: true, assigned_agent: 'asistente1', projectId: currentProjectId });
                 }
             }
 
             historyEvents.emit('ticket_updated', { id: ticketId, chat_id: ticket.chat_id, ...ticketUpdate });
-            
+
             return { success: true };
         } catch (err: any) {
             console.error('[HistoryHandler] Error en updateLeadAndTicket:', err);
@@ -2087,7 +2092,7 @@ export class HistoryHandler {
         }
         try {
             console.log(`[HistoryHandler] Eliminando ticket ${ticketId}`);
-            
+
             const { error } = await supabase
                 .from('tickets')
                 .delete()
@@ -2143,11 +2148,11 @@ export class HistoryHandler {
             const fiveDaysLater = new Date();
             fiveDaysLater.setDate(fiveDaysLater.getDate() + 5);
             fiveDaysLater.setHours(23, 59, 59, 999);
-            
+
             const tasks = chats
                 .filter(c => c.is_lead === true && c.crm_due_date)
                 .filter(c => new Date(c.crm_due_date!) <= fiveDaysLater);
-                
+
             tasks.sort((a, b) => new Date(a.crm_due_date!).getTime() - new Date(b.crm_due_date!).getTime());
             return tasks.map(c => ({
                 id: c.id,
@@ -2160,7 +2165,7 @@ export class HistoryHandler {
         try {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
-            
+
             const fiveDaysLater = new Date();
             fiveDaysLater.setDate(today.getDate() + 5);
             fiveDaysLater.setHours(23, 59, 59, 999);
@@ -2234,7 +2239,7 @@ export class HistoryHandler {
                 // Asegurar que termina sin barra lateral para consistencia
                 if (projectUrl.endsWith('/')) projectUrl = projectUrl.slice(0, -1);
                 console.log(`📡 [HistoryHandler] Sincronizando routing_table para ${phoneId} -> ${projectUrl}`);
-                
+
                 await supabase
                     .from('routing_table')
                     .upsert({
@@ -2253,9 +2258,9 @@ export class HistoryHandler {
                     const axios = (await import('axios')).default;
                     // Suscribir a messages + smb_message_echoes para capturar mensajes
                     // enviados manualmente desde la app de WhatsApp (Atención Humana)
-                    await axios.post(`https://graph.facebook.com/v22.0/${wabaId}/subscribed_apps`, 
-                        {}, 
-                        { 
+                    await axios.post(`https://graph.facebook.com/v22.0/${wabaId}/subscribed_apps`,
+                        {},
+                        {
                             headers: { 'Authorization': `Bearer ${tokenToSave}` },
                             params: { subscribed_fields: 'messages,smb_message_echoes' }
                         }
@@ -2396,18 +2401,18 @@ export class HistoryHandler {
     static async saveSetting(key: string, value: string, projectId: string | null = null) {
         if (!supabase) return;
         const targetProjectId = projectId || HistoryHandler.PROJECT_IDENTIFIER;
-        
+
         // Invalidar cache en memoria
         const cacheKey = `${targetProjectId}:${key}`;
         this.settingsCache.delete(cacheKey);
 
         const { error } = await supabase
             .from('settings')
-            .upsert({ 
-                project_id: targetProjectId, 
-                key, 
-                value, 
-                updated_at: new Date().toISOString() 
+            .upsert({
+                project_id: targetProjectId,
+                key,
+                value,
+                updated_at: new Date().toISOString()
             }, { onConflict: 'project_id,key' });
 
         if (error) {
@@ -2425,7 +2430,7 @@ export class HistoryHandler {
                     let projectUrl = publicDomain.startsWith('http') ? publicDomain : `https://${publicDomain}`;
                     if (projectUrl.endsWith('/')) projectUrl = projectUrl.slice(0, -1);
                     console.log(`📡 [HistoryHandler] Sincronizando routing_table para ${key}: ${value} -> ${projectUrl}`);
-                    
+
                     await supabase
                         .from('routing_table')
                         .upsert({
@@ -2490,7 +2495,7 @@ export class HistoryHandler {
 
         // Si no está en DB, lo tomamos de Railway (env)
         const envValue = process.env[key] || null;
-        
+
         // Si lo encontramos en Railway pero no estaba en DB, lo retornamos pero NO lo persistimos automáticamente
         // para evitar sobreescrituras accidentales de la configuración base.
         return envValue;
@@ -2520,7 +2525,7 @@ export class HistoryHandler {
             const normalizedInput = statusLabel.trim().toLowerCase();
 
             // 1. Buscar coincidencia exacta por título
-            const match = columns.find((col: any) => 
+            const match = columns.find((col: any) =>
                 col.title && col.title.trim().toLowerCase() === normalizedInput
             );
 
@@ -2530,10 +2535,10 @@ export class HistoryHandler {
             }
 
             // 2. Si no hay match exacto, buscar por ID (por si la IA ya devolvió el ID correcto)
-            const idMatch = columns.find((col: any) => 
+            const idMatch = columns.find((col: any) =>
                 col.id && col.id.trim().toLowerCase() === normalizedInput
             );
-            
+
             if (idMatch) return idMatch.id;
 
             return statusLabel; // Fallback
@@ -2546,7 +2551,7 @@ export class HistoryHandler {
     private static async bootstrapConfig() {
         try {
             const currentProjectId = this.PROJECT_IDENTIFIER;
-            const MASTER_ID = "defaul"; 
+            const MASTER_ID = "defaul";
             console.log(`[Bootstrap] 🚀 Iniciando Bootstrap para: ${currentProjectId}`);
 
             if (currentProjectId === MASTER_ID || currentProjectId === "default_project") {
@@ -2556,13 +2561,13 @@ export class HistoryHandler {
 
             // 1. Verificar si el proyecto actual tiene configuración
             const { data: currentSettings } = await supabase.from('settings').select('key').eq('project_id', currentProjectId).limit(1);
-            
+
             if (!currentSettings || currentSettings.length === 0) {
                 console.log(`🆕 [Bootstrap] Proyecto ${currentProjectId} vacío. Intentando clonar desde '${MASTER_ID}'...`);
-                
+
                 // 2. Obtener configuración del maestro 'defaul'
                 const { data: masterSettings } = await supabase.from('settings').select('key, value').eq('project_id', MASTER_ID);
-                
+
                 if (masterSettings && masterSettings.length > 0) {
                     // Lista de llaves que NUNCA deben clonarse automáticamente desde el maestro
                     const protectedKeys = ['OPENAI_API_KEY', 'OPENAI_ADMIN_API_KEY', 'OPENAI_API_KEY_TOOLS'];
@@ -2578,7 +2583,7 @@ export class HistoryHandler {
                         }));
 
                     const { error: cloneErr } = await supabase.from('settings').insert(settingsToInsert);
-                    
+
                     if (cloneErr) {
                         console.error(`❌ [Bootstrap] Error al clonar desde '${MASTER_ID}':`, cloneErr);
                     } else {
@@ -2633,16 +2638,16 @@ export class HistoryHandler {
                     .eq('project_id', currentProjectId)
                     .eq('key', item.key)
                     .maybeSingle();
-                
+
                 if (!existingEntry || existingEntry.value === 'PENDING') {
                     console.log(`🔍 [Bootstrap] Variable '${item.key}' ${!existingEntry ? 'faltante' : 'en estado PENDING'}. Buscando valor...`);
-                    
+
                     let finalValue = item.defaultValue;
 
                     // Si el valor en env es 'PENDING', intentamos buscar en el proyecto maestro 'defaul'
                     // EXCEPTO para llaves críticas de OpenAI que deben ser únicas por proyecto
                     const sensitiveKeys = ['OPENAI_API_KEY', 'OPENAI_ADMIN_API_KEY', 'OPENAI_API_KEY_TOOLS'];
-                    
+
                     if (finalValue === 'PENDING' && !sensitiveKeys.includes(item.key)) {
                         const { data: masterVal } = await supabase
                             .from('settings')
@@ -2650,7 +2655,7 @@ export class HistoryHandler {
                             .eq('project_id', MASTER_ID)
                             .eq('key', item.key)
                             .maybeSingle();
-                        
+
                         if (masterVal && masterVal.value) {
                             console.log(`🎯 [Bootstrap] Valor para '${item.key}' recuperado desde el maestro '${MASTER_ID}'.`);
                             finalValue = masterVal.value;
@@ -2683,7 +2688,7 @@ export class HistoryHandler {
         try {
             const currentProjectId = this.PROJECT_IDENTIFIER;
             console.log(`📡 [HistoryHandler] Sincronizando settings de DB -> process.env (Project: ${currentProjectId})...`);
-            
+
             const { data, error } = await supabase
                 .from('settings')
                 .select('key, value')
@@ -2753,7 +2758,7 @@ export class HistoryHandler {
         try {
             const cleanUser = (username || '').trim();
             const cleanPass = (pass || '').trim();
-            
+
             const { data, error } = await supabase
                 .from('users')
                 .select('*')
@@ -2795,10 +2800,10 @@ export class HistoryHandler {
             if (error) throw error;
 
             // Emitir evento para actualización en tiempo real
-            historyEvents.emit('contact_updated', { 
-                chatId, 
-                project_id: HistoryHandler.PROJECT_IDENTIFIER, 
-                details: { assigned_to: userId } 
+            historyEvents.emit('contact_updated', {
+                chatId,
+                project_id: HistoryHandler.PROJECT_IDENTIFIER,
+                details: { assigned_to: userId }
             });
 
             return { success: true };
@@ -2814,7 +2819,7 @@ export class HistoryHandler {
      */
     static async getProjectIdByRecipient(recipientId: string | null): Promise<string | null> {
         if (!recipientId || !supabase) return null;
-        
+
         try {
             // 1. Intentar buscar por phone_number_id en meta_onboarding
             const { data: metaData } = await supabase
@@ -2853,7 +2858,7 @@ export class HistoryHandler {
                 .select('project_id')
                 .eq('id', normalizedChatId)
                 .maybeSingle();
-            
+
             if (error) throw error;
             return data?.project_id || null;
         } catch (err) {
@@ -2868,10 +2873,10 @@ export class HistoryHandler {
     static async syncTags(tags: any[], forcedProjectId?: string) {
         if (!supabase) return { success: false, error: 'Supabase not initialized' };
         const targetProjectId = forcedProjectId || HistoryHandler.PROJECT_IDENTIFIER;
-        
+
         try {
             if (tags.length === 0) return { success: true, data: [] };
-            
+
             const tagsToUpsert = tags.map(t => ({
                 project_id: targetProjectId,
                 name: t.name,

@@ -473,7 +473,7 @@ class MetaCloudProvider extends ProviderClass {
     private async transcodeToSupportedFormat(filePath: string, mimeType?: string): Promise<{ outputPath: string; isTemporary: boolean }> {
         const ext = path.extname(filePath).toLowerCase();
 
-        const isVideo = ['.mkv', '.webm', '.mov', '.avi', '.flv', '.wmv', '.gif'].includes(ext);
+        let isVideo = ['.mkv', '.webm', '.mov', '.avi', '.flv', '.wmv', '.gif'].includes(ext);
         const isAudio = ['.wav', '.wma', '.flac', '.m4r'].includes(ext);
 
         // Si es webm pero el mimeType indica que es audio, no tratarlo como video
@@ -615,20 +615,20 @@ class MetaCloudProvider extends ProviderClass {
             
             // Limpieza
             if (tempOgg && fs.existsSync(tempOgg)) {
-                try { fs.unlinkSync(tempOgg); } catch (_) {}
+                try { fs.unlinkSync(tempOgg); } catch (_) { void 0; }
             }
             if (isTemp && finalPath && fs.existsSync(finalPath)) {
-                try { fs.unlinkSync(finalPath); } catch (_) {}
+                try { fs.unlinkSync(finalPath); } catch (_) { void 0; }
             }
             
             return response.data.id;
         } catch (error: any) {
             console.error('❌ [MetaCloudProvider] Error subiendo media a Meta:', error?.response?.data || error.message);
             if (tempOgg && fs.existsSync(tempOgg)) {
-                try { fs.unlinkSync(tempOgg); } catch (_) {}
+                try { fs.unlinkSync(tempOgg); } catch (_) { void 0; }
             }
             if (isTemp && finalPath && fs.existsSync(finalPath)) {
-                try { fs.unlinkSync(finalPath); } catch (_) {}
+                try { fs.unlinkSync(finalPath); } catch (_) { void 0; }
             }
             return null;
         }

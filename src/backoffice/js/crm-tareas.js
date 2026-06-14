@@ -1,4 +1,4 @@
-/* global Sortable, FB, metaAppId, showToast, _csdRebuild, _csdSync */
+/* global Sortable, FB, metaAppId, showToast, _csdRebuild, _csdSync, io */
 (function() {
 const backofficeToken = localStorage.getItem('backoffice_token');
 const activeToken = backofficeToken;

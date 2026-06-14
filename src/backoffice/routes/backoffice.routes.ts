@@ -1365,7 +1365,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     app.get('/api/backoffice/tickets/pending-count', backofficeAuth, async (req: any, res: any) => {
         const projectId = resolveProjectId(req);
-        const count = await depsHistoryHandler.getPendingTicketsCount(projectId);
+        const tipo = req.query.tipo as string;
+        const count = await depsHistoryHandler.getPendingTicketsCount(projectId, tipo);
         res.json({ count });
     });
 
@@ -1386,7 +1387,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         if (!titulo) return sendJson(res, 400, { success: false, error: 'titulo is required' });
         const adjuntos = Array.isArray(chats_adjuntos) ? chats_adjuntos : [];
         const projectId = resolveProjectId(req);
-        const result = await depsHistoryHandler.createTicket(chatId, titulo, descripcion, tipo || 'Asistencia Externa', 'Media', projectId || undefined, [], adjuntos);
+        const result = await depsHistoryHandler.createTicket(chatId, titulo, descripcion, tipo || 'Soporte', 'Media', projectId || undefined, [], adjuntos);
         res.json(result);
     });
 
