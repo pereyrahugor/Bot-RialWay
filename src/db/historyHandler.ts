@@ -1300,6 +1300,7 @@ export class HistoryHandler {
                     titulo: `Lead: ${details.name || chatId}`,
                     descripcion: details.notes || 'Lead creado manualmente',
                     estado: 'Abierto',
+                    tipo: 'Nuevo Lead',
                     created_at: new Date().toISOString(),
                     ...(clienteId ? { cliente_id: clienteId } : {})
                 })
@@ -1812,6 +1813,7 @@ export class HistoryHandler {
                     tipo,
                     prioridad,
                     estado: 'Abierto',
+                    tipo: 'Soporte',
                     attachments: JSON.stringify(attachments),
                     chats_adjuntos: JSON.stringify(chats_adjuntos),
                     ...(clienteId ? { cliente_id: clienteId } : {})

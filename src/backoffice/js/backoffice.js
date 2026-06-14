@@ -1736,7 +1736,7 @@ let currentTicketsFilter = 'pending';
 
 async function fetchPendingTicketsCount() {
     try {
-        const res = await fetch(`/api/backoffice/tickets/pending-count?token=${token}&tipo=Asistencia Externa`);
+        const res = await fetch(`/api/backoffice/tickets/pending-count?token=${token}&tipo=Soporte`);
         const { count } = await res.json();
         
         const badge = document.getElementById('tickets-badge');
