@@ -68,7 +68,11 @@ window.crmTareasView = {
         if (typeof window.initCRMTareasView === 'function') await window.initCRMTareasView();
     },
 
-    destroy() {}
+    destroy() {
+        if (typeof window.destroyCRMTareas === 'function') {
+            window.destroyCRMTareas();
+        }
+    }
 };
 
 window._toggleTareasMenu = function(e) {

@@ -33,7 +33,7 @@ const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
     const openai = await getOpenAIVision();
     if (!openai) {
       console.warn("⚠️ IA Vision Desactivada: Saltando análisis de imagen en flujo.");
-      const caption = ctx.body && !ctx.body.includes('_event_') ? ctx.body : '';
+      const caption = (ctx.body && !ctx.body.includes('_event_')) ? ctx.body : (ctx.payload?.message?.imageMessage?.caption || ctx.payload?.image?.caption || '');
       ctx.body = `[Imagen recibida (Sin procesar para IA)]${caption ? ': ' + caption : ''}`;
       // Continuar al flujo de texto para no romper la experiencia
       return gotoFlow(welcomeFlowTxt);
@@ -111,9 +111,16 @@ const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
       await state.update({ lastImage: localPath });
       const buffer = fs.default.readFileSync(localPath);
       
-      console.log("Analizando imagen con GPT-4o...");
+      // Cargar modelo dinámico de la base de datos
+      let visionModel = await HistoryHandler.getConfig('OPENAI_MODEL') || "gpt-4o-mini";
+      // Si el modelo es de razonamiento (o1, o3, etc.), hacemos fallback a gpt-4o-mini porque no soportan entrada de visión en la llamada estándar
+      if (visionModel.startsWith('o1') || visionModel.startsWith('o3')) {
+        visionModel = "gpt-4o-mini";
+      }
+
+      console.log(`Analizando imagen con modelo: ${visionModel}...`);
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: visionModel,
         messages: [
           {
             role: "user",
@@ -131,9 +138,28 @@ const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
       const result = response.choices[0].message.content || "No se pudo obtener una descripción de la imagen.";
 
       // Enviar el mensaje al asistente principal para que lo procese y mantenga el contexto
-      const caption = ctx.body && !ctx.body.includes('_event_') ? ctx.body : '';
+      const caption = (ctx.body && !ctx.body.includes('_event_')) ? ctx.body : (ctx.payload?.message?.imageMessage?.caption || ctx.payload?.image?.caption || '');
       ctx.body = `[Imagen recibida]${caption ? ': ' + caption : ''}. (Análisis): ${result}`;
 
+      // Guardar el análisis en la base de datos para que el asistente tenga el historial en siguientes turnos
+      try {
+        const botPhoneNumber = provider?.globalVendorArgs?.phone_number_id || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
+        const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || HistoryHandler.PROJECT_IDENTIFIER;
+        
+        await HistoryHandler.saveMessage(
+          userId,
+          'user',
+          `📷 Análisis de imagen: "${result}"`,
+          'text',
+          null,
+          ctx.userId,
+          null,
+          ctx.platform || 'whatsapp',
+          dynamicProjectId
+        );
+      } catch (dbErr) {
+        console.error("❌ Error guardando análisis de imagen en base de datos:", dbErr);
+      }
 
       // Reencolar el mensaje para que lo procese el flujo principal (texto)
       if (!userQueues.has(userId)) {

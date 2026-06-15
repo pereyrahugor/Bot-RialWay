@@ -21,7 +21,7 @@ if (!token) window.location.href = '/login';
 
 let activeChatId = null;
 let activeTicketId = null;
-let _notificationsActive = false;
+let _notificationsActive = true;
 let _showOnlyUnreadChats = false;
 let crmColumns = [];
 let _boCrmData = {};
@@ -30,6 +30,9 @@ let allMessages = [];
 let _boBotTags = [];
 let selectedFile = null;
 let isSending = false;
+let _mediaRecorder = null;
+let _audioChunks = [];
+let _isRecording = false;
 
 async function initCRMData() {
     try {
@@ -40,9 +43,16 @@ async function initCRMData() {
         const colSettingValue = settings.CRM_COLUMNS;
         if (colSettingValue) {
             crmColumns = JSON.parse(colSettingValue);
+            // Asegurarse de que UNASSIGNED siempre tenga el título "Leads Nuevos"
+            const unassigned = crmColumns.find(c => c.id === 'UNASSIGNED');
+            if (unassigned) {
+                unassigned.title = 'Leads Nuevos';
+            } else {
+                crmColumns.unshift({ id: 'UNASSIGNED', title: 'Leads Nuevos' });
+            }
         } else {
             crmColumns = [
-                { id: 'UNASSIGNED', title: 'Tickets Nuevos' },
+                { id: 'UNASSIGNED', title: 'Leads Nuevos' },
                 { id: 'contactado', title: 'Contactado' },
                 { id: 'negociacion', title: 'En Negociación' },
                 { id: 'propuesta', title: 'Propuesta Enviada' },
@@ -102,6 +112,7 @@ const MSG_LIMIT = 50;
 let loadingMessages = false;
 let allMessagesLoaded = false;
 let _fetchMessagesController = null;
+let _seenMessageIds = new Set();
 
 // Paginación de chats
 const CHAT_LIMIT = 20;
@@ -124,6 +135,17 @@ socket.on('new_message', (msg) => {
 
     // 1. Si es el chat activo, añadir mensaje a la vista
     if (normChatId(cid) === normChatId(activeChatId)) {
+        // Quitar el pending optimista que coincida con este mensaje real
+        if (msg.role === 'assistant') {
+            const pendingIdx = allMessages.findIndex(m =>
+                m._pending && m.role === 'assistant' && m.content === (msg.content || '')
+            );
+            if (pendingIdx !== -1) {
+                allMessages.splice(pendingIdx, 1);
+                msg._noAnimate = true; // replacing a pending - no slide-in
+            }
+        }
+
         const isDuplicate = allMessages.some(m =>
             (m.id === msg.id && msg.id !== undefined) ||
             (m.external_id === msg.external_id && msg.external_id !== undefined && msg.external_id !== null)
@@ -179,6 +201,25 @@ socket.on('message_deleted', (payload) => {
     const extId = payload.externalId;
     allMessages = allMessages.filter(m => m.id !== mId && m.external_id !== extId);
     if (activeChatId === payload.chatId) {
+        renderMessages();
+    }
+});
+
+socket.on('message_status_update', ({ externalId, chatId, status }) => {
+    const msg = allMessages.find(m => m.external_id === externalId || m.id === externalId);
+    if (!msg) return;
+    msg.status = status;
+    if (normChatId(chatId) !== normChatId(activeChatId)) return;
+    // Patch only the icon in place - avoids full re-render and scroll jump
+    const dataId = CSS.escape(String(msg.id || msg.external_id || ''));
+    const msgEl = document.querySelector(`.msg[data-id="${dataId}"]`);
+    if (msgEl) {
+        const icon = msgEl.querySelector('.msg-time i');
+        if (icon && status === 'read') {
+            icon.style.color = '#53bdeb';
+            icon.style.opacity = '';
+        }
+    } else {
         renderMessages();
     }
 });
@@ -529,7 +570,28 @@ async function checkPlatformVisibility() {
 async function selectChat(id) {
     activeChatId = id;
     if (window.innerWidth <= 768) document.body.classList.add('mobile-chat-active');
-    const chat = chats.find(c => c.id === id);
+    
+    let chat = chats.find(c => c.id === id);
+    if (!chat) {
+        console.log(`🔍 [UI] Chat ${id} no encontrado en la lista local, buscando en el servidor...`);
+        try {
+            const res = await fetch(`/api/backoffice/chats/${id}?token=${token}`);
+            if (res.ok) {
+                chat = await res.json();
+                if (chat && chat.id) {
+                    chats.unshift(chat);
+                    renderChatList();
+                }
+            }
+        } catch (err) {
+            console.error('Error buscando chat en el servidor:', err);
+        }
+    }
+    
+    if (!chat) {
+        console.error(`❌ Chat ${id} no encontrado en local ni en el servidor.`);
+        return;
+    }
     
     if (_notificationsActive && chat) {
         markChatAsRead(id);
@@ -598,6 +660,8 @@ function updateBotStatusText(enabled) {
         ? '<i class="fas fa-robot"></i>'
         : '<i class="fas fa-user"></i>';
     txt.className = isEnabled ? 'status-bot' : 'status-human';
+    const mobileLabel = document.getElementById('mobile-bot-label');
+    if (mobileLabel) mobileLabel.textContent = isEnabled ? 'Bot: on' : 'Bot: off';
 }
 
 function updateInputState(botEnabled) {
@@ -617,6 +681,8 @@ function updateInputState(botEnabled) {
     attachBtn.disabled = isBotEnabled;
     const emojiBtn = document.getElementById('emoji-btn');
     if (emojiBtn) emojiBtn.disabled = isBotEnabled;
+    const micBtn = document.getElementById('mic-btn');
+    if (micBtn && !_isRecording) micBtn.disabled = isBotEnabled;
 
     if (isBotEnabled) {
         input.parentElement.style.borderColor = 'var(--accent)';
@@ -668,6 +734,7 @@ async function fetchMessages(chatId, reset = false) {
 
         if (reset) {
             allMessages = newMessages;
+            _seenMessageIds = new Set(newMessages.map(m => m.id || m.external_id).filter(Boolean));
         } else {
             allMessages = [...newMessages, ...allMessages];
         }
@@ -722,23 +789,23 @@ const mediaCache = {
                 const request = store.get(url);
                 
                 request.onsuccess = async (e) => {
-                    const cachedBlob = e.target.result;
-                    if (cachedBlob) {
-                        resolve(URL.createObjectURL(cachedBlob));
-                    } else {
-                        try {
-                            const res = await fetch(url);
-                            if (!res.ok) throw new Error('Status not 200');
-                            const blob = await res.blob();
-                            
-                            const writeTx = this.db.transaction(['media'], 'readwrite');
-                            const writeStore = writeTx.objectStore('media');
-                            writeStore.put(blob, url);
-                            
-                            resolve(URL.createObjectURL(blob));
-                        } catch (fetchErr) {
-                            resolve(url);
+                    const cached = e.target.result;
+                    if (cached === 'NOT_FOUND') { resolve(null); return; }
+                    if (cached) { resolve(URL.createObjectURL(cached)); return; }
+                    try {
+                        const res = await fetch(url);
+                        if (!res.ok) {
+                            const tx = this.db.transaction(['media'], 'readwrite');
+                            tx.objectStore('media').put('NOT_FOUND', url);
+                            resolve(null);
+                            return;
                         }
+                        const blob = await res.blob();
+                        const tx = this.db.transaction(['media'], 'readwrite');
+                        tx.objectStore('media').put(blob, url);
+                        resolve(URL.createObjectURL(blob));
+                    } catch (fetchErr) {
+                        resolve(null);
                     }
                 };
                 request.onerror = () => resolve(url);
@@ -759,40 +826,127 @@ async function loadCachedMedia() {
             if (finalSrc) {
                 el.src = finalSrc;
                 el.removeAttribute('data-media-src');
-                
-                const parent = el.closest('.image-container, .video-container, .msg-audio');
+                const parent = el.closest('.image-container, .video-container, .msg-audio, .wa-audio-player');
                 if (parent) {
                     const downloadBtn = parent.querySelector('.cached-download');
                     if (downloadBtn) downloadBtn.href = finalSrc;
+                    if (parent.classList.contains('wa-audio-player')) _initWaPlayer(parent);
                 }
+            } else {
+                const parent = el.closest('.image-container, .video-container, .msg-audio, .wa-audio-player');
+                if (parent) parent.style.display = 'none';
             }
         } catch (e) {
-            el.src = src;
+            // silently ignore
         }
     });
+}
+
+// --- WhatsApp-style audio player ---
+function _waWaveform(url) {
+    let h = 0;
+    for (let i = 0; i < url.length; i++) h = ((h << 5) - h + url.charCodeAt(i)) | 0;
+    let out = '';
+    for (let i = 0; i < 30; i++) {
+        h = (h * 1664525 + 1013904223) | 0;
+        out += `<span class="wa-bar" style="height:${18 + (Math.abs(h) % 65)}%"></span>`;
+    }
+    return out;
+}
+
+function _waFmtTime(s) {
+    if (!isFinite(s) || s < 0) return '0:00';
+    return `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
+}
+
+function _initWaPlayer(playerEl) {
+    const audio  = playerEl.querySelector('audio');
+    const timeEl = playerEl.querySelector('.wa-audio-time');
+    const bars   = playerEl.querySelectorAll('.wa-bar');
+    const icon   = playerEl.querySelector('.wa-play-btn i');
+    if (!audio || !timeEl) return;
+
+    const updateBars = () => {
+        if (!audio.duration) return;
+        const filled = Math.floor((audio.currentTime / audio.duration) * bars.length);
+        bars.forEach((b, i) => { b.style.opacity = i < filled ? '1' : '0.35'; });
+    };
+
+    audio.addEventListener('loadedmetadata', () => { timeEl.textContent = _waFmtTime(audio.duration); });
+    audio.addEventListener('timeupdate', () => { updateBars(); timeEl.textContent = _waFmtTime(audio.currentTime); });
+    audio.addEventListener('ended', () => {
+        icon.className = 'fas fa-play';
+        playerEl.classList.remove('wa-playing');
+        bars.forEach(b => { b.style.opacity = '0.35'; });
+        timeEl.textContent = _waFmtTime(audio.duration);
+    });
+}
+
+function waTogglePlay(pid) {
+    const box = document.getElementById(pid);
+    if (!box) return;
+    const audio = box.querySelector('audio');
+    const icon  = box.querySelector('.wa-play-btn i');
+    document.querySelectorAll('.wa-audio-player').forEach(p => {
+        if (p.id !== pid) {
+            const a = p.querySelector('audio');
+            if (a && !a.paused) {
+                a.pause();
+                const i = p.querySelector('.wa-play-btn i');
+                if (i) i.className = 'fas fa-play';
+                p.classList.remove('wa-playing');
+            }
+        }
+    });
+    if (!audio) return;
+    if (audio.paused) {
+        audio.play();
+        icon.className = 'fas fa-pause';
+        box.classList.add('wa-playing');
+    } else {
+        audio.pause();
+        icon.className = 'fas fa-play';
+        box.classList.remove('wa-playing');
+    }
+}
+
+function waSeek(pid, e) {
+    const box = document.getElementById(pid);
+    const audio = box?.querySelector('audio');
+    if (!audio?.duration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    audio.currentTime = ((e.clientX - rect.left) / rect.width) * audio.duration;
 }
 
 function renderMessages() {
     const container = document.getElementById('messages');
+    const wasAtBottom = !container || container.scrollTop >= container.scrollHeight - container.clientHeight - 60;
+    const prevScrollTop = container ? container.scrollTop : 0;
     let html = '';
     let lastDate = null;
 
+    const newIds = [];
     allMessages.forEach(m => {
         const date = new Date(m.created_at);
         const dateStr = date.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' });
-        
+
         if (dateStr !== lastDate) {
             html += `<div class="date-separator"><span>${dateStr}</span></div>`;
             lastDate = dateStr;
         }
-        html += generateMessageHtml(m);
+        const msgId = m.id || m.external_id;
+        const isNew = !!(msgId && !_seenMessageIds.has(msgId) && !m._noAnimate);
+        if (isNew && msgId) newIds.push(msgId);
+        html += generateMessageHtml(m, isNew);
     });
 
     container.innerHTML = html;
+    newIds.forEach(id => _seenMessageIds.add(id));
+    container.scrollTop = wasAtBottom ? container.scrollHeight : prevScrollTop;
     loadCachedMedia();
 }
 
-function generateMessageHtml(m) {
+function generateMessageHtml(m, isNew = false) {
     const date = new Date(m.created_at);
     const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     
@@ -803,8 +957,9 @@ function generateMessageHtml(m) {
     const looksLikeUrl = contentHtml.startsWith('/') || contentHtml.startsWith('http://') || contentHtml.startsWith('https://') || contentHtml.includes('/uploads/') || contentHtml.includes('/tmp/');
 
     const isImageUrl = looksLikeUrl && (type === 'image' || type === 'sticker' || contentHtml.match(/\.(jpeg|jpg|gif|png|webp|svg)($|\?)/i));
-    const isVideoUrl = looksLikeUrl && (type === 'video' || contentHtml.match(/\.(mp4|webm)($|\?)/i));
-    const isAudioUrl = looksLikeUrl && (type === 'voice' || type === 'audio' || contentHtml.match(/\.(ogg|opus|mp3|wav|aac|m4a)($|\?)/i));
+    const isAudioType = type === 'voice' || type === 'audio';
+    const isVideoUrl = looksLikeUrl && !isAudioType && (type === 'video' || contentHtml.match(/\.(mp4|webm)($|\?)/i));
+    const isAudioUrl = looksLikeUrl && (isAudioType || contentHtml.match(/\.(ogg|opus|mp3|wav|aac|m4a|webm)($|\?)/i));
     const isFileUrl = looksLikeUrl && (type === 'document' || (contentHtml.includes('/uploads/') && !isImageUrl && !isVideoUrl && !isAudioUrl));
 
     if (isImageUrl && contentHtml) {
@@ -834,27 +989,41 @@ function generateMessageHtml(m) {
                 </div>
             </div>`;
     } else if (isAudioUrl && contentHtml) {
+        const audioUrl = contentHtml;
+        const pid = 'wap-' + (m.id || m.external_id || Date.now()).toString().replace(/\W/g, '_');
+        const chat = chats.find(c => c.id === (m.chat_id || activeChatId));
+        const name = chat?.contact_name || chat?.name || '';
+        const initial = name ? name.charAt(0).toUpperCase() : '<i class="fas fa-user"></i>';
+        const avatarHtml = m.role === 'user'
+            ? (name ? `<span>${initial}</span>` : '<i class="fas fa-user"></i>')
+            : '<i class="fas fa-microphone"></i>';
         contentHtml = `
-            <div class="msg-audio">
-                <audio data-media-src="${contentHtml}" controls preload="metadata" class="cached-media"></audio>
-                <div class="audio-download-row" style="display: flex; align-items: center; gap: 15px; margin-top: 6px;">
-                    <button onclick="event.stopPropagation(); openForwardModal('${contentHtml}', 'voice')" class="media-download-link" title="Reenviar Audio" style="background: none; border: none; color: var(--accent); cursor: pointer; display: flex; align-items: center; gap: 5px; font-size: 0.85rem; padding: 0;">
-                        <i class="fas fa-share"></i> Reenviar
-                    </button>
-                    <a href="${contentHtml}" download class="media-download-link cached-download" title="Descargar Audio">
-                        <i class="fas fa-download"></i> Descargar Audio
-                    </a>
+            <div class="wa-audio-player" id="${pid}">
+                <audio class="cached-media" data-media-src="${audioUrl}" preload="metadata"></audio>
+                <button class="wa-play-btn" onclick="waTogglePlay('${pid}')">
+                    <i class="fas fa-play"></i>
+                </button>
+                <div class="wa-audio-body">
+                    <div class="wa-waveform" onclick="waSeek('${pid}', event)">${_waWaveform(audioUrl)}</div>
+                    <span class="wa-audio-time">0:00</span>
                 </div>
+                <div class="wa-avatar">${avatarHtml}</div>
             </div>`;
     } else if (isFileUrl && contentHtml) {
-        const fileName = contentHtml.split('/').pop();
+        const fileUrl = contentHtml;
+        const fileName = fileUrl.split('/').pop() || 'archivo';
+        const ext = fileName.split('.').pop()?.toLowerCase() || '';
+        const iconMap = { pdf: 'fa-file-pdf', doc: 'fa-file-word', docx: 'fa-file-word', xls: 'fa-file-excel', xlsx: 'fa-file-excel', csv: 'fa-file-csv', zip: 'fa-file-zipper', rar: 'fa-file-zipper', txt: 'fa-file-lines', png: 'fa-file-image', jpg: 'fa-file-image', jpeg: 'fa-file-image' };
+        const icon = iconMap[ext] || 'fa-file';
         contentHtml = `
             <div class="msg-file">
-                <div style="display: flex; align-items: center; justify-content: space-between;">
-                    <a href="${contentHtml}" target="_blank">📄 Documento adjunto (${fileName})</a>
-                    <button onclick="event.stopPropagation(); openForwardModal('${contentHtml}', 'document')" class="media-action-btn" title="Reenviar Documento" style="background: none; border: none; color: var(--accent); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; margin-left: 10px; font-size: 1rem;">
-                        <i class="fas fa-share"></i>
-                    </button>
+                <a href="${fileUrl}" target="_blank" class="msg-file-link">
+                    <div class="msg-file-icon"><i class="fas ${icon}"></i></div>
+                    <span class="msg-file-name">${fileName}</span>
+                </a>
+                <div class="msg-file-actions">
+                    <a href="${fileUrl}" download title="Descargar" class="msg-file-action-btn"><i class="fas fa-download"></i></a>
+                    <button onclick="event.stopPropagation(); openForwardModal('${fileUrl}', 'document')" class="msg-file-action-btn" title="Reenviar"><i class="fas fa-share"></i></button>
                 </div>
             </div>`;
     }
@@ -865,11 +1034,17 @@ function generateMessageHtml(m) {
         </button>
     ` : '';
 
+    let checkHtml = '';
+    if (m._failed) checkHtml = ' <i class="fas fa-exclamation-circle" style="color:#ef4444;font-size:0.62rem;"></i>';
+    else if (m._pending) checkHtml = ' <i class="fas fa-check" style="opacity:0.55;font-size:0.62rem;"></i>';
+    else if (m.status === 'read') checkHtml = ' <i class="fas fa-check-double" style="color:#53bdeb;font-size:0.62rem;"></i>';
+    else checkHtml = ' <i class="fas fa-check-double" style="opacity:0.75;font-size:0.62rem;"></i>';
+
     return `
-        <div class="msg ${m.role}" data-id="${m.id || m.external_id}">
+        <div class="msg ${m.role}${isNew ? ' msg-animate' : ''}" data-id="${m.id || m.external_id || ''}">
             ${deleteBtn}
             <div class="msg-content">${contentHtml}</div>
-            <span class="msg-time">${time}</span>
+            <span class="msg-time">${time}${checkHtml}</span>
         </div>
     `;
 }
@@ -896,9 +1071,167 @@ async function toggleBot(enabled) {
 function handleFileSelect(input) {
     if (input.files && input.files[0]) {
         selectedFile = input.files[0];
-        document.getElementById('message-input').placeholder = `Archivo: ${selectedFile.name} (Escribe un comentario opcional)`;
-        document.getElementById('message-input').focus();
+        openFilePreview(selectedFile);
     }
+}
+
+function openFilePreview(file) {
+    const overlay = document.getElementById('file-preview-overlay');
+    if (!overlay) return;
+    const body = document.getElementById('file-preview-body');
+    const name = document.getElementById('file-preview-name');
+    if (!body || !name) return;
+
+    name.textContent = file.name;
+    body.innerHTML = '';
+
+    const mime = file.type || '';
+    if (mime.startsWith('image/')) {
+        const img = document.createElement('img');
+        img.style.cssText = 'max-width:100%;max-height:100%;object-fit:contain;border-radius:4px;';
+        img.src = URL.createObjectURL(file);
+        body.appendChild(img);
+    } else if (mime.startsWith('video/')) {
+        const vid = document.createElement('video');
+        vid.controls = true;
+        vid.style.cssText = 'max-width:100%;max-height:100%;border-radius:4px;';
+        vid.src = URL.createObjectURL(file);
+        body.appendChild(vid);
+    } else {
+        const ext = file.name.split('.').pop()?.toUpperCase() || 'FILE';
+        const sizeKb = Math.round(file.size / 1024);
+        const sizeStr = sizeKb >= 1024 ? `${(sizeKb / 1024).toFixed(1)} MB` : `${sizeKb} kB`;
+        body.innerHTML = `
+            <div style="display:flex;flex-direction:column;align-items:center;gap:16px;padding:32px;background:rgba(255,255,255,0.05);border-radius:12px;min-width:220px;">
+                <div style="width:72px;height:80px;background:rgba(255,255,255,0.1);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;">
+                    <i class="fas fa-file" style="font-size:1.8rem;color:rgba(255,255,255,0.6);"></i>
+                </div>
+                <div style="text-align:center;">
+                    <div style="color:rgba(255,255,255,0.5);font-size:0.85rem;margin-bottom:4px;">No preview available</div>
+                    <div style="color:rgba(255,255,255,0.7);font-size:0.8rem;">${sizeStr} - ${ext}</div>
+                </div>
+            </div>`;
+    }
+
+    overlay.style.display = 'flex';
+    document.getElementById('file-preview-caption').value = '';
+    document.getElementById('file-preview-caption').focus();
+}
+
+function closeFilePreview() {
+    const overlay = document.getElementById('file-preview-overlay');
+    if (overlay) overlay.style.display = 'none';
+    selectedFile = null;
+    const fileInput = document.getElementById('file-input');
+    if (fileInput) fileInput.value = '';
+}
+
+async function sendFromPreview() {
+    const caption = document.getElementById('file-preview-caption')?.value.trim() || '';
+    const input = document.getElementById('message-input');
+    if (input) input.value = caption;
+    const overlay = document.getElementById('file-preview-overlay');
+    if (overlay) overlay.style.display = 'none';
+    await sendMessage();
+}
+
+async function toggleRecording() {
+    if (_isRecording) {
+        stopRecording();
+    } else {
+        await startRecording();
+    }
+}
+
+async function startRecording() {
+    if (!activeChatId) return;
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        _audioChunks = [];
+        _mediaRecorder = new MediaRecorder(stream);
+        _mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) _audioChunks.push(e.data);
+        };
+        _mediaRecorder.onstop = async () => {
+            stream.getTracks().forEach(t => t.stop());
+            const mimeType = _mediaRecorder.mimeType || 'audio/webm';
+            const ext = mimeType.includes('ogg') ? 'ogg' : 'webm';
+            const blob = new Blob(_audioChunks, { type: mimeType });
+            const file = new File([blob], `audio_${Date.now()}.${ext}`, { type: mimeType });
+            await sendAudioFile(file);
+        };
+        _mediaRecorder.start();
+        _isRecording = true;
+        const micBtn = document.getElementById('mic-btn');
+        micBtn.classList.add('recording');
+        micBtn.querySelector('i').className = 'fas fa-stop';
+        micBtn.title = 'Detener grabacion';
+    } catch (err) {
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+            alert('Permiso de microfono denegado. Habilitalo en la configuracion del navegador.');
+        } else {
+            console.error('Error al iniciar grabacion:', err);
+        }
+    }
+}
+
+function stopRecording() {
+    if (_mediaRecorder && _isRecording) {
+        _mediaRecorder.stop();
+        _isRecording = false;
+        const micBtn = document.getElementById('mic-btn');
+        micBtn.classList.remove('recording');
+        micBtn.querySelector('i').className = 'fas fa-microphone';
+        micBtn.title = 'Grabar audio';
+    }
+}
+
+async function sendAudioFile(file) {
+    if (isSending) return;
+    isSending = true;
+    const micBtn = document.getElementById('mic-btn');
+    if (micBtn) micBtn.disabled = true;
+    try {
+        const token = localStorage.getItem('backoffice_token');
+        const formData = new FormData();
+        formData.append('chatId', activeChatId);
+        formData.append('file', file);
+        const res = await fetch('/api/backoffice/send-message', {
+            method: 'POST',
+            headers: { 'Authorization': 'token=' + token },
+            body: formData
+        });
+        if (res.ok) {
+            const data = await res.json();
+            if (data.warning) alert('⚠️ ' + data.warning);
+        } else {
+            let errorMsg = 'Error desconocido';
+            const text = await res.text();
+            try { errorMsg = JSON.parse(text).error || errorMsg; } catch (_) { errorMsg = text || errorMsg; }
+            alert('Error al enviar audio: ' + errorMsg);
+        }
+    } catch (err) {
+        console.error('Error al enviar audio:', err);
+        alert('Error de conexion al enviar el audio');
+    } finally {
+        isSending = false;
+        if (micBtn) micBtn.disabled = false;
+    }
+}
+
+function _clearSendUI() {
+    const input = document.getElementById('message-input');
+    if (input) { input.value = ''; input.placeholder = 'Escribe un mensaje aquí'; }
+    selectedFile = null;
+    const fi = document.getElementById('file-input');
+    if (fi) fi.value = '';
+    const po = document.getElementById('file-preview-overlay');
+    if (po) po.style.display = 'none';
+    const mic = document.getElementById('mic-btn');
+    if (mic) mic.style.display = '';
+    updateInputState(false);
+    const toggle = document.getElementById('bot-toggle');
+    if (toggle) toggle.checked = false;
 }
 
 async function sendMessage() {
@@ -907,92 +1240,75 @@ async function sendMessage() {
 
     const input = document.getElementById('message-input');
     const content = input.value.trim();
-    if (!content && !selectedFile) {
-        console.log('⚠️ Intento de envío vacío ignorado');
-        isSending = false;
-        return;
-    }
-    if (!activeChatId) {
-        console.warn('⚠️ No hay chat activo seleccionado');
-        isSending = false;
-        return;
-    }
+    if (!content && !selectedFile) { isSending = false; return; }
+    if (!activeChatId) { isSending = false; return; }
 
-    console.log(`📤 Enviando mensaje a ${activeChatId}...`, { hasFile: !!selectedFile });
-    const btn = document.getElementById('send-btn');
-    const originalBtnText = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '...';
+    const token = localStorage.getItem('backoffice_token');
+    const chatId = activeChatId;
 
-    try {
-        let res;
-        const token = localStorage.getItem('backoffice_token');
-
-        if (!selectedFile) {
-            // Enviar como JSON simple (más confiable para texto)
-            res = await fetch('/api/backoffice/send-message', {
-                method: 'POST',
-                headers: { 
-                    'Authorization': 'token=' + token,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    chatId: activeChatId,
-                    message: content
-                })
-            });
-        } else {
-            // Enviar como FormData (necesario para archivos)
+    if (selectedFile) {
+        // Archivo: esperar respuesta (necesitamos la URL real para mostrar)
+        const btn = document.getElementById('send-btn');
+        const origHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '...';
+        try {
             const formData = new FormData();
-            formData.append('chatId', activeChatId);
+            formData.append('chatId', chatId);
             if (content) formData.append('message', content);
             formData.append('file', selectedFile);
-
-            res = await fetch('/api/backoffice/send-message', {
+            const res = await fetch('/api/backoffice/send-message', {
                 method: 'POST',
-                headers: { 
-                    'Authorization': 'token=' + token
-                },
+                headers: { 'Authorization': 'token=' + token },
                 body: formData
             });
-        }
-
-        if (res.ok) {
-            const data = await res.json();
-            if (data.warning) {
-                console.warn('⚠️ Advertencia del servidor:', data.warning);
-                alert('⚠️ ' + data.warning);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.warning) alert('⚠️ ' + data.warning);
             } else {
-                console.log('✅ Mensaje enviado exitosamente');
+                const text = await res.text();
+                let msg = 'Error desconocido';
+                try { msg = JSON.parse(text).error || msg; } catch (_) { msg = text || msg; }
+                alert('Error al enviar: ' + msg);
             }
-            input.value = '';
-            input.placeholder = "Escribe un mensaje aquí";
-            selectedFile = null;
-            document.getElementById('file-input').value = '';
-            
-            // Forzar habilitación inmediata del input para mejor UX
-            updateInputState(false);
-            const toggle = document.getElementById('bot-toggle');
-            if (toggle) toggle.checked = false;
-        } else {
-            let errorMsg = 'Error desconocido';
-            const text = await res.text();
-            try {
-                const errorData = JSON.parse(text);
-                errorMsg = errorData.error || errorMsg;
-            } catch (e) {
-                errorMsg = text || res.statusText || 'Error del servidor';
-            }
-            console.error('❌ Error del servidor:', errorMsg);
-            alert('Error al enviar mensaje: ' + errorMsg);
+        } catch (_) {
+            alert('Error de conexión al enviar el archivo');
+        } finally {
+            isSending = false;
+            btn.disabled = false;
+            btn.innerHTML = origHtml;
+            _clearSendUI();
         }
-    } catch (err) {
-        console.error('❌ Error de red:', err);
-        alert('Error de conexión al enviar el mensaje');
-    } finally {
-        isSending = false;
-        btn.disabled = false;
-        btn.innerHTML = originalBtnText;
+        return;
+    }
+
+    // Texto: UI optimista - mostrar inmediatamente con check simple
+    const tempId = '_p_' + Date.now();
+    allMessages.push({
+        id: tempId, chat_id: chatId, role: 'assistant',
+        content, type: 'text',
+        created_at: new Date().toISOString(),
+        _pending: true
+    });
+    renderMessages();
+    _clearSendUI();
+    scrollToBottom();
+    isSending = false;
+
+    // POST en background
+    try {
+        const res = await fetch('/api/backoffice/send-message', {
+            method: 'POST',
+            headers: { 'Authorization': 'token=' + token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chatId: chatId, message: content })
+        });
+        if (!res.ok) {
+            const idx = allMessages.findIndex(m => m.id === tempId);
+            if (idx !== -1) { allMessages[idx]._failed = true; allMessages[idx]._pending = false; renderMessages(); }
+        }
+    } catch (_) {
+        const idx = allMessages.findIndex(m => m.id === tempId);
+        if (idx !== -1) { allMessages[idx]._failed = true; allMessages[idx]._pending = false; renderMessages(); }
     }
 }
 
@@ -1344,7 +1660,7 @@ function renderTagManager() {
     if (!editorList) return;
     
     editorList.innerHTML = `
-        <div style="max-height: 200px; overflow-y: auto; margin-top: 10px;">
+        <div style="max-height: 280px; overflow-y: auto; overflow-x: hidden; margin-top: 10px;">
             ${_boBotTags.map(t => `
                 <div class="tag-item-edit">
                     <span class="tag-pill" style="${_tagStyle(t.color)}">${t.name}</span>
@@ -1388,6 +1704,30 @@ socket.on('ticket_updated', (payload) => {
     if (_tp && _tp.classList.contains('active')) {
         fetchTickets();
     }
+    // Si el ticket pertenece al chat activo, recargar el Salto al CRM para actualizar prioridad, título, etc.
+    if (activeChatId && payload.chat_id && normChatId(payload.chat_id) === normChatId(activeChatId)) {
+        loadCRMJump(activeChatId);
+    }
+});
+socket.on('contact_updated', (payload) => {
+    console.log('📡 Contacto actualizado:', payload);
+    const chatId = payload.chatId;
+    const details = payload.details || {};
+    
+    // Buscar y actualizar el chat local en el array de chats
+    const chatIndex = chats.findIndex(c => normChatId(c.id) === normChatId(chatId));
+    if (chatIndex !== -1) {
+        // Combinar datos nuevos
+        chats[chatIndex] = { ...chats[chatIndex], ...details };
+        
+        // Si es el chat activo, actualizar la vista
+        if (normChatId(chatId) === normChatId(activeChatId)) {
+            populateCRMFields(chats[chatIndex]);
+        }
+        
+        // Re-renderizar lista de chats
+        renderChatList();
+    }
 });
 
 // --- TICKETS LOGIC ---
@@ -1396,10 +1736,11 @@ let currentTicketsFilter = 'pending';
 
 async function fetchPendingTicketsCount() {
     try {
-        const res = await fetch(`/api/backoffice/tickets/pending-count?token=${token}&tipo=Asistencia Externa`);
+        const res = await fetch(`/api/backoffice/tickets/pending-count?token=${token}&tipo=Soporte`);
         const { count } = await res.json();
         
         const badge = document.getElementById('tickets-badge');
+        if (!badge) return;
         if (count > 0) {
             badge.innerText = count > 99 ? '99+' : count;
             badge.style.display = 'block';
@@ -1427,7 +1768,7 @@ async function fetchTickets() {
     
     try {
         const estadoParam = currentTicketsFilter === 'pending' ? '' : `&estado=${currentTicketsFilter}`;
-        const res = await fetch(`/api/backoffice/tickets?token=${token}${estadoParam}&tipo=Asistencia Externa`);
+        const res = await fetch(`/api/backoffice/tickets?token=${token}${estadoParam}`);
         const tickets = await res.json();
 
         if (!Array.isArray(tickets) || tickets.length === 0) {
@@ -1436,23 +1777,39 @@ async function fetchTickets() {
         }
 
         list.innerHTML = tickets.map(t => {
-            const date = new Date(t.created_at).toLocaleDateString();
-            const contactName = t.chats?.name || (t.chat_id ? t.chat_id.split('@')[0] : 'Sin contacto');
-            
+            const date = new Date(t.created_at).toLocaleDateString('es-AR');
+            const contactName = t.chats?.name || (t.chat_id ? t.chat_id.split('@')[0] : '—');
+            const attachments = t.attachments ? (typeof t.attachments === 'string' ? JSON.parse(t.attachments) : t.attachments) : [];
+            const chatsAdj = t.chats_adjuntos ? (typeof t.chats_adjuntos === 'string' ? JSON.parse(t.chats_adjuntos) : t.chats_adjuntos) : [];
+
+            const attachHtml = attachments.length ? `
+                <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">
+                    ${attachments.map(url => `<a href="${url}" target="_blank" style="display:block; width:56px; height:56px; border-radius:6px; overflow:hidden; border:1px solid var(--border);">
+                        <img src="${url}" style="width:100%; height:100%; object-fit:cover;" onerror="this.parentElement.innerHTML='<i class=\\'fas fa-file\\' style=\\'color:var(--text-muted); font-size:1.2rem; width:100%; height:100%; display:flex; align-items:center; justify-content:center;\\'></i>'">
+                    </a>`).join('')}
+                </div>` : '';
+
+            const chatsAdjHtml = chatsAdj.length ? `
+                <div style="display:flex; flex-wrap:wrap; gap:5px; margin-top:6px;">
+                    ${chatsAdj.map(c => `<span onclick="goToTicketChat('${c.chat_id}')" style="display:inline-flex; align-items:center; gap:5px; padding:3px 9px; border-radius:99px; background:rgba(0,153,255,0.1); border:1px solid rgba(0,153,255,0.2); font-size:0.75rem; color:#0099FF; cursor:pointer;">
+                        <i class="fas fa-comment" style="font-size:0.7rem;"></i>${c.name}
+                    </span>`).join('')}
+                </div>` : '';
+
             return `
                 <div class="ticket-item">
-                    <div onclick="${t.chat_id ? `goToTicketChat('${t.chat_id}')` : ''}" style="cursor:pointer;">
+                    <div>
                         <div class="ticket-header">
                             <div class="ticket-title">${t.titulo}</div>
-                            <div class="ticket-badge priority-${t.prioridad}">${t.prioridad}</div>
                         </div>
-                        <div style="font-size:0.85rem; color:var(--text-main); margin-bottom:4px;">${contactName}</div>
-                        <div class="ticket-meta">
+                        ${t.descripcion ? `<div style="font-size:0.82rem; color:var(--text-muted); margin:4px 0 6px; line-height:1.5;">${t.descripcion}</div>` : ''}
+                        <div class="ticket-meta" style="margin-bottom:2px;">
                             <span><i class="far fa-calendar-alt"></i> ${date}</span>
-                            <span><i class="fas fa-tag"></i> ${t.tipo}</span>
+                            <span onclick="${t.chat_id ? `goToTicketChat('${t.chat_id}')` : ''}" style="${t.chat_id ? 'cursor:pointer; color:#0099FF;' : ''}"><i class="fas fa-user"></i> ${contactName}</span>
                         </div>
+                        ${chatsAdjHtml}
+                        ${attachHtml}
                     </div>
-                    
                     <div class="ticket-status-row">
                         <span style="font-size:0.75rem; color:var(--text-muted);">Estado:</span>
                         <div class="csd-wrap csd-sm" style="width:auto; min-width:120px;">
@@ -1517,53 +1874,117 @@ function goToTicketChat(chatId) {
     }
 }
 
+let _ticketSelectedChats = [];
+let _ticketFiles = [];
+
 function openTicketModal() {
+    _ticketSelectedChats = [];
+    _ticketFiles = [];
     document.getElementById('ticket-modal').classList.add('active');
     document.getElementById('ticket-title').focus();
+    document.getElementById('ticket-chat-chips').innerHTML = '';
+    document.getElementById('ticket-file-preview').innerHTML = '';
+    document.getElementById('ticket-chat-search').value = '';
+    document.getElementById('ticket-files').value = '';
 }
 
 function closeTicketModal() {
     document.getElementById('ticket-modal').classList.remove('active');
+    document.getElementById('ticket-chat-suggestions').style.display = 'none';
+}
+
+function _ticketChatSearch(query) {
+    const box = document.getElementById('ticket-chat-suggestions');
+    if (!query.trim()) { box.style.display = 'none'; return; }
+    const q = query.toLowerCase();
+    const matches = chats.filter(c => {
+        const name = (c.name || c.id || '').toLowerCase();
+        const num = (c.id || '').toLowerCase();
+        return (name.includes(q) || num.includes(q)) && !_ticketSelectedChats.find(s => s.chat_id === c.id);
+    }).slice(0, 8);
+    if (!matches.length) { box.style.display = 'none'; return; }
+    box.style.display = 'block';
+    box.innerHTML = matches.map(c => {
+        const label = c.name || c.id.split('@')[0];
+        return `<div onclick="_ticketAddChat('${c.id}', '${label.replace(/'/g,"\\'")}'); document.getElementById('ticket-chat-search').value=''; document.getElementById('ticket-chat-suggestions').style.display='none';"
+                     style="padding:10px 14px; cursor:pointer; font-size:0.85rem; color:var(--text-main); transition:background 0.15s;"
+                     onmouseover="this.style.background='rgba(0,153,255,0.1)'" onmouseout="this.style.background=''">
+                <i class="fas fa-comment" style="color:#0099FF; margin-right:8px;"></i>${label}
+                <span style="color:var(--text-muted); font-size:0.78rem; margin-left:6px;">${c.id.split('@')[0]}</span>
+            </div>`;
+    }).join('');
+}
+
+function _ticketAddChat(chatId, name) {
+    if (_ticketSelectedChats.find(s => s.chat_id === chatId)) return;
+    _ticketSelectedChats.push({ chat_id: chatId, name });
+    _renderTicketChips();
+}
+
+function _ticketRemoveChat(chatId) {
+    _ticketSelectedChats = _ticketSelectedChats.filter(s => s.chat_id !== chatId);
+    _renderTicketChips();
+}
+
+function _renderTicketChips() {
+    const box = document.getElementById('ticket-chat-chips');
+    box.innerHTML = _ticketSelectedChats.map(s =>
+        `<span style="display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:99px; background:rgba(0,153,255,0.12); border:1px solid rgba(0,153,255,0.25); font-size:0.8rem; color:var(--text-main);">
+            <i class="fas fa-comment" style="color:#0099FF; font-size:0.75rem;"></i>
+            ${s.name}
+            <button onclick="_ticketRemoveChat('${s.chat_id}')" style="background:none; border:none; cursor:pointer; color:var(--text-muted); padding:0; line-height:1; font-size:0.85rem;">&times;</button>
+        </span>`
+    ).join('');
+}
+
+function _ticketFilesSelected(fileList) {
+    _ticketFiles = Array.from(fileList);
+    const preview = document.getElementById('ticket-file-preview');
+    preview.innerHTML = _ticketFiles.map((f, i) => {
+        const isImg = f.type.startsWith('image/');
+        const icon = isImg ? '' : '<i class="fas fa-file-pdf" style="font-size:1.5rem; color:#ef4444;"></i>';
+        return `<div style="position:relative; width:72px; height:72px; border-radius:8px; overflow:hidden; border:1px solid var(--border); background:var(--bg-card); display:flex; align-items:center; justify-content:center;" id="ticket-fp-${i}">
+            ${isImg ? `<img src="${URL.createObjectURL(f)}" style="width:100%; height:100%; object-fit:cover;">` : icon}
+            <button onclick="_ticketRemoveFile(${i})" style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.6); border:none; border-radius:50%; width:18px; height:18px; cursor:pointer; color:white; font-size:10px; display:flex; align-items:center; justify-content:center;">&times;</button>
+        </div>`;
+    }).join('');
+}
+
+function _ticketRemoveFile(index) {
+    _ticketFiles.splice(index, 1);
+    _ticketFilesSelected(_ticketFiles);
 }
 
 async function createTicket() {
     const titulo = document.getElementById('ticket-title').value.trim();
     const descripcion = document.getElementById('ticket-desc').value.trim();
-    const tipo = document.getElementById('ticket-type').value;
-    const prioridad = document.getElementById('ticket-priority').value;
 
     if (!titulo) {
-        showToast('⚠️ El título es obligatorio', 'error');
+        showToast('El asunto es obligatorio', 'error');
         return;
     }
 
-    try {
-        const res = await fetch(`/api/backoffice/tickets?token=${token}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                chatId: activeChatId,
-                titulo,
-                descripcion,
-                tipo,
-                prioridad
-            })
-        });
+    const fd = new FormData();
+    fd.append('chatId', activeChatId || '');
+    fd.append('titulo', titulo);
+    fd.append('descripcion', descripcion);
+    fd.append('chats_adjuntos', JSON.stringify(_ticketSelectedChats));
+    for (const file of _ticketFiles) fd.append('attachments', file);
 
+    try {
+        const res = await fetch(`/api/backoffice/tickets?token=${token}`, { method: 'POST', body: fd });
         if (res.ok) {
-            showToast('✅ Ticket generado correctamente');
+            showToast('Ticket enviado correctamente');
             closeTicketModal();
             fetchPendingTicketsCount();
-            
-            // Limpiar campos
             document.getElementById('ticket-title').value = '';
             document.getElementById('ticket-desc').value = '';
         } else {
-            showToast('❌ Error al generar ticket', 'error');
+            showToast('Error al enviar ticket', 'error');
         }
     } catch (e) {
         console.error(e);
-        showToast('❌ Error de conexión', 'error');
+        showToast('Error de conexión', 'error');
     }
 }
 
@@ -2937,6 +3358,15 @@ window.initBackofficeView = function() {
             }
         });
     }
+
+    // Ocultar mic al escribir, mostrar al vaciar (como WhatsApp)
+    const msgInput = document.getElementById('message-input');
+    const micBtn = document.getElementById('mic-btn');
+    if (msgInput && micBtn) {
+        msgInput.addEventListener('input', function() {
+            micBtn.style.display = this.value.length > 0 ? 'none' : '';
+        });
+    }
 };
 
 window._backofficeAbortAll = function() {
@@ -2968,8 +3398,9 @@ async function initBlacklist() {
 
 function _updateBlacklistBtnVisibility() {
     const btn = document.getElementById('blacklist-toggle-btn');
-    if (!btn) return;
-    btn.style.display = _blacklistActive ? 'inline-flex' : 'none';
+    if (btn) btn.style.display = _blacklistActive ? 'inline-flex' : 'none';
+    const mobileLi = document.getElementById('mobile-blacklist-li');
+    if (mobileLi) mobileLi.style.display = _blacklistActive ? '' : 'none';
 }
 
 /** Llamada al seleccionar un chat: verifica si está en la lista negra y actualiza el botón */
@@ -2995,10 +3426,10 @@ function _updateBlacklistBtn(isBlacklisted) {
     const btn = document.getElementById('blacklist-toggle-btn');
     if (!btn) return;
     if (isBlacklisted) {
-        btn.innerHTML = '<i class="fas fa-times-circle" style="color:#ef4444;"></i>';
+        btn.innerHTML = '<i class="fas fa-ban" style="color:#25D366;"></i>';
         btn.title = 'Lista Negra: contacto bloqueado — Clic para quitar';
     } else {
-        btn.innerHTML = '<i class="fas fa-check-circle" style="color:#25D366;"></i>';
+        btn.innerHTML = '<i class="fas fa-ban" style="color:var(--text-muted);"></i>';
         btn.title = 'Lista Negra: contacto habilitado — Clic para agregar';
     }
 }

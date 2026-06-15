@@ -66,10 +66,29 @@ const welcomeFlowVideo = addKeyword(EVENTS.MEDIA).addAction(
       await state.update({ lastVideo: localPath });
 
       // Informar al asistente principal
-      const caption = ctx.body && !ctx.body.includes('_event_') ? ctx.body : '';
+      const caption = (ctx.body && !ctx.body.includes('_event_')) ? ctx.body : (ctx.payload?.message?.videoMessage?.caption || ctx.payload?.video?.caption || '');
       ctx.body = `[Video recibido]${caption ? ': ' + caption : ''}. (El usuario envió un video que ha sido guardado)`;
 
-      
+      // Guardar en la base de datos para que el asistente tenga el historial en siguientes turnos
+      try {
+        const botPhoneNumber = provider?.globalVendorArgs?.phone_number_id || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
+        const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || HistoryHandler.PROJECT_IDENTIFIER;
+        
+        await HistoryHandler.saveMessage(
+          userId,
+          'user',
+          `📹 Video recibido: (El usuario envió un video que ha sido guardado en el sistema)${caption ? ' con subtítulo: "' + caption + '"' : ''}`,
+          'text',
+          null,
+          ctx.userId,
+          null,
+          ctx.platform || 'whatsapp',
+          dynamicProjectId
+        );
+      } catch (dbErr) {
+        console.error("❌ Error guardando log de video en base de datos:", dbErr);
+      }
+
       if (!userQueues.has(userId)) {
         userQueues.set(userId, []);
       }

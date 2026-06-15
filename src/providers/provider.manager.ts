@@ -5,6 +5,15 @@ import { EVENTS } from "@builderbot/bot";
 import { isSessionInDb } from "./sessionSync";
 import { HistoryHandler } from '../db/historyHandler';
 
+const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+
+// Comprime la imagen en disco y devuelve la ruta web relativa final
+async function compressImageToDisk(absolutePath: string): Promise<string> {
+    // Retornamos el path original directamente para evitar el uso del módulo nativo C++ sharp.
+    // Esto previene los problemas de corrupción de memoria heap (free(): invalid size) en el contenedor.
+    return absolutePath;
+}
+
 /**
  * Cache temporal para IDs de mensajes enviados desde el backoffice.
  * Evita procesar los "ecos" (message_from_me) de lo que nosotros mismos mandamos.
@@ -92,9 +101,27 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
                 console.log(`${prefix} 🎙️ NOTA DE VOZ DETECTADA. Enviando a los flujos...`);
             }
 
-            // Guardar en el historial de Supabase si no es un comando de sistema (se permite guardar notas de voz que tengan _event_)
-            if (ctx.body && (!ctx.body.startsWith('_event_') || ctx.type === 'voice')) {
+            // Guardar en el historial de Supabase si no es un comando de sistema (se permite guardar multimedia/ubicación que tengan _event_)
+            const isMediaOrLocation = ['voice', 'audio', 'image', 'video', 'document', 'location'].includes(ctx.type);
+            if (ctx.body && (!ctx.body.startsWith('_event_') || isMediaOrLocation)) {
                 const { HistoryHandler } = await import('../db/historyHandler');
+
+                // Resolver projectId dinámicamente
+                const rawJid = provider?.vendor?.authState?.creds?.me?.id || 
+                               provider?.vendor?.user?.id || 
+                               provider?.globalVendorArgs?.sock?.user?.id || '';
+                const botPhoneNumber = ctx.recipientPhoneId ||
+                                       rawJid.split(':')[0].split('@')[0] || 
+                                       provider?.globalVendorArgs?.phone_number_id || 
+                                       provider?.config?.phone_number_id ||
+                                       (ctx.to ? ctx.to.replace(/\D/g, '') : null);
+                let dynamicProjectId = HistoryHandler.PROJECT_IDENTIFIER;
+                if (botPhoneNumber) {
+                    const resolvedId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber);
+                    if (resolvedId) {
+                        dynamicProjectId = resolvedId;
+                    }
+                }
                 
                 // Si es grupo, mantenemos el JID completo. Si es chat privado, extraemos el número.
                 const chatId = isGroup ? (from.includes('@') ? from : `${from}@g.us`) : (from.includes('@') ? from.split('@')[0] : from);
@@ -107,18 +134,28 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
                     contactName = (chatId === cleanGroupResumenId) ? 'Grupo de Reportes 1' : 'Grupo de Reportes 2';
                 }
                 
-                let contentToSave = ctx.type === 'voice' ? (ctx.localPath || ctx.body) : ctx.body;
-                
-                // Normalizar rutas absolutas del sistema de archivos a URLs relativas web para el navegador
-                if (contentToSave && typeof contentToSave === 'string') {
-                    const normalized = contentToSave.replace(/\\/g, '/');
-                    const tmpIdx = normalized.toLowerCase().indexOf('/tmp/');
-                    if (tmpIdx !== -1) {
-                        contentToSave = normalized.substring(tmpIdx);
-                    } else {
-                        const uploadsIdx = normalized.toLowerCase().indexOf('/uploads/');
-                        if (uploadsIdx !== -1) {
-                            contentToSave = normalized.substring(uploadsIdx);
+                // Para media: preferir localPath sobre el caption/body, igual que se hace para voice
+                const isMediaType = ['voice', 'audio', 'image', 'video', 'document'].includes(ctx.type);
+                let contentToSave = (isMediaType && ctx.localPath) ? ctx.localPath : ctx.body;
+
+                // Normalizar rutas absolutas a URLs relativas web, comprimiendo imágenes en disco
+                if (contentToSave && typeof contentToSave === 'string' && !contentToSave.startsWith('http')) {
+                    let normalized = contentToSave.replace(/\\/g, '/');
+                    const isLocalFile = normalized.includes('/tmp/') || normalized.includes('/uploads/') || path.isAbsolute(contentToSave);
+                    if (isLocalFile) {
+                        // Comprimir imagen en disco si aplica
+                        let absolutePath = contentToSave;
+                        if (normalized.startsWith('/tmp/') || normalized.startsWith('/uploads/')) {
+                            absolutePath = path.join(process.cwd(), normalized);
+                        }
+                        const finalAbsPath = await compressImageToDisk(absolutePath);
+                        normalized = finalAbsPath.replace(/\\/g, '/');
+
+                        const tmpIdx = normalized.toLowerCase().indexOf('/tmp/');
+                        if (tmpIdx !== -1) contentToSave = normalized.substring(tmpIdx);
+                        else {
+                            const uploadsIdx = normalized.toLowerCase().indexOf('/uploads/');
+                            if (uploadsIdx !== -1) contentToSave = normalized.substring(uploadsIdx);
                         }
                     }
                 }
@@ -131,20 +168,21 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
                     contactName, 
                     ctx.userId,
                     externalId,
-                    ctx.platform || 'whatsapp'
+                    ctx.platform || 'whatsapp',
+                    dynamicProjectId
                 );
 
                 // Si el mensaje original provino de un LID, guardamos el mapeo en metadata de chats para poder resolverlo en la intervención manual
                 if (ctx.payload?.key?.remoteJid?.endsWith('@lid')) {
                     const originalLid = ctx.payload.key.remoteJid;
                     try {
-                        const chat = await HistoryHandler.getChat(chatId);
+                        const chat = await HistoryHandler.getChat(chatId, dynamicProjectId);
                         if (chat) {
                             const currentMeta = chat.metadata || {};
                             if (currentMeta.lid !== originalLid) {
                                 currentMeta.lid = originalLid;
-                                await HistoryHandler.updateContactDetails(chatId, { metadata: currentMeta });
-                                console.log(`${prefix} 💾 Guardado mapeo LID en metadata del chat: ${chatId} -> ${originalLid}`);
+                                await HistoryHandler.updateContactDetails(chatId, { metadata: currentMeta }, dynamicProjectId);
+                                console.log(`${prefix} 💾 Guardado mapeo LID en metadata del chat: ${chatId} -> ${originalLid} para proyecto ${dynamicProjectId}`);
                             }
                         }
                     } catch (metaErr: any) {
@@ -170,6 +208,23 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
             }
 
             const { HistoryHandler, recentBotSentMessages, normalizeTextForCache } = await import('../db/historyHandler');
+
+            // Resolver projectId dinámicamente
+            const rawJid = provider?.vendor?.authState?.creds?.me?.id || 
+                           provider?.vendor?.user?.id || 
+                           provider?.globalVendorArgs?.sock?.user?.id || '';
+            const botPhoneNumber = ctx.recipientPhoneId ||
+                                   rawJid.split(':')[0].split('@')[0] || 
+                                   provider?.globalVendorArgs?.phone_number_id || 
+                                   provider?.config?.phone_number_id ||
+                                   (ctx.to ? ctx.to.replace(/\D/g, '') : null);
+            let dynamicProjectId = HistoryHandler.PROJECT_IDENTIFIER;
+            if (botPhoneNumber) {
+                const resolvedId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber);
+                if (resolvedId) {
+                    dynamicProjectId = resolvedId;
+                }
+            }
 
             if (isGroup) {
                 // Filtro estricto: solo procedemos si es uno de los grupos de reportes oficiales
@@ -245,15 +300,16 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
                 contactName, 
                 null,
                 externalId,
-                ctx.platform || 'whatsapp'
+                ctx.platform || 'whatsapp',
+                dynamicProjectId
             );
 
             // Si fue una intervención manual desde la app de WhatsApp (y no es grupo),
             // activar automáticamente el modo "Atención Humana"
             if (isManual && !isGroup) {
-                console.log(`${prefix} 🛑 Activando modo Atención Humana para ${chatId} (operador escribió desde la app)`);
-                await HistoryHandler.toggleBot(chatId, false);
-                await HistoryHandler.updateLastHumanMessage(chatId);
+                console.log(`${prefix} 🛑 Activando modo Atención Humana para ${chatId} (operador escribió desde la app) para proyecto ${dynamicProjectId}`);
+                await HistoryHandler.toggleBot(chatId, false, dynamicProjectId);
+                await HistoryHandler.updateLastHumanMessage(chatId, dynamicProjectId);
             }
         } catch (err) {
             console.error(`❌ ${prefix} Error guardando mensaje saliente manual:`, err);
@@ -408,10 +464,27 @@ export const hasActiveSession = async (adapterProvider: any, groupProvider: any 
             }
         }
 
+        let activeProjectId = HistoryHandler.PROJECT_IDENTIFIER;
+        if (metaOnboarding?.project_id) {
+            activeProjectId = metaOnboarding.project_id;
+        } else {
+            const rawJid = adapterProvider?.vendor?.authState?.creds?.me?.id || 
+                           adapterProvider?.vendor?.user?.id || 
+                           adapterProvider?.globalVendorArgs?.sock?.user?.id || '';
+            const phoneNumber = rawJid.split(':')[0].split('@')[0];
+            if (phoneNumber) {
+                const resolvedId = await HistoryHandler.getProjectIdByRecipient(phoneNumber);
+                if (resolvedId) {
+                    activeProjectId = resolvedId;
+                }
+            }
+        }
+
         return {
             adapter: adapterStatus,
             group: groupStatus,
-            metaOnboarding: metaOnboarding || null
+            metaOnboarding: metaOnboarding || null,
+            activeProjectId
         };
     } catch (error: any) {
         return { active: false, error: error.message };

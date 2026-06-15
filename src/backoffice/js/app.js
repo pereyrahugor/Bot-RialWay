@@ -3,20 +3,23 @@
 // Carga views dinamicamente y maneja la navegacion sin recargar la pagina
 
 const ROUTES = {
-    '/backoffice':    '/js/views/backoffice.view.js',
-    '/dashboard':     '/js/views/dashboard.view.js',
-    '/conexion':      '/js/views/conexion.view.js',
-    '/crm':           '/js/views/crm.view.js',
-    '/crm-tareas':    '/js/views/crm-tareas.view.js',
-    '/system-config': '/js/views/system-config.view.js',
-    '/docs':          '/js/views/docs.view.js',
-    '/documentacion': '/js/views/docs.view.js',
-    '/webchat':       '/js/views/webchat.view.js',
-    '/meta':          '/js/views/meta.view.js',
-    '/mercado-pago':  '/js/views/mercado-pago.view.js',
-    '/meli':          '/js/views/meli.view.js',
-    '/lista-negra':   '/js/views/lista-negra.view.js',
-    '/notificaciones': '/js/views/notificaciones.view.js',
+    '/backoffice':               '/js/views/backoffice.view.js',
+    '/dashboard':                '/js/views/dashboard.view.js',
+    '/conexion':                 '/js/views/conexion.view.js',
+    '/crm':                      '/js/views/crm.view.js',
+    '/crm-tareas':               '/js/views/crm-tareas.view.js',
+    '/system-config':            '/js/views/system-config.view.js',
+    '/docs':                     '/js/views/docs.view.js',
+    '/documentacion':            '/js/views/docs.view.js',
+    '/webchat':                  '/js/views/webchat.view.js',
+    '/meta':                     '/js/views/meta.view.js',
+    '/mercado-libre':            '/js/views/mercado-libre.view.js',
+    '/mercado-libre-productos':  '/js/views/mercado-libre-productos.view.js',
+    '/mercado-libre-bot':        '/js/views/mercado-libre-bot.view.js',
+    '/mercado-pago':             '/js/views/mercado-pago.view.js',
+    '/lista-negra':              '/js/views/lista-negra.view.js',
+    '/reportes':                 '/js/views/reportes.view.js',
+    '/tickets':                  '/js/views/tickets.view.js',
 };
 
 const _loadedScripts = {};
@@ -60,12 +63,32 @@ function highlightActiveNav(path) {
     });
     // Integraciones flyout button
     const intBtn = document.getElementById('nav-integraciones-btn');
-    if (intBtn) intBtn.classList.toggle('active', path === '/crm' || path === '/crm-tareas');
+    const isIntegrationPath = ['/crm', '/crm-tareas', '/meta', '/mercado-libre', '/mercado-libre-productos', '/mercado-libre-bot', '/mercado-pago', '/lista-negra'].includes(path);
+    if (intBtn) intBtn.classList.toggle('active', isIntegrationPath);
     // Dropdown links de Integraciones
     document.querySelectorAll('#nav-integraciones-btn .nav-dropdown-link[data-route]').forEach(item => {
         item.classList.toggle('active', item.getAttribute('data-route') === path);
     });
-    // Cerrar flyouts al navegar
+
+    // Expandir y activar sub-dropdown de Mercado Libre si corresponde
+    const meliSub = document.getElementById('nav-mercado-libre-sub');
+    if (meliSub) {
+        const isMeliPath = ['/mercado-libre-productos', '/mercado-libre-bot', '/mercado-pago'].includes(path);
+        meliSub.classList.toggle('active', isMeliPath);
+        const subMenu = meliSub.querySelector('.nav-sub-dropdown-menu');
+        const chevron = meliSub.querySelector('.nav-sub-dropdown-icon');
+        if (isMeliPath) {
+            meliSub.classList.add('open');
+            if (subMenu) subMenu.style.height = subMenu.scrollHeight + 'px';
+            if (chevron) chevron.style.transform = 'rotate(180deg)';
+        } else {
+            meliSub.classList.remove('open');
+            if (subMenu) subMenu.style.height = '0';
+            if (chevron) chevron.style.transform = 'rotate(0deg)';
+        }
+    }
+
+    // Cerrar flyouts al navegar (solo si no es ruta interna de integraciones que necesite mantenerlas abiertas en mobile)
     if (typeof window.closeMessagingFlyout === 'function') window.closeMessagingFlyout();
     if (typeof window.closeIntegracionesFlyout === 'function') window.closeIntegracionesFlyout();
 }

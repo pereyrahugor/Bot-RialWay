@@ -34,8 +34,20 @@ export const initSocketIO = (serverInstance: any, { processUserMessage }: any) =
             io.emit('contact_updated', payload);
         });
 
+        historyEvents.on('ticket_updated', (payload) => {
+            io.emit('ticket_updated', payload);
+        });
+
         historyEvents.on('setting_changed', (payload) => {
             io.emit('setting_changed', payload);
+        });
+
+        historyEvents.on('reporte_created', (payload) => {
+            io.emit('reporte_created', payload);
+        });
+
+        historyEvents.on('message_status_update', (payload) => {
+            io.emit('message_status_update', payload);
         });
 
         io.on('connection', (socket) => {

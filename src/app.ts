@@ -257,7 +257,8 @@ const main = async () => {
                     const deps: BackofficeDependencies = { adapterProvider, groupProvider, HistoryHandler, openaiMain: openaiMainDynamic, upload };
 
                     // Sincronizar Meta Provider antes de procesar si es necesario
-                    const metaOnboarding = await HistoryHandler.getMetaOnboardingData();
+                    const pId = req.query.projectId || (req.body && req.body.projectId) || req.headers['x-project-id'] || (req.auth && req.auth.projectId) || null;
+                    const metaOnboarding = await HistoryHandler.getMetaOnboardingData(pId);
                     if (metaOnboarding && adapterProvider && adapterProvider.updateConfig) {
                         adapterProvider.updateConfig({
                             access_token: metaOnboarding.whatsappToken,
@@ -328,7 +329,7 @@ const main = async () => {
     });
 
     // 7. Create flow and bot instance
-    const adapterFlow = createFlow([welcomeFlowTxt, welcomeFlowVoice, welcomeFlowImg, welcomeFlowVideo, welcomeFlowDoc, locationFlow, idleFlow, welcomeFlowButton]);
+    const adapterFlow = createFlow([welcomeFlowVoice, welcomeFlowImg, welcomeFlowVideo, welcomeFlowDoc, locationFlow, welcomeFlowButton, idleFlow, welcomeFlowTxt]);
     const adapterDB = new MemoryDB();
 
     const { httpServer } = await createBot({
@@ -382,12 +383,18 @@ const main = async () => {
     // 11. Start Server and Sockets
     try {
         httpServer(+PORT);
-        setTimeout(() => {
+        let checks = 0;
+        const checkInterval = setInterval(() => {
+            checks++;
             if (app?.server) {
-                console.log("✅ [Socket.IO] app.server detected, initializing...");
+                console.log(`✅ [Socket.IO] app.server detectado, lanzando initSocketIO (Intento ${checks})`);
                 initSocketIO(app.server, { processUserMessage: aiManagerInstance.processUserMessage });
+                clearInterval(checkInterval);
+            } else if (checks >= 20) {
+                console.error("❌ [Socket.IO] app.server no detectado tras 10 segundos. Socket.IO falló.");
+                clearInterval(checkInterval);
             }
-        }, 1000);
+        }, 500);
     } catch (err) {
         console.error("❌ [FATAL] Error starting server:", err);
     }

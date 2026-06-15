@@ -123,7 +123,7 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
         console.log(`[openaiHelper] 📜 Historial recuperado para ${userId}: ${history.length} mensajes (Limit: ${historyLimit}) | Project: ${projectId}`);
         
         // Cargar datos del chat para obtener el último resultado de BD
-        const chatData = await HistoryHandler.getChat(userId, projectId);
+        const chatData = await HistoryHandler.getChat(userId, projectId ?? undefined);
         const lastDbResult = chatData?.last_db_result;
         
         // 2. Preparar el prompt del sistema
@@ -237,7 +237,7 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
 
         while (continueLoop && attempts < 10) {
             attempts++;
-            const openaiModel = await HistoryHandler.getConfig('OPENAI_MODEL') || "gpt-4o";
+            const openaiModel = await HistoryHandler.getConfig('OPENAI_MODEL') || "gpt-4o-mini";
             const completion = await openai.chat.completions.create({
                 model: openaiModel,
                 messages: messages,
@@ -272,7 +272,7 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
                             toolResult = await executeDbQuery(sql);
                             
                             // Persistir el resultado para que esté disponible en futuros turnos del contexto
-                            await HistoryHandler.updateLastDbResult(userId, toolResult, projectId);
+                            await HistoryHandler.updateLastDbResult(userId, toolResult, projectId ?? undefined);
                         }
                     } else {
                         toolResult = JSON.stringify({ error: `Function ${funcName} not implemented.` });

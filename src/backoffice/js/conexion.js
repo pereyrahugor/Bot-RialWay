@@ -9,8 +9,8 @@ async function fetchStatus() {
         if (res.status === 401) return logout();
         const data = await res.json();
 
-        if (data && data.metaOnboarding && data.metaOnboarding.project_id) {
-            currentProjectId = data.metaOnboarding.project_id;
+        if (data) {
+            currentProjectId = data.activeProjectId || (data.metaOnboarding && data.metaOnboarding.project_id) || 'default';
         }
 
         const statusEl       = document.getElementById('session-status');
@@ -178,7 +178,7 @@ async function fetchBotStatus() {
     if (!botToggle) return;
     try {
         const token = localStorage.getItem('backoffice_token');
-        const res = await fetch(`/api/backoffice/get-setting?key=GLOBAL_BOT_ENABLED&token=${token}`);
+        const res = await fetch(`/api/backoffice/get-setting?key=GLOBAL_BOT_ENABLED&projectId=${currentProjectId}&token=${token}`);
         const data = await res.json();
         if (data.success) botToggle.checked = data.value !== 'false';
     } catch (e) { console.error("Error fetching bot status", e); }
@@ -208,7 +208,7 @@ window.initConexionView = function () {
                 const res = await fetch(`/api/backoffice/save-setting?token=${token}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ key: 'GLOBAL_BOT_ENABLED', value: enabled ? 'true' : 'false' })
+                    body: JSON.stringify({ key: 'GLOBAL_BOT_ENABLED', value: enabled ? 'true' : 'false', projectId: currentProjectId })
                 });
                 const data = await res.json();
                 if (!res.ok || !data.success) throw new Error(data.error || 'Server error');
