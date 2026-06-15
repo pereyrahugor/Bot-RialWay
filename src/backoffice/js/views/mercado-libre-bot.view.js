@@ -17,7 +17,7 @@ window.mercadoLibreBotView = (() => {
                         <h2 style="margin:0 0 8px; color:var(--text-main); font-size:1.45rem; font-weight:700;">Mercado Libre Bot</h2>
                         <div style="height:3px; width:50px; background:#FFE600; border-radius:10px; margin:0 auto 12px;"></div>
                         <p style="color:var(--text-muted); font-size:0.95rem; line-height:1.5; margin:0;">
-                            automatiza las respuestas a las consultas de tus clientes en base a la info del producto
+                            Vincula tu cuenta e Integra al CRM las consultas de tus publicaciones y respondelas desde un solo canal, si tiene un bot en tu CRM podras automatizar las respuestas a estas en base a la info de tu negocio y tus productos.
                         </p>
                     </div>
                     <div style="background:var(--bg-header); padding:1rem 1.25rem; border-radius:16px; border:1px solid var(--border); width:100%; text-align:center;">

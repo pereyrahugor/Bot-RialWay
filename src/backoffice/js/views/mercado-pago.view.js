@@ -17,7 +17,7 @@ window.mercadoPagoView = (() => {
                         <h2 style="margin:0 0 8px; color:var(--text-main); font-size:1.45rem; font-weight:700;">Mercado Pago</h2>
                         <div style="height:3px; width:50px; background:#00B2FF; border-radius:10px; margin:0 auto 12px;"></div>
                         <p style="color:var(--text-muted); font-size:0.95rem; line-height:1.5; margin:0;">
-                            Gestion ventas y pagos
+                            Vincula tu cuenta y podras ver y gestionar pagos recibidos, crear links de pagos, controlar comprobantes recibidos y realizar acciones automaticas al recibir pagos.
                         </p>
                     </div>
                     <div style="background:var(--bg-header); padding:1rem 1.25rem; border-radius:16px; border:1px solid var(--border); width:100%; text-align:center;">

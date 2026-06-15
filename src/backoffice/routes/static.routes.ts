@@ -134,6 +134,10 @@ export const registerStaticRoutes = (app: any, { __dirname, provider, groupProvi
     serveHtmlPage("/documentacion", "shell.html");
     serveHtmlPage("/docs", "shell.html");
     serveHtmlPage("/meta", "shell.html");
+    serveHtmlPage("/mercado-libre", "shell.html");
+    serveHtmlPage("/mercado-libre-productos", "shell.html");
+    serveHtmlPage("/mercado-libre-bot", "shell.html");
+    serveHtmlPage("/mercado-pago", "shell.html");
     serveHtmlPage("/lista-negra", "shell.html");
 
     // Favicon directo (browsers lo piden en / automáticamente) — busca en src/assets primero, luego en assets/

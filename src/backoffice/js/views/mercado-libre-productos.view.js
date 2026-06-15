@@ -17,7 +17,7 @@ window.mercadoLibreProductosView = (() => {
                         <h2 style="margin:0 0 8px; color:var(--text-main); font-size:1.45rem; font-weight:700;">Mercado Libre Productos</h2>
                         <div style="height:3px; width:50px; background:#FFE600; border-radius:10px; margin:0 auto 12px;"></div>
                         <p style="color:var(--text-muted); font-size:0.95rem; line-height:1.5; margin:0;">
-                            crea y administra productos/precios/stock
+                            Vincula tu cuenta de mercado libre y controla tus productos desde un solo lugar, crear productos, modifica precios, controla stock y mucho mas.
                         </p>
                     </div>
                     <div style="background:var(--bg-header); padding:1rem 1.25rem; border-radius:16px; border:1px solid var(--border); width:100%; text-align:center;">
