@@ -254,6 +254,42 @@ window.closeIntegracionesFlyout = function() {
     container.classList.remove('open');
     const menu = container.querySelector('.nav-dropdown-menu');
     if (menu) menu.style.height = '0';
+    
+    // Cerrar también el sub-dropdown de Mercado Libre para que no se quede abierto la próxima vez
+    const meliSub = document.getElementById('nav-mercado-libre-sub');
+    if (meliSub) {
+        meliSub.classList.remove('open');
+        const subMenu = meliSub.querySelector('.nav-sub-dropdown-menu');
+        const chevron = meliSub.querySelector('.nav-sub-dropdown-icon');
+        if (subMenu) subMenu.style.height = '0';
+        if (chevron) chevron.style.transform = 'rotate(0deg)';
+    }
+};
+
+window.toggleMeliSubMenu = function(e) {
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    const container = document.getElementById('nav-mercado-libre-sub');
+    if (!container) return;
+    const menu = container.querySelector('.nav-sub-dropdown-menu');
+    if (!menu) return;
+    const chevron = container.querySelector('.nav-sub-dropdown-icon');
+
+    const isOpen = container.classList.contains('open');
+    if (isOpen) {
+        container.classList.remove('open');
+        menu.style.height = '0';
+        if (chevron) chevron.style.transform = 'rotate(0deg)';
+    } else {
+        container.classList.add('open');
+        menu.style.height = menu.scrollHeight + 'px';
+        if (chevron) chevron.style.transform = 'rotate(180deg)';
+        
+        // Ajustar altura del contenedor padre (Integraciones) para evitar recortes
+        const parentMenu = document.querySelector('#nav-integraciones-btn .nav-dropdown-menu');
+        if (parentMenu) {
+            parentMenu.style.height = 'auto';
+        }
+    }
 };
 
 window.toggleAjustesFlyout = function(e) {

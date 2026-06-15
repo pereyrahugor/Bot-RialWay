@@ -136,12 +136,32 @@
                                 <span class="nav-label">Meta</span>
                             </a>
                         </li>
-                        <li class="nav-item" data-route="/mercado-libre">
-                            <a href="#" class="nav-link nav-dropdown-link"
-                               onclick="event.preventDefault(); closeIntegracionesFlyout(); navigate('/mercado-libre')">
+                        <li class="nav-item nav-sub-dropdown" id="nav-mercado-libre-sub">
+                            <a href="#" class="nav-link nav-dropdown-link" onclick="toggleMeliSubMenu(event)">
                                 <i class="fas fa-handshake"></i>
                                 <span class="nav-label">Mercado Libre</span>
+                                <i class="fas fa-chevron-down nav-sub-dropdown-icon" style="font-size: 0.7rem; margin-left: auto; transition: transform 0.2s;"></i>
                             </a>
+                            <ul class="nav-sub-dropdown-menu" style="height: 0; overflow: hidden; transition: height 0.2s; padding-left: 1.25rem; list-style: none; display: flex; flex-direction: column; gap: 4px;">
+                                <li class="nav-item" data-route="/mercado-libre-productos">
+                                    <a href="#" class="nav-link nav-dropdown-link" onclick="event.preventDefault(); closeIntegracionesFlyout(); navigate('/mercado-libre-productos')">
+                                        <i class="fas fa-boxes" style="font-size: 0.8rem; width: 16px; text-align: center;"></i>
+                                        <span class="nav-label" style="font-size: 0.85rem;">Productos</span>
+                                    </a>
+                                </li>
+                                <li class="nav-item" data-route="/mercado-libre-bot">
+                                    <a href="#" class="nav-link nav-dropdown-link" onclick="event.preventDefault(); closeIntegracionesFlyout(); navigate('/mercado-libre-bot')">
+                                        <i class="fas fa-robot" style="font-size: 0.8rem; width: 16px; text-align: center;"></i>
+                                        <span class="nav-label" style="font-size: 0.85rem;">ML Bot</span>
+                                    </a>
+                                </li>
+                                <li class="nav-item" data-route="/mercado-pago">
+                                    <a href="#" class="nav-link nav-dropdown-link" onclick="event.preventDefault(); closeIntegracionesFlyout(); navigate('/mercado-pago')">
+                                        <i class="fas fa-wallet" style="font-size: 0.8rem; width: 16px; text-align: center;"></i>
+                                        <span class="nav-label" style="font-size: 0.85rem;">Mercado Pago</span>
+                                    </a>
+                                </li>
+                            </ul>
                         </li>
                         <li class="nav-item" data-route="/lista-negra">
                             <a href="#" class="nav-link nav-dropdown-link"
