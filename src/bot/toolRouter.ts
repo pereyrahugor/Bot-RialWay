@@ -27,6 +27,32 @@ export function invalidateModuleCache() {
  * Enruta y ejecuta una herramienta de cliente con validaciones de seguridad.
  */
 export async function executeClientTool(toolName: string, args: any, context: any = {}) {
+  // 0. Herramientas Globales / Compartidas (ej: Mercado Pago)
+  const isMpTool = ["generar_link_pago", "mercadopago_crear_link", "mercadopago.crear_link"].includes(toolName);
+  if (isMpTool) {
+      console.log(`[toolRouter] 🚀 Ejecutando herramienta global '${toolName}'`);
+      try {
+          const { createMercadoPagoPreference } = await import("../utils/mercadopago");
+          const title = args.title || args.concepto || args.description || "Cobro";
+          const amount = Number(args.amount || args.monto || args.precio);
+          
+          if (!amount || isNaN(amount)) {
+              return { error: "Monto inválido para generar el link de pago." };
+          }
+          
+          const result = await createMercadoPagoPreference(title, amount);
+          return {
+              success: true,
+              link: result.initPoint,
+              preferenceId: result.preferenceId,
+              result: `Link de pago generado para "${title}" por $${amount}: ${result.initPoint}`
+          };
+      } catch (err: any) {
+          console.error(`[toolRouter] Error en herramienta global '${toolName}':`, err.message);
+          return { error: `No se pudo generar el link de pago: ${err.message}` };
+      }
+  }
+
   const activeModule = await getActiveModule();
 
   if (!activeModule) {

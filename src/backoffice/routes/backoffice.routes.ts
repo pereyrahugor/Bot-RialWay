@@ -3103,6 +3103,133 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
+    // --- MERCADO PAGO INTEGRATION ROUTES ---
+
+    app.get('/api/backoffice/mercadopago/config', backofficeAuth, async (req: any, res: any) => {
+        try {
+            const accessToken = await depsHistoryHandler.getSetting('MP_ACCESS_TOKEN');
+            const publicKey = await depsHistoryHandler.getSetting('MP_PUBLIC_KEY');
+            const appId = await depsHistoryHandler.getSetting('MP_APP_ID');
+            const userId = await depsHistoryHandler.getSetting('MP_USER_ID');
+            const nickname = await depsHistoryHandler.getSetting('MP_NICKNAME');
+
+            res.json({
+                success: true,
+                config: {
+                    accessToken: accessToken || '',
+                    publicKey: publicKey || '',
+                    appId: appId || '',
+                    userId: userId || '',
+                    nickname: nickname || ''
+                }
+            });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    app.post('/api/backoffice/mercadopago/connect', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
+        const { accessToken, publicKey, appId } = req.body;
+        if (!accessToken || !publicKey || !appId) {
+            return res.status(400).json({ success: false, error: 'Faltan campos requeridos (accessToken, publicKey, appId)' });
+        }
+
+        try {
+            console.log(`📡 [MercadoPago] Validando cuenta con Access Token...`);
+            // Validar token consultando a la API de Mercado Pago
+            const response = await axios.get('https://api.mercadopago.com/users/me', {
+                headers: { Authorization: `Bearer ${accessToken}` }
+            });
+
+            const { id, nickname } = response.data;
+            if (!id) {
+                throw new Error('No se pudo recuperar el ID de usuario de Mercado Pago');
+            }
+
+            console.log(`✅ [MercadoPago] Validación exitosa. User ID: ${id}, Nickname: ${nickname}`);
+
+            // Guardar settings en Supabase
+            await depsHistoryHandler.saveSetting('MP_ACCESS_TOKEN', accessToken);
+            await depsHistoryHandler.saveSetting('MP_PUBLIC_KEY', publicKey);
+            await depsHistoryHandler.saveSetting('MP_APP_ID', appId);
+            await depsHistoryHandler.saveSetting('MP_USER_ID', String(id));
+            await depsHistoryHandler.saveSetting('MP_NICKNAME', nickname || '');
+
+            res.json({
+                success: true,
+                userId: id,
+                nickname: nickname || ''
+            });
+        } catch (e: any) {
+            console.error('❌ [MercadoPago] Error conectando cuenta:', e.response?.data || e.message);
+            const errMsg = e.response?.data?.message || e.message || 'Error validando credenciales de Mercado Pago';
+            res.status(500).json({ success: false, error: errMsg });
+        }
+    });
+
+    app.post('/api/backoffice/mercadopago/disconnect', backofficeAuth, async (req: any, res: any) => {
+        try {
+            console.log(`🧹 [MercadoPago] Desvinculando cuenta de Mercado Pago...`);
+            await depsHistoryHandler.saveSetting('MP_ACCESS_TOKEN', '');
+            await depsHistoryHandler.saveSetting('MP_PUBLIC_KEY', '');
+            await depsHistoryHandler.saveSetting('MP_APP_ID', '');
+            await depsHistoryHandler.saveSetting('MP_USER_ID', '');
+            await depsHistoryHandler.saveSetting('MP_NICKNAME', '');
+
+            res.json({ success: true });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    app.post('/api/backoffice/mercadopago/create-link', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
+        const { title, amount, chatId, sendToChat } = req.body;
+        if (!title || !amount) {
+            return res.status(400).json({ success: false, error: 'Faltan campos obligatorios (title, amount)' });
+        }
+
+        try {
+            console.log(`📡 [MercadoPago] Generando preferencia para cobro: "${title}" por $${amount}`);
+            const { createMercadoPagoPreference } = await import('../../utils/mercadopago');
+            const result = await createMercadoPagoPreference(title, Number(amount));
+
+            console.log(`✅ [MercadoPago] Preferencia creada con éxito. Link: ${result.initPoint}`);
+
+            if (sendToChat && chatId) {
+                console.log(`📡 [MercadoPago] Enviando link de pago automáticamente a ${chatId}...`);
+                const isGroup = chatId.includes('@g.us');
+                const providerToSend = (isGroup && deps.groupProvider) ? deps.groupProvider : adapterProvider;
+                const jid = chatId.includes('@') ? chatId : `${chatId}@s.whatsapp.net`;
+                
+                const messageText = `Acá tenés el link de pago para *${title}* por un monto de *$${amount}*:\n🔗 ${result.initPoint}`;
+                const providerResponse = await providerToSend.sendMessage(jid, messageText, {});
+
+                // Guardar en el historial de mensajes
+                const externalId = providerResponse?.key?.id || providerResponse?.messages?.[0]?.id || providerResponse?.id;
+                await depsHistoryHandler.saveMessage(
+                    chatId,
+                    'assistant',
+                    messageText,
+                    'text',
+                    externalId || null,
+                    req.userId || null,
+                    null,
+                    isGroup ? 'whatsapp_group' : 'whatsapp',
+                    depsHistoryHandler.PROJECT_IDENTIFIER
+                );
+            }
+
+            res.json({
+                success: true,
+                initPoint: result.initPoint,
+                preferenceId: result.preferenceId
+            });
+        } catch (e: any) {
+            console.error('❌ [MercadoPago] Error al crear link de pago:', e.message);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
     /** POST /api/backoffice/chat/read/:chatId — Resetea unread_count a 0 para un chat */
     app.post('/api/backoffice/chat/read/:chatId', backofficeAuth, async (req: any, res: any) => {
         try {
