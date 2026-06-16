@@ -55,10 +55,67 @@ export const welcomeFlowVoice = addKeyword<any, any>(EVENTS.VOICE_NOTE)
         const localPath = await provider.saveFile(ctx, { path: "./tmp/voiceNote/" });
         console.log(`📂 Ruta del archivo de audio: ${localPath}`);
 
+        const { supabase } = await import("~/db/historyHandler");
+        const botPhoneNumber = provider?.globalVendorArgs?.phone_number_id || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
+        const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || HistoryHandler.PROJECT_IDENTIFIER;
+        const chatId = userId;
+        const externalId = ctx.key?.id || ctx.payload?.id || ctx.id;
+
+        // Normalizar la ruta a URL relativa web
+        let webPath = localPath;
+        if (webPath && typeof webPath === 'string') {
+            let normalized = webPath.replace(/\\/g, '/');
+            const tmpIdx = normalized.toLowerCase().indexOf('/tmp/');
+            if (tmpIdx !== -1) {
+                webPath = normalized.substring(tmpIdx);
+            }
+        }
+
+        // Actualizar el mensaje original con la ruta real del audio para que sea reproducible en el CRM
+        if (process.env.STORAGE_MODE === "local") {
+            try {
+                const { LocalHistoryStore } = await import("~/db/localHistoryStore");
+                const list = LocalHistoryStore.getMessagesList(dynamicProjectId);
+                const msgIdx = list.findIndex(m => m.external_id === externalId);
+                if (msgIdx !== -1) {
+                    list[msgIdx].content = webPath;
+                    list[msgIdx].type = ctx.type || 'voice';
+                    LocalHistoryStore.saveMessagesList(dynamicProjectId, list);
+                    console.log(`💾 Mensaje de voz ${externalId} actualizado en BD local: ${webPath}`);
+                }
+            } catch (dbErr: any) {
+                console.error("❌ Error actualizando ruta local de nota de voz:", dbErr.message);
+            }
+        } else if (supabase && externalId) {
+            try {
+                await supabase
+                    .from('messages')
+                    .update({
+                        content: webPath,
+                        type: ctx.type || 'voice'
+                    })
+                    .eq('external_id', externalId)
+                    .eq('project_id', dynamicProjectId);
+                console.log(`💾 Mensaje de voz ${externalId} actualizado en BD con la ruta local: ${webPath}`);
+            } catch (dbErr: any) {
+                console.error("❌ Error actualizando ruta de nota de voz en base de datos:", dbErr.message);
+            }
+        }
+
+        // Verificar si la IA está activa (si existe OPENAI_API_KEY)
+        const { getOpenAI } = await import("~/apis/openai/openaiHelper");
+        const openai = await getOpenAI();
+
+        if (!openai) {
+            console.log(`[welcomeFlowVoice] IA Desactivada (sin OPENAI_API_KEY). Omitiendo transcripción y respuesta del bot.`);
+            return;
+        }
+
         // Transcribir el audio antes de procesarlo
         const transcription = await transcribeAudioFile(`${localPath}`);
 
         if (!transcription) {
+            // Solo alertar si el bot está configurado con OpenAI pero falló por algún motivo en la transcripción
             await flowDynamic("⚠️ No pude transcribir el audio. Inténtalo de nuevo.");
             return;
         }
@@ -68,11 +125,6 @@ export const welcomeFlowVoice = addKeyword<any, any>(EVENTS.VOICE_NOTE)
 
         // Guardar la transcripción en la base de datos como mensaje de texto para visibilidad en el Backoffice
         try {
-            const { HistoryHandler } = await import("~/db/historyHandler");
-            const botPhoneNumber = provider?.globalVendorArgs?.phone_number_id || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
-            const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || HistoryHandler.PROJECT_IDENTIFIER;
-            const chatId = userId;
-            
             await HistoryHandler.saveMessage(
                 chatId,
                 'user',

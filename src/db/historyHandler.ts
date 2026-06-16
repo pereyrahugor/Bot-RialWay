@@ -1194,6 +1194,7 @@ export class HistoryHandler {
                             titulo: `Lead: ${name}`,
                             descripcion: details.notes || 'Lead detectado automáticamente',
                             estado: 'Abierto',
+                            tipo: 'Nuevo Lead',
                             prioridad: 'Media',
                             created_at: new Date().toISOString(),
                             ...(clienteId ? { cliente_id: clienteId } : {})
@@ -1909,7 +1910,7 @@ export class HistoryHandler {
     static async createReporteBot(
         rawChatId: string,
         descripcion: string,
-        tipo: string = 'Resumen',
+        tipo: string = 'Nuevo Lead',
         forcedProjectId?: string
     ) {
         const chatId = this.normalizeId(rawChatId);
@@ -1917,22 +1918,35 @@ export class HistoryHandler {
         try {
             const { data: proyectoRow } = await supabase
                 .from('proyectos_railway')
-                .select('cliente_id, clientes(nombre)')
+                .select('cliente_id')
                 .eq('railway_project_id', currentProjectId)
                 .maybeSingle();
 
             const clienteId = (proyectoRow as any)?.cliente_id || null;
-            const nombre = (proyectoRow as any)?.clientes?.nombre || null;
+
+            // Obtener el nombre real del contacto desde la tabla chats
+            const { data: chatData } = await supabase
+                .from('chats')
+                .select('name')
+                .eq('id', chatId)
+                .eq('project_id', currentProjectId)
+                .maybeSingle();
+            const contactName = chatData?.name || chatId;
 
             const { data, error } = await supabase
-                .from('reportes_bot')
+                .from('tickets')
                 .insert({
                     project_id: currentProjectId,
                     chat_id: chatId,
+                    titulo: `Lead: ${contactName}`,
                     descripcion,
                     tipo,
-                    ...(clienteId ? { cliente_id: clienteId } : {}),
-                    ...(nombre ? { nombre } : {})
+                    estado: 'Abierto',
+                    prioridad: 'Media',
+                    attachments: '[]',
+                    chats_adjuntos: '[]',
+                    created_at: new Date().toISOString(),
+                    ...(clienteId ? { cliente_id: clienteId } : {})
                 })
                 .select()
                 .single();
@@ -1950,10 +1964,12 @@ export class HistoryHandler {
         const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
         try {
             const { data, error } = await supabase
-                .from('reportes_bot')
+                .from('tickets')
                 .select('*')
                 .eq('chat_id', chatId)
                 .eq('project_id', currentProjectId)
+                .eq('tipo', 'Nuevo Lead')
+                .eq('estado', 'Abierto')
                 .order('created_at', { ascending: false })
                 .limit(1)
                 .maybeSingle();
@@ -1969,7 +1985,7 @@ export class HistoryHandler {
     static async updateReporteBotDescription(reporteId: string, descripcion: string) {
         try {
             const { data, error } = await supabase
-                .from('reportes_bot')
+                .from('tickets')
                 .update({ descripcion, updated_at: new Date().toISOString() })
                 .eq('id', reporteId)
                 .select()
@@ -2424,17 +2440,18 @@ export class HistoryHandler {
             .on('postgres_changes', {
                 event: 'INSERT',
                 schema: 'public',
-                table: 'reportes_bot',
+                table: 'tickets',
                 filter: `project_id=eq.${projectId}`
             }, (payload: any) => {
-                console.log(`📡 [Realtime] Nuevo reporte creado: ${payload.new?.tipo} para ${payload.new?.chat_id}`);
+                if (payload.new?.tipo !== 'Nuevo Lead') return;
+                console.log(`📡 [Realtime] Nuevo ticket Lead creado para ${payload.new?.chat_id}`);
                 historyEvents.emit('reporte_created', { reporte: payload.new, projectId });
             })
             .subscribe((status: string) => {
                 if (status === 'SUBSCRIBED') {
-                    console.log(`✅ [Realtime] Suscrito a reportes_bot para proyecto ${projectId}`);
+                    console.log(`✅ [Realtime] Suscrito a tickets (Nuevo Lead) para proyecto ${projectId}`);
                 } else if (status === 'CHANNEL_ERROR') {
-                    console.error(`❌ [Realtime] Error en suscripción de reportes_bot. Verifica que Realtime esté habilitado en la tabla 'reportes_bot' en Supabase.`);
+                    console.error(`❌ [Realtime] Error en suscripción de tickets. Verifica que Realtime esté habilitado en la tabla 'tickets' en Supabase.`);
                 }
             });
     }

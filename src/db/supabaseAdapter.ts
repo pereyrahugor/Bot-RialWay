@@ -85,7 +85,8 @@ export const useSupabaseAuthState = async (
             } finally {
                 saveTimeout = null;
             }
-        }, 120000); // Agrupar cambios durante 120 segundos para evitar alto volumen de egreso
+        }, 1800000); // Agrupar cambios durante 30 minutos para no saturar Supabase
+
     };
 
     // Baileys espera que 'creds' esté disponible directamente (initAuthCreds lo inicializa si no existe)
