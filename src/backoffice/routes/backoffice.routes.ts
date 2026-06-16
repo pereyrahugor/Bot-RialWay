@@ -2579,33 +2579,82 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
-    app.post('/api/backoffice/mercadopago/connect', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
-        const { token } = req.body;
-        if (!token) {
-            return res.status(400).json({ success: false, error: 'Token de acceso es requerido.' });
-        }
+    app.get('/api/backoffice/mercadopago/auth-url', backofficeAuth, (req: any, res: any) => {
         try {
-            const projectId = resolveProjectId(req);
-            try {
-                const mpRes = await axios.get('https://api.mercadopago.com/users/me', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                await depsHistoryHandler.saveSetting('MP_ACCESS_TOKEN', token, projectId);
-                return res.json({
-                    success: true,
-                    connected: true,
-                    nickname: mpRes.data.nickname,
-                    email: mpRes.data.email
-                });
-            } catch (err: any) {
-                console.error('[MercadoPago Connect] Error validando token:', err.response?.data || err.message);
-                return res.status(400).json({
-                    success: false,
-                    error: err.response?.data?.message || 'Token de acceso inválido o expirado. Verifique e intente nuevamente.'
-                });
+            const projectId = resolveProjectId(req) || 'default';
+            const appId = process.env.MP_APP_ID;
+            if (!appId) {
+                return res.status(500).json({ success: false, error: 'Configuración MP_APP_ID faltante en el servidor.' });
             }
+            
+            const publicDomain = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PROJECT_URL || "";
+            const cleanDomain = publicDomain.startsWith("http") ? publicDomain : publicDomain ? `https://${publicDomain}` : "";
+            const redirectUri = encodeURIComponent(`${cleanDomain}/api/backoffice/mercadopago/callback`);
+            
+            const authUrl = `https://auth.mercadopago.com.ar/authorization?client_id=${appId}&response_type=code&platform_id=mp&redirect_uri=${redirectUri}&state=${projectId}`;
+            
+            res.json({ success: true, url: authUrl });
         } catch (error: any) {
             res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
+    app.get('/api/backoffice/mercadopago/callback', async (req: any, res: any) => {
+        const { code, state } = req.query;
+        if (!code) {
+            return res.status(400).send('Código de autorización faltante de Mercado Pago.');
+        }
+        
+        try {
+            const projectId = (state && state !== 'default') ? state : null;
+            const appId = process.env.MP_APP_ID;
+            const appSecret = process.env.MP_PASS; // client_secret
+            
+            if (!appId || !appSecret) {
+                console.error('[MercadoPago Callback] Faltan credenciales de aplicación en .env');
+                return res.status(500).send('Error interno: Configuración de la aplicación faltante.');
+            }
+            
+            const publicDomain = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PROJECT_URL || "";
+            const cleanDomain = publicDomain.startsWith("http") ? publicDomain : publicDomain ? `https://${publicDomain}` : "";
+            const redirectUri = `${cleanDomain}/api/backoffice/mercadopago/callback`;
+            
+            // Exchange code for token
+            const tokenRes = await axios.post('https://api.mercadopago.com/oauth/token', 
+                new URLSearchParams({
+                    client_id: appId,
+                    client_secret: appSecret,
+                    grant_type: 'authorization_code',
+                    code: code as string,
+                    redirect_uri: redirectUri
+                }).toString(),
+                {
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+                }
+            );
+            
+            const { access_token, public_key, user_id } = tokenRes.data;
+            
+            if (!access_token) {
+                return res.status(400).send('No se recibió el access token en la respuesta de Mercado Pago.');
+            }
+            
+            // Guardar el token del cliente en settings
+            await depsHistoryHandler.saveSetting('MP_ACCESS_TOKEN', access_token, projectId);
+            if (public_key) {
+                await depsHistoryHandler.saveSetting('MP_PUBLIC_KEY', public_key, projectId);
+            }
+            if (user_id) {
+                await depsHistoryHandler.saveSetting('MP_USER_ID', String(user_id), projectId);
+            }
+            
+            // Redirigir de vuelta a la vista de Mercado Pago en el backoffice
+            const origin = cleanDomain || '';
+            res.writeHead(302, { Location: `${origin}/mercado-pago` });
+            res.end();
+        } catch (error: any) {
+            console.error('[MercadoPago Callback] Error en el intercambio de token:', error.response?.data || error.message);
+            res.status(500).send(`Error al vincular cuenta: ${error.response?.data?.message || error.message}`);
         }
     });
 

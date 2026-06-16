@@ -34,19 +34,15 @@ window.mercadoPagoView = (() => {
                     </div>
 
                     <!-- Estado: Desconectado / Formulario de Conexión -->
-                    <div id="mp-disconnected-section" style="display: none;">
-                        <div style="background: rgba(0, 158, 227, 0.05); border: 1px solid rgba(0, 158, 227, 0.2); border-radius: 12px; padding: 1rem; margin-bottom: 1.5rem;">
-                            <h4 style="margin: 0 0 6px; color: #009ee3; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; font-weight: 700;">¿Cómo obtener tu Access Token?</h4>
+                    <div id="mp-disconnected-section" style="display: none; text-align: center;">
+                        <div style="background: rgba(0, 158, 227, 0.05); border: 1px solid rgba(0, 158, 227, 0.2); border-radius: 12px; padding: 1rem; margin-bottom: 1.5rem; text-align: left;">
+                            <h4 style="margin: 0 0 6px; color: #009ee3; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; font-weight: 700;">Conexión Segura</h4>
                             <p style="margin: 0; font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">
-                                Ingresá a <a href="https://www.mercadopago.com.ar/developers/panel" target="_blank" style="color: #009ee3; text-decoration: underline; font-weight: 600;">Mercado Pago Developers</a>, ve a tus Credenciales y copia tu <strong>Access Token</strong> (de producción <code>APP_USR-</code> o de prueba <code>TEST-</code>).
+                                Serás redirigido de forma segura a Mercado Pago para iniciar sesión con tus credenciales de usuario y autorizar la vinculación.
                             </p>
                         </div>
-                        <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 1.5rem; text-align: left;">
-                            <label style="font-size: 0.85rem; font-weight: 600; color: var(--text-main);">Access Token (Producción o Prueba)</label>
-                            <input type="password" id="mp-token-input" class="crm-input" placeholder="APP_USR-... o TEST-..." style="width: 100%; padding: 12px; border-radius: 10px; background: var(--bg-header); border: 1px solid var(--border); color: var(--text-main);">
-                        </div>
                         <button id="mp-connect-btn" class="btn-primary" style="width:100%; padding:13px 20px; display:flex; align-items:center; justify-content:center; gap:10px; font-size:0.95rem; font-weight:600; border-radius:12px; background: #009ee3; color: white; border: none; cursor: pointer; transition: all 0.2s;">
-                            <i class="fas fa-plug"></i> Vincular Cuenta
+                            <i class="fas fa-plug"></i> Vincular con Mercado Pago
                         </button>
                     </div>
 
@@ -64,18 +60,14 @@ window.mercadoPagoView = (() => {
                             <div style="display: flex; justify-content: space-between;"><strong style="color: var(--text-muted);">User ID:</strong> <span id="mp-userid" style="font-family: monospace; color: var(--text-muted);">Cargando...</span></div>
                         </div>
 
-                        <!-- Override Form container -->
+                        <!-- Override Form container (solo visible si está con token default del server) -->
                         <div id="mp-override-container" style="display: none; border-top: 1px solid var(--border); padding-top: 1.5rem; margin-top: 1.5rem; text-align: left;">
                             <h4 style="margin: 0 0 8px; color: var(--text-main); font-size: 0.9rem; font-weight: 700;">Vincular Cuenta de Cliente Personalizada</h4>
                             <p style="margin: 0 0 1.25rem; font-size: 0.8rem; color: var(--text-muted); line-height: 1.4;">
-                                Puedes anular la configuración por defecto vinculando un Access Token propio para este proyecto.
+                                Puedes anular la configuración por defecto vinculando un usuario de Mercado Pago propio para este proyecto.
                             </p>
-                            <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 1rem;">
-                                <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-main);">Access Token del Cliente</label>
-                                <input type="password" id="mp-override-token-input" class="crm-input" placeholder="APP_USR-... o TEST-..." style="width: 100%; padding: 10px; border-radius: 8px; background: var(--bg-header); border: 1px solid var(--border); color: var(--text-main);">
-                            </div>
                             <button id="mp-override-connect-btn" class="btn-primary" style="width:100%; padding:11px; display:flex; align-items:center; justify-content:center; gap:8px; font-size:0.88rem; font-weight:600; border-radius:10px; background: #009ee3; color: white; border: none; cursor: pointer;">
-                                <i class="fas fa-plug"></i> Vincular esta Cuenta
+                                <i class="fas fa-plug"></i> Vincular otra cuenta de usuario
                             </button>
                         </div>
 
@@ -190,34 +182,25 @@ window.mercadoPagoView = (() => {
         }
     }
 
-    async function connectToken(tokenVal, btnElement) {
-        if (!tokenVal) {
-            showToast('Por favor ingrese un token de acceso válido.', 'error');
-            return;
-        }
-
+    async function startOAuthFlow(btnElement) {
         const originalHtml = btnElement.innerHTML;
         btnElement.disabled = true;
-        btnElement.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Conectando...';
+        btnElement.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Redirigiendo...';
 
         try {
-            const res = await fetch(`/api/backoffice/mercadopago/connect?token=${_token}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ token: tokenVal })
-            });
+            const res = await fetch(`/api/backoffice/mercadopago/auth-url?token=${_token}`);
             const data = await res.json();
             
-            if (res.ok && data.success) {
-                showToast('¡Mercado Pago conectado con éxito!', 'success');
-                await checkStatus();
+            if (res.ok && data.success && data.url) {
+                window.location.href = data.url;
             } else {
-                showToast(data.error || 'No se pudo conectar Mercado Pago.', 'error');
+                showToast(data.error || 'No se pudo obtener la URL de vinculación.', 'error');
+                btnElement.disabled = false;
+                btnElement.innerHTML = originalHtml;
             }
         } catch (err) {
             console.error(err);
-            showToast('Error de red al conectar.', 'error');
-        } finally {
+            showToast('Error de red al iniciar la vinculación.', 'error');
             btnElement.disabled = false;
             btnElement.innerHTML = originalHtml;
         }
@@ -233,10 +216,7 @@ window.mercadoPagoView = (() => {
         const connectBtn = document.getElementById('mp-connect-btn');
         if (connectBtn) {
             connectBtn.addEventListener('click', async () => {
-                const tokenInput = document.getElementById('mp-token-input');
-                const val = tokenInput ? tokenInput.value.trim() : '';
-                await connectToken(val, connectBtn);
-                if (tokenInput) tokenInput.value = '';
+                await startOAuthFlow(connectBtn);
             });
         }
 
@@ -244,10 +224,7 @@ window.mercadoPagoView = (() => {
         const overrideConnectBtn = document.getElementById('mp-override-connect-btn');
         if (overrideConnectBtn) {
             overrideConnectBtn.addEventListener('click', async () => {
-                const tokenInput = document.getElementById('mp-override-token-input');
-                const val = tokenInput ? tokenInput.value.trim() : '';
-                await connectToken(val, overrideConnectBtn);
-                if (tokenInput) tokenInput.value = '';
+                await startOAuthFlow(overrideConnectBtn);
             });
         }
 
