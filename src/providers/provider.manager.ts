@@ -398,7 +398,9 @@ export const hasActiveSession = async (adapterProvider: any, groupProvider: any 
         const metaOnboarding = await HistoryHandler.getMetaOnboardingData();
 
         const now = Date.now();
-        const hasData = metaOnboarding?.onboarding_data && Object.keys(metaOnboarding.onboarding_data).length > 2;
+        const hasData = metaOnboarding?.onboarding_data && 
+                        Object.keys(metaOnboarding.onboarding_data).length > 2 && 
+                        metaOnboarding.onboarding_data.display_phone_number;
         const skipSync = hasData && (now - lastMetaSyncTime < META_SYNC_COOLDOWN_MS);
 
         if (metaOnboarding && metaOnboarding.whatsappToken && metaOnboarding.whatsappNumberId && metaOnboarding.whatsappToken !== 'PENDING' && !skipSync) {
