@@ -2541,8 +2541,14 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     // --- MERCADO PAGO ---
     app.get('/api/backoffice/mercadopago/status', backofficeAuth, async (req: any, res: any) => {
         try {
-            const projectId = resolveProjectId(req);
-            let token = await depsHistoryHandler.getSetting('MP_ACCESS_TOKEN', projectId);
+            const projectId = resolveProjectId(req) || 'default';
+            const { data: acc } = await supabase
+                .from('mercadopago_acount_user')
+                .select('*')
+                .eq('project_id', projectId)
+                .maybeSingle();
+
+            let token = acc?.access_token || "";
             let isFromEnv = false;
             if (!token) {
                 token = process.env.MP_TOKEN_TEST || process.env.MP_ACCESS_TOKEN || "";
@@ -2554,6 +2560,19 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                 return res.json({ success: true, connected: false });
             }
             try {
+                // Si viene de BD, ya tenemos los datos guardados para ahorrar llamadas
+                if (acc && !isFromEnv) {
+                    return res.json({
+                        success: true,
+                        connected: true,
+                        nickname: acc.nickname || 'Desconocido',
+                        email: acc.email || 'Desconocido',
+                        id: acc.user_id || 'Desconocido',
+                        isFromEnv: false
+                    });
+                }
+
+                // Si viene de env, validamos contra la API de Mercado Pago
                 const mpRes = await axios.get('https://api.mercadopago.com/users/me', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -2606,7 +2625,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
         
         try {
-            const projectId = (state && state !== 'default') ? state : null;
+            const projectId = (state && state !== 'default') ? state : 'default';
             const appId = process.env.MP_APP_ID;
             const appSecret = process.env.MP_PASS; // client_secret
             
@@ -2638,15 +2657,38 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             if (!access_token) {
                 return res.status(400).send('No se recibió el access token en la respuesta de Mercado Pago.');
             }
+
+            // Obtener el nickname e email del vendedor desde Mercado Pago
+            let nickname = 'Desconocido';
+            let email = 'Desconocido';
+            try {
+                const mpUserRes = await axios.get('https://api.mercadopago.com/users/me', {
+                    headers: { 'Authorization': `Bearer ${access_token}` }
+                });
+                nickname = mpUserRes.data.nickname || 'Desconocido';
+                email = mpUserRes.data.email || 'Desconocido';
+            } catch (err: any) {
+                console.warn('[MercadoPago Callback] Error obteniendo info de usuario:', err.message);
+            }
             
-            // Guardar el token del cliente en settings
-            await depsHistoryHandler.saveSetting('MP_ACCESS_TOKEN', access_token, projectId);
-            if (public_key) {
-                await depsHistoryHandler.saveSetting('MP_PUBLIC_KEY', public_key, projectId);
-            }
-            if (user_id) {
-                await depsHistoryHandler.saveSetting('MP_USER_ID', String(user_id), projectId);
-            }
+            // Guardar en la tabla mercadopago_acount_user
+            await supabase.from('mercadopago_acount_user').upsert({
+                project_id: projectId,
+                access_token,
+                public_key: public_key || null,
+                user_id: String(user_id),
+                nickname: nickname || null,
+                email: email || null,
+                updated_at: new Date().toISOString()
+            }, { onConflict: 'project_id' });
+
+            // Guardar en la tabla mercadopago_user_routoing para enrutamiento
+            await supabase.from('mercadopago_user_routoing').upsert({
+                user_id: String(user_id),
+                project_id: projectId,
+                project_url: cleanDomain || '',
+                updated_at: new Date().toISOString()
+            }, { onConflict: 'user_id' });
             
             // Redirigir de vuelta a la vista de Mercado Pago en el backoffice
             const origin = cleanDomain || '';
@@ -2658,10 +2700,317 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
+    // --- MERCADO PAGO CUSTOMER PAYMENT CALLBACK ---
+    app.get('/api/mercadopago/callback', (req: any, res: any) => {
+        const { status, payment_id } = req.query;
+        const isApproved = status === 'approved';
+        
+        let title = 'Estado de Pago';
+        let color = '#f59e0b'; // pending yellow
+        let icon = 'fa-clock';
+        let message = 'Tu pago se encuentra en proceso o pendiente.';
+        
+        if (isApproved) {
+            title = '¡Pago Exitoso!';
+            color = '#10b981'; // green
+            icon = 'fa-circle-check';
+            message = '¡Muchas gracias! Tu pago ha sido procesado con éxito.';
+        } else if (status === 'rejected' || status === 'cancelled') {
+            title = 'Pago Rechazado';
+            color = '#ef4444'; // red
+            icon = 'fa-circle-xmark';
+            message = 'Lo sentimos, el pago no pudo ser completado.';
+        }
+
+        res.setHeader('Content-Type', 'text/html');
+        res.end(`
+            <!DOCTYPE html>
+            <html lang="es">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>${title}</title>
+                <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+                <style>
+                    body {
+                        margin: 0;
+                        padding: 0;
+                        font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+                        background: #0f172a;
+                        color: #f8fafc;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        min-height: 100vh;
+                    }
+                    .card {
+                        background: #1e293b;
+                        border: 1px solid #334155;
+                        border-radius: 24px;
+                        padding: 2.5rem 2rem;
+                        max-width: 420px;
+                        width: 90%;
+                        text-align: center;
+                        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+                    }
+                    .icon {
+                        font-size: 4.5rem;
+                        color: ${color};
+                        margin-bottom: 1.5rem;
+                    }
+                    h1 {
+                        font-size: 1.75rem;
+                        font-weight: 700;
+                        margin: 0 0 10px;
+                        color: #f8fafc;
+                    }
+                    p {
+                        color: #94a3b8;
+                        font-size: 1rem;
+                        line-height: 1.5;
+                        margin: 0 0 1.5rem;
+                    }
+                    .details {
+                        background: #0f172a;
+                        border-radius: 12px;
+                        padding: 1rem;
+                        margin-bottom: 2rem;
+                        font-size: 0.9rem;
+                        text-align: left;
+                        border: 1px solid #1e293b;
+                    }
+                    .detail-row {
+                        display: flex;
+                        justify-content: space-between;
+                        margin-bottom: 6px;
+                    }
+                    .detail-row:last-child {
+                        margin-bottom: 0;
+                    }
+                    .label {
+                        color: #64748b;
+                    }
+                    .value {
+                        color: #cbd5e1;
+                        font-weight: 600;
+                    }
+                    .btn {
+                        display: inline-block;
+                        width: 100%;
+                        box-sizing: border-box;
+                        background: #009ee3;
+                        color: white;
+                        text-decoration: none;
+                        padding: 12px;
+                        border-radius: 12px;
+                        font-weight: 600;
+                        transition: background 0.2s;
+                        cursor: pointer;
+                        border: none;
+                        text-align: center;
+                    }
+                    .btn:hover {
+                        background: #008cd1;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="card">
+                    <div class="icon"><i class="fa-solid ${icon}"></i></div>
+                    <h1>${title}</h1>
+                    <p>${message}</p>
+                    
+                    <div class="details">
+                        <div class="detail-row">
+                            <span class="label">ID de Operación:</span>
+                            <span class="value">${payment_id || 'N/D'}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="label">Estado del Pago:</span>
+                            <span class="value" style="color: ${color};">${status ? status.toUpperCase() : 'DESCONOCIDO'}</span>
+                        </div>
+                    </div>
+                    
+                    <button class="btn" onclick="window.close()">Cerrar Ventana</button>
+                </div>
+            </body>
+            </html>
+        `);
+    });
+
+    // --- MERCADO PAGO CUSTOMER PAYMENT WEBHOOK ---
+    app.get('/api/clientes/mercadopago/webhook', (req: any, res: any) => {
+        res.statusCode = 200;
+        res.end('OK');
+    });
+
+    app.post('/api/clientes/mercadopago/webhook', bodyParser.json(), async (req: any, res: any) => {
+        res.statusCode = 200;
+        res.end('OK');
+
+        try {
+            console.log('📡 [MP Webhook] Recibida notificación de pago:', JSON.stringify(req.body));
+            
+            const paymentId = req.body?.data?.id || req.body?.id || req.query?.id;
+            const type = req.body?.type || req.body?.topic || req.query?.topic;
+            const userId = req.body?.user_id || req.query?.user_id;
+
+            if (type !== 'payment' || !paymentId) {
+                console.log(`[MP Webhook] Ignorando notificación tipo: ${type || 'indefinido'}, ID: ${paymentId || 'indefinido'}`);
+                return;
+            }
+
+            // 1. Identificar el projectId usando el user_id de Mercado Pago
+            let projectId: string | null = null;
+            if (userId) {
+                const { data: routeData, error: dbErr } = await supabase
+                    .from('mercadopago_user_routoing')
+                    .select('project_id')
+                    .eq('user_id', String(userId))
+                    .limit(1);
+                
+                if (dbErr) {
+                    console.error('[MP Webhook] Error consultando mercadopago_user_routoing:', dbErr.message);
+                } else if (routeData && routeData.length > 0) {
+                    projectId = routeData[0].project_id;
+                }
+            }
+
+            // 2. Obtener el token de acceso correspondiente (DB o fallback a ENV)
+            let accessToken = "";
+            if (projectId) {
+                const { data: acc } = await supabase
+                    .from('mercadopago_acount_user')
+                    .select('access_token')
+                    .eq('project_id', projectId)
+                    .maybeSingle();
+                accessToken = acc?.access_token || "";
+            }
+            if (!accessToken) {
+                accessToken = process.env.MP_TOKEN_TEST || process.env.MP_ACCESS_TOKEN || "";
+            }
+
+            if (!accessToken) {
+                console.error('[MP Webhook] Error: No se encontró Access Token para procesar el pago ID:', paymentId);
+                return;
+            }
+
+            // 3. Consultar los detalles del pago a la API de Mercado Pago
+            const paymentRes = await axios.get(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+            const payment = paymentRes.data;
+
+            // 3.5 Extraer projectId y chatId de external_reference
+            const extRef = payment?.external_reference || "";
+            const parts = extRef.split(':');
+            const refProjectId = parts[0] || projectId;
+            const chatId = parts[1];
+
+            // 5. Evitar procesar el mismo pago más de una vez (Deduplicación)
+            const { data: existingPayment, error: payErr } = await supabase
+                .from('mercadopago_payments_clients')
+                .select('id, status')
+                .eq('id', String(paymentId))
+                .maybeSingle();
+
+            if (payErr) {
+                console.error('[MP Webhook] Error deduplicando pago:', payErr.message);
+            } else if (existingPayment && existingPayment.status === 'approved') {
+                console.log(`[MP Webhook] El pago ${paymentId} ya fue procesado como aprobado previamente.`);
+                return;
+            }
+
+            // Guardar registro de la transacción en la base de datos mercadopago_payments_clients
+            if (payment) {
+                const { error: savePayErr } = await supabase
+                    .from('mercadopago_payments_clients')
+                    .upsert({
+                        id: String(paymentId),
+                        project_id: refProjectId,
+                        chat_id: chatId || null,
+                        status: payment.status || null,
+                        description: payment.description || null,
+                        transaction_amount: payment.transaction_amount || null,
+                        payment_method_id: payment.payment_method_id || null,
+                        user_id: userId ? String(userId) : null,
+                        updated_at: new Date().toISOString()
+                    }, { onConflict: 'id' });
+
+                if (savePayErr) {
+                    console.error('[MP Webhook] Error guardando registro en mercadopago_payments_clients:', savePayErr.message);
+                } else {
+                    console.log(`[MP Webhook] Registro de pago ${paymentId} (${payment.status}) guardado en base de datos.`);
+                }
+            }
+
+            if (!payment || payment.status !== 'approved') {
+                console.log(`[MP Webhook] Pago ${paymentId} no está aprobado (Estado: ${payment?.status || 'indefinido'}). Ignorando.`);
+                return;
+            }
+
+            if (!chatId) {
+                console.warn(`[MP Webhook] Pago aprobado ${paymentId} no tiene un chatId asociado en external_reference.`);
+                return;
+            }
+
+            console.log(`✅ [MP Webhook] Procesando pago aprobado ${paymentId} para chat: ${chatId}, proyecto: ${refProjectId}`);
+
+            // 6. Enviar mensaje de confirmación por WhatsApp
+            const cleanChatId = chatId.includes('@') ? chatId : `${chatId}@s.whatsapp.net`;
+            const isGroup = cleanChatId.includes('@g.us');
+            
+            const { getAdapterProvider, getGroupProvider } = await import('../../providers/instances');
+            const activeAdapter = getAdapterProvider();
+            const activeGroupAdapter = getGroupProvider();
+
+            const providerToSend = (isGroup && activeGroupAdapter) ? activeGroupAdapter : activeAdapter;
+
+            if (!providerToSend) {
+                console.error('[MP Webhook] Error: No hay proveedor de WhatsApp disponible para enviar la confirmación.');
+                return;
+            }
+
+            const confMessage = `✅ *Pago Aprobado*
+Hemos recibido tu pago con éxito.
+
+*Detalles del pago:*
+• *Concepto:* ${payment.description || 'Cobro'}
+• *Monto:* $${payment.transaction_amount} ARS
+• *ID de Pago:* ${paymentId}
+
+¡Muchas gracias!`;
+
+            try {
+                await providerToSend.sendMessage(cleanChatId, confMessage, {});
+                console.log(`[MP Webhook] Mensaje enviado correctamente a ${cleanChatId}`);
+                
+                await depsHistoryHandler.saveMessage(chatId, 'assistant', confMessage, 'text', null, null, null, 'whatsapp', refProjectId);
+            } catch (sendErr: any) {
+                console.error('[MP Webhook] Error al enviar confirmación de WhatsApp:', sendErr.message);
+            }
+
+        } catch (error: any) {
+            console.error('[MP Webhook] Error crítico procesando webhook:', error.response?.data || error.message);
+        }
+    });
+
     app.post('/api/backoffice/mercadopago/disconnect', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         try {
-            const projectId = resolveProjectId(req);
-            await depsHistoryHandler.saveSetting('MP_ACCESS_TOKEN', '', projectId);
+            const projectId = resolveProjectId(req) || 'default';
+            
+            // Buscar el user_id antes de borrar para limpiar ruteo
+            const { data: acc } = await supabase
+                .from('mercadopago_acount_user')
+                .select('user_id')
+                .eq('project_id', projectId)
+                .maybeSingle();
+
+            if (acc && acc.user_id) {
+                await supabase.from('mercadopago_user_routoing').delete().eq('user_id', acc.user_id);
+            }
+            
+            await supabase.from('mercadopago_acount_user').delete().eq('project_id', projectId);
             res.json({ success: true });
         } catch (error: any) {
             res.status(500).json({ success: false, error: error.message });

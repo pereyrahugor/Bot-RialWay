@@ -42,8 +42,9 @@ export async function executeClientTool(toolName: string, args: any, context: an
           
           const state = context?.state;
           const dynamicProjectId = state?.get ? state.get('dynamicProjectId') : (process.env.RAILWAY_PROJECT_ID || null);
+          const chatId = context?.ctx?.from || null;
           
-          const result = await createMercadoPagoPreference(title, amount, 1, dynamicProjectId);
+          const result = await createMercadoPagoPreference(title, amount, 1, dynamicProjectId, chatId);
           return {
               success: true,
               link: result.initPoint,

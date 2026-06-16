@@ -276,6 +276,52 @@ export class HistoryHandler {
                 GRANT ALL ON TABLE routing_table TO service_role;
                 GRANT ALL ON TABLE routing_table TO authenticated;
                 GRANT SELECT ON TABLE routing_table TO anon;`
+            },
+            {
+                name: 'mercadopago_payments_clients',
+                sql: `CREATE TABLE IF NOT EXISTS mercadopago_payments_clients (
+                    id TEXT PRIMARY KEY,
+                    project_id TEXT,
+                    chat_id TEXT,
+                    status TEXT,
+                    description TEXT,
+                    transaction_amount NUMERIC,
+                    payment_method_id TEXT,
+                    user_id TEXT,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                );
+                GRANT ALL ON TABLE mercadopago_payments_clients TO service_role;
+                GRANT ALL ON TABLE mercadopago_payments_clients TO authenticated;
+                GRANT SELECT ON TABLE mercadopago_payments_clients TO anon;`
+            },
+            {
+                name: 'mercadopago_acount_user',
+                sql: `CREATE TABLE IF NOT EXISTS mercadopago_acount_user (
+                    project_id TEXT PRIMARY KEY,
+                    access_token TEXT,
+                    public_key TEXT,
+                    user_id TEXT,
+                    nickname TEXT,
+                    email TEXT,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                );
+                GRANT ALL ON TABLE mercadopago_acount_user TO service_role;
+                GRANT ALL ON TABLE mercadopago_acount_user TO authenticated;
+                GRANT SELECT ON TABLE mercadopago_acount_user TO anon;`
+            },
+            {
+                name: 'mercadopago_user_routoing',
+                sql: `CREATE TABLE IF NOT EXISTS mercadopago_user_routoing (
+                    user_id TEXT PRIMARY KEY,
+                    project_id TEXT,
+                    project_url TEXT,
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                );
+                GRANT ALL ON TABLE mercadopago_user_routoing TO service_role;
+                GRANT ALL ON TABLE mercadopago_user_routoing TO authenticated;
+                GRANT SELECT ON TABLE mercadopago_user_routoing TO anon;`
             }
         ];
 

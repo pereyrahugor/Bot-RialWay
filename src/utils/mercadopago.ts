@@ -1,5 +1,5 @@
 import { MercadoPagoConfig, Preference } from "mercadopago";
-import { HistoryHandler } from "../db/historyHandler";
+import { HistoryHandler, supabase } from "../db/historyHandler";
 
 /**
  * Crea una preferencia de pago en Mercado Pago y retorna el link de pago (initPoint).
@@ -11,9 +11,21 @@ export async function createMercadoPagoPreference(
     title: string,
     amount: number,
     quantity = 1,
-    projectId: string | null = null
+    projectId: string | null = null,
+    chatId: string | null = null
 ): Promise<{ initPoint: string; preferenceId: string }> {
-    let accessToken = await HistoryHandler.getSetting("MP_ACCESS_TOKEN", projectId);
+    let accessToken = "";
+    try {
+        const { data: acc } = await supabase
+            .from("mercadopago_acount_user")
+            .select("access_token")
+            .eq("project_id", projectId || "default")
+            .maybeSingle();
+        accessToken = acc?.access_token || "";
+    } catch (dbErr) {
+        console.error("[MercadoPago Pref] Error fetching token from DB:", dbErr);
+    }
+
     if (!accessToken) {
         accessToken = process.env.MP_TOKEN_TEST || process.env.MP_ACCESS_TOKEN || "";
     }
@@ -37,6 +49,7 @@ export async function createMercadoPagoPreference(
                 currency_id: "ARS"
             }
         ],
+        external_reference: `${projectId || ''}:${chatId || ''}`,
         auto_return: "approved"
     };
 
