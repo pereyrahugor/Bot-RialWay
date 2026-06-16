@@ -2542,7 +2542,14 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     app.get('/api/backoffice/mercadopago/status', backofficeAuth, async (req: any, res: any) => {
         try {
             const projectId = resolveProjectId(req);
-            const token = await depsHistoryHandler.getSetting('MP_ACCESS_TOKEN', projectId);
+            let token = await depsHistoryHandler.getSetting('MP_ACCESS_TOKEN', projectId);
+            let isFromEnv = false;
+            if (!token) {
+                token = process.env.MP_TOKEN_TEST || process.env.MP_ACCESS_TOKEN || "";
+                if (token) {
+                    isFromEnv = true;
+                }
+            }
             if (!token) {
                 return res.json({ success: true, connected: false });
             }
@@ -2555,14 +2562,16 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                     connected: true,
                     nickname: mpRes.data.nickname,
                     email: mpRes.data.email,
-                    id: mpRes.data.id
+                    id: mpRes.data.id,
+                    isFromEnv
                 });
             } catch (err: any) {
                 console.warn('[MercadoPago Status] Error validando token:', err.response?.data || err.message);
                 return res.json({
                     success: true,
                     connected: false,
-                    error: err.response?.data?.message || 'Token de acceso inválido o expirado.'
+                    error: err.response?.data?.message || 'Token de acceso inválido o expirado.',
+                    isFromEnv
                 });
             }
         } catch (error: any) {

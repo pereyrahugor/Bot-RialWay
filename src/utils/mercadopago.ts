@@ -13,7 +13,10 @@ export async function createMercadoPagoPreference(
     quantity = 1,
     projectId: string | null = null
 ): Promise<{ initPoint: string; preferenceId: string }> {
-    const accessToken = await HistoryHandler.getSetting("MP_ACCESS_TOKEN", projectId);
+    let accessToken = await HistoryHandler.getSetting("MP_ACCESS_TOKEN", projectId);
+    if (!accessToken) {
+        accessToken = process.env.MP_TOKEN_TEST || process.env.MP_ACCESS_TOKEN || "";
+    }
     if (!accessToken) {
         throw new Error("Mercado Pago no está configurado. Token de acceso faltante.");
     }
