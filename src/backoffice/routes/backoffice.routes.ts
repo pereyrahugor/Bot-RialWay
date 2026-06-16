@@ -2266,7 +2266,11 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                 // --- SINCRONIZACIÓN AUTOMÁTICA SMB ---
                 // Solicitamos contactos e historial inmediatamente tras la vinculación
                 if (finalPhoneId) {
-                    await triggerMetaSync(accessToken, finalPhoneId);
+                    try {
+                        await triggerMetaSync(accessToken, finalPhoneId);
+                    } catch (syncErr: any) {
+                        console.warn('⚠️ [CALLBACK] Sincronización automática de contactos/historial falló (omitiendo para no bloquear la vinculación):', syncErr.response?.data || syncErr.message);
+                    }
                 }
             }
 
@@ -2314,7 +2318,11 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             await depsHistoryHandler.saveMetaOnboardingData(wabaId, phoneNumberId, token, { manual: true }, projectId);
             
             // Disparar sincronización SMB
-            await triggerMetaSync(token, phoneNumberId);
+            try {
+                await triggerMetaSync(token, phoneNumberId);
+            } catch (syncErr: any) {
+                console.warn('⚠️ [SYNC-MANUAL] Sincronización automática manual falló (omitiendo para no bloquear la vinculación):', syncErr.response?.data || syncErr.message);
+            }
 
             // Programar reinicio
             setTimeout(() => {
