@@ -1480,11 +1480,15 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         if (isAbsent(mergedConfig.phone_number_id) && process.env.META_PHONE_ID)     mergedConfig.phone_number_id = process.env.META_PHONE_ID;
         if (isAbsent(mergedConfig.access_token)   && process.env.META_ACCESS_TOKEN) mergedConfig.access_token   = process.env.META_ACCESS_TOKEN;
 
+        const dbAppId = await depsHistoryHandler.getConfig('META_APP_ID', projectId);
+        const dbAppSecret = await depsHistoryHandler.getConfig('META_APP_SECRET', projectId);
+        const dbConfigId = await depsHistoryHandler.getConfig('META_CONFIG_ID', projectId);
+
         res.json({
             success: true,
-            appId: process.env.META_APP_ID || '1493670789148486',
-            appSecret: process.env.META_APP_SECRET || '',
-            configId: process.env.META_CONFIG_ID || '',
+            appId: dbAppId || process.env.META_APP_ID || '1493670789148486',
+            appSecret: dbAppSecret || process.env.META_APP_SECRET || '362b2ec20c00bdf51336fd165ad47160',
+            configId: dbConfigId || process.env.META_CONFIG_ID || '770821995864139',
             railwayProjectId: projectId,
             config: mergedConfig
         });
@@ -1503,7 +1507,9 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             if (!finalWabaId || !finalPhoneId) {
                 const { discoverMetaIds } = await import("../../apis/meta/metaDiscovery");
                 console.log(`📡 [META-SYNC-MANUAL] Iniciando descubrimiento manual por falta de IDs...`);
-                const discovery = await discoverMetaIds(manualToken);
+                const appId = await depsHistoryHandler.getConfig('META_APP_ID', projectId) || process.env.META_APP_ID || '1493670789148486';
+                const appSecret = await depsHistoryHandler.getConfig('META_APP_SECRET', projectId) || process.env.META_APP_SECRET || '362b2ec20c00bdf51336fd165ad47160';
+                const discovery = await discoverMetaIds(manualToken, null, appId, appSecret);
                 if (!discovery.found || !discovery.data?.phoneNumberId) {
                     return res.status(404).json({ success: false, error: 'No se pudieron encontrar los datos automáticamente. Por favor ingresa los IDs manualmente.' });
                 }
@@ -2075,8 +2081,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         try {
             console.log(`📡 [CALLBACK] Intercambiando código Meta por token (v22.0)...`);
             
-            const appId = process.env.META_APP_ID;
-            const appSecret = process.env.META_APP_SECRET;
+            const appId = await depsHistoryHandler.getConfig('META_APP_ID', projectId) || process.env.META_APP_ID || '1493670789148486';
+            const appSecret = await depsHistoryHandler.getConfig('META_APP_SECRET', projectId) || process.env.META_APP_SECRET || '362b2ec20c00bdf51336fd165ad47160';
 
             if (!appId || !appSecret) {
                 throw new Error("Faltan META_APP_ID o META_APP_SECRET en el servidor.");
@@ -2094,7 +2100,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             // 1. Descubrimiento de WhatsApp (WABA)
             const { discoverMetaIds } = await import("../../apis/meta/metaDiscovery");
             const mainToken = await depsHistoryHandler.getMainToken();
-            const discovery = await discoverMetaIds(accessToken, mainToken);
+            const discovery = await discoverMetaIds(accessToken, mainToken, appId, appSecret);
             
             if (discovery.found && discovery.data) {
                 finalWabaId = discovery.data.wabaId || finalWabaId;
@@ -2359,7 +2365,9 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             console.log(`🔍 [SYNC-IDS] IDs faltantes. Iniciando discovery con token guardado...`);
             const { discoverMetaIds } = await import('../../apis/meta/metaDiscovery');
             const mainToken = await depsHistoryHandler.getMainToken();
-            const discovery = await discoverMetaIds(config.access_token, mainToken);
+            const appId = await depsHistoryHandler.getConfig('META_APP_ID', projectId) || process.env.META_APP_ID || '1493670789148486';
+            const appSecret = await depsHistoryHandler.getConfig('META_APP_SECRET', projectId) || process.env.META_APP_SECRET || '362b2ec20c00bdf51336fd165ad47160';
+            const discovery = await discoverMetaIds(config.access_token, mainToken, appId, appSecret);
 
             if (!discovery.found || !discovery.data?.wabaId || !discovery.data?.phoneNumberId) {
                 console.error(`❌ [SYNC-IDS] Discovery fallo para proyecto ${projectId}. No se encontraron IDs.`);
@@ -2463,12 +2471,16 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         const { code } = req.body;
         if (!code) return res.status(400).json({ success: false, error: 'Code is required' });
         try {
+            const projectId = resolveProjectId(req) || process.env.RAILWAY_PROJECT_ID || 'default_project';
+            const appId = await depsHistoryHandler.getConfig('META_APP_ID', projectId) || process.env.META_APP_ID || '1493670789148486';
+            const appSecret = await depsHistoryHandler.getConfig('META_APP_SECRET', projectId) || process.env.META_APP_SECRET || '362b2ec20c00bdf51336fd165ad47160';
+
             const response = await axios.post('https://ygyicozjewxbyixtpjlo.supabase.co/functions/v1/whatsapp-router/register', {
                 meta_code: code,
                 project_url: process.env.PROJECT_URL,
-                project_id: process.env.RAILWAY_PROJECT_ID,
-                app_id: process.env.META_APP_ID,
-                app_secret: process.env.META_APP_SECRET
+                project_id: projectId,
+                app_id: appId,
+                app_secret: appSecret
             });
             const data = response.data;
             const result = await depsHistoryHandler.saveMetaOnboardingData(

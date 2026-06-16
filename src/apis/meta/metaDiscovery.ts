@@ -30,7 +30,12 @@ export interface DiscoveryResult {
  * Utilidad para descubrir automáticamente los IDs de Meta (WABA y Phone)
  * utilizando únicamente el Access Token.
  */
-export async function discoverMetaIds(accessToken: string, mainToken: string | null = null): Promise<DiscoveryResult> {
+export async function discoverMetaIds(
+    accessToken: string, 
+    mainToken: string | null = null,
+    appId: string | null = null,
+    appSecret: string | null = null
+): Promise<DiscoveryResult> {
     const diagnostics: DiagnosticEntry[] = [];
     
     const logDiag = (step: string, description: string, status: 'success' | 'failed' | 'empty', details?: any, error?: any) => {
@@ -148,7 +153,9 @@ export async function discoverMetaIds(accessToken: string, mainToken: string | n
         // 4. Fallback Final: Debug Token para obtener contexto de la App
         if (!wabaId) {
             try {
-                const appToken = `${process.env.META_APP_ID}|${process.env.META_APP_SECRET}`;
+                const finalAppId = appId || process.env.META_APP_ID || '1493670789148486';
+                const finalAppSecret = appSecret || process.env.META_APP_SECRET || '362b2ec20c00bdf51336fd165ad47160';
+                const appToken = `${finalAppId}|${finalAppSecret}`;
                 const debugResponse = await axios.get(`https://graph.facebook.com/v22.0/debug_token`, {
                     params: {
                         input_token: accessToken,
