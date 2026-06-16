@@ -1486,9 +1486,9 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
         res.json({
             success: true,
-            appId: dbAppId || process.env.META_APP_ID || '1493670789148486',
-            appSecret: dbAppSecret || process.env.META_APP_SECRET || '362b2ec20c00bdf51336fd165ad47160',
-            configId: dbConfigId || process.env.META_CONFIG_ID || '770821995864139',
+            appId: dbAppId || process.env.META_APP_ID,
+            appSecret: dbAppSecret || process.env.META_APP_SECRET,
+            configId: dbConfigId || process.env.META_CONFIG_ID,
             railwayProjectId: projectId,
             config: mergedConfig
         });
