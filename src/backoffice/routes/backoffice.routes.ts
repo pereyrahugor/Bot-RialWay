@@ -2538,6 +2538,93 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
     });
 
+    // --- MERCADO PAGO ---
+    app.get('/api/backoffice/mercadopago/status', backofficeAuth, async (req: any, res: any) => {
+        try {
+            const projectId = resolveProjectId(req);
+            const token = await depsHistoryHandler.getSetting('MP_ACCESS_TOKEN', projectId);
+            if (!token) {
+                return res.json({ success: true, connected: false });
+            }
+            try {
+                const mpRes = await axios.get('https://api.mercadopago.com/users/me', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                return res.json({
+                    success: true,
+                    connected: true,
+                    nickname: mpRes.data.nickname,
+                    email: mpRes.data.email,
+                    id: mpRes.data.id
+                });
+            } catch (err: any) {
+                console.warn('[MercadoPago Status] Error validando token:', err.response?.data || err.message);
+                return res.json({
+                    success: true,
+                    connected: false,
+                    error: err.response?.data?.message || 'Token de acceso inválido o expirado.'
+                });
+            }
+        } catch (error: any) {
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
+    app.post('/api/backoffice/mercadopago/connect', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
+        const { token } = req.body;
+        if (!token) {
+            return res.status(400).json({ success: false, error: 'Token de acceso es requerido.' });
+        }
+        try {
+            const projectId = resolveProjectId(req);
+            try {
+                const mpRes = await axios.get('https://api.mercadopago.com/users/me', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                await depsHistoryHandler.saveSetting('MP_ACCESS_TOKEN', token, projectId);
+                return res.json({
+                    success: true,
+                    connected: true,
+                    nickname: mpRes.data.nickname,
+                    email: mpRes.data.email
+                });
+            } catch (err: any) {
+                console.error('[MercadoPago Connect] Error validando token:', err.response?.data || err.message);
+                return res.status(400).json({
+                    success: false,
+                    error: err.response?.data?.message || 'Token de acceso inválido o expirado. Verifique e intente nuevamente.'
+                });
+            }
+        } catch (error: any) {
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
+    app.post('/api/backoffice/mercadopago/disconnect', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
+        try {
+            const projectId = resolveProjectId(req);
+            await depsHistoryHandler.saveSetting('MP_ACCESS_TOKEN', '', projectId);
+            res.json({ success: true });
+        } catch (error: any) {
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
+    app.post('/api/backoffice/mercadopago/create-link', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
+        const { title, amount } = req.body;
+        if (!title || !amount) {
+            return res.status(400).json({ success: false, error: 'Título y monto son requeridos.' });
+        }
+        try {
+            const projectId = resolveProjectId(req);
+            const { createMercadoPagoPreference } = await import('../../utils/mercadopago');
+            const result = await createMercadoPagoPreference(title, Number(amount), 1, projectId);
+            res.json({ success: true, link: result.initPoint, preferenceId: result.preferenceId });
+        } catch (error: any) {
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
     // --- META SMB SYNC ---
     /**
      * Dispara la sincronización de contactos o historial desde Meta SMB API.

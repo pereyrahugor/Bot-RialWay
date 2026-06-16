@@ -10,9 +10,10 @@ import { HistoryHandler } from "../db/historyHandler";
 export async function createMercadoPagoPreference(
     title: string,
     amount: number,
-    quantity = 1
+    quantity = 1,
+    projectId: string | null = null
 ): Promise<{ initPoint: string; preferenceId: string }> {
-    const accessToken = await HistoryHandler.getSetting("MP_ACCESS_TOKEN");
+    const accessToken = await HistoryHandler.getSetting("MP_ACCESS_TOKEN", projectId);
     if (!accessToken) {
         throw new Error("Mercado Pago no está configurado. Token de acceso faltante.");
     }

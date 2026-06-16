@@ -30,7 +30,7 @@ function loadViewScript(src) {
     if (_loadedScripts[src]) return Promise.resolve();
     return new Promise((resolve) => {
         const el = document.createElement('script');
-        el.src = src;
+        el.src = src + '?v=' + (window.BOT_NAME ? encodeURIComponent(window.BOT_NAME) : '9');
         const done = () => { _loadedScripts[src] = true; resolve(); };
         // Timeout de 30s: safety net para CDN lento; scripts locales no deben llegar a esto
         const t = setTimeout(() => {

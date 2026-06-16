@@ -40,7 +40,10 @@ export async function executeClientTool(toolName: string, args: any, context: an
               return { error: "Monto inválido para generar el link de pago." };
           }
           
-          const result = await createMercadoPagoPreference(title, amount);
+          const state = context?.state;
+          const dynamicProjectId = state?.get ? state.get('dynamicProjectId') : (process.env.RAILWAY_PROJECT_ID || null);
+          
+          const result = await createMercadoPagoPreference(title, amount, 1, dynamicProjectId);
           return {
               success: true,
               link: result.initPoint,
