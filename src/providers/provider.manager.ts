@@ -407,19 +407,19 @@ export const hasActiveSession = async (adapterProvider: any, groupProvider: any 
                 const phoneId = metaOnboarding.whatsappNumberId;
                 const token = metaOnboarding.whatsappToken;
 
-                // 1. Consultar nodo del número de teléfono usando v25.0 para soporte completo de whatsapp_business_manager_messaging_limit
-                const phoneRes = await axios.get(`https://graph.facebook.com/v25.0/${phoneId}`, {
+                // 1. Consultar nodo del número de teléfono usando v22.0
+                const phoneRes = await axios.get(`https://graph.facebook.com/v22.0/${phoneId}`, {
                     headers: { 'Authorization': `Bearer ${token}` },
                     params: {
-                        fields: "id,display_phone_number,verified_name,quality_rating,status,code_verification_status,messaging_limit_tier,whatsapp_business_manager_messaging_limit"
+                        fields: "id,display_phone_number,verified_name,quality_rating,status,code_verification_status,messaging_limit_tier"
                     }
                 });
-
+ 
                 // 2. Consultar WABA
                 let accountReviewStatus = null;
                 if (metaOnboarding.whatsappBusinessId) {
                     try {
-                        const wabaRes = await axios.get(`https://graph.facebook.com/v25.0/${metaOnboarding.whatsappBusinessId}`, {
+                        const wabaRes = await axios.get(`https://graph.facebook.com/v22.0/${metaOnboarding.whatsappBusinessId}`, {
                             headers: { 'Authorization': `Bearer ${token}` },
                             params: {
                                 fields: "id,account_review_status"
@@ -428,9 +428,9 @@ export const hasActiveSession = async (adapterProvider: any, groupProvider: any 
                         accountReviewStatus = wabaRes.data?.account_review_status || null;
                     } catch (e) { /* ignore WABA errors */ }
                 }
-
+ 
                 // 3. Unir y guardar en onboarding_data temporal
-                const finalMessagingLimit = phoneRes.data?.whatsapp_business_manager_messaging_limit || phoneRes.data?.messaging_limit_tier || null;
+                const finalMessagingLimit = phoneRes.data?.messaging_limit_tier || null;
                 metaOnboarding.onboarding_data = {
                     ...(metaOnboarding.onboarding_data || {}),
                     display_phone_number: phoneRes.data?.display_phone_number || null,
@@ -445,7 +445,7 @@ export const hasActiveSession = async (adapterProvider: any, groupProvider: any 
 
                 // Actualizar marca de tiempo tras sincronización exitosa
                 lastMetaSyncTime = now;
-
+ 
                 // 4. Actualizar en la base de datos en segundo plano
                 const supabase = HistoryHandler.getSupabase();
                 if (supabase) {
