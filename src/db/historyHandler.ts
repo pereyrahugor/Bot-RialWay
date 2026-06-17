@@ -115,7 +115,7 @@ export class HistoryHandler {
 
         // 0.2. Suscribirse a cambios en tiempo real de la tabla settings
         this.subscribeToSettingsChanges();
-        this.subscribeToReportesChanges();
+        this.subscribeToTicketChanges();
 
         console.log('🔍 [HistoryHandler] Verificando tablas de historial...');
 
@@ -2026,6 +2026,8 @@ export class HistoryHandler {
             const priorityVal = details.priority || details.prioridad;
             if (priorityVal !== undefined) ticketUpdate.prioridad = priorityVal;
 
+            if (details.chats_adjuntos !== undefined) ticketUpdate.chats_adjuntos = details.chats_adjuntos;
+
             if (details.estado !== undefined) {
                 ticketUpdate.estado = details.estado;
             } else if (details.contact?.crm_status === 'Cerrado' || details.contact?.crm_status === 'Vendido') {
@@ -2367,9 +2369,9 @@ export class HistoryHandler {
             .on('postgres_changes', {
                 event: '*',
                 schema: 'public',
-                table: 'settings',
-                filter: `project_id=eq.${projectId}`
+                table: 'settings'
             }, (payload: any) => {
+                if (payload.new?.project_id !== projectId && payload.old?.project_id !== projectId) return;
                 const key = payload.new?.key || payload.old?.key;
                 const value = payload.new?.value;
                 if (!key) return;
@@ -2386,24 +2388,28 @@ export class HistoryHandler {
             });
     }
 
-    static subscribeToReportesChanges() {
+    static subscribeToTicketChanges() {
         if (!supabase) return;
         const projectId = this.PROJECT_IDENTIFIER;
         supabase
-            .channel(`reportes-bot-changes-${projectId}`)
+            .channel(`tickets-changes-${projectId}`)
             .on('postgres_changes', {
-                event: 'INSERT',
+                event: '*',
                 schema: 'public',
-                table: 'tickets',
-                filter: `project_id=eq.${projectId}`
+                table: 'tickets'
             }, (payload: any) => {
-                if (payload.new?.tipo !== 'Nuevo Lead') return;
-                console.log(`📡 [Realtime] Nuevo ticket Lead creado para ${payload.new?.chat_id}`);
-                historyEvents.emit('reporte_created', { reporte: payload.new, projectId });
+                if (payload.new?.project_id !== projectId && payload.old?.project_id !== projectId) return;
+                if (payload.eventType === 'INSERT' && payload.new?.tipo === 'Nuevo Lead') {
+                    console.log(`📡 [Realtime] Nuevo ticket Lead creado para ${payload.new?.chat_id}`);
+                    historyEvents.emit('reporte_created', { reporte: payload.new, projectId });
+                }
+                if (payload.eventType === 'UPDATE') {
+                    historyEvents.emit('ticket_updated', payload.new);
+                }
             })
             .subscribe((status: string) => {
                 if (status === 'SUBSCRIBED') {
-                    console.log(`✅ [Realtime] Suscrito a tickets (Nuevo Lead) para proyecto ${projectId}`);
+                    console.log(`✅ [Realtime] Suscrito a tabla tickets para proyecto ${projectId}`);
                 } else if (status === 'CHANNEL_ERROR') {
                     console.error(`❌ [Realtime] Error en suscripción de tickets. Verifica que Realtime esté habilitado en la tabla 'tickets' en Supabase.`);
                 }
@@ -2413,6 +2419,33 @@ export class HistoryHandler {
     static invalidateSettingCache(key: string, projectId: string | null = null) {
         const targetProjectId = projectId || HistoryHandler.PROJECT_IDENTIFIER;
         this.settingsCache.delete(`${targetProjectId}:${key}`);
+    }
+
+    static async saveSystemLog(
+        service: 'OPENAI' | 'META' | 'SUPABASE' | 'SYSTEM' | 'RAILWAY',
+        level: 'INFO' | 'WARN' | 'ERROR',
+        message: string,
+        clientId: string | null = null,
+        details: any = {}
+    ): Promise<void> {
+        if (!supabase) return;
+        try {
+            const projectId = HistoryHandler.PROJECT_IDENTIFIER;
+            const { error } = await supabase.from('system_logs').insert([{
+                project_id: projectId,
+                service,
+                level,
+                message,
+                client_id: clientId,
+                details
+            }]);
+
+            if (error) {
+                console.error('[HistoryHandler] Error guardando system log:', error);
+            }
+        } catch (err) {
+            console.error('[HistoryHandler] Exception guardando system log:', err);
+        }
     }
 
     static async saveSetting(key: string, value: string, projectId: string | null = null) {

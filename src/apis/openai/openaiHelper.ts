@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { getArgentinaDatetimeString } from "../../utils/ArgentinaTime";
 import { executeDbQuery } from "../../db/dbHandler";
+import { SystemLogger } from "../../utils/logger.js";
 
 // Instancias perezosas para Hot-update
 let _openai: OpenAI | null = null;
@@ -296,6 +297,19 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
         return responseContent;
 
     } catch (error: any) {
+        const errorCode = error.status || error.code || 'OAI_ERR';
+        
+        let humanMessage = `Error [${errorCode}]: OpenAI no pudo generar una respuesta para el mensaje de [${userId}]. Detalle: ${error.message}`;
+        if (errorCode === 429) {
+            humanMessage = `Error [429]: Saldo insuficiente o límite de cuota excedido en OpenAI. El bot no le contestó a [${userId}].`;
+        }
+
+        await SystemLogger.error('OPENAI', humanMessage, userId, {
+            message: error.message,
+            stack: error.stack,
+            status: error.status
+        });
+        
         console.error("[openaiHelper] ❌ Error en Chat Completions:", error.message);
         throw error;
     }

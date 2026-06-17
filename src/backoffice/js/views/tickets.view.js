@@ -3,8 +3,6 @@
 /* eslint-disable no-undef */
 window.ticketsView = (() => {
     let _token = '';
-    let _selectedChats = [];
-    let _files = [];
 
     function getHTML() {
         return `
@@ -143,49 +141,182 @@ window.ticketsView = (() => {
                 overflow-y: visible !important;
                 margin-bottom: 0 !important;
             }
+
+            /* Estilos para la Vista Chat del Ticket */
+            .tc-chat-container {
+                flex: 1;
+                overflow-y: auto;
+                padding: 20px;
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+            }
+            .tc-bubble {
+                max-width: 80%;
+                padding: 12px 16px;
+                border-radius: 12px;
+                font-size: 0.9rem;
+                line-height: 1.4;
+                position: relative;
+                word-break: break-word;
+            }
+            .tc-bubble-admin {
+                align-self: flex-start;
+                background: #e2e8f0;
+                color: #1e293b;
+                border-bottom-left-radius: 4px;
+            }
+            html.dark .tc-bubble-admin {
+                background: #334155;
+                color: #f8fafc;
+            }
+            .tc-bubble-client {
+                align-self: flex-end;
+                background: #0099FF;
+                color: #ffffff;
+                border-bottom-right-radius: 4px;
+            }
+            .tc-time {
+                font-size: 0.65rem;
+                opacity: 0.7;
+                margin-top: 4px;
+                text-align: right;
+            }
+            .tc-input-area {
+                padding: 16px;
+                border-top: 1px solid var(--border);
+                display: flex;
+                gap: 10px;
+            }
+            .tc-input {
+                flex: 1;
+                border: 1px solid var(--border);
+                border-radius: 20px;
+                padding: 10px 16px;
+                background: transparent;
+                color: var(--text-main);
+                outline: none;
+            }
+            .tc-send-btn {
+                background: #0099FF;
+                color: white;
+                border: none;
+                width: 42px;
+                height: 42px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                transition: transform 0.2s;
+            }
+            .tc-send-btn:hover { transform: scale(1.05); }
+            .tc-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+            .tv-card { cursor: pointer; transition: transform 0.2s; }
+            .tv-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+
+            /* Fix para vista Mobile del Chat */
+            @media (max-width: 768px) {
+                #tv-chat-view { padding: 0 !important; }
+                .tv-chat-inner { border: none !important; border-radius: 0 !important; }
+                .kanban-header { padding: 12px 16px !important; }
+                .tc-input-area { 
+                    padding: 6px !important; 
+                    gap: 4px !important; 
+                }
+                .tc-send-btn {
+                    width: 34px !important;
+                    height: 34px !important;
+                }
+                .tc-send-btn i {
+                    font-size: 0.85rem;
+                }
+                #tc-title {
+                    font-size: 0.9rem !important;
+                    gap: 6px !important;
+                }
+                #tc-title i {
+                    font-size: 0.85rem !important;
+                }
+                #tc-status {
+                    font-size: 0.55rem !important;
+                    padding: 2px 8px !important;
+                }
+            }
         </style>
 
-        <main class="crm-main-container" style="z-index:10; padding:0;">
-            <div class="kanban-header animate-fade">
-                <div class="header-info">
-                    <h1>
-                        <i class="fas fa-ticket-alt kanban-header-icon" style="color:#0099FF;"></i>
-                        Tickets de Soporte
-                    </h1>
-                    <p>Reportá problemas o consultas y seguí su estado</p>
+        <main class="crm-main-container" style="z-index:10; padding:0; height: 100%; display: flex; flex-direction: column;">
+            
+            <!-- VISTA: KANBAN -->
+            <div id="tv-list-view" style="display:flex; flex-direction:column; height: 100%;">
+                <div class="kanban-header animate-fade">
+                    <div class="header-info">
+                        <h1>
+                            <i class="fas fa-ticket-alt kanban-header-icon" style="color:#0099FF;"></i>
+                            Tickets de Soporte
+                        </h1>
+                        <p>Reportá problemas o consultas y seguí su estado</p>
+                    </div>
+                    <button class="btn-primary" onclick="ticketsView._openModal()" style="display:flex; align-items:center; gap:8px; padding:8px 18px; font-size:0.85rem; flex-shrink:0;">
+                        <i class="fas fa-plus"></i> Nuevo
+                    </button>
                 </div>
-                <button class="btn-primary" onclick="ticketsView._openModal()" style="display:flex; align-items:center; gap:8px; padding:8px 18px; font-size:0.85rem; flex-shrink:0;">
-                    <i class="fas fa-plus"></i> Nuevo
-                </button>
+
+                <div class="meta-view-body" style="padding:20px 24px; flex:1; overflow-y:auto;">
+                    <div id="tv-columns">
+                        <!-- Columna Pendientes -->
+                        <div class="tv-col-box bg-white dark:bg-[#102a43a6]">
+                            <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding-bottom:10px; border-bottom:2px solid #ef4444;">
+                                <span style="width:8px; height:8px; border-radius:50%; background:#ef4444; flex-shrink:0;"></span>
+                                <h3 style="margin:0; font-size:0.82rem; font-weight:700; font-family:'Montserrat',sans-serif; text-transform:uppercase; letter-spacing:1px; color:var(--text-main);">Pendientes</h3>
+                                <span id="tv-count-pending" style="margin-left:auto; font-size:0.75rem; color:var(--text-muted);"></span>
+                            </div>
+                            <div id="tv-list-pending" class="tv-list-wrapper">
+                                <div style="text-align:center; color:var(--text-muted); font-size:0.82rem; height:100%; display:flex; align-items:center; justify-content:center;">Cargando...</div>
+                            </div>
+                        </div>
+
+                        <!-- Columna Cerrados -->
+                        <div class="tv-col-box bg-white dark:bg-[#102a43a6]">
+                            <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding-bottom:10px; border-bottom:2px solid #22c55e;">
+                                <span style="width:8px; height:8px; border-radius:50%; background:#22c55e; flex-shrink:0;"></span>
+                                <h3 style="margin:0; font-size:0.82rem; font-weight:700; font-family:'Montserrat',sans-serif; text-transform:uppercase; letter-spacing:1px; color:var(--text-main);">Cerrados</h3>
+                                <span id="tv-count-closed" style="margin-left:auto; font-size:0.75rem; color:var(--text-muted);"></span>
+                            </div>
+                            <div id="tv-list-closed" class="tv-list-wrapper">
+                                <div style="text-align:center; color:var(--text-muted); font-size:0.82rem; height:100%; display:flex; align-items:center; justify-content:center;">Cargando...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            <div class="meta-view-body" style="padding:20px 24px;">
-                <div id="tv-columns">
-
-                    <!-- Columna Pendientes -->
-                    <div class="tv-col-box bg-white dark:bg-[#102a43a6]">
-                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding-bottom:10px; border-bottom:2px solid #ef4444;">
-                            <span style="width:8px; height:8px; border-radius:50%; background:#ef4444; flex-shrink:0;"></span>
-                            <h3 style="margin:0; font-size:0.82rem; font-weight:700; font-family:'Montserrat',sans-serif; text-transform:uppercase; letter-spacing:1px; color:var(--text-main);">Pendientes</h3>
-                            <span id="tv-count-pending" style="margin-left:auto; font-size:0.75rem; color:var(--text-muted);"></span>
-                        </div>
-                        <div id="tv-list-pending" class="tv-list-wrapper">
-                            <div style="text-align:center; color:var(--text-muted); font-size:0.82rem; height:100%; display:flex; align-items:center; justify-content:center;">Cargando...</div>
-                        </div>
-                    </div>
-
-                    <!-- Columna Cerrados -->
-                    <div class="tv-col-box bg-white dark:bg-[#102a43a6]">
-                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding-bottom:10px; border-bottom:2px solid #22c55e;">
-                            <span style="width:8px; height:8px; border-radius:50%; background:#22c55e; flex-shrink:0;"></span>
-                            <h3 style="margin:0; font-size:0.82rem; font-weight:700; font-family:'Montserrat',sans-serif; text-transform:uppercase; letter-spacing:1px; color:var(--text-main);">Cerrados</h3>
-                            <span id="tv-count-closed" style="margin-left:auto; font-size:0.75rem; color:var(--text-muted);"></span>
-                        </div>
-                        <div id="tv-list-closed" class="tv-list-wrapper">
-                            <div style="text-align:center; color:var(--text-muted); font-size:0.82rem; height:100%; display:flex; align-items:center; justify-content:center;">Cargando...</div>
+            <!-- VISTA: CHAT DINÁMICO -->
+            <div id="tv-chat-view" class="animate-fade" style="display:none; height: 100%; flex-direction: row; flex: 1; padding: 20px 24px;">
+                <div class="tv-chat-inner bg-white dark:bg-[#102a43a6]" style="flex: 1; display: flex; flex-direction: column; min-width: 0; border: 1px solid rgba(0,153,255,0.12); border-radius: 14px; overflow: hidden;">
+                    <div class="kanban-header" style="border-bottom:1px solid rgba(0,153,255,0.1); padding: 12px 24px;">
+                        <button class="btn-icon" onclick="ticketsView._goBack()" style="margin-right:12px; font-size:1.1rem; color: var(--text-main);">
+                            <i class="fas fa-arrow-left"></i>
+                        </button>
+                        <div class="header-info" style="flex:1;">
+                            <h1 id="tc-title" style="margin-bottom:0; font-size:1.1rem; display:flex; align-items:center; gap:12px; min-width:0;">
+                                <div style="display:flex; align-items:center; min-width:0; flex:1;">
+                                    <i class="fas fa-ticket-alt" style="color:#0099FF; margin-right:6px; flex-shrink:0;"></i> 
+                                    <span id="tc-title-text" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Cargando...</span>
+                                </div>
+                                <span id="tc-status" class="tv-card-badge" style="font-size:0.65rem; flex-shrink:0;"></span>
+                            </h1>
                         </div>
                     </div>
-
+                    <div id="tc-messages" class="tc-chat-container">
+                        <!-- Mensajes dinámicos -->
+                    </div>
+                    <div class="tc-input-area">
+                        <input type="text" id="tc-input" class="tc-input" placeholder="Escribí un mensaje..." onkeypress="if(event.key === 'Enter') ticketsView._sendMessage()">
+                        <button id="tc-send-btn" class="tc-send-btn" onclick="ticketsView._sendMessage()">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -205,24 +336,6 @@ window.ticketsView = (() => {
                             <label><i class="fas fa-align-left"></i> Descripcion</label>
                             <textarea id="tv-desc" class="crm-input" rows="4" placeholder="Describí el problema con el mayor detalle posible..."></textarea>
                         </div>
-                        <div class="modal-section">
-                            <label><i class="fas fa-comments"></i> Chats con problema <span style="font-size:0.75rem; font-weight:400; color:var(--text-muted);">(opcional)</span></label>
-                            <div style="position:relative;">
-                                <input type="text" id="tv-chat-search" class="crm-input" placeholder="Buscar chat por nombre o numero..." oninput="ticketsView._chatSearch(this.value)" autocomplete="off">
-                                <div id="tv-chat-suggestions" class="bg-white dark:bg-[#081428]" style="display:none; position:absolute; top:100%; left:0; right:0; z-index:200; border-radius:10px; overflow:hidden; border:1px solid rgba(0,153,255,0.2); max-height:180px; overflow-y:auto;"></div>
-                            </div>
-                            <div id="tv-chat-chips" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;"></div>
-                        </div>
-                        <div class="modal-section">
-                            <label><i class="fas fa-paperclip"></i> Adjuntar imagenes <span style="font-size:0.75rem; font-weight:400; color:var(--text-muted);">(opcional)</span></label>
-                            <div id="tv-drop-zone" onclick="document.getElementById('tv-files').click()"
-                                 style="border:2px dashed var(--border); border-radius:10px; padding:18px; text-align:center; cursor:pointer; transition:border-color 0.2s; color:var(--text-muted); font-size:0.82rem; display:flex; flex-direction:column; align-items:center; gap:6px;">
-                                <i class="fas fa-cloud-upload-alt" style="font-size:1.6rem; color:#0099FF;"></i>
-                                <span>hasta 10MB por archivo</span>
-                            </div>
-                            <input type="file" id="tv-files" multiple accept="image/*,.pdf" style="display:none" onchange="ticketsView._filesSelected(this.files)">
-                            <div id="tv-file-preview" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;"></div>
-                        </div>
                         <button class="btn-primary btn-full-mt" onclick="ticketsView._submit()">
                             <i class="fas fa-save icon-mr"></i> Enviar Ticket
                         </button>
@@ -235,6 +348,8 @@ window.ticketsView = (() => {
 
     let _chats = [];
 
+    let _socketBound = false;
+
     async function init(token) {
         _token = (typeof token === 'string' && token && token !== 'undefined') ? token : '';
         if (!_token) {
@@ -243,6 +358,25 @@ window.ticketsView = (() => {
         if (_token === 'undefined') _token = '';
         _loadChats();
         _fetchAll();
+
+        // Bind socket events for real-time chat updates
+        if (!_socketBound && typeof io !== 'undefined') {
+            _socketBound = true;
+            // Use existing socket from backoffice if available, otherwise create a new one
+            const s = typeof socket !== 'undefined' ? socket : (typeof window.crmSocket !== 'undefined' ? window.crmSocket : io());
+            
+            s.on('ticket_updated', async (payload) => {
+                await _fetchAll();
+                
+                if (_activeTicket && payload && payload.id === _activeTicket.id) {
+                    const updatedTicket = _activeTicketsCache.find(x => x.id === _activeTicket.id);
+                    if (updatedTicket) {
+                        _activeTicket = updatedTicket;
+                        _updateChatUI();
+                    }
+                }
+            });
+        }
     }
 
     async function _loadChats() {
@@ -260,6 +394,9 @@ window.ticketsView = (() => {
         _fetchColumn('Cerrado');
     }
 
+    let _activeTicket = null;
+    let _activeTicketsCache = []; // Para buscar el ticket rápido
+
     async function _fetchColumn(filter) {
         const listId = filter === 'pending' ? 'tv-list-pending' : 'tv-list-closed';
         const countId = filter === 'pending' ? 'tv-count-pending' : 'tv-count-closed';
@@ -273,6 +410,11 @@ window.ticketsView = (() => {
             
             if (Array.isArray(tickets)) {
                 tickets = tickets.filter(t => t.tipo === 'Soporte');
+                tickets.forEach(t => {
+                    const idx = _activeTicketsCache.findIndex(x => x.id === t.id);
+                    if (idx >= 0) _activeTicketsCache[idx] = t;
+                    else _activeTicketsCache.push(t);
+                });
             }
             
             const count = document.getElementById(countId);
@@ -294,29 +436,41 @@ window.ticketsView = (() => {
     function _renderCard(t) {
         const date = new Date(t.created_at).toLocaleDateString('es-AR');
         const attachments = _parseJson(t.attachments, []);
-        const chatsAdj = _parseJson(t.chats_adjuntos, []);
+        let chatsAdj = _parseJson(t.chats_adjuntos, []);
+        
+        let needsResponse = false;
+        if (chatsAdj.length > 0) {
+            const lastMsg = chatsAdj[chatsAdj.length - 1];
+            if (lastMsg.rol === 'admin') {
+                needsResponse = true;
+            }
+        }
+
         const statusColor = { 'Abierto': '#ef4444', 'Cerrado': '#22c55e' }[t.estado] || 'var(--text-muted)';
         const statusBg = { 'Abierto': 'rgba(239,68,68,0.12)', 'Cerrado': 'rgba(34,197,94,0.12)' }[t.estado] || 'rgba(255,255,255,0.05)';
+
+        const chips = chatsAdj.filter(c => c.name || c.chat_id);
 
         const attachHtml = attachments.length ? `
             <div class="tv-card-attachments">
                 ${attachments.map(url => `
-                    <a href="${url}" target="_blank" style="width:44px; height:44px; border-radius:6px; overflow:hidden; border:1px solid var(--border); display:block; flex-shrink:0;">
+                    <a href="${url}" target="_blank" onclick="event.stopPropagation()" style="width:44px; height:44px; border-radius:6px; overflow:hidden; border:1px solid var(--border); display:block; flex-shrink:0;">
                         <img src="${url}" style="width:100%; height:100%; object-fit:cover;"
                              onerror="this.parentElement.innerHTML='<div style=\\'width:100%;height:100%;display:flex;align-items:center;justify-content:center;\\'><i class=\\'fas fa-file\\' style=\\'color:var(--text-muted);font-size:0.9rem;\\'></i></div>'">
                     </a>`).join('')}
             </div>` : '';
 
-        const chatsAdjHtml = chatsAdj.length ? `
+        const chatsAdjHtml = chips.length ? `
             <div class="tv-card-chips">
-                ${chatsAdj.map(c => `
+                ${chips.map(c => `
                     <span style="display:inline-flex; align-items:center; gap:4px; padding:2px 7px; border-radius:99px; background:rgba(0,153,255,0.1); border:1px solid rgba(0,153,255,0.2); font-size:0.68rem; color:#0099FF;">
-                        <i class="fas fa-comment" style="font-size:0.6rem;"></i>${c.name || c.chat_id}
+                        <i class="fas fa-link" style="font-size:0.6rem;"></i>Vinculado
                     </span>`).join('')}
             </div>` : '';
 
         return `
-            <div class="tv-card">
+            <div class="tv-card" onclick="ticketsView._openChat('${t.id}')" style="position:relative;">
+                ${needsResponse && t.estado !== 'Cerrado' ? `<span style="position:absolute; top:-5px; right:-5px; width:14px; height:14px; background:#ef4444; border-radius:50%; border:2px solid var(--bg-card); z-index:5;"></span>` : ''}
                 <span class="tv-card-badge" style="color:${statusColor}; background:${statusBg};">${t.estado}</span>
                 <div class="tv-card-title">${t.titulo}</div>
                 ${t.descripcion ? `<div class="tv-card-desc">${t.descripcion}</div>` : ''}
@@ -327,7 +481,6 @@ window.ticketsView = (() => {
     }
 
     function _openModal() {
-        _selectedChats = [];
         _files = [];
         const modal = document.getElementById('tv-modal');
         if (modal) modal.classList.add('active');
@@ -352,70 +505,7 @@ window.ticketsView = (() => {
         if (sugg) sugg.style.display = 'none';
     }
 
-    function _chatSearch(query) {
-        const box = document.getElementById('tv-chat-suggestions');
-        if (!box) return;
-        if (!query.trim()) { box.style.display = 'none'; return; }
-        const allChats = _chats.length ? _chats : (typeof window.chats !== 'undefined' ? window.chats : []);
-        const q = query.toLowerCase();
-        const matches = allChats.filter(c => {
-            const name = (c.name || c.id || '').toLowerCase();
-            const num = (c.id || '').toLowerCase();
-            return (name.includes(q) || num.includes(q)) && !_selectedChats.find(s => s.chat_id === c.id);
-        }).slice(0, 8);
 
-        if (!matches.length) { box.style.display = 'none'; return; }
-        box.style.display = 'block';
-        box.innerHTML = matches.map(c => {
-            const label = c.name || c.id.split('@')[0];
-            return `<div onclick="ticketsView._addChat('${c.id}', '${label.replace(/'/g,"\\'")}'); document.getElementById('tv-chat-search').value=''; document.getElementById('tv-chat-suggestions').style.display='none';"
-                         style="padding:10px 14px; cursor:pointer; font-size:0.85rem; color:var(--text-main);"
-                         onmouseover="this.style.background='rgba(0,153,255,0.1)'" onmouseout="this.style.background=''">
-                <i class="fas fa-comment" style="color:#0099FF; margin-right:8px;"></i>${label}
-                <span style="color:var(--text-muted); font-size:0.78rem; margin-left:6px;">${c.id.split('@')[0]}</span>
-            </div>`;
-        }).join('');
-    }
-
-    function _addChat(chatId, name) {
-        if (_selectedChats.find(s => s.chat_id === chatId)) return;
-        _selectedChats.push({ chat_id: chatId, name });
-        _renderChips();
-    }
-
-    function _removeChat(chatId) {
-        _selectedChats = _selectedChats.filter(s => s.chat_id !== chatId);
-        _renderChips();
-    }
-
-    function _renderChips() {
-        const box = document.getElementById('tv-chat-chips');
-        if (!box) return;
-        box.innerHTML = _selectedChats.map(s =>
-            `<span style="display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:99px; background:rgba(0,153,255,0.12); border:1px solid rgba(0,153,255,0.25); font-size:0.8rem; color:var(--text-main);">
-                <i class="fas fa-comment" style="color:#0099FF; font-size:0.75rem;"></i>${s.name}
-                <button onclick="ticketsView._removeChat('${s.chat_id}')" style="background:none; border:none; cursor:pointer; color:var(--text-muted); padding:0; line-height:1;">&times;</button>
-            </span>`
-        ).join('');
-    }
-
-    function _filesSelected(fileList) {
-        _files = Array.from(fileList);
-        const preview = document.getElementById('tv-file-preview');
-        if (!preview) return;
-        preview.innerHTML = _files.map((f, i) => {
-            const isImg = f.type.startsWith('image/');
-            return `<div style="position:relative; width:72px; height:72px; border-radius:8px; overflow:hidden; border:1px solid var(--border); background:var(--bg-card); display:flex; align-items:center; justify-content:center;">
-                ${isImg ? `<img src="${URL.createObjectURL(f)}" style="width:100%; height:100%; object-fit:cover;">` : '<i class="fas fa-file-pdf" style="font-size:1.5rem; color:#ef4444;"></i>'}
-                <button onclick="ticketsView._removeFile(${i})" style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.6); border:none; border-radius:50%; width:18px; height:18px; cursor:pointer; color:white; font-size:10px; display:flex; align-items:center; justify-content:center;">&times;</button>
-            </div>`;
-        }).join('');
-    }
-
-    function _removeFile(index) {
-        _files.splice(index, 1);
-        _filesSelected(_files);
-    }
 
     async function _submit() {
         const titulo = (document.getElementById('tv-titulo')?.value || '').trim();
@@ -426,7 +516,7 @@ window.ticketsView = (() => {
             const res = await fetch(`/api/backoffice/tickets?token=${_token}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ titulo, descripcion, chats_adjuntos: _selectedChats })
+                body: JSON.stringify({ titulo, descripcion, chats_adjuntos: [] })
             });
             if (res.ok) {
                 showToast && showToast('Ticket enviado correctamente');
@@ -448,6 +538,126 @@ window.ticketsView = (() => {
 
     function destroy() {}
 
+    function _openChat(ticketId) {
+        _activeTicket = _activeTicketsCache.find(t => t.id === ticketId);
+        if (!_activeTicket) return;
+
+        document.getElementById('tv-list-view').style.display = 'none';
+        document.getElementById('tv-chat-view').style.display = 'flex';
+
+        _updateChatUI();
+    }
+
+    function _updateChatUI() {
+        if (!_activeTicket) return;
+        
+        document.getElementById('tc-title-text').innerText = _activeTicket.titulo;
+        
+        const statusColor = { 'Abierto': '#ef4444', 'Cerrado': '#22c55e' }[_activeTicket.estado] || 'var(--text-muted)';
+        const statusBg = { 'Abierto': 'rgba(239,68,68,0.12)', 'Cerrado': 'rgba(34,197,94,0.12)' }[_activeTicket.estado] || 'rgba(255,255,255,0.05)';
+        document.getElementById('tc-status').style.color = statusColor;
+        document.getElementById('tc-status').style.background = statusBg;
+        document.getElementById('tc-status').innerText = _activeTicket.estado;
+
+        const isCerrado = _activeTicket.estado === 'Cerrado';
+        document.getElementById('tc-input').disabled = isCerrado;
+        document.getElementById('tc-send-btn').disabled = isCerrado;
+        document.getElementById('tc-input').placeholder = isCerrado ? "Ticket cerrado." : "Escribí un mensaje...";
+
+        _renderChatMessages();
+    }
+
+
+    function _goBack() {
+        _activeTicket = null;
+        document.getElementById('tv-chat-view').style.display = 'none';
+        document.getElementById('tv-list-view').style.display = 'flex';
+        _fetchAll();
+    }
+
+    function _renderChatMessages() {
+        const container = document.getElementById('tc-messages');
+        if (!container || !_activeTicket) return;
+
+        let chats = _parseJson(_activeTicket.chats_adjuntos, []);
+        chats = chats.filter(c => c.rol && (c.mensaje || c.attachmentUrl));
+
+        let html = '';
+        
+        if (_activeTicket.descripcion) {
+            html += `
+                <div class="tc-bubble tc-bubble-client">
+                    <div>${_activeTicket.descripcion.replace(/\n/g, '<br>')}</div>
+                    <div class="tc-time">Ticket inicial</div>
+                </div>
+            `;
+        }
+
+        if (chats.length === 0 && !_activeTicket.descripcion) {
+            html = `<div style="text-align:center; color:var(--text-muted); margin-top:20px;">Sin historial. Empezá a chatear.</div>`;
+        } else {
+            chats.forEach(msg => {
+                const isAdmin = msg.rol === 'admin';
+                const bubbleClass = isAdmin ? 'tc-bubble-admin' : 'tc-bubble-client';
+                const msgTime = msg.timestamp || msg.fecha;
+                const timeStr = msgTime ? new Date(msgTime).toLocaleTimeString('es-AR', { hour: '2-digit', minute:'2-digit' }) : '';
+                html += `
+                    <div class="tc-bubble ${bubbleClass}">
+                        ${isAdmin ? '<div style="font-size:0.7rem; opacity:0.8; margin-bottom:4px; font-weight:bold;">Soporte Técnico</div>' : ''}
+                        ${msg.mensaje ? `<div>${msg.mensaje.replace(/\n/g, '<br>')}</div>` : ''}
+                        <div class="tc-time">${timeStr}</div>
+                    </div>
+                `;
+            });
+        }
+
+        container.innerHTML = html;
+        container.scrollTop = container.scrollHeight;
+    }
+
+    async function _sendMessage() {
+        if (!_activeTicket || _activeTicket.estado === 'Cerrado') return;
+        
+        const input = document.getElementById('tc-input');
+        const text = input.value.trim();
+        if (!text) return;
+
+        input.disabled = true;
+        document.getElementById('tc-send-btn').disabled = true;
+
+        let currentChats = _parseJson(_activeTicket.chats_adjuntos, []);
+        
+        currentChats.push({
+            rol: 'cliente',
+            mensaje: text,
+            timestamp: new Date().toISOString()
+        });
+
+        try {
+            const res = await fetch(`/api/backoffice/tickets/${_activeTicket.id}?token=${_token}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    chats_adjuntos: JSON.stringify(currentChats)
+                }) 
+            });
+
+            if (res.ok) {
+                _activeTicket.chats_adjuntos = JSON.stringify(currentChats);
+                input.value = '';
+                _renderChatMessages();
+            } else {
+                showToast && showToast('Error al enviar mensaje', 'error');
+            }
+        } catch (e) {
+            showToast && showToast('Error de conexión', 'error');
+        } finally {
+            input.disabled = false;
+            document.getElementById('tc-send-btn').disabled = false;
+            input.focus();
+        }
+    }
+
     return {
         title: 'Tickets',
         getHTML,
@@ -456,11 +666,9 @@ window.ticketsView = (() => {
         _fetchAll,
         _openModal,
         _closeModal,
-        _chatSearch,
-        _addChat,
-        _removeChat,
-        _filesSelected,
-        _removeFile,
-        _submit
+        _submit,
+        _openChat,
+        _goBack,
+        _sendMessage
     };
 })();
