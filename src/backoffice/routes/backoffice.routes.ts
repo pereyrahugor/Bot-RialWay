@@ -1383,11 +1383,12 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     });
 
     app.post('/api/backoffice/tickets', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
-        const { chatId, titulo, descripcion, chats_adjuntos, tipo } = req.body;
+        const { chatId, titulo, descripcion, chats_adjuntos, attachments, tipo } = req.body;
         if (!titulo) return sendJson(res, 400, { success: false, error: 'titulo is required' });
         const adjuntos = Array.isArray(chats_adjuntos) ? chats_adjuntos : [];
+        const atts = Array.isArray(attachments) ? attachments : [];
         const projectId = resolveProjectId(req);
-        const result = await depsHistoryHandler.createTicket(chatId, titulo, descripcion, tipo || 'Soporte', 'Media', projectId || undefined, [], adjuntos);
+        const result = await depsHistoryHandler.createTicket(chatId, titulo, descripcion, tipo || 'Soporte', 'Media', projectId || undefined, atts, adjuntos);
         res.json(result);
     });
 

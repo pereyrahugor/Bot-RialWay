@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as child_process from 'child_process';
 import FormData from 'form-data';
+import { SystemLogger } from '../utils/logger.js';
 
 /**
  * Proveedor para Meta Cloud API (WhatsApp Business API)
@@ -776,6 +777,18 @@ class MetaCloudProvider extends ProviderClass {
             });
             return response.data;
         } catch (error: any) {
+            const errorCode = error.response?.data?.error?.code || 'META_ERR';
+            const errorMsg = error.response?.data?.error?.message || error.message;
+            const clientPhone = toFormat;
+            
+            let humanMessage = `Error [${errorCode}]: Falló el envío de mensaje de WhatsApp a [${clientPhone}]. Detalle: ${errorMsg}`;
+            
+            // Si Meta devuelve error por versión de API deprecada
+            if (errorMsg.includes('deprecated') || errorCode === 190) {
+                humanMessage = `Error [${errorCode}]: Token expirado o Versión de API de Meta deprecada al intentar responder a [${clientPhone}]. Requiere actualización manual. Detalle: ${errorMsg}`;
+            }
+
+            await SystemLogger.error('META', humanMessage, clientPhone, error.response?.data || error);
             console.error('❌ [MetaCloudProvider] Error API:', error?.response?.data || error.message);
             return null;
         }

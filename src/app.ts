@@ -269,7 +269,9 @@ const main = async () => {
                     }
 
                     if (contentType.includes('multipart/form-data')) {
-                        return upload.single('file')(req, res, (err: any) => {
+                        const multerMiddleware = upload.single('file');
+                        
+                        return multerMiddleware(req, res, (err: any) => {
                             if (err) {
                                 console.error("❌ [MASTER-INTERCEPTOR] Multer Error:", err);
                                 res.statusCode = 500;
