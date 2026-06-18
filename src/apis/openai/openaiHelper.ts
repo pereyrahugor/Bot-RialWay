@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { getArgentinaDatetimeString } from "../../utils/ArgentinaTime";
 import { executeDbQuery } from "../../db/dbHandler";
+import { SystemLogger } from "../../utils/logger.js";
 
 // Instancias perezosas para Hot-update
 let _openai: OpenAI | null = null;
@@ -14,8 +15,8 @@ let _lastVisionKey: string | null = null;
 export async function getOpenAI(): Promise<OpenAI | null> {
     const { HistoryHandler } = await import("../../db/historyHandler");
     const key = await HistoryHandler.getConfig('OPENAI_API_KEY');
-    if (!key) {
-        console.warn(`📡 [OpenAI] ⚠️ No se pudo obtener OPENAI_API_KEY del config. getOpenAI() retornará null.`);
+    if (!key || key.includes('*****') || key === 'tu_api_key_aqui' || key.trim() === '') {
+        console.warn(`📡 [OpenAI] ⚠️ No se detectó una OPENAI_API_KEY válida (vacía o por defecto). getOpenAI() retornará null.`);
         return null;
     }
     if (key !== _lastKey) {
@@ -296,6 +297,19 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
         return responseContent;
 
     } catch (error: any) {
+        const errorCode = error.status || error.code || 'OAI_ERR';
+        
+        let humanMessage = `Error [${errorCode}]: OpenAI no pudo generar una respuesta para el mensaje de [${userId}]. Detalle: ${error.message}`;
+        if (errorCode === 429) {
+            humanMessage = `Error [429]: Saldo insuficiente o límite de cuota excedido en OpenAI. El bot no le contestó a [${userId}].`;
+        }
+
+        await SystemLogger.error('OPENAI', humanMessage, userId, {
+            message: error.message,
+            stack: error.stack,
+            status: error.status
+        });
+        
         console.error("[openaiHelper] ❌ Error en Chat Completions:", error.message);
         throw error;
     }
@@ -329,6 +343,14 @@ export const safeToAsk = async (
                 } catch (err: any) {
                     attempt++;
                     console.error(`[openaiHelper] Intento ${attempt} fallido:`, err.message);
+                    
+                    const status = err.status || err.code;
+                    // Si es un error de clave inválida o permisos, abortar de inmediato sin reintentar
+                    if (status === 401 || status === 403) {
+                        console.error("[openaiHelper] 🛑 Error de autenticación (401/403) detectado. Abortando reintentos.");
+                        throw err;
+                    }
+
                     if (attempt >= maxRetries) throw err;
                     await new Promise(r => setTimeout(r, 2000 * attempt));
                 }

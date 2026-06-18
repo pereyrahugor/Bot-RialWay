@@ -9,6 +9,7 @@
     "start": "node ./dist/app.js",
     "lint": "eslint src --no-ignore",
     "dev": "npm run lint && nodemon ./src/app.ts",
+    "dev:tunnel": "node dev-tunnel.js",
     "build": "esbuild src/app.ts --bundle --platform=node --format=esm --packages=external --outdir=dist",
     "vaciar_base_backoffice": "tsx vaciar_base_backoffice.ts",
     "meta_webhook_register": "tsx meta_webhook_register.ts",
