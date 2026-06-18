@@ -4525,7 +4525,7 @@
 
   /* Input area */
   #input-area {
-    @apply flex items-center flex-shrink-0;
+    @apply flex items-end flex-shrink-0;
     padding: 6px 4px;
     gap: 2px;
     background: #f0f2f5;
@@ -4575,11 +4575,13 @@
   }
 
   .input-wrapper {
-    @apply flex-1 flex items-center rounded-full;
-    height: 40px;
+    @apply flex-1 flex items-end;
+    border-radius: 20px;
+    min-height: 40px;
+    height: auto;
     min-width: 0;
     overflow: hidden;
-    padding: 0 6px;
+    padding: 4px 6px;
     background: #ffffff;
   }
 
@@ -4607,7 +4609,6 @@
 
   #message-input {
     @apply flex-1 bg-transparent border-0 px-2 outline-none text-sm text-gray-800;
-    height: 100%;
   }
 
   [data-theme="dark"] #message-input {
