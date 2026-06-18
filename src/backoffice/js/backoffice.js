@@ -1221,7 +1221,7 @@ async function sendAudioFile(file) {
 
 function _clearSendUI() {
     const input = document.getElementById('message-input');
-    if (input) { window.resetChatTextarea(input); input.placeholder = 'Escribe un mensaje aquí'; }
+    if (input) { input.value = ''; input.placeholder = 'Escribe un mensaje aquí'; }
     selectedFile = null;
     const fi = document.getElementById('file-input');
     if (fi) fi.value = '';

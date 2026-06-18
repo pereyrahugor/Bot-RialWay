@@ -11,16 +11,6 @@
     <script>document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'light');</script>
     <link rel="stylesheet" href="/style/vendor/fontawesome/css/all.min.css">
     <link rel="stylesheet" href="/style/tailwind.css">
-    <style>
-        /* Previene auto-zoom en iOS en todos los inputs de la app */
-        @media (max-width: 1024px) {
-            input[type="text"], input[type="email"], input[type="number"], 
-            input[type="password"], input[type="search"], input[type="tel"], 
-            input[type="url"], textarea, select {
-                font-size: 16px !important;
-            }
-        }
-    </style>
 </head>
 <body class="min-h-screen flex items-center justify-center overflow-hidden font-body">
 
