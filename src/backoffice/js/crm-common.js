@@ -44,6 +44,42 @@
     };
 })();
 
+// --- Funciones Globales para Textareas de Chat ---
+window.handleChatTextareaKey = function(e, sendCallback) {
+    if (e.key === 'Enter') {
+        if (window.innerWidth <= 1024) {
+            // Mobile/Tablet: Enter hace un salto de línea normal
+            return;
+        } else {
+            // Desktop: Enter envía, Shift+Enter hace salto de línea
+            if (!e.shiftKey) {
+                e.preventDefault();
+                if (typeof sendCallback === 'function') sendCallback();
+            }
+        }
+    }
+};
+
+window.autoResizeChatTextarea = function(el) {
+    el.style.height = 'auto';
+    
+    // padding aproximado (puede variar un poco según la vista, pero 16px es estándar)
+    const paddingY = 16;
+    const lineHeight = 20; 
+    
+    // 5 líneas en Mobile/Tablet, 8 en Desktop
+    const maxLines = window.innerWidth <= 1024 ? 5 : 8;
+    const maxHeight = paddingY + (lineHeight * maxLines);
+    
+    el.style.height = Math.min(el.scrollHeight, maxHeight) + 'px';
+};
+
+window.resetChatTextarea = function(el) {
+    if (!el) return;
+    el.value = '';
+    el.style.height = 'auto';
+};
+
 // --- Lógica Común de Navegación y Estilo ---
 
 // ── Custom Select Dropdown (CSD) helpers ─────────────────────────────
