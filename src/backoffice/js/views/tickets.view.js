@@ -186,7 +186,9 @@ window.ticketsView = (() => {
                 padding: 16px;
                 border-top: 1px solid var(--border);
                 display: flex;
+                align-items: flex-end;
                 gap: 10px;
+                flex-shrink: 0;
             }
             .tc-input {
                 flex: 1;
@@ -217,19 +219,27 @@ window.ticketsView = (() => {
 
             /* Fix para vista Mobile del Chat */
             @media (max-width: 768px) {
-                #tv-chat-view { padding: 0 !important; }
-                .tv-chat-inner { border: none !important; border-radius: 0 !important; }
+                #tv-chat-view { padding: 10px !important; padding-bottom: 6px !important; }
+                .tv-chat-inner { border: 1px solid rgba(0,153,255,0.12) !important; border-radius: 18px !important; }
                 .kanban-header { padding: 12px 16px !important; }
                 .tc-input-area { 
-                    padding: 6px !important; 
-                    gap: 4px !important; 
+                    padding: 8px !important; 
+                    gap: 8px !important; 
+                }
+                .tc-input {
+                    padding: 8px 14px !important;
+                    font-size: 16px !important; /* Previene auto-zoom en iOS */
                 }
                 .tc-send-btn {
-                    width: 34px !important;
-                    height: 34px !important;
+                    width: 38px !important;
+                    height: 38px !important;
+                    flex-shrink: 0 !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
                 }
                 .tc-send-btn i {
-                    font-size: 0.85rem;
+                    font-size: 0.9rem;
                 }
                 #tc-title {
                     font-size: 0.9rem !important;
@@ -242,14 +252,13 @@ window.ticketsView = (() => {
                     font-size: 0.55rem !important;
                     padding: 2px 8px !important;
                 }
-            }
-        </style>
+            }</style>
 
-        <main class="crm-main-container" style="z-index:10; padding:0; height: 100%; display: flex; flex-direction: column;">
+        <main class="crm-main-container" style="z-index:10; padding:0; flex: 1; width: 100%; height: 100%; max-height: 100%; display: flex; flex-direction: column; min-height: 0 !important; overflow: hidden;">
             
             <!-- VISTA: KANBAN -->
-            <div id="tv-list-view" style="display:flex; flex-direction:column; height: 100%;">
-                <div class="kanban-header animate-fade">
+            <div id="tv-list-view" style="display:flex; flex-direction:column; flex: 1; min-height: 0; overflow: hidden;">
+                <div class="kanban-header animate-fade" style="flex-shrink: 0;">
                     <div class="header-info">
                         <h1>
                             <i class="fas fa-ticket-alt kanban-header-icon" style="color:#0099FF;"></i>
@@ -262,7 +271,7 @@ window.ticketsView = (() => {
                     </button>
                 </div>
 
-                <div class="meta-view-body" style="padding:20px 24px; flex:1; overflow-y:auto;">
+                <div class="meta-view-body" style="padding:20px 24px; flex:1; overflow-y:auto; min-height: 0;">
                     <div id="tv-columns">
                         <!-- Columna Pendientes -->
                         <div class="tv-col-box bg-white dark:bg-[#102a43a6]">
@@ -292,9 +301,9 @@ window.ticketsView = (() => {
             </div>
 
             <!-- VISTA: CHAT DINÁMICO -->
-            <div id="tv-chat-view" class="animate-fade" style="display:none; height: 100%; flex-direction: row; flex: 1; padding: 20px 24px;">
-                <div class="tv-chat-inner bg-white dark:bg-[#102a43a6]" style="flex: 1; display: flex; flex-direction: column; min-width: 0; border: 1px solid rgba(0,153,255,0.12); border-radius: 14px; overflow: hidden;">
-                    <div class="kanban-header" style="border-bottom:1px solid rgba(0,153,255,0.1); padding: 12px 24px;">
+            <div id="tv-chat-view" class="animate-fade" style="display:none; flex-direction: column; flex: 1; padding: 20px 24px; min-height: 0; overflow: hidden;">
+                <div class="tv-chat-inner bg-white dark:bg-[#102a43a6]" style="flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; border: 1px solid rgba(0,153,255,0.12); border-radius: 14px; overflow: hidden;">
+                    <div class="kanban-header" style="border-bottom:1px solid rgba(0,153,255,0.1); padding: 12px 24px; flex-shrink: 0;">
                         <button class="btn-icon" onclick="ticketsView._goBack()" style="margin-right:12px; font-size:1.1rem; color: var(--text-main);">
                             <i class="fas fa-arrow-left"></i>
                         </button>
@@ -308,11 +317,11 @@ window.ticketsView = (() => {
                             </h1>
                         </div>
                     </div>
-                    <div id="tc-messages" class="tc-chat-container">
+                    <div id="tc-messages" class="tc-chat-container" style="min-height: 0;">
                         <!-- Mensajes dinámicos -->
                     </div>
                     <div class="tc-input-area">
-                        <input type="text" id="tc-input" class="tc-input" placeholder="Escribí un mensaje..." onkeypress="if(event.key === 'Enter') ticketsView._sendMessage()">
+                        <textarea id="tc-input" class="tc-input" rows="1" placeholder="Escribí un mensaje..." onkeydown="window.handleChatTextareaKey(event, ticketsView._sendMessage)" oninput="window.autoResizeChatTextarea(this)" style="resize: none; overflow-y: auto; max-height: 120px; font-family: inherit; line-height: 1.4; display: block;"></textarea>
                         <button id="tc-send-btn" class="tc-send-btn" onclick="ticketsView._sendMessage()">
                             <i class="fas fa-paper-plane"></i>
                         </button>
@@ -644,7 +653,7 @@ window.ticketsView = (() => {
 
             if (res.ok) {
                 _activeTicket.chats_adjuntos = JSON.stringify(currentChats);
-                input.value = '';
+                window.resetChatTextarea(input);
                 _renderChatMessages();
             } else {
                 showToast && showToast('Error al enviar mensaje', 'error');
