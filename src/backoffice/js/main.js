@@ -147,16 +147,7 @@ window.initWebchatView = function () {
     });
     _send.onclick = _doSend;
     _input.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') {
-            if (window.innerWidth <= 1024) {
-                return;
-            } else {
-                if (!e.shiftKey) {
-                    e.preventDefault();
-                    _doSend();
-                }
-            }
-        }
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); _doSend(); }
     });
 
     if (_attach && _fileInput) {

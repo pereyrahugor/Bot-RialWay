@@ -194,11 +194,8 @@ window.backofficeView = {
                         <button class="btn-icon input-action-btn" id="emoji-btn" title="Emojis" disabled onclick="toggleEmojiPicker(event)">
                             <i class="far fa-face-smile"></i>
                         </button>
-                        <textarea id="message-input" placeholder="Escribe un mensaje" disabled
-                            rows="1"
-                            onkeydown="window.handleChatTextareaKey(event, window.sendMessage)"
-                            oninput="window.autoResizeChatTextarea(this)"
-                            style="flex:1;background:transparent;border:0;outline:none;color:var(--text-main);font-size:16px;padding:8px 0;min-width:0;resize:none;overflow-y:auto;max-height:120px;font-family:inherit;line-height:1.4;display:block;"></textarea>
+                        <input type="text" id="message-input" placeholder="Escribe un mensaje" disabled
+                            onkeydown="if(event.key === 'Enter') sendMessage()">
                     </div>
                     <button class="btn-icon input-action-btn" id="mic-btn" title="Grabar audio" disabled onclick="toggleRecording()">
                         <i class="fas fa-microphone"></i>
