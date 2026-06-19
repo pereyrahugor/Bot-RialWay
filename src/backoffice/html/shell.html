@@ -26,14 +26,29 @@
         /* Puntos de notificacion rojos en sidebar */
         .nav-dot {
             display: inline-block;
-            width: 7px;
-            height: 7px;
-            background-color: #ef4444;
+            width: 10px;
+            height: 10px;
+            background: radial-gradient(circle, rgba(239, 68, 68, 1) 25%, rgba(239, 68, 68, 0.45) 65%, rgba(239, 68, 68, 0) 100%);
             border-radius: 50%;
             margin-left: 6px;
             flex-shrink: 0;
             vertical-align: middle;
-            box-shadow: 0 0 6px rgba(239, 68, 68, 0.8);
+            position: relative;
+            animation: nav-dot-pulse 2s infinite ease-in-out;
+        }
+        @keyframes nav-dot-pulse {
+            0% {
+                transform: scale(0.95);
+                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+            }
+            70% {
+                transform: scale(1.15);
+                box-shadow: 0 0 0 6px rgba(239, 68, 68, 0);
+            }
+            100% {
+                transform: scale(0.95);
+                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+            }
         }
         /* Posicionar punto de notificacion sobre el icono en sidebar colapsado */
         .nav-sidebar.collapsed .nav-item > .nav-link > .nav-dot {
