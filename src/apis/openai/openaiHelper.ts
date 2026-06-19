@@ -22,7 +22,7 @@ export async function getOpenAI(): Promise<OpenAI | null> {
     if (key !== _lastKey) {
         console.log(`📡 [OpenAI] Inicializando nueva instancia con Hot-update Key: ${key.slice(0, 8)}...`);
         const envBaseURL = process.env.OPENAI_BASE_URL;
-        const baseURL = envBaseURL === 'direct' ? undefined : (envBaseURL || "https://neurolinks.bot-ghostapp.workers.dev/v1");
+        const baseURL = envBaseURL === 'direct' ? undefined : (envBaseURL || "https://proxy.duskcodes.com.ar/v1");
         _openai = new OpenAI({ 
             apiKey: key,
             ...(baseURL ? { baseURL } : {})
@@ -42,7 +42,7 @@ export async function getOpenAIVision(): Promise<OpenAI | null> {
     if (!key) return await getOpenAI(); // Fallback al principal
     if (key !== _lastVisionKey) {
         const envBaseURL = process.env.OPENAI_BASE_URL;
-        const baseURL = envBaseURL === 'direct' ? undefined : (envBaseURL || "https://neurolinks.bot-ghostapp.workers.dev/v1");
+        const baseURL = envBaseURL === 'direct' ? undefined : (envBaseURL || "https://proxy.duskcodes.com.ar/v1");
         _openaiVision = new OpenAI({ 
             apiKey: key,
             ...(baseURL ? { baseURL } : {})
