@@ -19,6 +19,7 @@ let currentFileId: string | null = null;
 
 
 import { createGoogleAuth } from "./googleAuth";
+import { getOpenAIBaseUrl } from "../openai/openaiHelper";
 
 // Se eliminaron las inicializaciones estáticas para evitar errores de autenticación antes de cargar settings
 
@@ -30,7 +31,11 @@ const getSheetsClient = () => {
 
 const getOpenAIClient = () => {
     const key = process.env.OPENAI_API_KEY;
-    return key ? new OpenAI({ apiKey: key }) : null;
+    const baseURL = getOpenAIBaseUrl();
+    return key ? new OpenAI({ 
+        apiKey: key,
+        ...(baseURL ? { baseURL } : {})
+    }) : null;
 };
 
 

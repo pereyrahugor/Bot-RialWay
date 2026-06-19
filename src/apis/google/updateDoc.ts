@@ -11,6 +11,7 @@ let currentFileId: string | null = null;
 
 
 import { createGoogleAuth } from "./googleAuth";
+import { getOpenAIBaseUrl } from "../openai/openaiHelper";
 
 // Se eliminaron inicializaciones estáticas para evitar errores de carga prematura
 
@@ -21,7 +22,11 @@ const getDriveClient = () => {
 
 const getOpenAIClient = () => {
     const key = process.env.OPENAI_API_KEY;
-    return (key && key.length > 5) ? new OpenAI({ apiKey: key }) : null;
+    const baseURL = getOpenAIBaseUrl();
+    return (key && key.length > 5) ? new OpenAI({ 
+        apiKey: key,
+        ...(baseURL ? { baseURL } : {})
+    }) : null;
 };
 
 

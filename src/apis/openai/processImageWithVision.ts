@@ -1,8 +1,13 @@
 import axios from "axios";
 import { OpenAI } from "openai";
 import fs from "fs";
+import { getOpenAIBaseUrl } from "./openaiHelper";
 
-const openai = process.env.OPENAI_API_KEY_IMG ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY_IMG }) : null;
+const baseURL = getOpenAIBaseUrl();
+const openai = process.env.OPENAI_API_KEY_IMG ? new OpenAI({ 
+    apiKey: process.env.OPENAI_API_KEY_IMG,
+    ...(baseURL ? { baseURL } : {})
+}) : null;
 const IMGUR_CLIENT_ID = "dbe415c6bbb950d";
 
 export async function processImageWithVision(buffer: Buffer, flowDynamic: any): Promise<string> {

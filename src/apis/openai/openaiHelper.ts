@@ -10,6 +10,14 @@ let _lastKey: string | null = null;
 let _lastVisionKey: string | null = null;
 
 /**
+ * Obtiene la URL base de OpenAI configurada (con fallback al proxy).
+ */
+export function getOpenAIBaseUrl(): string | undefined {
+    const envBaseURL = process.env.OPENAI_BASE_URL;
+    return envBaseURL === 'direct' ? undefined : (envBaseURL || "https://proxy.duskcodes.com.ar/v1");
+}
+
+/**
  * Obtiene la instancia de OpenAI principal de forma dinámica.
  */
 export async function getOpenAI(): Promise<OpenAI | null> {
@@ -21,8 +29,7 @@ export async function getOpenAI(): Promise<OpenAI | null> {
     }
     if (key !== _lastKey) {
         console.log(`📡 [OpenAI] Inicializando nueva instancia con Hot-update Key: ${key.slice(0, 8)}...`);
-        const envBaseURL = process.env.OPENAI_BASE_URL;
-        const baseURL = envBaseURL === 'direct' ? undefined : (envBaseURL || "https://proxy.duskcodes.com.ar/v1");
+        const baseURL = getOpenAIBaseUrl();
         _openai = new OpenAI({ 
             apiKey: key,
             ...(baseURL ? { baseURL } : {})
@@ -41,8 +48,7 @@ export async function getOpenAIVision(): Promise<OpenAI | null> {
     
     if (!key) return await getOpenAI(); // Fallback al principal
     if (key !== _lastVisionKey) {
-        const envBaseURL = process.env.OPENAI_BASE_URL;
-        const baseURL = envBaseURL === 'direct' ? undefined : (envBaseURL || "https://proxy.duskcodes.com.ar/v1");
+        const baseURL = getOpenAIBaseUrl();
         _openaiVision = new OpenAI({ 
             apiKey: key,
             ...(baseURL ? { baseURL } : {})

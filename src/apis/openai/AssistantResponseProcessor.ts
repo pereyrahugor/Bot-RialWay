@@ -21,13 +21,16 @@ import fs from 'fs';
 import path from 'path';
 import moment from 'moment';
 import OpenAI from "openai";
+import { getOpenAIBaseUrl } from "./openaiHelper";
 import { transcribeAudioFile } from './audioTranscriptior';
 import { HistoryHandler } from '../../db/historyHandler';
 import { executeClientTool } from "../../bot/toolRouter";
 //import { handleToolFunctionCall } from '../Api-BotAsistente/handleToolFunctionCall.js';
 
+const baseURL = getOpenAIBaseUrl();
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
+    ...(baseURL ? { baseURL } : {})
 }) : null;
 
 // Eliminadas funciones de Assistants API legacy
