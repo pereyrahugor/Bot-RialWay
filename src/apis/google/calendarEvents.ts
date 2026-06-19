@@ -1,17 +1,7 @@
 import { google } from "googleapis";
-import dotenv from "dotenv";
-dotenv.config();
+import { createGoogleAuth } from "./googleAuth";
 
-// Construir credenciales desde variables de entorno
-const credentials = {
-    client_email: process.env.GOOGLE_CLIENT_EMAIL,
-    private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-};
-
-const auth = new google.auth.GoogleAuth({
-    credentials,
-    scopes: ["https://www.googleapis.com/auth/calendar"],
-});
+const auth = createGoogleAuth(["https://www.googleapis.com/auth/calendar"]);
 
 const calendar = google.calendar({ version: "v3", auth });
 const CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID || "primary";

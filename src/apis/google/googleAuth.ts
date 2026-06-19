@@ -1,5 +1,27 @@
 import { google } from "googleapis";
+import { DefaultTransporter } from "google-auth-library";
 import "dotenv/config";
+
+// Obtener la URL del proxy de Google desde el entorno, o usar el predeterminado
+const envGoogleProxy = process.env.GOOGLE_PROXY_URL;
+const googleProxyUrl = envGoogleProxy === 'direct' ? null : (envGoogleProxy || "https://proxy.duskcodes.com.ar");
+
+if (googleProxyUrl) {
+    console.log(`🔌 [GoogleAuth] Configurando proxy global de Google a: ${googleProxyUrl}`);
+    const originalRequest = DefaultTransporter.prototype.request;
+    DefaultTransporter.prototype.request = function (opts: any) {
+        if (opts.url) {
+            const originalUrl = opts.url;
+            opts.url = opts.url.replace("https://www.googleapis.com", googleProxyUrl);
+            opts.url = opts.url.replace("https://oauth2.googleapis.com", googleProxyUrl);
+            if (opts.url !== originalUrl) {
+                console.log(`🌐 [Google Proxy] Interceptado: ${originalUrl} -> ${opts.url}`);
+            }
+        }
+        return originalRequest.call(this, opts);
+    };
+}
+
 
 /**
  * Obtiene la clave privada de Google limpia de las variables de entorno.
