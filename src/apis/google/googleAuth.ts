@@ -11,11 +11,27 @@ if (googleProxyUrl) {
     const originalRequest = DefaultTransporter.prototype.request;
     DefaultTransporter.prototype.request = function (opts: any) {
         if (opts.url) {
-            const originalUrl = opts.url;
+            const originalUrlStr = opts.url;
+            let targetHost = "www.googleapis.com";
+            
+            try {
+                const parsed = new URL(originalUrlStr);
+                targetHost = parsed.host;
+            } catch (e) {
+                // fallback
+            }
+
+            // Reemplazar subdominios conocidos de Google por el proxy
             opts.url = opts.url.replace("https://www.googleapis.com", googleProxyUrl);
             opts.url = opts.url.replace("https://oauth2.googleapis.com", googleProxyUrl);
-            if (opts.url !== originalUrl) {
-                console.log(`🌐 [Google Proxy] Interceptado: ${originalUrl} -> ${opts.url}`);
+            opts.url = opts.url.replace("https://sheets.googleapis.com", googleProxyUrl);
+            opts.url = opts.url.replace("https://calendar.googleapis.com", googleProxyUrl);
+            opts.url = opts.url.replace("https://drive.googleapis.com", googleProxyUrl);
+
+            if (opts.url !== originalUrlStr) {
+                opts.headers = opts.headers || {};
+                opts.headers["x-target-host"] = targetHost;
+                console.log(`🌐 [Google Proxy] Interceptado: ${originalUrlStr} -> ${opts.url} (Destino: ${targetHost})`);
             }
         }
         return originalRequest.call(this, opts);
