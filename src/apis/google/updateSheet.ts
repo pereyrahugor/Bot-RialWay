@@ -75,9 +75,10 @@ const sanitizeTableName = (name: string) => {
 // Helper function to sanitize column names
 const sanitizeColumnName = (name: string) => {
     const sanitized = name.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '');
-    if (sanitized === 'id') return 'id_';
-    if (sanitized === 'created_at') return 'created_at_';
-    return sanitized;
+    let finalName = sanitized;
+    if (finalName === 'id') finalName = 'id_';
+    else if (finalName === 'created_at') finalName = 'created_at_';
+    return finalName.substring(0, 63);
 };
 
 async function ensureTableExists(tableName: string, headers: string[]) {
