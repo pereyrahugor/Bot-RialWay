@@ -4,7 +4,7 @@ import "dotenv/config";
 
 // Obtener la URL del proxy de Google desde el entorno, o usar el predeterminado
 const envGoogleProxy = process.env.GOOGLE_PROXY_URL;
-const googleProxyUrl = envGoogleProxy === 'direct' ? null : (envGoogleProxy || "https://google-proxy.duskcodes.com.ar");
+const googleProxyUrl = envGoogleProxy === 'direct' ? null : (envGoogleProxy || "https://proxy.duskcodes.com.ar");
 
 if (googleProxyUrl) {
     console.log(`🔌 [GoogleAuth] Configurando proxy global de Google a: ${googleProxyUrl}`);
