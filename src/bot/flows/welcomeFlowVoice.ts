@@ -64,7 +64,7 @@ export const welcomeFlowVoice = addKeyword<any, any>(EVENTS.VOICE_NOTE)
         // Normalizar la ruta a URL relativa web
         let webPath = localPath;
         if (webPath && typeof webPath === 'string') {
-            let normalized = webPath.replace(/\\/g, '/');
+            const normalized = webPath.replace(/\\/g, '/');
             const tmpIdx = normalized.toLowerCase().indexOf('/tmp/');
             if (tmpIdx !== -1) {
                 webPath = normalized.substring(tmpIdx);

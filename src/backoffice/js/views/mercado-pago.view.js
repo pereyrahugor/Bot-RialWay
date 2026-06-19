@@ -1,3 +1,4 @@
+/* global showToast */
 window.mercadoPagoView = (() => {
     let _token = '';
 
