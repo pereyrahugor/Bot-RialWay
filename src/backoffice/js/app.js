@@ -146,6 +146,50 @@ async function mountView(path) {
         highlightActiveNav(cleanPath);
         _currentView = view;
 
+        // Limpiar notificaciones localmente de forma inmediata y guardar visitas en localStorage
+        if (cleanPath === '/backoffice') {
+            localStorage.setItem('last_visited_conversaciones', Date.now().toString());
+            const el = document.getElementById('dot-conversaciones');
+            if (el) el.style.display = 'none';
+        } else if (cleanPath === '/tickets') {
+            localStorage.setItem('last_visited_tickets', Date.now().toString());
+            const el = document.getElementById('dot-tickets');
+            if (el) el.style.display = 'none';
+        } else if (cleanPath === '/reportes') {
+            localStorage.setItem('last_visited_reportes', Date.now().toString());
+            const el = document.getElementById('dot-reportes');
+            if (el) el.style.display = 'none';
+        } else if (cleanPath === '/crm') {
+            localStorage.setItem('last_visited_crm', Date.now().toString());
+            const el = document.getElementById('dot-crm');
+            if (el) el.style.display = 'none';
+        } else if (cleanPath === '/crm-tareas') {
+            localStorage.setItem('last_visited_tareas', Date.now().toString());
+            const el = document.getElementById('dot-tareas');
+            if (el) el.style.display = 'none';
+        }
+
+        // Limpiar puntos padres localmente si todos sus hijos estan limpios
+        const showConversaciones = document.getElementById('dot-conversaciones')?.style.display === 'inline-block';
+        const showTickets = document.getElementById('dot-tickets')?.style.display === 'inline-block';
+        const showReportes = document.getElementById('dot-reportes')?.style.display === 'inline-block';
+        if (!showConversaciones && !showTickets && !showReportes) {
+            const el = document.getElementById('dot-messaging');
+            if (el) el.style.display = 'none';
+        }
+
+        const showCrm = document.getElementById('dot-crm')?.style.display === 'inline-block';
+        const showTareas = document.getElementById('dot-tareas')?.style.display === 'inline-block';
+        if (!showCrm && !showTareas) {
+            const el = document.getElementById('dot-integraciones');
+            if (el) el.style.display = 'none';
+        }
+
+        // Actualizar desde el servidor
+        if (typeof window.updateNotificationDots === 'function') {
+            window.updateNotificationDots();
+        }
+
         if (typeof view.init === 'function') {
             await view.init();
         }
@@ -175,6 +219,67 @@ window.addEventListener('popstate', () => {
     mountView(window.location.pathname);
 });
 
+// Funcion global para actualizar puntos de notificacion en el sidebar
+async function updateNotificationDots() {
+    const token = localStorage.getItem('backoffice_token') || '';
+    if (!token || token === 'undefined') return;
+
+    try {
+        const res = await fetch(`/api/backoffice/notifications/summary?token=${encodeURIComponent(token)}`);
+        const data = await res.json();
+        if (!data || !data.success) return;
+
+        const currentPath = window.location.pathname;
+
+        // --- Conversaciones ---
+        const showConversaciones = data.unread_chats_count > 0 && currentPath !== '/backoffice';
+        const dotConversaciones = document.getElementById('dot-conversaciones');
+        if (dotConversaciones) dotConversaciones.style.display = showConversaciones ? 'inline-block' : 'none';
+
+        // --- Tickets ---
+        const lastTicketsVisit = parseInt(localStorage.getItem('last_visited_tickets') || '0');
+        const latestTicketTime = data.latest_ticket_time ? new Date(data.latest_ticket_time).getTime() : 0;
+        const showTickets = latestTicketTime > lastTicketsVisit && currentPath !== '/tickets';
+        const dotTickets = document.getElementById('dot-tickets');
+        if (dotTickets) dotTickets.style.display = showTickets ? 'inline-block' : 'none';
+
+        // --- Reportes ---
+        const lastReportesVisit = parseInt(localStorage.getItem('last_visited_reportes') || '0');
+        const latestReporteTime = data.latest_reporte_time ? new Date(data.latest_reporte_time).getTime() : 0;
+        const showReportes = latestReporteTime > lastReportesVisit && currentPath !== '/reportes';
+        const dotReportes = document.getElementById('dot-reportes');
+        if (dotReportes) dotReportes.style.display = showReportes ? 'inline-block' : 'none';
+
+        // --- CRM ---
+        const lastCrmVisit = parseInt(localStorage.getItem('last_visited_crm') || '0');
+        const latestLeadTime = data.latest_crm_lead_time ? new Date(data.latest_crm_lead_time).getTime() : 0;
+        const showCrm = latestLeadTime > lastCrmVisit && currentPath !== '/crm';
+        const dotCrm = document.getElementById('dot-crm');
+        if (dotCrm) dotCrm.style.display = showCrm ? 'inline-block' : 'none';
+
+        // --- Tareas ---
+        const lastTareasVisit = parseInt(localStorage.getItem('last_visited_tareas') || '0');
+        const latestTareaTime = data.latest_tarea_time ? new Date(data.latest_tarea_time).getTime() : 0;
+        const showTareas = latestTareaTime > lastTareasVisit && currentPath !== '/crm-tareas';
+        const dotTareas = document.getElementById('dot-tareas');
+        if (dotTareas) dotTareas.style.display = showTareas ? 'inline-block' : 'none';
+
+        // --- Mensajeria (Padre) ---
+        const showMessaging = showConversaciones || showTickets || showReportes;
+        const dotMessaging = document.getElementById('dot-messaging');
+        if (dotMessaging) dotMessaging.style.display = showMessaging ? 'inline-block' : 'none';
+
+        // --- Integraciones (Padre) ---
+        const showIntegraciones = showCrm || showTareas;
+        const dotIntegraciones = document.getElementById('dot-integraciones');
+        if (dotIntegraciones) dotIntegraciones.style.display = showIntegraciones ? 'inline-block' : 'none';
+
+    } catch (e) {
+        console.error('[Router] Error al actualizar puntos de notificacion:', e);
+    }
+}
+window.updateNotificationDots = updateNotificationDots;
+
 // Iniciar en DOMContentLoaded
 document.addEventListener('DOMContentLoaded', () => {
     mountView(window.location.pathname);
@@ -194,4 +299,22 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     });
+
+    // Escuchar eventos en tiempo real para actualizar los puntos de notificacion
+    _appSocket.on('new_message', () => {
+        updateNotificationDots();
+    });
+    _appSocket.on('contact_updated', () => {
+        updateNotificationDots();
+    });
+    _appSocket.on('ticket_updated', () => {
+        updateNotificationDots();
+    });
+    _appSocket.on('reporte_created', () => {
+        updateNotificationDots();
+    });
+
+    // Actualizacion inicial corta y polling de seguridad de 30 segundos
+    setTimeout(updateNotificationDots, 1000);
+    setInterval(updateNotificationDots, 30000);
 });

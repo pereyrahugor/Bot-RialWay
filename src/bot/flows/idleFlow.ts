@@ -247,6 +247,12 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                     gotoFlow,
                     maxAttempts: 3,
                     onSuccess: async (newData) => {
+                        // Si el usuario respondió directamente, omitimos el redireccionamiento para evitar ejecuciones dobles,
+                        // ya que el bot procesará el mensaje entrante de forma natural.
+                        if (newData && (newData as any).userResponded) {
+                            console.log(`[idleFlow] El usuario respondió al seguimiento. Dejando que el bot lo procese naturalmente.`);
+                            return;
+                        }
                         // Derivar al flujo conversacional usando gotoFlow
                         if (typeof gotoFlow === 'function') {
                             if (ctx.type === 'voice_note' || ctx.type === 'VOICE_NOTE') {
@@ -295,6 +301,12 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                     gotoFlow,
                     maxAttempts: 3,
                     onSuccess: async (newData) => {
+                        // Si el usuario respondió directamente, omitimos el redireccionamiento para evitar ejecuciones dobles,
+                        // ya que el bot procesará el mensaje entrante de forma natural.
+                        if (newData && (newData as any).userResponded) {
+                            console.log(`[idleFlow] El usuario respondió al seguimiento. Dejando que el bot lo procese naturalmente.`);
+                            return;
+                        }
                         // Derivar al flujo conversacional usando gotoFlow
                         if (typeof gotoFlow === 'function') {
                             if (ctx.type === 'voice_note' || ctx.type === 'VOICE_NOTE') {

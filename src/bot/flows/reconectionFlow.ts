@@ -15,7 +15,7 @@ interface ReconectionOptions {
     gotoFlow: any;    // Navegación de flujo
     maxAttempts?: number; // Máximo de intentos de reconexión
     timeoutMs?: number; // Tiempo de espera entre intentos (ms)
-    onSuccess: (data: GenericResumenData) => Promise<void>; // Callback si se obtiene el nombre
+    onSuccess: (data: any) => Promise<void>; // Callback si se obtiene el nombre
     onFail: () => Promise<void>; // Callback si se alcanzan los intentos máximos
 }
 
@@ -29,7 +29,7 @@ export class ReconectionFlow {
     private readonly provider: any; // Proveedor de mensajería
     private readonly flowDynamic: any; // Dinamismo del flujo
     private readonly gotoFlow: any; // Navegación de flujo
-    private readonly onSuccess: (data: GenericResumenData) => Promise<void>; // Acción al obtener nombre
+    private readonly onSuccess: (data: any) => Promise<void>; // Acción al obtener nombre
     private readonly onFail: () => Promise<void>; // Acción al fallar todos los intentos
     private readonly ASSISTANT_ID = process.env.ASSISTANT_ID ?? '';
 
@@ -176,8 +176,8 @@ export class ReconectionFlow {
             if (userResponded) {
                 // Limpiar el estado de reconexión y delegar la navegación al callback onSuccess
                 if (this.state) delete this.state.reconectionFlow;
-                // Llama al callback onSuccess, que debe encargarse de la navegación
-                await this.onSuccess({});
+                // Llama al callback onSuccess, indicando que fue por respuesta del usuario
+                await this.onSuccess({ userResponded: true });
                 return;
             }
 

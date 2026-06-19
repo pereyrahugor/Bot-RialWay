@@ -644,6 +644,132 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         res.json(chats);
     });
 
+    // --- NUEVO: SUMARIO DE NOTIFICACIONES ---
+    app.get('/api/backoffice/notifications/summary', backofficeAuth, async (req: any, res: any) => {
+        try {
+            const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
+            let unread_chats_count = 0;
+            let latest_ticket_time: string | null = null;
+            let latest_reporte_time: string | null = null;
+            let latest_crm_lead_time: string | null = null;
+            let latest_tarea_time: string | null = null;
+
+            if (process.env.STORAGE_MODE === "local") {
+                const { LocalHistoryStore } = await import('../../db/localHistoryStore');
+                const chats = LocalHistoryStore.getChats(projectId);
+                const tickets = LocalHistoryStore.getTicketsList(projectId);
+
+                // 1. Unread chats
+                unread_chats_count = chats.filter(c => (c.unread_count || 0) > 0).length;
+
+                // 2. Latest ticket time (tipo = 'Soporte')
+                const activeTickets = tickets.filter(t => t.tipo === 'Soporte');
+                if (activeTickets.length > 0) {
+                    const times = activeTickets.map(t => Math.max(new Date(t.created_at).getTime(), new Date(t.updated_at).getTime()));
+                    latest_ticket_time = new Date(Math.max(...times)).toISOString();
+                }
+
+                // 3. Latest reporte time (tipo = 'Nuevo Lead')
+                const reportes = tickets.filter(t => t.tipo === 'Nuevo Lead');
+                if (reportes.length > 0) {
+                    const times = reportes.map(t => Math.max(new Date(t.created_at).getTime(), new Date(t.updated_at).getTime()));
+                    latest_reporte_time = new Date(Math.max(...times)).toISOString();
+                }
+
+                // 4. Latest CRM lead time
+                const leads = chats.filter(c => c.is_lead === true || c.crm_status !== null);
+                if (leads.length > 0) {
+                    const times = leads.map(c => new Date(c.last_message_at).getTime());
+                    latest_crm_lead_time = new Date(Math.max(...times)).toISOString();
+                }
+
+                // 5. Latest CRM task time
+                const tasks = chats.filter(c => c.is_lead === true && c.crm_due_date !== null);
+                if (tasks.length > 0) {
+                    const times = tasks.map(c => new Date(c.last_message_at).getTime());
+                    latest_tarea_time = new Date(Math.max(...times)).toISOString();
+                }
+            } else {
+                // 1. Count chats with unread_count > 0
+                const { data: unreadChats, error: unreadError } = await supabase
+                    .from('chats')
+                    .select('id')
+                    .eq('project_id', projectId)
+                    .gt('unread_count', 0);
+                if (unreadError) throw unreadError;
+                unread_chats_count = unreadChats?.length || 0;
+
+                // 2. Latest ticket (tipo = 'Soporte')
+                const { data: latestTicket, error: ticketError } = await supabase
+                    .from('tickets')
+                    .select('created_at, updated_at')
+                    .eq('project_id', projectId)
+                    .eq('tipo', 'Soporte')
+                    .order('updated_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+                if (ticketError) throw ticketError;
+                if (latestTicket) {
+                    latest_ticket_time = new Date(Math.max(new Date(latestTicket.created_at).getTime(), new Date(latestTicket.updated_at).getTime())).toISOString();
+                }
+
+                // 3. Latest reporte (tipo = 'Nuevo Lead')
+                const { data: latestReporte, error: reporteError } = await supabase
+                    .from('tickets')
+                    .select('created_at, updated_at')
+                    .eq('project_id', projectId)
+                    .eq('tipo', 'Nuevo Lead')
+                    .order('updated_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+                if (reporteError) throw reporteError;
+                if (latestReporte) {
+                    latest_reporte_time = new Date(Math.max(new Date(latestReporte.created_at).getTime(), new Date(latestReporte.updated_at).getTime())).toISOString();
+                }
+
+                // 4. Latest CRM lead
+                const { data: latestLead, error: leadError } = await supabase
+                    .from('chats')
+                    .select('last_message_at')
+                    .eq('project_id', projectId)
+                    .or('is_lead.eq.true,crm_status.not.is.null')
+                    .order('last_message_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+                if (leadError) throw leadError;
+                if (latestLead) {
+                    latest_crm_lead_time = latestLead.last_message_at;
+                }
+
+                // 5. Latest CRM task
+                const { data: latestTarea, error: tareaError } = await supabase
+                    .from('chats')
+                    .select('last_message_at')
+                    .eq('project_id', projectId)
+                    .eq('is_lead', true)
+                    .not('crm_due_date', 'is', null)
+                    .order('last_message_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+                if (tareaError) throw tareaError;
+                if (latestTarea) {
+                    latest_tarea_time = latestTarea.last_message_at;
+                }
+            }
+
+            res.json({
+                success: true,
+                unread_chats_count,
+                latest_ticket_time,
+                latest_reporte_time,
+                latest_crm_lead_time,
+                latest_tarea_time
+            });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
     // --- NUEVO: IMPORTACIÓN DE CONTACTOS ---
     app.get('/api/backoffice/chats/import-template', backofficeAuth, (req: any, res: any) => {
         try {

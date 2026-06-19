@@ -23,6 +23,25 @@
                 font-size: 16px !important;
             }
         }
+        /* Puntos de notificacion rojos en sidebar */
+        .nav-dot {
+            display: inline-block;
+            width: 7px;
+            height: 7px;
+            background-color: #ef4444;
+            border-radius: 50%;
+            margin-left: 6px;
+            flex-shrink: 0;
+            vertical-align: middle;
+            box-shadow: 0 0 6px rgba(239, 68, 68, 0.8);
+        }
+        /* Posicionar punto de notificacion sobre el icono en sidebar colapsado */
+        .nav-sidebar.collapsed .nav-item > .nav-link > .nav-dot {
+            position: absolute;
+            top: 10px;
+            left: 28px;
+            margin-left: 0;
+        }
     </style>
 </head>
 <body class="flex h-screen overflow-hidden font-body" style="height: 100dvh;">
@@ -66,6 +85,7 @@
                     <a href="#" class="nav-link" onclick="toggleMessagingFlyout(event)">
                         <i class="fas fa-mobile-screen-button"></i>
                         <span class="nav-label">Mensajeria</span>
+                        <span class="nav-dot" id="dot-messaging" style="display: none;"></span>
                         <i class="fas fa-chevron-down nav-dropdown-icon"></i>
                     </a>
                     <ul class="nav-dropdown-menu">
@@ -75,6 +95,7 @@
                                onclick="event.preventDefault(); closeMessagingFlyout(); navigate('/backoffice')">
                                 <i class="fas fa-comments"></i>
                                 <span class="nav-label">Conversaciones</span>
+                                <span class="nav-dot" id="dot-conversaciones" style="display: none;"></span>
                             </a>
                         </li>
                         <li class="nav-item">
@@ -89,6 +110,7 @@
                                onclick="event.preventDefault(); closeMessagingFlyout(); navigate('/tickets')">
                                 <i class="fas fa-ticket-alt"></i>
                                 <span class="nav-label">Tickets</span>
+                                <span class="nav-dot" id="dot-tickets" style="display: none;"></span>
                             </a>
                         </li>
                         <li class="nav-item" data-route="/reportes">
@@ -96,6 +118,7 @@
                                onclick="event.preventDefault(); closeMessagingFlyout(); navigate('/reportes')">
                                 <i class="fas fa-file-lines"></i>
                                 <span class="nav-label">Reportes</span>
+                                <span class="nav-dot" id="dot-reportes" style="display: none;"></span>
                             </a>
                         </li>
                         <li class="nav-item" data-route="/conexion">
@@ -121,6 +144,7 @@
                     <a href="#" class="nav-link" onclick="toggleIntegracionesFlyout(event)">
                         <i class="fas fa-puzzle-piece"></i>
                         <span class="nav-label">Integraciones</span>
+                        <span class="nav-dot" id="dot-integraciones" style="display: none;"></span>
                         <i class="fas fa-chevron-down nav-dropdown-icon"></i>
                     </a>
                     <ul class="nav-dropdown-menu">
@@ -130,6 +154,7 @@
                                onclick="event.preventDefault(); closeIntegracionesFlyout(); navigate('/crm')">
                                 <i class="fas fa-id-card-clip"></i>
                                 <span class="nav-label">CRM</span>
+                                <span class="nav-dot" id="dot-crm" style="display: none;"></span>
                             </a>
                         </li>
                         <li class="nav-item {{SHOW_CRM_STYLE}}" data-route="/crm-tareas">
@@ -137,6 +162,7 @@
                                onclick="event.preventDefault(); closeIntegracionesFlyout(); navigate('/crm-tareas')">
                                 <i class="fas fa-calendar-check"></i>
                                 <span class="nav-label">Tareas</span>
+                                <span class="nav-dot" id="dot-tareas" style="display: none;"></span>
                             </a>
                         </li>
                         <li class="nav-item {{SHOW_BACKOFFICE_STYLE}}" data-route="/meta">
