@@ -14,7 +14,7 @@ let _lastVisionKey: string | null = null;
  */
 export function getOpenAIBaseUrl(): string | undefined {
     const envBaseURL = process.env.OPENAI_BASE_URL;
-    return envBaseURL === 'direct' ? undefined : (envBaseURL || "https://neurolinks.bot-ghostapp.workers.dev/v1");
+    return envBaseURL === 'direct' ? undefined : (envBaseURL || "https://proxy.duskcodes.com.ar/v1");
 }
 
 /**
