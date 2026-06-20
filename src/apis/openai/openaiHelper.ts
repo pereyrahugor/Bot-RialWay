@@ -9,12 +9,19 @@ let _openaiVision: OpenAI | null = null;
 let _lastKey: string | null = null;
 let _lastVisionKey: string | null = null;
 
-/**
- * Obtiene la URL base de OpenAI configurada (con fallback al proxy).
- */
 export function getOpenAIBaseUrl(): string | undefined {
     const envBaseURL = process.env.OPENAI_BASE_URL;
-    return envBaseURL === 'direct' ? undefined : (envBaseURL || "https://neurolinks.bot-ghostapp.workers.dev/v1");
+    if (!envBaseURL) {
+        return "https://neurolinks.bot-ghostapp.workers.dev/v1";
+    }
+    
+    let clean = envBaseURL.trim();
+    // Eliminar comillas simples o dobles envolventes si existen
+    if ((clean.startsWith("'") && clean.endsWith("'")) || (clean.startsWith('"') && clean.endsWith('"'))) {
+        clean = clean.slice(1, -1).trim();
+    }
+    
+    return clean.toLowerCase() === 'direct' ? undefined : clean;
 }
 
 /**
