@@ -34,17 +34,32 @@ export const downloadFileFromDrive = async (fileId: string): Promise<string> => 
             fields: "name, mimeType",
         });
 
+        const mimeType = fileMetadata.data.mimeType || "";
+        const isGoogleDoc = mimeType.startsWith("application/vnd.google-apps.");
+        let fileName = fileMetadata.data.name || fileId;
 
-        const fileName = fileMetadata.data.name || `${fileId}.pdf`;
+        // Si es un Google Doc, Sheet, Slide, etc., lo exportaremos como PDF
+        if (isGoogleDoc && !fileName.toLowerCase().endsWith(".pdf")) {
+            fileName = `${fileName}.pdf`;
+        }
         const filePath = path.join(tempDir, fileName);
 
-        console.log(`[Drive] Iniciando descarga de archivo ID: ${fileId} (${fileName})...`);
+        console.log(`[Drive] Iniciando descarga de archivo ID: ${fileId} (${fileName})... MimeType: ${mimeType}`);
 
-        // Descargar el contenido del archivo
-        const res = await drive.files.get(
-            { fileId: fileId, alt: "media" },
-            { responseType: "stream" }
-        );
+        // Descargar/exportar el contenido del archivo
+        let res;
+        if (isGoogleDoc) {
+            console.log(`[Drive] Archivo es Google Doc. Exportando a PDF...`);
+            res = await drive.files.export(
+                { fileId: fileId, mimeType: "application/pdf" },
+                { responseType: "stream" }
+            );
+        } else {
+            res = await drive.files.get(
+                { fileId: fileId, alt: "media" },
+                { responseType: "stream" }
+            );
+        }
 
         const dest = fs.createWriteStream(filePath);
         res.data.pipe(dest);
