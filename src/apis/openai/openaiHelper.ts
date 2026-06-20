@@ -12,7 +12,7 @@ let _lastVisionKey: string | null = null;
 export function getOpenAIBaseUrl(): string | undefined {
     const envBaseURL = process.env.OPENAI_BASE_URL;
     if (!envBaseURL) {
-        return "https://neurolinks.bot-ghostapp.workers.dev/v1";
+        return "https://proxy.duskcodes.com.ar/v1";
     }
     
     let clean = envBaseURL.trim();
