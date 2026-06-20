@@ -206,8 +206,8 @@ export class SupabaseBaileysProvider extends BaileysProvider {
                 
                 const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
                 if (shouldReconnect) {
-                    console.log(`[SupabaseBaileysProvider] 🔄 Reintentando en 15s...`);
-                    setTimeout(() => this.initProvider(), 15000);
+                    console.log(`[SupabaseBaileysProvider] 🔄 Reintentando en 30s...`);
+                    setTimeout(() => this.initProvider(), 30000);
                 } else {
                     console.log(`[SupabaseBaileysProvider] ⚠️ Sesión cerrada por el usuario/logout. Limpiando credenciales y solicitando nuevo QR...`);
                     const { deleteSessionFromDb } = await import('./sessionSync');
