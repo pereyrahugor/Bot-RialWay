@@ -10,6 +10,7 @@ import {
 import pino from 'pino';
 import path from 'path';
 import fs from 'fs';
+import { SocksProxyAgent } from 'socks-proxy-agent';
 
 const logger = pino({ level: 'error' });
 
@@ -143,6 +144,12 @@ export class SupabaseBaileysProvider extends BaileysProvider {
         // --- STORE INICIALIZACIÓN (DESACTIVADO POR RENDIMIENTO) ---
         (this as any).store = null;
 
+        const useProxy = process.env.CHISEL_SERVER_URL && process.env.CHISEL_AUTH;
+        const agent = useProxy ? new SocksProxyAgent('socks5://127.0.0.1:1080') : undefined;
+        if (agent) {
+            console.log(`📡 [SupabaseBaileysProvider] [${botName}] Configurando socket para usar proxy SOCKS5 local Chisel (127.0.0.1:1080)`);
+        }
+
         this.vendor = makeWASocket({
             auth: {
                 creds: state.creds,
@@ -154,6 +161,7 @@ export class SupabaseBaileysProvider extends BaileysProvider {
             syncFullHistory: true,
             markOnlineOnConnect: false,
             linkPreviewImageThumbnailWidth: 192,
+            ...(agent ? { agent, fetchAgent: agent } : {}),
             ...this.globalVendorArgs
         }) as any;
 

@@ -1,6 +1,7 @@
 import "dotenv/config";
 import fs from "fs";
 import path from "path";
+import { spawn } from "child_process";
 import { fileURLToPath } from "url";
 import multer from "multer";
 import OpenAI from "openai";
@@ -100,6 +101,21 @@ const main = async () => {
         await HistoryHandler.initDatabase();
     } catch (err) {
         console.warn('[App] initDatabase error:', err);
+    }
+
+    // Iniciar túnel de Chisel si está configurado en las variables de entorno
+    const chiselServer = process.env.CHISEL_SERVER_URL;
+    const chiselAuth = process.env.CHISEL_AUTH;
+    if (chiselServer && chiselAuth) {
+        console.log(`🔌 [Proxy central] Iniciando túnel Chisel hacia ${chiselServer}...`);
+        try {
+            const chiselProcess = spawn('chisel', ['client', '--auth', chiselAuth, chiselServer, '127.0.0.1:1080:socks']);
+            chiselProcess.stdout.on('data', (data) => console.log(`[Chisel] ${data.toString().trim()}`));
+            chiselProcess.stderr.on('data', (data) => console.error(`[Chisel Err] ${data.toString().trim()}`));
+            chiselProcess.on('close', (code) => console.warn(`[Chisel] Proceso cerrado con código ${code}`));
+        } catch (chiselError: any) {
+            console.error(`❌ [Chisel] Error ejecutando comando chisel:`, chiselError.message);
+        }
     }
     const PORT = process.env.PORT || 8080;
     

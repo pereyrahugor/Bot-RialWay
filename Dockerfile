@@ -33,8 +33,11 @@ FROM node:22-slim AS deploy
 
 # Instalar dependencias de runtime necesarias
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    poppler-utils ffmpeg && \
+    poppler-utils ffmpeg curl ca-certificates && \
     rm -rf /var/lib/apt/lists/*
+
+# Descargar e instalar Chisel client
+RUN curl -L https://github.com/jpillora/chisel/releases/download/v1.9.1/chisel_1.9.1_linux_amd64.gz | gunzip > /usr/local/bin/chisel && chmod +x /usr/local/bin/chisel
 
 WORKDIR /app
 
