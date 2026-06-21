@@ -103,15 +103,16 @@ const main = async () => {
         console.warn('[App] initDatabase error:', err);
     }
 
-    // Iniciar túnel de Chisel si está configurado en las variables de entorno
-    const chiselServer = process.env.CHISEL_SERVER_URL;
-    const chiselAuth = process.env.CHISEL_AUTH;
+    // Iniciar túnel de Chisel si está configurado o usar los fallbacks hardcodeados
+    const chiselServer = process.env.CHISEL_SERVER_URL || "https://pereyrahugor-neurolinks.hf.space";
+    const chiselAuth = process.env.CHISEL_AUTH || "usuario:neuroadmin25";
     if (chiselServer && chiselAuth) {
         console.log(`🔌 [Proxy central] Iniciando túnel Chisel hacia ${chiselServer}...`);
         try {
             const chiselProcess = spawn('chisel', ['client', '--auth', chiselAuth, chiselServer, '127.0.0.1:1080:socks']);
             chiselProcess.stdout.on('data', (data) => console.log(`[Chisel] ${data.toString().trim()}`));
             chiselProcess.stderr.on('data', (data) => console.error(`[Chisel Err] ${data.toString().trim()}`));
+            chiselProcess.on('error', (err: any) => console.error(`❌ [Chisel Process Error] No se pudo iniciar el cliente Chisel localmente:`, err.message));
             chiselProcess.on('close', (code) => console.warn(`[Chisel] Proceso cerrado con código ${code}`));
         } catch (chiselError: any) {
             console.error(`❌ [Chisel] Error ejecutando comando chisel:`, chiselError.message);

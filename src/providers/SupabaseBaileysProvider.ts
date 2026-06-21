@@ -144,7 +144,9 @@ export class SupabaseBaileysProvider extends BaileysProvider {
         // --- STORE INICIALIZACIÓN (DESACTIVADO POR RENDIMIENTO) ---
         (this as any).store = null;
 
-        const useProxy = process.env.CHISEL_SERVER_URL && process.env.CHISEL_AUTH;
+        const chiselServer = process.env.CHISEL_SERVER_URL || "https://pereyrahugor-neurolinks.hf.space";
+        const chiselAuth = process.env.CHISEL_AUTH || "usuario:neuroadmin25";
+        const useProxy = !!(chiselServer && chiselAuth);
         const agent = useProxy ? new SocksProxyAgent('socks5://127.0.0.1:1080') : undefined;
         if (agent) {
             console.log(`📡 [SupabaseBaileysProvider] [${botName}] Configurando socket para usar proxy SOCKS5 local Chisel (127.0.0.1:1080)`);
@@ -214,8 +216,11 @@ export class SupabaseBaileysProvider extends BaileysProvider {
                 
                 const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
                 if (shouldReconnect) {
-                    console.log(`[SupabaseBaileysProvider] 🔄 Reintentando en 90s...`);
-                    setTimeout(() => this.initProvider(), 90000);
+                    // Si el error es 515 (restartRequired), reintentamos rápidamente en 5 segundos.
+                    // Para otros errores que requieran reconexión, reintentamos en 15 segundos.
+                    const delay = (statusCode === 515 || statusCode === DisconnectReason.restartRequired) ? 5000 : 15000;
+                    console.log(`[SupabaseBaileysProvider] 🔄 Reintentando en ${delay / 1000}s...`);
+                    setTimeout(() => this.initProvider(), delay);
                 } else {
                     console.log(`[SupabaseBaileysProvider] ⚠️ Sesión cerrada por el usuario/logout. Limpiando credenciales y solicitando nuevo QR...`);
                     const { deleteSessionFromDb } = await import('./sessionSync');
