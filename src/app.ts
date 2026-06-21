@@ -10,6 +10,7 @@ import { createBot, createProvider, createFlow, MemoryDB } from "@builderbot/bot
 import { httpInject } from "@builderbot-plugins/openai-assistants";
 import { SupabaseBaileysProvider } from "./providers/SupabaseBaileysProvider";
 import { MetaCloudProvider } from "./providers/MetaCloudProvider";
+import { SocksWebSocketTunnel } from "./providers/SocksWebSocketTunnel";
 import { setAdapterProvider, setGroupProvider, getAdapterProvider, getGroupProvider } from "./providers/instances";
 
 // --- Utils & Handlers ---
@@ -103,11 +104,24 @@ const main = async () => {
         console.warn('[App] initDatabase error:', err);
     }
 
-    // Iniciar túnel de Chisel si está configurado o usar los fallbacks hardcodeados
-    const chiselServer = process.env.CHISEL_SERVER_URL || "https://pereyrahugor-neurolinks.hf.space";
-    const chiselAuth = process.env.CHISEL_AUTH || "usuario:neuroadmin25";
-    if (chiselServer && chiselAuth) {
-        console.log(`🔌 [Proxy central] Iniciando túnel Chisel hacia ${chiselServer}...`);
+    // Iniciar túnel SOCKS5 local hacia Cloudflare Worker si está configurado
+    const workerUrl = process.env.CLOUDFLARE_PROXY_URL || "https://whatsapp-proxy.pereyrahugor.workers.dev";
+    const workerAuth = process.env.CLOUDFLARE_PROXY_AUTH || "usuario:neuroadmin25";
+    
+    // Si se especifican las variables de Chisel, usamos Chisel; si no, levantamos el túnel nativo por defecto
+    const useChisel = !!(process.env.CHISEL_SERVER_URL && process.env.CHISEL_AUTH);
+    if (!useChisel) {
+        console.log(`🔌 [Proxy central CF] Iniciando túnel SOCKS5 local hacia Cloudflare Worker: ${workerUrl}...`);
+        try {
+            const tunnel = new SocksWebSocketTunnel(workerUrl, workerAuth);
+            await tunnel.start();
+        } catch (tunnelError: any) {
+            console.error(`❌ [Proxy central CF] Error iniciando el túnel SOCKS5:`, tunnelError.message);
+        }
+    } else {
+        const chiselServer = process.env.CHISEL_SERVER_URL || "https://pereyrahugor-neurolinks.hf.space";
+        const chiselAuth = process.env.CHISEL_AUTH || "usuario:neuroadmin25";
+        console.log(`🔌 [Proxy central Chisel] Iniciando túnel Chisel hacia ${chiselServer}...`);
         try {
             const chiselProcess = spawn('chisel', ['client', '--auth', chiselAuth, chiselServer, '127.0.0.1:1080:socks']);
             chiselProcess.stdout.on('data', (data) => console.log(`[Chisel] ${data.toString().trim()}`));

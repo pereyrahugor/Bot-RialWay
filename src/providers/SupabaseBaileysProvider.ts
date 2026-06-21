@@ -144,12 +144,16 @@ export class SupabaseBaileysProvider extends BaileysProvider {
         // --- STORE INICIALIZACIÓN (DESACTIVADO POR RENDIMIENTO) ---
         (this as any).store = null;
 
-        const chiselServer = process.env.CHISEL_SERVER_URL || "https://pereyrahugor-neurolinks.hf.space";
-        const chiselAuth = process.env.CHISEL_AUTH || "usuario:neuroadmin25";
-        const useProxy = !!(chiselServer && chiselAuth);
+        const useProxy = !!(
+            process.env.CHISEL_SERVER_URL || 
+            process.env.CHISEL_AUTH || 
+            process.env.CLOUDFLARE_PROXY_URL || 
+            process.env.CLOUDFLARE_PROXY_AUTH ||
+            true // Por defecto se usa el túnel local (127.0.0.1:1080)
+        );
         const agent = useProxy ? new SocksProxyAgent('socks5://127.0.0.1:1080') : undefined;
         if (agent) {
-            console.log(`📡 [SupabaseBaileysProvider] [${botName}] Configurando socket para usar proxy SOCKS5 local Chisel (127.0.0.1:1080)`);
+            console.log(`📡 [SupabaseBaileysProvider] [${botName}] Configurando socket para usar proxy SOCKS5 local (127.0.0.1:1080)`);
         }
 
         this.vendor = makeWASocket({
