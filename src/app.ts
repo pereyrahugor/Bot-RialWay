@@ -116,7 +116,7 @@ const main = async () => {
     const qrPath = path.join(process.cwd(), "bot.qr.png");
 
     // Usar versión fija conocida que funciona
-    const baileysVersion: any = [2, 3000, 1040735178]; //Vencimineto = 
+    const baileysVersion: any = [2, 3000, 1040745201]; //Vencimineto = 
     console.log(`📡 [App] Usando versión fija de WhatsApp Web: ${baileysVersion.join('.')}`);
 
     // 2. Initialize Providers
