@@ -2442,6 +2442,7 @@
     height: 36px;
     color: white;
     -moz-appearance: textfield;
+    appearance: textfield;
   }
 
   .stepper-input::-webkit-inner-spin-button,
@@ -3537,9 +3538,7 @@
     color: #2563eb;
   }
 
-  .nav-item-logout {
-    /* color handled by .nav-item-logout > .nav-link */
-  }
+
 
   .loading-placeholder {
     @apply text-center py-5 opacity-50 text-sm text-secondary-content;
@@ -5855,6 +5854,7 @@
   .truncate-2 {
     display: -webkit-box;
     -webkit-line-clamp: 2;
+    line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
   }

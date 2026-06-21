@@ -2736,7 +2736,7 @@ export class HistoryHandler {
                     .maybeSingle();
 
                 if (!existingEntry || existingEntry.value === 'PENDING') {
-                    console.log(`🔍 [Bootstrap] Variable '${item.key}' ${!existingEntry ? 'faltante' : 'en estado PENDING'}. Buscando valor...`);
+                    // console.log(`🔍 [Bootstrap] Variable '${item.key}' ${!existingEntry ? 'faltante' : 'en estado PENDING'}. Buscando valor...`);
 
                     let finalValue = item.defaultValue;
 
@@ -2759,7 +2759,7 @@ export class HistoryHandler {
                     }
 
                     if (finalValue !== 'PENDING') {
-                        console.log(`🆕 [Bootstrap] ${!existingEntry ? 'Creando' : 'Actualizando'} variable '${item.key}' con valor: ${finalValue.substring(0, 10)}...`);
+                        // console.log(`🆕 [Bootstrap] ${!existingEntry ? 'Creando' : 'Actualizando'} variable '${item.key}' con valor: ${finalValue.substring(0, 10)}...`);
                         await supabase.from('settings').upsert({
                             project_id: currentProjectId,
                             key: item.key,
@@ -2799,11 +2799,11 @@ export class HistoryHandler {
                         const isFixed = HistoryHandler.FIXED_KEYS.includes(setting.key);
                         if (isFixed && process.env[setting.key] && process.env[setting.key] !== '') {
                             if (process.env[setting.key] !== setting.value) {
-                                console.log(`ℹ️ [HistoryHandler] Manteniendo valor de entorno estático para la llave fija '${setting.key}' (ignorando valor DB: ${setting.value.substring(0, 5)}...)`);
+                                // console.log(`ℹ️ [HistoryHandler] Manteniendo valor de entorno estático para la llave fija '${setting.key}' (ignorando valor DB: ${setting.value.substring(0, 5)}...)`);
                             }
                         } else {
                             if (process.env[setting.key] !== setting.value) {
-                                console.log(`🔄 [HistoryHandler] Sobreescribiendo '${setting.key}' con valor de Base de Datos (prioridad DB).`);
+                                // console.log(`🔄 [HistoryHandler] Sobreescribiendo '${setting.key}' con valor de Base de Datos (prioridad DB).`);
                             }
                             process.env[setting.key] = setting.value;
                             count++;

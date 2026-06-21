@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import axios from "axios";
-import { vault } from "./src/db/vault";
+import { vault } from "../db/vault";
 
 // Inicializar cliente de Supabase
 const supabaseUrl = process.env.SUPABASE_URL || vault.supabaseUrl;
@@ -14,9 +14,9 @@ const projectId = args[0];
 if (!projectId || projectId.startsWith("-")) {
     console.error("\n❌ Error: Falta el ID de Proyecto.");
     console.log("\n📖 Uso correcto:");
-    console.log("  npx tsx meta_webhook_register.ts <project_id>");
-    console.log("\nEjemplo:");
-    console.log("  npx tsx meta_webhook_register.ts 5678d0d0-7256-496e-ac1c-d0dd2c41db07\n");
+    console.log("  npx tsx src/backoffice/meta_webhook_register.ts <project_id>");
+    console.log("Ejemplo:");
+    console.log("  npx tsx src/backoffice/meta_webhook_register.ts 5678d0d0-7256-496e-ac1c-d0dd2c41db07\n");
     process.exit(1);
 }
 
