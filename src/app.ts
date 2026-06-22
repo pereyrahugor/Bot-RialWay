@@ -94,6 +94,16 @@ function registerSafeErrorHandlers() {
  * Main function for Bot and Server Orchestration
  */
 const main = async () => {
+    // Interceptar stdout para suprimir el spam de rutas generadas automáticamente
+    const originalStdoutWrite = process.stdout.write;
+    process.stdout.write = function(chunk: any, ...args: any[]) {
+        const str = typeof chunk === 'string' ? chunk : (Buffer.isBuffer(chunk) ? chunk.toString() : '');
+        if (/\[(GET|POST|PUT|DELETE|PATCH)\]: http/.test(str)) {
+            return true; // Suprimir logs de endpoints
+        }
+        return originalStdoutWrite.apply(process.stdout, [chunk, ...args] as any);
+    } as any;
+
     // 1. Storage cleanup and session restoration
     // Await initDatabase so settings/variables are loaded from DB first
     try {
@@ -387,6 +397,7 @@ const main = async () => {
     // 11. Start Server and Sockets
     try {
         httpServer(+PORT);
+        console.log(`\n🚀 Servidor local corriendo en http://localhost:${PORT}\n`);
         let checks = 0;
         const checkInterval = setInterval(() => {
             checks++;

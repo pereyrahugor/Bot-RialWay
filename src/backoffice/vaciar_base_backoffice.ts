@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import readline from "readline";
-import { vault } from "./src/db/vault";
+import { vault } from "../db/vault";
 
 // Inicializar cliente de Supabase
 const supabaseUrl = process.env.SUPABASE_URL || vault.supabaseUrl;
@@ -15,9 +15,9 @@ const force = args.includes("--force") || args.includes("-f");
 if (!projectId || projectId.startsWith("-")) {
     console.error("\n❌ Error: Falta el ID de Proyecto.");
     console.log("\n📖 Uso correcto:");
-    console.log("  npx tsx vaciar_base_backoffice.ts <project_id> [--force]");
-    console.log("\nEjemplo:");
-    console.log("  npx tsx vaciar_base_backoffice.ts 5fcdadff-e9c4-4bdd-b1f0-39b932db796f\n");
+    console.log("  npx tsx src/backoffice/vaciar_base_backoffice.ts <project_id> [--force]");
+    console.log("Ejemplo:");
+    console.log("  npx tsx src/backoffice/vaciar_base_backoffice.ts 5fcdadff-e9c4-4bdd-b1f0-39b932db796f\n");
     process.exit(1);
 }
 
