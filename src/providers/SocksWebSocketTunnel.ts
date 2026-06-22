@@ -106,6 +106,14 @@ export class SocksWebSocketTunnel {
                         clientSocket.write(Buffer.from([0x05, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]));
                         stage = 2;
                         clientSocket.resume();
+
+                        // Si el cliente ya había mandado datos tras el CONNECT, enviarlos por WS una vez abierto
+                        if (data.length > offset) {
+                            const extra = data.subarray(offset);
+                            if (ws && ws.readyState === WebSocket.OPEN) {
+                                ws.send(extra);
+                            }
+                        }
                     });
 
                     ws.on('message', (messageData: WebSocket.Data) => {
@@ -141,11 +149,7 @@ export class SocksWebSocketTunnel {
                         }
                     });
 
-                    // Si el cliente ya había mandado datos tras el CONNECT, enviarlos por WS
-                    if (data.length > offset) {
-                        const extra = data.subarray(offset);
-                        ws.send(extra);
-                    }
+
                 } else if (stage === 2) {
                     if (ws && ws.readyState === WebSocket.OPEN) {
                         ws.send(data);
