@@ -104,21 +104,9 @@ const main = async () => {
         console.warn('[App] initDatabase error:', err);
     }
 
-    // Iniciar túnel SOCKS5 local hacia Cloudflare Worker si está configurado
-    const workerUrl = process.env.CLOUDFLARE_PROXY_URL || "https://whatsapp-proxy.duskcodes.com.ar";
-    const workerAuth = process.env.CLOUDFLARE_PROXY_AUTH || "usuario:neuroadmin25";
-    
-    // Si se especifican las variables de Chisel, usamos Chisel; si no, levantamos el túnel nativo por defecto
-    const useChisel = !!(process.env.CHISEL_SERVER_URL && process.env.CHISEL_AUTH);
-    if (!useChisel) {
-        console.log(`🔌 [Proxy central CF] Iniciando túnel SOCKS5 local hacia Cloudflare Worker: ${workerUrl}...`);
-        try {
-            const tunnel = new SocksWebSocketTunnel(workerUrl, workerAuth);
-            await tunnel.start();
-        } catch (tunnelError: any) {
-            console.error(`❌ [Proxy central CF] Error iniciando el túnel SOCKS5:`, tunnelError.message);
-        }
-    } else {
+    // Iniciar túnel SOCKS5 local. Por defecto usamos Chisel (Hugging Face) para evitar bloqueos de CF en WhatsApp.
+    const useChisel = process.env.USE_CHISEL !== 'false';
+    if (useChisel) {
         const chiselServer = process.env.CHISEL_SERVER_URL || "https://pereyrahugor-neurolinks.hf.space";
         const chiselAuth = process.env.CHISEL_AUTH || "usuario:neuroadmin25";
         console.log(`🔌 [Proxy central Chisel] Iniciando túnel Chisel hacia ${chiselServer}...`);
@@ -130,6 +118,16 @@ const main = async () => {
             chiselProcess.on('close', (code) => console.warn(`[Chisel] Proceso cerrado con código ${code}`));
         } catch (chiselError: any) {
             console.error(`❌ [Chisel] Error ejecutando comando chisel:`, chiselError.message);
+        }
+    } else {
+        const workerUrl = process.env.CLOUDFLARE_PROXY_URL || "https://whatsapp-proxy.duskcodes.com.ar";
+        const workerAuth = process.env.CLOUDFLARE_PROXY_AUTH || "usuario:neuroadmin25";
+        console.log(`🔌 [Proxy central CF] Iniciando túnel SOCKS5 local hacia Cloudflare Worker: ${workerUrl}...`);
+        try {
+            const tunnel = new SocksWebSocketTunnel(workerUrl, workerAuth);
+            await tunnel.start();
+        } catch (tunnelError: any) {
+            console.error(`❌ [Proxy central CF] Error iniciando el túnel SOCKS5:`, tunnelError.message);
         }
     }
     const PORT = process.env.PORT || 8080;
