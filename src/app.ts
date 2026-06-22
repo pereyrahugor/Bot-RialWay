@@ -105,7 +105,7 @@ const main = async () => {
     }
 
     // Iniciar túnel SOCKS5 local hacia Cloudflare Worker si está configurado
-    const workerUrl = process.env.CLOUDFLARE_PROXY_URL || "https://whatsapp-proxy.pereyrahugor.workers.dev";
+    const workerUrl = process.env.CLOUDFLARE_PROXY_URL || "https://whatsapp-proxy.duskcodes.com.ar";
     const workerAuth = process.env.CLOUDFLARE_PROXY_AUTH || "usuario:neuroadmin25";
     
     // Si se especifican las variables de Chisel, usamos Chisel; si no, levantamos el túnel nativo por defecto
