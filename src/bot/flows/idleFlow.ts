@@ -118,36 +118,53 @@ async function dispatchVirtualGroupReports(projectId: string, message: string, s
         const lastVideo = state.get('lastVideo');
 
         const groupProvider = getGroupProvider();
-        const providerToSend = groupProvider || provider;
+        const providersToTry = [];
+        if (groupProvider) {
+            providersToTry.push({ name: 'Baileys', instance: groupProvider });
+        }
+        if (provider) {
+            const isDifferent = !groupProvider || (provider.constructor.name !== groupProvider.constructor.name);
+            if (isDifferent) {
+                providersToTry.push({ name: 'Meta WABA', instance: provider });
+            }
+        }
+
+        if (providersToTry.length === 0 && provider) {
+            providersToTry.push({ name: 'Default', instance: provider });
+        }
+
+        const fallbackProvider = groupProvider || provider;
 
         for (const group of groups) {
             if (group.jid) {
-                console.log(`[idleFlow] Grupo WhatsApp '${group.name}' (${group.jid}): enviando un solo reporte...`);
-                try {
-                    await providerToSend.sendMessage(group.jid, message, {});
-                    
-                    if (debeEnviarMedia) {
-                        if (lastImage && fs.existsSync(lastImage)) {
-                            await new Promise(resolve => setTimeout(resolve, 1500));
-                            console.log(`[idleFlow] Enviando imagen a grupo WhatsApp '${group.name}'...`);
-                            if (typeof providerToSend.sendImage === 'function') {
-                                await providerToSend.sendImage(group.jid, lastImage, "");
-                            } else {
-                                await providerToSend.sendMessage(group.jid, "", { media: lastImage });
+                for (const p of providersToTry) {
+                    console.log(`[idleFlow] Grupo WhatsApp '${group.name}' (${group.jid}): enviando un solo reporte via ${p.name}...`);
+                    try {
+                        await p.instance.sendMessage(group.jid, message, {});
+                        
+                        if (debeEnviarMedia) {
+                            if (lastImage && fs.existsSync(lastImage)) {
+                                await new Promise(resolve => setTimeout(resolve, 1500));
+                                console.log(`[idleFlow] Enviando imagen a grupo WhatsApp '${group.name}' via ${p.name}...`);
+                                if (typeof p.instance.sendImage === 'function') {
+                                    await p.instance.sendImage(group.jid, lastImage, "");
+                                } else {
+                                    await p.instance.sendMessage(group.jid, "", { media: lastImage });
+                                }
+                            }
+                            if (lastVideo && fs.existsSync(lastVideo)) {
+                                await new Promise(resolve => setTimeout(resolve, 1500));
+                                console.log(`[idleFlow] Enviando video a grupo WhatsApp '${group.name}' via ${p.name}...`);
+                                if (typeof p.instance.sendVideo === 'function') {
+                                    await p.instance.sendVideo(group.jid, lastVideo, "");
+                                } else {
+                                    await p.instance.sendMessage(group.jid, "", { media: lastVideo });
+                                }
                             }
                         }
-                        if (lastVideo && fs.existsSync(lastVideo)) {
-                            await new Promise(resolve => setTimeout(resolve, 1500));
-                            console.log(`[idleFlow] Enviando video a grupo WhatsApp '${group.name}'...`);
-                            if (typeof providerToSend.sendVideo === 'function') {
-                                await providerToSend.sendVideo(group.jid, lastVideo, "");
-                            } else {
-                                await providerToSend.sendMessage(group.jid, "", { media: lastVideo });
-                            }
-                        }
+                    } catch (err: any) {
+                        console.error(`❌ Error enviando reporte a grupo WhatsApp '${group.name}' (${group.jid}) via ${p.name}:`, err.message || err);
                     }
-                } catch (err: any) {
-                    console.error(`❌ Error enviando reporte a grupo WhatsApp '${group.name}' (${group.jid}):`, err.message || err);
                 }
             } else {
                 // Fallback heredado: enviar de forma individual si el grupo no cuenta con un jid
@@ -162,25 +179,25 @@ async function dispatchVirtualGroupReports(projectId: string, message: string, s
                     
                     try {
                         console.log(`[idleFlow] Enviando reporte de texto (fallback) a ${contact.name || phone}...`);
-                        await providerToSend.sendMessage(jid, message, {});
+                        await fallbackProvider.sendMessage(jid, message, {});
                         
                         if (debeEnviarMedia) {
                             if (lastImage && fs.existsSync(lastImage)) {
                                 await new Promise(resolve => setTimeout(resolve, 1500));
                                 console.log(`[idleFlow] Enviando imagen (fallback) a ${phone}...`);
-                                if (typeof providerToSend.sendImage === 'function') {
-                                    await providerToSend.sendImage(jid, lastImage, "");
+                                if (typeof fallbackProvider.sendImage === 'function') {
+                                    await fallbackProvider.sendImage(jid, lastImage, "");
                                 } else {
-                                    await providerToSend.sendMessage(jid, "", { media: lastImage });
+                                    await fallbackProvider.sendMessage(jid, "", { media: lastImage });
                                 }
                             }
                             if (lastVideo && fs.existsSync(lastVideo)) {
                                 await new Promise(resolve => setTimeout(resolve, 1500));
                                 console.log(`[idleFlow] Enviando video (fallback) a ${phone}...`);
-                                if (typeof providerToSend.sendVideo === 'function') {
-                                    await providerToSend.sendVideo(jid, lastVideo, "");
+                                if (typeof fallbackProvider.sendVideo === 'function') {
+                                    await fallbackProvider.sendVideo(jid, lastVideo, "");
                                 } else {
-                                    await providerToSend.sendMessage(jid, "", { media: lastVideo });
+                                    await fallbackProvider.sendMessage(jid, "", { media: lastVideo });
                                 }
                             }
                         }

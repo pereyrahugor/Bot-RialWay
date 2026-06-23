@@ -2059,7 +2059,7 @@ export class HistoryHandler {
             }
 
             const { data, error } = await query
-                .order('created_at', { ascending: false })
+                .order('updated_at', { ascending: false })
                 .range(offset, offset + limit - 1);
 
             if (error) throw error;

@@ -648,8 +648,19 @@ class MetaCloudProvider extends ProviderClass {
 
         const apiVersion = process.env.META_API_VERSION || 'v22.0';
         const url = `https://graph.facebook.com/${apiVersion}/${phone_number_id}/messages`;
-        const cleanNumber = this.formatNumberForMeta(number);
-        const toFormat = `+${cleanNumber}`;
+
+        const isGroup = number.includes('@g.us') || (options && options.recipient_type === 'group') || number.startsWith('120363');
+        let toFormat = '';
+        let recipientType = 'individual';
+
+        if (isGroup) {
+            toFormat = number.split('@')[0];
+            recipientType = 'group';
+        } else {
+            const cleanNumber = this.formatNumberForMeta(number);
+            toFormat = `+${cleanNumber}`;
+            recipientType = 'individual';
+        }
 
         // Detectar si el mensaje es una ruta de archivo local
         const isMessagePath = typeof message === 'string' && (message.startsWith('/') || message.includes(':\\')) && fs.existsSync(message);
@@ -658,7 +669,7 @@ class MetaCloudProvider extends ProviderClass {
 
         const body: any = {
             messaging_product: "whatsapp",
-            recipient_type: "individual",
+            recipient_type: recipientType,
             to: toFormat
         };
 

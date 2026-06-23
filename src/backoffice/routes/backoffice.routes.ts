@@ -1500,7 +1500,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         const estado = req.query.estado as string;
         const tipo = req.query.tipo as string;
         const id = req.query.id as string;
-        const limit = parseInt(req.query.limit as string) || 50;
+        const limit = parseInt(req.query.limit as string) || 300;
         const offset = parseInt(req.query.offset as string) || 0;
         const chatId = req.query.chatId as string;
         const projectId = resolveProjectId(req);
@@ -3902,7 +3902,7 @@ Hemos recibido tu pago con éxito.
                 .select('id, chat_id, titulo, tipo, descripcion, created_at, updated_at')
                 .eq('project_id', projectId)
                 .eq('tipo', 'Nuevo Lead')
-                .order('created_at', { ascending: false })
+                .order('updated_at', { ascending: false })
                 .limit(limit);
             if (error) throw error;
             const reportes = (data || []).map((t: any) => ({ ...t, nombre: t.titulo }));
