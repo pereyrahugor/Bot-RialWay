@@ -4168,64 +4168,31 @@ Hemos recibido tu pago con éxito.
                 }
             } else {
                 // Caso C: Es un grupo nuevo o el grupo existente no tenía JID
-                // 1. Intentar creación con Meta WABA
-                if (metaConfig?.whatsappToken && metaConfig?.whatsappNumberId) {
-                    try {
-                        groupJid = await attemptCreateMetaWabaGroup(name, contacts, metaConfig);
-                        console.log(`[MetaGroupsAPI] Grupo Meta creado y guardado con JID/ID: ${groupJid}`);
-                    } catch (err: any) {
-                        metaError = err.response?.data || err.message;
-                        console.warn(`[MetaGroupsAPI] Error al intentar crear grupo en Meta WABA. Detalle:`, JSON.stringify(metaError));
-                        console.log(`[MetaGroupsAPI] Procediendo con fallback a Baileys.`);
-                    }
-                } else {
-                    console.log(`[MetaGroupsAPI] No se detectaron credenciales de Meta WABA. Procediendo directamente con Baileys.`);
+                // Creación estrictamente con Meta WABA
+                if (!metaConfig?.whatsappToken || !metaConfig?.whatsappNumberId) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'No se detectaron credenciales de Meta WABA activas. Para crear grupos oficiales, configura Meta WABA primero.'
+                    });
                 }
 
-                // 2. Si no se creó con Meta, procedemos con Baileys
-                if (!groupJid) {
-                    let sock: any = null;
-                    const groupProvider = deps.groupProvider;
-                    if (groupProvider && typeof groupProvider.getInstance === 'function') {
-                        sock = await groupProvider.getInstance();
+                try {
+                    groupJid = await attemptCreateMetaWabaGroup(name, contacts, metaConfig);
+                    console.log(`[MetaGroupsAPI] Grupo Meta creado y guardado con JID/ID: ${groupJid}`);
+                } catch (err: any) {
+                    metaError = err.response?.data || err.message;
+                    console.error(`[MetaGroupsAPI] Error al intentar crear grupo en Meta WABA:`, JSON.stringify(metaError));
+                    
+                    let errorMsg = 'No se pudo crear el grupo en Meta WABA.';
+                    if (metaError && metaError.error && metaError.error.message) {
+                        errorMsg += ` Detalle: ${metaError.error.message}`;
+                    } else if (typeof metaError === 'string') {
+                        errorMsg += ` Detalle: ${metaError}`;
                     }
-                    if (!sock) {
-                        const adapterProvider = deps.adapterProvider;
-                        if (adapterProvider && typeof adapterProvider.getInstance === 'function') {
-                            sock = await adapterProvider.getInstance();
-                        }
-                    }
-
-                    if (!sock || typeof sock.groupCreate !== 'function') {
-                        const errorDetail = metaError ? ` Error previo de Meta: ${JSON.stringify(metaError)}.` : '';
-                        return res.status(400).json({ 
-                            success: false, 
-                            error: `WhatsApp no está conectado o no soporta creación de grupos.${errorDetail} Conecta WhatsApp primero en la sección de Conexión.` 
-                        });
-                    }
-
-                    const participantJids = contacts
-                        .map((c: any) => c.phone ? c.phone.replace(/[^0-9]/g, '') : '')
-                        .filter(Boolean)
-                        .map((num: string) => `${num}@s.whatsapp.net`);
-
-                    if (participantJids.length === 0) {
-                        return res.status(400).json({ success: false, error: 'El grupo debe contener al menos un contacto con número de teléfono válido.' });
-                    }
-
-                    try {
-                        console.log(`[WabaGroups] Creando grupo WhatsApp '${name}' vía Baileys con participantes:`, participantJids);
-                        const groupMetadata = await sock.groupCreate(name, participantJids);
-                        groupJid = groupMetadata.id;
-                        console.log(`[WabaGroups] Grupo WhatsApp creado con éxito vía Baileys: ${groupJid}`);
-                    } catch (wsErr: any) {
-                        console.error(`[WabaGroups] Error al crear grupo en WhatsApp vía Baileys:`, wsErr.message || wsErr);
-                        const errorDetail = metaError ? ` (API de Meta también falló: ${JSON.stringify(metaError)})` : '';
-                        return res.status(500).json({ 
-                            success: false, 
-                            error: `No se pudo crear el grupo en WhatsApp vía Baileys: ${wsErr.message || wsErr}.${errorDetail}` 
-                        });
-                    }
+                    return res.status(400).json({
+                        success: false,
+                        error: errorMsg
+                    });
                 }
             }
 
