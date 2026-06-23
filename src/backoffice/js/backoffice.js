@@ -2929,7 +2929,7 @@ window.checkMetaStatus = checkMetaStatus;
 window.toggleBulkModal = toggleBulkModal;
 window.downloadBulkExcel = () => {
     if (currentSelectedTemplate) {
-        let url = `/api/backoffice/whatsapp/template-excel/${currentSelectedTemplate.name}?token=${token}`;
+        let url = `/api/backoffice/whatsapp/template-excel/${currentSelectedTemplate.name}?token=${encodeURIComponent(token)}`;
         
         const start = document.getElementById('bulk-filter-start')?.value;
         const end = document.getElementById('bulk-filter-end')?.value;
@@ -3046,7 +3046,7 @@ function toggleImportModal() {
 }
 
 function downloadImportTemplate() {
-    window.open(`/api/backoffice/chats/import-template?token=${token}`, '_blank');
+    window.open(`/api/backoffice/chats/import-template?token=${encodeURIComponent(token)}`, '_blank');
 }
 
 async function startImportExcel() {

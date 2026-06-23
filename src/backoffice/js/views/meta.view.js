@@ -478,7 +478,7 @@ window.metaView = (() => {
     // ── Descarga Excel ────────────────────────────────────────────────────
     function downloadBulkExcel() {
         if (!_currentTemplate) return;
-        let url = `/api/backoffice/whatsapp/template-excel/${_currentTemplate.name}?token=${_token}`;
+        let url = `/api/backoffice/whatsapp/template-excel/${_currentTemplate.name}?token=${encodeURIComponent(_token)}`;
         const start  = document.getElementById('bulk-filter-start')?.value;
         const end    = document.getElementById('bulk-filter-end')?.value;
         if (start) url += `&startDate=${start}`;
