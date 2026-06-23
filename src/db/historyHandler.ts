@@ -330,6 +330,7 @@ export class HistoryHandler {
                     project_id TEXT NOT NULL,
                     name TEXT NOT NULL,
                     contacts JSONB DEFAULT '[]'::jsonb,
+                    jid TEXT,
                     created_at TIMESTAMPTZ DEFAULT NOW(),
                     updated_at TIMESTAMPTZ DEFAULT NOW()
                 );
@@ -479,6 +480,15 @@ export class HistoryHandler {
                         if (ownerErr && ownerErr.code === '42703') {
                             console.log(`🔧 Agregando columna owner_id a meta_onboarding...`);
                             await supabase.rpc('exec_sql', { query: `ALTER TABLE meta_onboarding ADD COLUMN IF NOT EXISTS owner_id uuid REFERENCES users(id);` });
+                        }
+                    }
+
+                    // Migración para jid en waba_report_groups
+                    if (table.name === 'waba_report_groups') {
+                        const { error: jidErr } = await supabase.from('waba_report_groups').select('jid').limit(1);
+                        if (jidErr && jidErr.code === '42703') {
+                            console.log(`🔧 Agregando columna jid a waba_report_groups...`);
+                            await supabase.rpc('exec_sql', { query: `ALTER TABLE waba_report_groups ADD COLUMN IF NOT EXISTS jid TEXT;` });
                         }
                     }
 
@@ -3094,19 +3104,20 @@ export class HistoryHandler {
     /**
      * Guarda o actualiza un grupo de reporte virtual (WABA).
      */
-    static async saveWabaReportGroup(group: { id?: string, name: string, contacts: any[] }, projectId: string | null = null) {
+    static async saveWabaReportGroup(group: { id?: string, name: string, contacts: any[], jid?: string }, projectId: string | null = null) {
         if (!supabase) return { success: false, error: 'Supabase not initialized' };
         const targetProjectId = projectId || HistoryHandler.PROJECT_IDENTIFIER;
         try {
-            const { id, name, contacts } = group;
+            const { id, name, contacts, jid } = group;
             if (!name) return { success: false, error: 'El nombre del grupo es obligatorio.' };
-            if (!Array.isArray(contacts)) return { success: false, error: 'Los contactos deben ser una lista.' };
+            if (!Array.isArray(contacts)) return { success: false, error: 'Los contactos deben ser un array.' };
             if (contacts.length > 8) return { success: false, error: 'Un grupo puede tener como máximo 8 contactos.' };
 
             const dataToSave: any = {
                 project_id: targetProjectId,
                 name,
                 contacts,
+                jid: jid || null,
                 updated_at: new Date().toISOString()
             };
 

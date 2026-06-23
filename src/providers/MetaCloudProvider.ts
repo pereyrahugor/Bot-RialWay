@@ -654,7 +654,7 @@ class MetaCloudProvider extends ProviderClass {
         // Detectar si el mensaje es una ruta de archivo local
         const isMessagePath = typeof message === 'string' && (message.startsWith('/') || message.includes(':\\')) && fs.existsSync(message);
 
-        console.log(`[MetaCloudProvider] ENVÍO: to=${toFormat} | IsPath=${isMessagePath} | Msg=${isMessagePath ? '[FILE]' : (message || '').substring(0, 20)} | OptionsKeys=${Object.keys(options || {})}`);
+        // console.log(`[MetaCloudProvider] ENVÍO: to=${toFormat} | IsPath=${isMessagePath} | Msg=${isMessagePath ? '[FILE]' : (message || '').substring(0, 20)} | OptionsKeys=${Object.keys(options || {})}`);
 
         const body: any = {
             messaging_product: "whatsapp",
@@ -943,7 +943,7 @@ class MetaCloudProvider extends ProviderClass {
                     // 0. MANEJO DE ACTUALIZACIONES DE ESTADO (statuses)
                     if (statuses && Array.isArray(statuses)) {
                         for (const status of statuses) {
-                            console.log(`📡 [MetaCloudProvider] Webhook de estado para ${status.recipient_id} (${status.id}): ${status.status}`);
+                            // console.log(`📡 [MetaCloudProvider] Webhook de estado para ${status.recipient_id} (${status.id}): ${status.status}`);
                             if (status.status === 'failed' && status.errors) {
                                 for (const err of status.errors) {
                                     console.error(`❌ [MetaCloudProvider] Error de entrega para ${status.recipient_id} (ID: ${status.id}): [Código ${err.code}] ${err.message} - ${err.error_data?.details || ''}`);

@@ -117,42 +117,76 @@ async function dispatchVirtualGroupReports(projectId: string, message: string, s
         const lastImage = state.get('lastImage');
         const lastVideo = state.get('lastVideo');
 
+        const groupProvider = getGroupProvider();
+        const providerToSend = groupProvider || provider;
+
         for (const group of groups) {
-            const contacts = group.contacts || [];
-            console.log(`[idleFlow] Grupo Virtual '${group.name}': enviando a ${contacts.length} contactos...`);
-            
-            for (const contact of contacts) {
-                const phone = contact.phone ? contact.phone.replace(/[^0-9]/g, '') : '';
-                if (!phone) continue;
-                
-                const jid = `${phone}@s.whatsapp.net`;
-                
+            if (group.jid) {
+                console.log(`[idleFlow] Grupo WhatsApp '${group.name}' (${group.jid}): enviando un solo reporte...`);
                 try {
-                    console.log(`[idleFlow] Enviando reporte de texto a ${contact.name || phone}...`);
-                    await provider.sendMessage(jid, message, {});
+                    await providerToSend.sendMessage(group.jid, message, {});
                     
                     if (debeEnviarMedia) {
                         if (lastImage && fs.existsSync(lastImage)) {
                             await new Promise(resolve => setTimeout(resolve, 1500));
-                            console.log(`[idleFlow] Enviando imagen a ${phone}...`);
-                            if (typeof provider.sendImage === 'function') {
-                                await provider.sendImage(jid, lastImage, "");
+                            console.log(`[idleFlow] Enviando imagen a grupo WhatsApp '${group.name}'...`);
+                            if (typeof providerToSend.sendImage === 'function') {
+                                await providerToSend.sendImage(group.jid, lastImage, "");
                             } else {
-                                await provider.sendMessage(jid, "", { media: lastImage });
+                                await providerToSend.sendMessage(group.jid, "", { media: lastImage });
                             }
                         }
                         if (lastVideo && fs.existsSync(lastVideo)) {
                             await new Promise(resolve => setTimeout(resolve, 1500));
-                            console.log(`[idleFlow] Enviando video a ${phone}...`);
-                            if (typeof provider.sendVideo === 'function') {
-                                await provider.sendVideo(jid, lastVideo, "");
+                            console.log(`[idleFlow] Enviando video a grupo WhatsApp '${group.name}'...`);
+                            if (typeof providerToSend.sendVideo === 'function') {
+                                await providerToSend.sendVideo(group.jid, lastVideo, "");
                             } else {
-                                await provider.sendMessage(jid, "", { media: lastVideo });
+                                await providerToSend.sendMessage(group.jid, "", { media: lastVideo });
                             }
                         }
                     }
                 } catch (err: any) {
-                    console.error(`❌ Error enviando reporte virtual a ${phone} (${group.name}):`, err.message || err);
+                    console.error(`❌ Error enviando reporte a grupo WhatsApp '${group.name}' (${group.jid}):`, err.message || err);
+                }
+            } else {
+                // Fallback heredado: enviar de forma individual si el grupo no cuenta con un jid
+                const contacts = group.contacts || [];
+                console.log(`[idleFlow] Grupo Virtual '${group.name}' sin JID: enviando a ${contacts.length} contactos individualmente (fallback)...`);
+                
+                for (const contact of contacts) {
+                    const phone = contact.phone ? contact.phone.replace(/[^0-9]/g, '') : '';
+                    if (!phone) continue;
+                    
+                    const jid = `${phone}@s.whatsapp.net`;
+                    
+                    try {
+                        console.log(`[idleFlow] Enviando reporte de texto (fallback) a ${contact.name || phone}...`);
+                        await providerToSend.sendMessage(jid, message, {});
+                        
+                        if (debeEnviarMedia) {
+                            if (lastImage && fs.existsSync(lastImage)) {
+                                await new Promise(resolve => setTimeout(resolve, 1500));
+                                console.log(`[idleFlow] Enviando imagen (fallback) a ${phone}...`);
+                                if (typeof providerToSend.sendImage === 'function') {
+                                    await providerToSend.sendImage(jid, lastImage, "");
+                                } else {
+                                    await providerToSend.sendMessage(jid, "", { media: lastImage });
+                                }
+                            }
+                            if (lastVideo && fs.existsSync(lastVideo)) {
+                                await new Promise(resolve => setTimeout(resolve, 1500));
+                                console.log(`[idleFlow] Enviando video (fallback) a ${phone}...`);
+                                if (typeof providerToSend.sendVideo === 'function') {
+                                    await providerToSend.sendVideo(jid, lastVideo, "");
+                                } else {
+                                    await providerToSend.sendMessage(jid, "", { media: lastVideo });
+                                }
+                            }
+                        }
+                    } catch (err: any) {
+                        console.error(`❌ Error de fallback enviando reporte virtual a ${phone} (${group.name}):`, err.message || err);
+                    }
                 }
             }
         }

@@ -3962,7 +3962,91 @@ Hemos recibido tu pago con éxito.
                 return res.status(400).json({ success: false, error: 'Un grupo no puede tener más de 8 contactos.' });
             }
 
-            const result = await depsHistoryHandler.saveWabaReportGroup({ id, name, contacts }, projectId);
+            // 1. Obtener el socket de Baileys activo
+            let sock: any = null;
+            const groupProvider = deps.groupProvider;
+            if (groupProvider && typeof groupProvider.getInstance === 'function') {
+                sock = await groupProvider.getInstance();
+            }
+            if (!sock) {
+                const adapterProvider = deps.adapterProvider;
+                if (adapterProvider && typeof adapterProvider.getInstance === 'function') {
+                    sock = await adapterProvider.getInstance();
+                }
+            }
+
+            if (!sock || typeof sock.groupCreate !== 'function') {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: 'WhatsApp no está conectado o no soporta creación de grupos. Conecta WhatsApp primero en la sección de Conexión.' 
+                });
+            }
+
+            // Parsear teléfonos a JIDs de WhatsApp
+            const participantJids = contacts
+                .map((c: any) => c.phone ? c.phone.replace(/[^0-9]/g, '') : '')
+                .filter(Boolean)
+                .map((num: string) => `${num}@s.whatsapp.net`);
+
+            if (participantJids.length === 0) {
+                return res.status(400).json({ success: false, error: 'El grupo debe contener al menos un contacto con número de teléfono válido.' });
+            }
+
+            let groupJid = null;
+            if (id) {
+                // Actualización: recuperar el grupo actual para obtener el JID previo
+                const existingGroups = await depsHistoryHandler.getWabaReportGroups(projectId);
+                const existingGroup = existingGroups.find((g: any) => g.id === id);
+                if (existingGroup && existingGroup.jid) {
+                    groupJid = existingGroup.jid;
+                    
+                    try {
+                        // Actualizar nombre si cambió
+                        if (existingGroup.name !== name) {
+                            console.log(`[WabaGroups] Actualizando subject del grupo ${groupJid} a: ${name}`);
+                            await sock.groupUpdateSubject(groupJid, name);
+                        }
+
+                        // Sincronizar participantes
+                        const oldParticipantJids = (existingGroup.contacts || [])
+                            .map((c: any) => c.phone ? c.phone.replace(/[^0-9]/g, '') : '')
+                            .filter(Boolean)
+                            .map((num: string) => `${num}@s.whatsapp.net`);
+
+                        const toAdd = participantJids.filter((jid: string) => !oldParticipantJids.includes(jid));
+                        const toRemove = oldParticipantJids.filter((jid: string) => !participantJids.includes(jid));
+
+                        if (toRemove.length > 0) {
+                            console.log(`[WabaGroups] Removiendo participantes de ${groupJid}:`, toRemove);
+                            await sock.groupParticipantsUpdate(groupJid, toRemove, 'remove');
+                        }
+                        if (toAdd.length > 0) {
+                            console.log(`[WabaGroups] Agregando participantes a ${groupJid}:`, toAdd);
+                            await sock.groupParticipantsUpdate(groupJid, toAdd, 'add');
+                        }
+                    } catch (wsErr: any) {
+                        console.warn(`[WabaGroups] Advertencia al actualizar grupo en WhatsApp (JID: ${groupJid}):`, wsErr.message || wsErr);
+                    }
+                }
+            }
+
+            // Si es un nuevo grupo o el existente no tenía JID en la base
+            if (!groupJid) {
+                try {
+                    console.log(`[WabaGroups] Creando grupo WhatsApp '${name}' con participantes:`, participantJids);
+                    const groupMetadata = await sock.groupCreate(name, participantJids);
+                    groupJid = groupMetadata.id;
+                    console.log(`[WabaGroups] Grupo WhatsApp creado: ${groupJid}`);
+                } catch (wsErr: any) {
+                    console.error(`[WabaGroups] Error al crear grupo en WhatsApp:`, wsErr.message || wsErr);
+                    return res.status(500).json({ 
+                        success: false, 
+                        error: `No se pudo crear el grupo en WhatsApp: ${wsErr.message || wsErr}` 
+                    });
+                }
+            }
+
+            const result = await depsHistoryHandler.saveWabaReportGroup({ id, name, contacts, jid: groupJid }, projectId);
             res.json(result);
         } catch (e: any) {
             res.status(500).json({ success: false, error: e.message });
@@ -3973,6 +4057,34 @@ Hemos recibido tu pago con éxito.
     app.delete('/api/backoffice/waba-groups/:id', backofficeAuth, async (req: any, res: any) => {
         try {
             const { id } = req.params;
+            const projectId = depsHistoryHandler.PROJECT_IDENTIFIER;
+
+            const existingGroups = await depsHistoryHandler.getWabaReportGroups(projectId);
+            const existingGroup = existingGroups.find((g: any) => g.id === id);
+
+            if (existingGroup && existingGroup.jid) {
+                let sock: any = null;
+                const groupProvider = deps.groupProvider;
+                if (groupProvider && typeof groupProvider.getInstance === 'function') {
+                    sock = await groupProvider.getInstance();
+                }
+                if (!sock) {
+                    const adapterProvider = deps.adapterProvider;
+                    if (adapterProvider && typeof adapterProvider.getInstance === 'function') {
+                        sock = await adapterProvider.getInstance();
+                    }
+                }
+
+                if (sock && typeof sock.groupLeave === 'function') {
+                    try {
+                        console.log(`[WabaGroups] Saliendo del grupo WhatsApp ${existingGroup.jid}...`);
+                        await sock.groupLeave(existingGroup.jid);
+                    } catch (wsErr: any) {
+                        console.warn(`[WabaGroups] No se pudo salir del grupo WhatsApp ${existingGroup.jid}:`, wsErr.message || wsErr);
+                    }
+                }
+            }
+
             const result = await depsHistoryHandler.deleteWabaReportGroup(id);
             res.json(result);
         } catch (e: any) {

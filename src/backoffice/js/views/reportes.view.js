@@ -413,11 +413,16 @@ window.reportesView = (() => {
                     return `
                     <div class="waba-group-card" style="display:flex; justify-content:space-between; align-items:center; padding:12px 14px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:10px; gap:15px;">
                         <div style="min-width:0; flex:1;">
-                            <div style="font-weight:600; font-size:0.88rem; color:var(--text-main); margin-bottom:3px; display:flex; align-items:center;">
-                                ${_escHtml(g.name)}
-                                <span style="font-size:0.75rem; font-weight:500; color:#0099FF; background:rgba(0,153,255,0.08); padding:1px 6px; border-radius:10px; margin-left:6px;">
+                            <div style="font-weight:600; font-size:0.88rem; color:var(--text-main); margin-bottom:3px; display:flex; align-items:center; flex-wrap:wrap; gap:6px;">
+                                <span style="margin-right:2px;">${_escHtml(g.name)}</span>
+                                <span style="font-size:0.75rem; font-weight:500; color:#0099FF; background:rgba(0,153,255,0.08); padding:1px 6px; border-radius:10px;">
                                     ${(g.contacts || []).length} contactos
                                 </span>
+                                ${g.jid ? `
+                                <span style="font-size:0.72rem; font-weight:normal; color:var(--text-muted); background:rgba(255,255,255,0.04); padding:1px 6px; border-radius:4px; font-family:monospace;">
+                                    ${_escHtml(g.jid)}
+                                </span>
+                                ` : ''}
                             </div>
                             <div style="font-size:0.78rem; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
                                 ${contactsList || 'Sin contactos'}
