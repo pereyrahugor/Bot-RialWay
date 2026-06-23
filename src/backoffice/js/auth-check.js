@@ -1,11 +1,14 @@
 (function() {
     const path = window.location.pathname;
     
-    // 1. Protección de Backoffice, CRM y Docs
+    // 1. Protección de Backoffice, CRM, Docs e Integraciones
     if (path.startsWith('/backoffice') || path.startsWith('/crm') ||
         path.startsWith('/documentacion') || path.startsWith('/docs') ||
         path.startsWith('/dashboard') || path.startsWith('/conexion') ||
-        path.startsWith('/webchat')) {
+        path.startsWith('/webchat') || path.startsWith('/meta') ||
+        path.startsWith('/reportes') || path.startsWith('/tickets') ||
+        path.startsWith('/lista-negra') || path.startsWith('/mercado-libre') ||
+        path.startsWith('/mercado-pago')) {
         const token = localStorage.getItem('backoffice_token');
         if (!token) window.location.href = '/login';
     }

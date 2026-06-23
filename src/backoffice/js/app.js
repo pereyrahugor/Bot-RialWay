@@ -106,6 +106,18 @@ async function mountView(path) {
         return;
     }
 
+    // Validar que exista el token correspondiente antes de proceder al montaje o llamadas a la API
+    const isSystemConfig = cleanPath === '/system-config';
+    const token = isSystemConfig 
+        ? localStorage.getItem('system_config_token') 
+        : localStorage.getItem('backoffice_token');
+
+    if (!token) {
+        console.warn(`[Router] No hay token para la ruta ${cleanPath}. Abortando montaje y redirigiendo.`);
+        window.location.href = isSystemConfig ? '/login?target=system-config' : '/login';
+        return;
+    }
+
     if (cleanPath === '/system-config' && window.__SYSTEM_CONFIG_VISIBLE === false) {
         navigate('/dashboard');
         return;

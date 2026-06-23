@@ -815,15 +815,9 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         res.json(messages);
     });
 
-    app.get('/api/backoffice/profile-pic/:chatId', async (req: any, res: any) => {
+    app.get('/api/backoffice/profile-pic/:chatId', backofficeAuth, async (req: any, res: any) => {
         try {
             const { chatId } = req.params;
-            const token = req.query.token as string;
-
-            if (token !== process.env.BACKOFFICE_TOKEN && token !== "neuroadmin25" && !token.startsWith('token=neuroadmin25')) {
-                res.status(401).end();
-                return;
-            }
 
             if (!adapterProvider) {
                 console.error('[ProfilePic] Error: adapterProvider no inicializado');
