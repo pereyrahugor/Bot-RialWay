@@ -88,8 +88,12 @@ export const registerStaticRoutes = (app: any, { __dirname, provider, groupProvi
                     const systemConfigVisibleJs = systemConfigVisible ? 'true' : 'false';
 
                     // Reemplazo universal de placeholders
+                    const projectName = process.env.RAILWAY_PROJECT_NAME || "Neurolinks";
+                    const projectId = process.env.RAILWAY_PROJECT_ID || "";
                     htmlContent = htmlContent.replace(/{{BOT_NAME}}/g, botName);
                     htmlContent = htmlContent.replace(/{{ASSISTANT_NAME}}/g, botName);
+                    htmlContent = htmlContent.replace(/{{PROJECT_NAME}}/g, projectName);
+                    htmlContent = htmlContent.replace(/{{PROJECT_ID}}/g, projectId);
                     htmlContent = htmlContent.replace(/{{SHOW_BACKOFFICE_STYLE}}/g, showBackoffice);
                     htmlContent = htmlContent.replace(/{{SHOW_CRM_STYLE}}/g, showCRM);
                     htmlContent = htmlContent.replace(/{{SHOW_SYSTEM_CONFIG_STYLE}}/g, showSystemConfig);
