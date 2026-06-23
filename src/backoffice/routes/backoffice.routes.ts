@@ -3905,9 +3905,76 @@ Hemos recibido tu pago con éxito.
                 .order('created_at', { ascending: false })
                 .limit(limit);
             if (error) throw error;
-            // Mapeamos titulo → nombre para compatibilidad con reportes.view.js
             const reportes = (data || []).map((t: any) => ({ ...t, nombre: t.titulo }));
             res.json({ success: true, reportes });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    /** GET /api/backoffice/waba-groups/status */
+    app.get('/api/backoffice/waba-groups/status', backofficeAuth, async (req: any, res: any) => {
+        try {
+            const projectId = depsHistoryHandler.PROJECT_IDENTIFIER;
+            const active = await depsHistoryHandler.getSetting('META_GROUP_REPORTS_ENABLED', projectId);
+            res.json({ success: true, active: active === 'true' });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    /** POST /api/backoffice/waba-groups/status */
+    app.post('/api/backoffice/waba-groups/status', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
+        try {
+            const { active } = req.body;
+            const projectId = depsHistoryHandler.PROJECT_IDENTIFIER;
+            await depsHistoryHandler.saveSetting('META_GROUP_REPORTS_ENABLED', active ? 'true' : 'false', projectId);
+            res.json({ success: true });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    /** GET /api/backoffice/waba-groups */
+    app.get('/api/backoffice/waba-groups', backofficeAuth, async (req: any, res: any) => {
+        try {
+            const projectId = depsHistoryHandler.PROJECT_IDENTIFIER;
+            const groups = await depsHistoryHandler.getWabaReportGroups(projectId);
+            res.json({ success: true, groups });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    /** POST /api/backoffice/waba-groups */
+    app.post('/api/backoffice/waba-groups', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
+        try {
+            const { id, name, contacts } = req.body;
+            const projectId = depsHistoryHandler.PROJECT_IDENTIFIER;
+            
+            if (!name) {
+                return res.status(400).json({ success: false, error: 'El nombre del grupo es obligatorio.' });
+            }
+            if (!Array.isArray(contacts)) {
+                return res.status(400).json({ success: false, error: 'Los contactos deben ser un array.' });
+            }
+            if (contacts.length > 8) {
+                return res.status(400).json({ success: false, error: 'Un grupo no puede tener más de 8 contactos.' });
+            }
+
+            const result = await depsHistoryHandler.saveWabaReportGroup({ id, name, contacts }, projectId);
+            res.json(result);
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    /** DELETE /api/backoffice/waba-groups/:id */
+    app.delete('/api/backoffice/waba-groups/:id', backofficeAuth, async (req: any, res: any) => {
+        try {
+            const { id } = req.params;
+            const result = await depsHistoryHandler.deleteWabaReportGroup(id);
+            res.json(result);
         } catch (e: any) {
             res.status(500).json({ success: false, error: e.message });
         }

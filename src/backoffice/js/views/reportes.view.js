@@ -6,6 +6,8 @@ window.reportesView = (() => {
     let _reportes = [];
     let _tipoFiltro = 'Todos';
     let _socket = null;
+    let _wabaGroups = [];
+    let _wabaIntegrationActive = false;
 
     function getHTML() {
         return `
@@ -85,6 +87,46 @@ window.reportesView = (() => {
                 <!-- Estado: activo -->
                 <div id="rep-active" style="display:none;">
 
+                    <!-- Integración Grupos Virtuales (Meta/WABA) -->
+                    <div class="glass-card animate-fade" style="margin-bottom: 20px; padding: 20px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px;">
+                            <div>
+                                <h3 style="margin:0 0 4px; font-size:1.05rem; font-weight:700; color:var(--text-main); display:flex; align-items:center; gap:8px;">
+                                    <i class="fas fa-users" style="color:#0099FF;"></i>
+                                    Grupos de Reporte vía Meta WABA
+                                </h3>
+                                <p style="margin:0; font-size:0.8rem; color:var(--text-muted);">
+                                    Envía reportes en paralelo de manera individual a grupos virtuales de hasta 8 contactos mediante la API oficial.
+                                </p>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <span id="waba-group-status-label" style="font-size:0.8rem; font-weight:500; color:var(--text-muted);">Desactivado</span>
+                                <label class="switch flex-shrink-0" style="transform: scale(0.9);">
+                                    <input type="checkbox" id="waba-group-toggle" onchange="reportesView._onWabaToggle(this.checked)">
+                                    <span class="slider round">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Panel de Grupos (visible cuando activado) -->
+                        <div id="waba-groups-panel" style="display:none; border-top: 1px solid rgba(255,255,255,0.06); padding-top:15px; margin-top:10px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                                <span style="font-size:0.82rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px;">Mis Grupos Virtuales</span>
+                                <button onclick="reportesView._openGroupModal()" class="btn-primary" style="padding: 6px 12px; font-size: 0.8rem; border-radius: 8px; cursor:pointer;">
+                                    <i class="fas fa-plus" style="margin-right:4px;"></i> Crear Grupo
+                                </button>
+                            </div>
+                            <div id="waba-groups-list">
+                                <div style="padding: 15px; text-align: center; color: var(--text-muted); font-size: 0.82rem;">
+                                    <i class="fas fa-circle-notch fa-spin" style="margin-right: 6px;"></i> Cargando grupos...
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div style="display:flex; gap:10px; align-items:center; margin-bottom:14px; flex-wrap:wrap;">
                         <div style="position:relative; flex:1; min-width:180px;">
                             <i class="fas fa-search" style="position:absolute; left:14px; top:50%; transform:translateY(-50%); color:var(--text-muted); font-size:0.82rem; pointer-events:none;"></i>
@@ -114,6 +156,54 @@ window.reportesView = (() => {
 
             </div>
         </main>
+
+        <!-- Modal para Crear/Editar Grupo Virtual -->
+        <div id="waba-group-modal" class="modal-overlay">
+            <div class="modal-content modal-content-md animate-pop-in">
+                <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; border-bottom:1px solid rgba(255,255,255,0.06); padding-bottom:12px;">
+                    <h3 id="waba-group-modal-title" style="margin:0; font-size:1.15rem; font-weight:700; color:var(--text-main); display:flex; align-items:center; gap:8px;">
+                        <i class="fas fa-users" style="color:#0099FF;"></i>
+                        Nuevo Grupo Virtual
+                    </h3>
+                    <button class="btn-close-modal" onclick="reportesView._closeGroupModal()" style="background:transparent; border:none; color:var(--text-muted); cursor:pointer; font-size:1.1rem;">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body" style="display:flex; flex-direction:column; gap:16px;">
+                    <div>
+                        <label style="display:block; font-size:0.82rem; font-weight:600; color:var(--text-main); margin-bottom:6px;">Nombre del Grupo</label>
+                        <input type="text" id="waba-group-name" placeholder="Ej: Equipo Ventas" 
+                            style="width:100%; box-sizing:border-box; padding:10px 12px; border-radius:8px; background:rgba(255,255,255,0.04); border:1px solid var(--border); color:var(--text-main); font-size:0.88rem; outline:none; transition:border-color 0.2s;"
+                            onfocus="this.style.borderColor='rgba(0,153,255,0.4)'" onblur="this.style.borderColor='var(--border)'">
+                    </div>
+                    
+                    <div>
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                            <label style="font-size:0.82rem; font-weight:600; color:var(--text-main);">Contactos (Máx 8)</label>
+                            <button type="button" onclick="reportesView._addGroupContactRow()" id="waba-group-add-contact-btn" 
+                                style="background:transparent; border:none; color:#0099FF; cursor:pointer; font-size:0.8rem; font-weight:600; display:flex; align-items:center; gap:4px;">
+                                <i class="fas fa-plus-circle"></i> Agregar Contacto
+                            </button>
+                        </div>
+                        <div id="waba-group-contacts-container" style="display:flex; flex-direction:column; gap:8px; max-height: 240px; overflow-y: auto; padding-right:4px;">
+                            <!-- Contact rows will be added dynamically -->
+                        </div>
+                    </div>
+                </div>
+                <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px; border-top:1px solid rgba(255,255,255,0.06); padding-top:15px;">
+                    <button onclick="reportesView._closeGroupModal()" style="padding: 8px 16px; border-radius: 8px; font-size: 0.85rem; background:transparent; border:1px solid var(--border); color:var(--text-muted); cursor:pointer; transition:all 0.15s;"
+                        onmouseenter="this.style.borderColor='var(--text-main)'; this.style.color='var(--text-main)'"
+                        onmouseleave="this.style.borderColor='var(--border)'; this.style.color='var(--text-muted)'">
+                        Cancelar
+                    </button>
+                    <button onclick="reportesView._saveGroup()" id="waba-group-save-btn" style="padding: 8px 16px; border-radius: 8px; font-size: 0.85rem; background:#0099FF; color:white; border:none; cursor:pointer; font-weight:600; transition:all 0.15s;"
+                        onmouseenter="this.style.background='#0078D4'"
+                        onmouseleave="this.style.background='#0099FF'">
+                        Guardar Grupo
+                    </button>
+                </div>
+            </div>
+        </div>
         `;
     }
 
@@ -132,7 +222,10 @@ window.reportesView = (() => {
             const data = await res.json();
             _isActive = !!data.active;
             _renderState();
-            if (_isActive) await _load();
+            if (_isActive) {
+                await _load();
+                await _loadWabaStatus();
+            }
         } catch (e) {
             console.error('[Reportes] Error al iniciar:', e);
             showToast && showToast('Error al conectar con el servidor', 'error');
@@ -184,6 +277,7 @@ window.reportesView = (() => {
                 _isActive = true;
                 _renderState();
                 await _load();
+                await _loadWabaStatus();
                 showToast && showToast('Reportes activados', 'success');
             } else {
                 showToast && showToast('Error al activar: ' + (data.error || ''), 'error');
@@ -204,7 +298,10 @@ window.reportesView = (() => {
             if (data.success) {
                 _isActive = false;
                 _reportes = [];
+                _wabaGroups = [];
+                _wabaIntegrationActive = false;
                 _renderState();
+                _renderWabaState();
                 showToast && showToast('Reportes desactivados', 'success');
             } else {
                 showToast && showToast('Error al desactivar: ' + (data.error || ''), 'error');
@@ -216,6 +313,316 @@ window.reportesView = (() => {
             const toggle = document.getElementById('rep-toggle');
             if (toggle) toggle.checked = true;
         }
+    }
+
+    async function _loadWabaStatus() {
+        try {
+            const res = await fetch(`/api/backoffice/waba-groups/status?token=${encodeURIComponent(_token)}`);
+            const data = await res.json();
+            _wabaIntegrationActive = !!data.active;
+            _renderWabaState();
+            if (_wabaIntegrationActive) {
+                await _loadWabaGroups();
+            }
+        } catch (e) {
+            console.error('[Reportes] Error loading WABA status:', e);
+        }
+    }
+
+    function _renderWabaState() {
+        const toggle = document.getElementById('waba-group-toggle');
+        const statusLabel = document.getElementById('waba-group-status-label');
+        const panel = document.getElementById('waba-groups-panel');
+
+        if (toggle) toggle.checked = _wabaIntegrationActive;
+        if (statusLabel) {
+            if (_wabaIntegrationActive) {
+                statusLabel.textContent = 'Activo';
+                statusLabel.style.color = '#22c55e';
+            } else {
+                statusLabel.textContent = 'Desactivado';
+                statusLabel.style.color = 'var(--text-muted)';
+            }
+        }
+        if (panel) {
+            panel.style.display = _wabaIntegrationActive ? 'block' : 'none';
+        }
+    }
+
+    async function _onWabaToggle(checked) {
+        try {
+            const res = await fetch(`/api/backoffice/waba-groups/status?token=${encodeURIComponent(_token)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ active: checked })
+            });
+            const data = await res.json();
+            if (data.success) {
+                _wabaIntegrationActive = checked;
+                _renderWabaState();
+                if (_wabaIntegrationActive) {
+                    await _loadWabaGroups();
+                }
+                showToast && showToast(checked ? 'Integración WABA activada' : 'Integración WABA desactivada', 'success');
+            } else {
+                showToast && showToast('Error al cambiar estado: ' + (data.error || ''), 'error');
+                const toggle = document.getElementById('waba-group-toggle');
+                if (toggle) toggle.checked = !_wabaIntegrationActive;
+            }
+        } catch (e) {
+            showToast && showToast('Error de red al cambiar estado WABA', 'error');
+            const toggle = document.getElementById('waba-group-toggle');
+            if (toggle) toggle.checked = !_wabaIntegrationActive;
+        }
+    }
+
+    async function _loadWabaGroups() {
+        const container = document.getElementById('waba-groups-list');
+        if (container) {
+            container.innerHTML = `<div style="padding:15px; text-align:center; color:var(--text-muted); font-size:0.82rem;"><i class="fas fa-circle-notch fa-spin" style="margin-right:6px;"></i> Cargando grupos virtuales...</div>`;
+        }
+        try {
+            const res = await fetch(`/api/backoffice/waba-groups?token=${encodeURIComponent(_token)}`);
+            const data = await res.json();
+            if (data.success) {
+                _wabaGroups = data.groups || [];
+                _renderWabaGroups();
+            } else {
+                throw new Error(data.error || 'Error desconocido');
+            }
+        } catch (e) {
+            if (container) {
+                container.innerHTML = `<div style="padding:15px; text-align:center; color:#ef4444; font-size:0.82rem;"><i class="fas fa-exclamation-triangle" style="margin-right:6px;"></i> Error cargando grupos: ${e.message}</div>`;
+            }
+        }
+    }
+
+    function _renderWabaGroups() {
+        const container = document.getElementById('waba-groups-list');
+        if (!container) return;
+
+        if (_wabaGroups.length === 0) {
+            container.innerHTML = `<div style="padding:20px; text-align:center; color:var(--text-muted); font-size:0.85rem;"><i class="fas fa-users-slash" style="margin-bottom:8px; font-size:1.5rem; display:block; opacity:0.6;"></i> No tienes grupos virtuales creados todavía.</div>`;
+            return;
+        }
+
+        container.innerHTML = `
+            <div style="display:flex; flex-direction:column; gap:10px; margin-top:10px;">
+                ${_wabaGroups.map(g => {
+                    const contactsList = (g.contacts || []).map(c => `${_escHtml(c.name || 'Sin nombre')} (${_escHtml(c.phone)})`).join(', ');
+                    return `
+                    <div class="waba-group-card" style="display:flex; justify-content:space-between; align-items:center; padding:12px 14px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:10px; gap:15px;">
+                        <div style="min-width:0; flex:1;">
+                            <div style="font-weight:600; font-size:0.88rem; color:var(--text-main); margin-bottom:3px; display:flex; align-items:center;">
+                                ${_escHtml(g.name)}
+                                <span style="font-size:0.75rem; font-weight:500; color:#0099FF; background:rgba(0,153,255,0.08); padding:1px 6px; border-radius:10px; margin-left:6px;">
+                                    ${(g.contacts || []).length} contactos
+                                </span>
+                            </div>
+                            <div style="font-size:0.78rem; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                                ${contactsList || 'Sin contactos'}
+                            </div>
+                        </div>
+                        <div style="display:flex; gap:6px; flex-shrink:0;">
+                            <button onclick="reportesView._openGroupModal('${g.id}')" style="background:transparent; border:none; color:var(--text-muted); cursor:pointer; padding:6px 8px; border-radius:6px; font-size:0.82rem; transition:all 0.15s;"
+                                onmouseenter="this.style.color='#0099FF'; this.style.background='rgba(0,153,255,0.08)'"
+                                onmouseleave="this.style.color='var(--text-muted)'; this.style.background='transparent'">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button onclick="reportesView._deleteGroup('${g.id}')" style="background:transparent; border:none; color:var(--text-muted); cursor:pointer; padding:6px 8px; border-radius:6px; font-size:0.82rem; transition:all 0.15s;"
+                                onmouseenter="this.style.color='#ef4444'; this.style.background='rgba(239,68,68,0.08)'"
+                                onmouseleave="this.style.color='var(--text-muted)'; this.style.background='transparent'">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+    }
+
+    async function _deleteGroup(groupId) {
+        if (!confirm('¿Estás seguro de que deseas eliminar este grupo virtual?')) return;
+        try {
+            const res = await fetch(`/api/backoffice/waba-groups/${groupId}?token=${encodeURIComponent(_token)}`, {
+                method: 'DELETE'
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast && showToast('Grupo eliminado correctamente', 'success');
+                await _loadWabaGroups();
+            } else {
+                showToast && showToast('Error al eliminar: ' + (data.error || ''), 'error');
+            }
+        } catch (e) {
+            showToast && showToast('Error de red al eliminar el grupo', 'error');
+        }
+    }
+
+    let _editingGroupId = null;
+
+    function _openGroupModal(groupId = null) {
+        const modal = document.getElementById('waba-group-modal');
+        const title = document.getElementById('waba-group-modal-title');
+        const nameInput = document.getElementById('waba-group-name');
+        const container = document.getElementById('waba-group-contacts-container');
+        
+        _editingGroupId = groupId;
+        if (container) container.innerHTML = '';
+        if (nameInput) nameInput.value = '';
+        
+        if (groupId) {
+            if (title) title.innerHTML = '<i class="fas fa-edit modal-h3-icon" style="color:#0099FF; margin-right:6px;"></i> Editar Grupo Virtual';
+            const group = _wabaGroups.find(g => g.id === groupId);
+            if (group) {
+                if (nameInput) nameInput.value = group.name || '';
+                const contacts = group.contacts || [];
+                contacts.forEach(c => _addContactRowHTML(c.name, c.phone));
+            }
+        } else {
+            if (title) title.innerHTML = '<i class="fas fa-users modal-h3-icon" style="color:#0099FF; margin-right:6px;"></i> Nuevo Grupo Virtual';
+            _addContactRowHTML('', '');
+        }
+        
+        _updateAddContactButtonState();
+        if (modal) modal.classList.add('active');
+    }
+
+    function _closeGroupModal() {
+        const modal = document.getElementById('waba-group-modal');
+        if (modal) modal.classList.remove('active');
+        _editingGroupId = null;
+    }
+
+    function _addContactRowHTML(name = '', phone = '') {
+        const container = document.getElementById('waba-group-contacts-container');
+        if (!container) return;
+        
+        const row = document.createElement('div');
+        row.className = 'waba-contact-row';
+        row.style = 'display:flex; gap:8px; align-items:center; width:100%;';
+        row.innerHTML = `
+            <input type="text" placeholder="Nombre (ej: Pedro)" value="${_escAttr(name)}" class="waba-contact-name-input"
+                style="flex:1; padding:8px 10px; border-radius:6px; background:rgba(255,255,255,0.03); border:1px solid var(--border); color:var(--text-main); font-size:0.82rem; outline:none; transition:border-color 0.2s;"
+                onfocus="this.style.borderColor='rgba(0,153,255,0.4)'" onblur="this.style.borderColor='var(--border)'">
+            <input type="text" placeholder="Teléfono (ej: 54911...)" value="${_escAttr(phone)}" class="waba-contact-phone-input"
+                style="flex:1.2; padding:8px 10px; border-radius:6px; background:rgba(255,255,255,0.03); border:1px solid var(--border); color:var(--text-main); font-size:0.82rem; outline:none; transition:border-color 0.2s;"
+                onfocus="this.style.borderColor='rgba(0,153,255,0.4)'" onblur="this.style.borderColor='var(--border)'">
+            <button type="button" onclick="this.parentElement.remove(); reportesView._updateAddContactButtonState();" 
+                style="background:transparent; border:none; color:var(--text-muted); cursor:pointer; padding:6px; border-radius:6px; display:flex; align-items:center; justify-content:center;"
+                onmouseenter="this.style.color='#ef4444'; this.style.background='rgba(239,68,68,0.07)'"
+                onmouseleave="this.style.color='var(--text-muted)'; this.style.background='transparent'">
+                <i class="fas fa-trash-alt" style="font-size:0.85rem;"></i>
+            </button>
+        `;
+        container.appendChild(row);
+        _updateAddContactButtonState();
+    }
+
+    function _addGroupContactRow() {
+        const container = document.getElementById('waba-group-contacts-container');
+        if (container && container.children.length < 8) {
+            _addContactRowHTML('', '');
+        }
+    }
+
+    function _updateAddContactButtonState() {
+        const container = document.getElementById('waba-group-contacts-container');
+        const btn = document.getElementById('waba-group-add-contact-btn');
+        if (!container || !btn) return;
+        
+        const count = container.children.length;
+        if (count >= 8) {
+            btn.style.opacity = '0.5';
+            btn.style.pointerEvents = 'none';
+        } else {
+            btn.style.opacity = '1';
+            btn.style.pointerEvents = 'auto';
+        }
+    }
+
+    async function _saveGroup() {
+        const nameInput = document.getElementById('waba-group-name');
+        const name = nameInput ? nameInput.value.trim() : '';
+        if (!name) {
+            if (nameInput) nameInput.style.borderColor = '#ef4444';
+            showToast && showToast('El nombre del grupo es requerido', 'error');
+            return;
+        }
+
+        const container = document.getElementById('waba-group-contacts-container');
+        if (!container || container.children.length === 0) {
+            showToast && showToast('Agrega al menos un contacto al grupo', 'error');
+            return;
+        }
+
+        const contacts = [];
+        let hasErrors = false;
+        
+        const rows = container.querySelectorAll('.waba-contact-row');
+        rows.forEach(row => {
+            const nameIn = row.querySelector('.waba-contact-name-input');
+            const phoneIn = row.querySelector('.waba-contact-phone-input');
+            
+            const contactName = nameIn ? nameIn.value.trim() : '';
+            const contactPhone = phoneIn ? phoneIn.value.trim().replace(/[^0-9]/g, '') : '';
+            
+            if (!contactPhone) {
+                if (phoneIn) phoneIn.style.borderColor = '#ef4444';
+                hasErrors = true;
+            } else {
+                if (phoneIn) phoneIn.style.borderColor = 'var(--border)';
+                contacts.push({ name: contactName || contactPhone, phone: contactPhone });
+            }
+        });
+
+        if (hasErrors) {
+            showToast && showToast('Por favor, ingresa los números de teléfono', 'error');
+            return;
+        }
+
+        const saveBtn = document.getElementById('waba-group-save-btn');
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Guardando...';
+        }
+
+        try {
+            const body = {
+                name,
+                contacts
+            };
+            if (_editingGroupId) {
+                body.id = _editingGroupId;
+            }
+
+            const res = await fetch(`/api/backoffice/waba-groups?token=${encodeURIComponent(_token)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            const data = await res.json();
+            
+            if (data.success) {
+                showToast && showToast(_editingGroupId ? 'Grupo actualizado con éxito' : 'Grupo creado con éxito', 'success');
+                _closeGroupModal();
+                await _loadWabaGroups();
+            } else {
+                showToast && showToast('Error al guardar: ' + (data.error || ''), 'error');
+            }
+        } catch (e) {
+            showToast && showToast('Error de red al guardar el grupo', 'error');
+        } finally {
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = 'Guardar Grupo';
+            }
+        }
+    }
+
+    function _escAttr(str) {
+        return String(str || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
     }
 
     async function _load() {
@@ -358,6 +765,13 @@ window.reportesView = (() => {
         _onToggle,
         _load,
         _render,
-        _setTipo
+        _setTipo,
+        _onWabaToggle,
+        _openGroupModal,
+        _closeGroupModal,
+        _addGroupContactRow,
+        _updateAddContactButtonState,
+        _saveGroup,
+        _deleteGroup
     };
 })();

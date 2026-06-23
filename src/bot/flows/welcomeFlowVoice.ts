@@ -102,6 +102,17 @@ export const welcomeFlowVoice = addKeyword<any, any>(EVENTS.VOICE_NOTE)
             }
         }
 
+        // Verificar si el bot está activo para este chat/proyecto
+        const isBotActiveForUser = await HistoryHandler.isBotEnabled(chatId, dynamicProjectId);
+        const isGlobalBotEnabledSetting = await HistoryHandler.getSetting('GLOBAL_BOT_ENABLED', dynamicProjectId);
+        const isGlobalBotEnabled = isGlobalBotEnabledSetting !== 'false';
+        const botEnabledForChat = isGlobalBotEnabled && isBotActiveForUser;
+
+        if (!botEnabledForChat) {
+            console.log(`[welcomeFlowVoice] Bot desactivado para el chat ${chatId} o globalmente. Omitiendo transcripción y respuesta del bot.`);
+            return;
+        }
+
         // Verificar si la IA está activa (si existe OPENAI_API_KEY)
         const { getOpenAI } = await import("~/apis/openai/openaiHelper");
         const openai = await getOpenAI();
@@ -115,8 +126,7 @@ export const welcomeFlowVoice = addKeyword<any, any>(EVENTS.VOICE_NOTE)
         const transcription = await transcribeAudioFile(`${localPath}`);
 
         if (!transcription) {
-            // Solo alertar si el bot está configurado con OpenAI pero falló por algún motivo en la transcripción
-            await flowDynamic("⚠️ No pude transcribir el audio. Inténtalo de nuevo.");
+            console.warn(`[welcomeFlowVoice] ⚠️ No se pudo transcribir el audio de ${chatId}. Omitiendo respuesta del bot.`);
             return;
         }
 
