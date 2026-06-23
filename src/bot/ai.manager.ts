@@ -187,6 +187,22 @@ export class AiManager {
                 return state;
             }
 
+            if (body === "#FULL_OFF#") {
+                await HistoryHandler.saveSetting('GLOBAL_BOT_ENABLED', 'false', dynamicProjectId);
+                const msg = "🛑 Bot desactivado GLOBALMENTE para todas las conversaciones.";
+                await flowDynamic([{ body: msg }]);
+                await HistoryHandler.saveMessage(ctx.from, 'assistant', msg, 'text', null, ctx.userId, null, ctx.platform, dynamicProjectId);
+                return state;
+            }
+
+            if (body === "#FULL_ON#") {
+                await HistoryHandler.saveSetting('GLOBAL_BOT_ENABLED', 'true', dynamicProjectId);
+                const msg = "🤖 Bot activado GLOBALMENTE para todas las conversaciones.";
+                await flowDynamic([{ body: msg }]);
+                await HistoryHandler.saveMessage(ctx.from, 'assistant', msg, 'text', null, ctx.userId, null, ctx.platform, dynamicProjectId);
+                return state;
+            }
+
             // Filtro de Eco (Mejorado para BSUID)
             if (ctx.key?.fromMe) {
                 stop(ctx);

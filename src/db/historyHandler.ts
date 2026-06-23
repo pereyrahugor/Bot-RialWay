@@ -322,6 +322,21 @@ export class HistoryHandler {
                 GRANT ALL ON TABLE mercadopago_user_routoing TO service_role;
                 GRANT ALL ON TABLE mercadopago_user_routoing TO authenticated;
                 GRANT SELECT ON TABLE mercadopago_user_routoing TO anon;`
+            },
+            {
+                name: 'waba_report_groups',
+                sql: `CREATE TABLE IF NOT EXISTS waba_report_groups (
+                    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    contacts JSONB DEFAULT '[]'::jsonb,
+                    jid TEXT,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                );
+                GRANT ALL ON TABLE waba_report_groups TO service_role;
+                GRANT ALL ON TABLE waba_report_groups TO authenticated;
+                GRANT SELECT ON TABLE waba_report_groups TO anon;`
             }
         ];
 
@@ -465,6 +480,15 @@ export class HistoryHandler {
                         if (ownerErr && ownerErr.code === '42703') {
                             console.log(`🔧 Agregando columna owner_id a meta_onboarding...`);
                             await supabase.rpc('exec_sql', { query: `ALTER TABLE meta_onboarding ADD COLUMN IF NOT EXISTS owner_id uuid REFERENCES users(id);` });
+                        }
+                    }
+
+                    // Migración para jid en waba_report_groups
+                    if (table.name === 'waba_report_groups') {
+                        const { error: jidErr } = await supabase.from('waba_report_groups').select('jid').limit(1);
+                        if (jidErr && jidErr.code === '42703') {
+                            console.log(`🔧 Agregando columna jid a waba_report_groups...`);
+                            await supabase.rpc('exec_sql', { query: `ALTER TABLE waba_report_groups ADD COLUMN IF NOT EXISTS jid TEXT;` });
                         }
                     }
 
@@ -2035,7 +2059,7 @@ export class HistoryHandler {
             }
 
             const { data, error } = await query
-                .order('created_at', { ascending: false })
+                .order('updated_at', { ascending: false })
                 .range(offset, offset + limit - 1);
 
             if (error) throw error;
@@ -3053,6 +3077,82 @@ export class HistoryHandler {
             return { success: true, data };
         } catch (err: any) {
             console.error('[HistoryHandler] Error en syncChatTags:', err);
+            return { success: false, error: err.message };
+        }
+    }
+
+    /**
+     * Obtiene todos los grupos de reporte virtual (WABA) para un proyecto.
+     */
+    static async getWabaReportGroups(projectId: string | null = null): Promise<any[]> {
+        if (!supabase) return [];
+        const targetProjectId = projectId || HistoryHandler.PROJECT_IDENTIFIER;
+        try {
+            const { data, error } = await supabase
+                .from('waba_report_groups')
+                .select('*')
+                .eq('project_id', targetProjectId)
+                .order('created_at', { ascending: true });
+            if (error) throw error;
+            return data || [];
+        } catch (err: any) {
+            console.error('[HistoryHandler] Error en getWabaReportGroups:', err.message);
+            return [];
+        }
+    }
+
+    /**
+     * Guarda o actualiza un grupo de reporte virtual (WABA).
+     */
+    static async saveWabaReportGroup(group: { id?: string, name: string, contacts: any[], jid?: string }, projectId: string | null = null) {
+        if (!supabase) return { success: false, error: 'Supabase not initialized' };
+        const targetProjectId = projectId || HistoryHandler.PROJECT_IDENTIFIER;
+        try {
+            const { id, name, contacts, jid } = group;
+            if (!name) return { success: false, error: 'El nombre del grupo es obligatorio.' };
+            if (!Array.isArray(contacts)) return { success: false, error: 'Los contactos deben ser un array.' };
+            if (contacts.length > 8) return { success: false, error: 'Un grupo puede tener como máximo 8 contactos.' };
+
+            const dataToSave: any = {
+                project_id: targetProjectId,
+                name,
+                contacts,
+                jid: jid || null,
+                updated_at: new Date().toISOString()
+            };
+
+            if (id) {
+                dataToSave.id = id;
+            }
+
+            const { data, error } = await supabase
+                .from('waba_report_groups')
+                .upsert(dataToSave, { onConflict: 'id' })
+                .select()
+                .single();
+
+            if (error) throw error;
+            return { success: true, data };
+        } catch (err: any) {
+            console.error('[HistoryHandler] Error en saveWabaReportGroup:', err.message);
+            return { success: false, error: err.message };
+        }
+    }
+
+    /**
+     * Elimina un grupo de reporte virtual (WABA).
+     */
+    static async deleteWabaReportGroup(id: string) {
+        if (!supabase) return { success: false, error: 'Supabase not initialized' };
+        try {
+            const { error } = await supabase
+                .from('waba_report_groups')
+                .delete()
+                .eq('id', id);
+            if (error) throw error;
+            return { success: true };
+        } catch (err: any) {
+            console.error('[HistoryHandler] Error en deleteWabaReportGroup:', err.message);
             return { success: false, error: err.message };
         }
     }

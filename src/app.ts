@@ -1,6 +1,7 @@
 import "dotenv/config";
 import fs from "fs";
 import path from "path";
+import { spawn } from "child_process";
 import { fileURLToPath } from "url";
 import multer from "multer";
 import OpenAI from "openai";
@@ -111,6 +112,8 @@ const main = async () => {
     } catch (err) {
         console.warn('[App] initDatabase error:', err);
     }
+
+    // Proxy central desactivado temporalmente para conexión limpia directa
     const PORT = process.env.PORT || 8080;
     
     // El proceso de sincronización de tools se movió más abajo para asegurar que todas las variables estén recuperadas.
@@ -126,7 +129,7 @@ const main = async () => {
     const qrPath = path.join(process.cwd(), "bot.qr.png");
 
     // Usar versión fija conocida que funciona
-    const baileysVersion: any = [2, 3000, 1040568398]; //Vencimineto = 
+    const baileysVersion: any = [2, 3000, 1040769081]; //Vencimineto = 
     console.log(`📡 [App] Usando versión fija de WhatsApp Web: ${baileysVersion.join('.')}`);
 
     // 2. Initialize Providers
@@ -370,6 +373,51 @@ const main = async () => {
 
         // API Health & Info
         app.get("/health", (_req: any, res: any) => res.json({ status: "ok", time: new Date().toISOString() }));
+        app.get("/api/test-proxy", async (_req: any, res: any) => {
+            try {
+                const { SocksProxyAgent } = await import('socks-proxy-agent');
+                const { default: axios } = await import('axios');
+                const agent = new SocksProxyAgent('socks5://127.0.0.1:1080');
+                const results: any = {};
+                
+                try {
+                    const googleRes = await axios.get('https://www.google.com', {
+                        httpAgent: agent,
+                        httpsAgent: agent,
+                        timeout: 8000
+                    });
+                    results.google = { success: true, status: googleRes.status };
+                } catch (err: any) {
+                    results.google = { success: false, error: err.message };
+                }
+
+                try {
+                    const ipRes = await axios.get('https://api.ipify.org?format=json', {
+                        httpAgent: agent,
+                        httpsAgent: agent,
+                        timeout: 8000
+                    });
+                    results.ipify = { success: true, ip: ipRes.data.ip };
+                } catch (err: any) {
+                    results.ipify = { success: false, error: err.message };
+                }
+
+                try {
+                    const wsRes = await axios.get('https://web.whatsapp.com', {
+                        httpAgent: agent,
+                        httpsAgent: agent,
+                        timeout: 8000
+                    });
+                    results.whatsapp = { success: true, status: wsRes.status };
+                } catch (err: any) {
+                    results.whatsapp = { success: false, error: err.message };
+                }
+
+                res.json(results);
+            } catch (globalErr: any) {
+                res.status(500).json({ error: globalErr.message });
+            }
+        });
         app.get("/api/assistant-name", (_req: any, res: any) => res.json({ name: process.env.ASSISTANT_NAME || "Bot" }));
         app.get("/api/dashboard-status", async (_req: any, res: any) => res.json(await hasActiveSession(adapterProvider, groupProvider)));
 

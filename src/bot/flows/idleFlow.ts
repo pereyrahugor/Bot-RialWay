@@ -32,7 +32,7 @@ function formatSummary(resumen: string, data: GenericResumenData, userId?: strin
 }
 
 // Función auxiliar para reenviar media
-async function sendMediaToGroup(provider: any, state: any, targetGroup: string, data: any) {
+async function sendMediaToGroup(provider: any, state: any, targetGroup: string, data: any, skipDelete: boolean = false) {
     // Detectar variaciones de "si" (si, sí, sii, si., Si, YES, etc - aunque el json suele ser español)
     // Usamos regex flexible que busca "s" seguido de "i" o "í"
     const fotoOVideoRaw = data["Foto o video"] || '';
@@ -48,10 +48,12 @@ async function sendMediaToGroup(provider: any, state: any, targetGroup: string, 
                 console.log(`📡 Intentando enviar imagen: ${lastImage} a ${targetGroup}`);
                 await provider.sendImage(targetGroup, lastImage, "");
                 console.log(`✅ Imagen reenviada al grupo ${targetGroup}`);
-                try {
-                    fs.unlinkSync(lastImage);
-                    await state.update({ lastImage: null });
-                } catch (e: any) { console.error('Error borrando img:', e.message); }
+                if (!skipDelete) {
+                    try {
+                        fs.unlinkSync(lastImage);
+                        await state.update({ lastImage: null });
+                    } catch (e: any) { console.error('Error borrando img:', e.message); }
+                }
             }
         }
 
@@ -65,12 +67,148 @@ async function sendMediaToGroup(provider: any, state: any, targetGroup: string, 
                     await provider.sendImage(targetGroup, lastVideo, "");
                 }
                 console.log(`✅ Video reenviada al grupo ${targetGroup}`);
-                try {
-                    fs.unlinkSync(lastVideo);
-                    await state.update({ lastVideo: null });
-                } catch (e: any) { console.error('Error borrando video:', e.message); }
+                if (!skipDelete) {
+                    try {
+                        fs.unlinkSync(lastVideo);
+                        await state.update({ lastVideo: null });
+                    } catch (e: any) { console.error('Error borrando video:', e.message); }
+                }
             }
         }
+    }
+}
+
+// Función para limpiar archivos locales de media de forma segura
+async function cleanUpMediaFiles(state: any) {
+    const lastImage = state.get('lastImage');
+    if (lastImage && typeof lastImage === 'string' && fs.existsSync(lastImage)) {
+        try {
+            fs.unlinkSync(lastImage);
+        } catch (e: any) { console.error('Error borrando img al limpiar:', e.message); }
+    }
+    const lastVideo = state.get('lastVideo');
+    if (lastVideo && typeof lastVideo === 'string' && fs.existsSync(lastVideo)) {
+        try {
+            fs.unlinkSync(lastVideo);
+        } catch (e: any) { console.error('Error borrando video al limpiar:', e.message); }
+    }
+    await state.update({ lastImage: null, lastVideo: null });
+}
+
+// Envía el reporte a todos los grupos virtuales configurados para el proyecto
+async function dispatchVirtualGroupReports(projectId: string, message: string, state: any, provider: any, data: any) {
+    try {
+        const enabled = await HistoryHandler.getConfig('META_GROUP_REPORTS_ENABLED', projectId);
+        if (enabled !== 'true') {
+            console.log(`[idleFlow] Envío a grupos virtuales (WABA) desactivado.`);
+            return;
+        }
+
+        const groups = await HistoryHandler.getWabaReportGroups(projectId);
+        if (groups.length === 0) {
+            console.log(`[idleFlow] No hay grupos virtuales de reportes configurados.`);
+            return;
+        }
+
+        console.log(`[idleFlow] Iniciando envío de reporte a ${groups.length} grupos virtuales...`);
+
+        const fotoOVideoRaw = data["Foto o video"] || '';
+        const debeEnviarMedia = /s[ií]+/i.test(fotoOVideoRaw);
+        const lastImage = state.get('lastImage');
+        const lastVideo = state.get('lastVideo');
+
+        const groupProvider = getGroupProvider();
+        const providersToTry = [];
+        if (groupProvider) {
+            providersToTry.push({ name: 'Baileys', instance: groupProvider });
+        }
+        if (provider) {
+            const isDifferent = !groupProvider || (provider.constructor.name !== groupProvider.constructor.name);
+            if (isDifferent) {
+                providersToTry.push({ name: 'Meta WABA', instance: provider });
+            }
+        }
+
+        if (providersToTry.length === 0 && provider) {
+            providersToTry.push({ name: 'Default', instance: provider });
+        }
+
+        const fallbackProvider = groupProvider || provider;
+
+        for (const group of groups) {
+            if (group.jid) {
+                for (const p of providersToTry) {
+                    console.log(`[idleFlow] Grupo WhatsApp '${group.name}' (${group.jid}): enviando un solo reporte via ${p.name}...`);
+                    try {
+                        await p.instance.sendMessage(group.jid, message, {});
+                        
+                        if (debeEnviarMedia) {
+                            if (lastImage && fs.existsSync(lastImage)) {
+                                await new Promise(resolve => setTimeout(resolve, 1500));
+                                console.log(`[idleFlow] Enviando imagen a grupo WhatsApp '${group.name}' via ${p.name}...`);
+                                if (typeof p.instance.sendImage === 'function') {
+                                    await p.instance.sendImage(group.jid, lastImage, "");
+                                } else {
+                                    await p.instance.sendMessage(group.jid, "", { media: lastImage });
+                                }
+                            }
+                            if (lastVideo && fs.existsSync(lastVideo)) {
+                                await new Promise(resolve => setTimeout(resolve, 1500));
+                                console.log(`[idleFlow] Enviando video a grupo WhatsApp '${group.name}' via ${p.name}...`);
+                                if (typeof p.instance.sendVideo === 'function') {
+                                    await p.instance.sendVideo(group.jid, lastVideo, "");
+                                } else {
+                                    await p.instance.sendMessage(group.jid, "", { media: lastVideo });
+                                }
+                            }
+                        }
+                    } catch (err: any) {
+                        console.error(`❌ Error enviando reporte a grupo WhatsApp '${group.name}' (${group.jid}) via ${p.name}:`, err.message || err);
+                    }
+                }
+            } else {
+                // Fallback heredado: enviar de forma individual si el grupo no cuenta con un jid
+                const contacts = group.contacts || [];
+                console.log(`[idleFlow] Grupo Virtual '${group.name}' sin JID: enviando a ${contacts.length} contactos individualmente (fallback)...`);
+                
+                for (const contact of contacts) {
+                    const phone = contact.phone ? contact.phone.replace(/[^0-9]/g, '') : '';
+                    if (!phone) continue;
+                    
+                    const jid = `${phone}@s.whatsapp.net`;
+                    
+                    try {
+                        console.log(`[idleFlow] Enviando reporte de texto (fallback) a ${contact.name || phone}...`);
+                        await fallbackProvider.sendMessage(jid, message, {});
+                        
+                        if (debeEnviarMedia) {
+                            if (lastImage && fs.existsSync(lastImage)) {
+                                await new Promise(resolve => setTimeout(resolve, 1500));
+                                console.log(`[idleFlow] Enviando imagen (fallback) a ${phone}...`);
+                                if (typeof fallbackProvider.sendImage === 'function') {
+                                    await fallbackProvider.sendImage(jid, lastImage, "");
+                                } else {
+                                    await fallbackProvider.sendMessage(jid, "", { media: lastImage });
+                                }
+                            }
+                            if (lastVideo && fs.existsSync(lastVideo)) {
+                                await new Promise(resolve => setTimeout(resolve, 1500));
+                                console.log(`[idleFlow] Enviando video (fallback) a ${phone}...`);
+                                if (typeof fallbackProvider.sendVideo === 'function') {
+                                    await fallbackProvider.sendVideo(jid, lastVideo, "");
+                                } else {
+                                    await fallbackProvider.sendMessage(jid, "", { media: lastVideo });
+                                }
+                            }
+                        }
+                    } catch (err: any) {
+                        console.error(`❌ Error de fallback enviando reporte virtual a ${phone} (${group.name}):`, err.message || err);
+                    }
+                }
+            }
+        }
+    } catch (err: any) {
+        console.error(`❌ Exception en dispatchVirtualGroupReports:`, err.message || err);
     }
 }
 
@@ -285,11 +423,14 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                     
                     await providerToSend.sendMessage(ID_GRUPO_RESUMEN, resumenConLink, {});
                     console.log(`✅ SI_REPORTAR_SEGUIR: Resumen enviado a ${ID_GRUPO_RESUMEN}`);
-                    await sendMediaToGroup(providerToSend, state, ID_GRUPO_RESUMEN, data);
+                    await sendMediaToGroup(providerToSend, state, ID_GRUPO_RESUMEN, data, true);
 
                 } catch (err: any) {
                     console.error(`❌ SI_REPORTAR_SEGUIR Error:`, err?.message || err);
                 }
+
+                await dispatchVirtualGroupReports(dynamicProjectId, resumenConLink, state, provider, data);
+                await cleanUpMediaFiles(state);
 
                 await addToSheet(data, sheetId ?? undefined, sheetRange ?? undefined);
 
@@ -339,11 +480,14 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                     await providerToSend.sendMessage(ID_GRUPO_RESUMEN_2, resumenConLink, {});
                     console.log(`✅ SI_RESUMEN_G2: Resumen enviado a ${ID_GRUPO_RESUMEN_2}`);
 
-                    await sendMediaToGroup(providerToSend, state, ID_GRUPO_RESUMEN_2, data);
+                    await sendMediaToGroup(providerToSend, state, ID_GRUPO_RESUMEN_2, data, true);
 
                 } catch (err: any) {
                     console.error(`❌ SI_RESUMEN_G2 Error:`, err?.message || err);
                 }
+
+                await dispatchVirtualGroupReports(dynamicProjectId, resumenConLink, state, provider, data);
+                await cleanUpMediaFiles(state);
 
                 await addToSheet(data, sheetId ?? undefined, sheetRange ?? undefined);
                 // Resetear al asistente 1 al cerrar la conversación
@@ -363,11 +507,14 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                     await providerToSend.sendMessage(ID_GRUPO_RESUMEN, resumenConLink, {});
                     console.log(`✅ SI_RESUMEN: Resumen enviado a ${ID_GRUPO_RESUMEN}`);
 
-                    await sendMediaToGroup(providerToSend, state, ID_GRUPO_RESUMEN, data);
+                    await sendMediaToGroup(providerToSend, state, ID_GRUPO_RESUMEN, data, true);
 
                 } catch (err: any) {
                     console.error(`❌ SI_RESUMEN Error:`, err?.message || err);
                 }
+
+                await dispatchVirtualGroupReports(dynamicProjectId, resumenConLink, state, provider, data);
+                await cleanUpMediaFiles(state);
 
                 await addToSheet(data, sheetId ?? undefined, sheetRange ?? undefined);
                 // Resetear al asistente 1 al cerrar la conversación
@@ -388,11 +535,14 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                     await providerToSend.sendMessage(ID_GRUPO_RESUMEN, resumenConLink, {});
                     console.log(`✅ DEFAULT: Resumen enviado a ${ID_GRUPO_RESUMEN}`);
 
-                    await sendMediaToGroup(providerToSend, state, ID_GRUPO_RESUMEN, data);
+                    await sendMediaToGroup(providerToSend, state, ID_GRUPO_RESUMEN, data, true);
 
                 } catch (err: any) {
                     console.error(`❌ DEFAULT Error:`, err?.message || err);
                 }
+
+                await dispatchVirtualGroupReports(dynamicProjectId, resumenConLink, state, provider, data);
+                await cleanUpMediaFiles(state);
 
                 await addToSheet(data, sheetId ?? undefined, sheetRange ?? undefined);
                 // Resetear al asistente 1 al cerrar la conversación por inactividad
