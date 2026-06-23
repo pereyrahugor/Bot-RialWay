@@ -3962,48 +3962,186 @@ Hemos recibido tu pago con éxito.
                 return res.status(400).json({ success: false, error: 'Un grupo no puede tener más de 8 contactos.' });
             }
 
-            // 1. Obtener el socket de Baileys activo
-            let sock: any = null;
-            const groupProvider = deps.groupProvider;
-            if (groupProvider && typeof groupProvider.getInstance === 'function') {
-                sock = await groupProvider.getInstance();
-            }
-            if (!sock) {
-                const adapterProvider = deps.adapterProvider;
-                if (adapterProvider && typeof adapterProvider.getInstance === 'function') {
-                    sock = await adapterProvider.getInstance();
+            // Helpers para envío de invitación y creación en Meta
+            const sendDirectWabaMessage = async (phone: string, text: string, whatsappNumberId: string, whatsappToken: string) => {
+                const cleanNumber = phone.replace(/\D/g, '');
+                let toFormat = cleanNumber;
+                if (cleanNumber.startsWith('54')) {
+                    if (cleanNumber.length === 12 && !cleanNumber.startsWith('549')) {
+                        toFormat = '549' + cleanNumber.slice(2);
+                    }
                 }
-            }
+                const url = `https://graph.facebook.com/v22.0/${whatsappNumberId}/messages`;
+                console.log(`[MetaGroupsAPI] Enviando mensaje de invitación a +${toFormat}...`);
+                try {
+                    const resMsg = await axios.post(url, {
+                        messaging_product: "whatsapp",
+                        recipient_type: "individual",
+                        to: toFormat,
+                        type: "text",
+                        text: { body: text }
+                    }, {
+                        headers: {
+                            'Authorization': `Bearer ${whatsappToken}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    console.log(`[MetaGroupsAPI] Mensaje de invitación enviado con éxito a +${toFormat}. ID: ${resMsg.data.messages?.[0]?.id || 'unknown'}`);
+                    return true;
+                } catch (err: any) {
+                    console.error(`[MetaGroupsAPI] Error al enviar invitación a +${toFormat}:`, err.response?.data || err.message);
+                    return false;
+                }
+            };
 
-            if (!sock || typeof sock.groupCreate !== 'function') {
-                return res.status(400).json({ 
-                    success: false, 
-                    error: 'WhatsApp no está conectado o no soporta creación de grupos. Conecta WhatsApp primero en la sección de Conexión.' 
-                });
-            }
+            const attemptCreateMetaWabaGroup = async (groupName: string, groupContacts: any[], metaConfig: any) => {
+                const { whatsappToken, whatsappNumberId } = metaConfig;
+                if (!whatsappToken || !whatsappNumberId) {
+                    throw new Error('Faltan credenciales de Meta (whatsappToken o whatsappNumberId).');
+                }
 
-            // Parsear teléfonos a JIDs de WhatsApp
-            const participantJids = contacts
-                .map((c: any) => c.phone ? c.phone.replace(/[^0-9]/g, '') : '')
-                .filter(Boolean)
-                .map((num: string) => `${num}@s.whatsapp.net`);
+                console.log(`[MetaGroupsAPI] Intentando crear grupo Meta WABA '${groupName}'...`);
+                const createUrl = `https://graph.facebook.com/v22.0/${whatsappNumberId}/groups`;
+                
+                let groupId: string;
+                try {
+                    const resCreate = await axios.post(createUrl, {
+                        messaging_product: 'whatsapp',
+                        subject: groupName
+                    }, {
+                        headers: {
+                            'Authorization': `Bearer ${whatsappToken}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    groupId = resCreate.data.id;
+                    console.log(`[MetaGroupsAPI] Grupo creado con éxito en Meta WABA. ID: ${groupId}`);
+                } catch (err: any) {
+                    console.error(`[MetaGroupsAPI] Error al crear grupo en Meta WABA:`, err.response?.data || err.message);
+                    throw err;
+                }
 
-            if (participantJids.length === 0) {
-                return res.status(400).json({ success: false, error: 'El grupo debe contener al menos un contacto con número de teléfono válido.' });
-            }
+                // Obtener enlace de invitación
+                console.log(`[MetaGroupsAPI] Solicitando enlace de invitación para el grupo ${groupId}...`);
+                const inviteUrl = `https://graph.facebook.com/v22.0/${groupId}/invite_link`;
+                let inviteLink: string;
+                try {
+                    const resInvite = await axios.post(inviteUrl, {
+                        messaging_product: 'whatsapp'
+                    }, {
+                        headers: {
+                            'Authorization': `Bearer ${whatsappToken}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    inviteLink = resInvite.data.invite_link;
+                    console.log(`[MetaGroupsAPI] Enlace de invitación obtenido para el grupo ${groupId}: ${inviteLink}`);
+                } catch (err: any) {
+                    console.error(`[MetaGroupsAPI] Error al obtener el enlace de invitación para ${groupId}:`, err.response?.data || err.message);
+                    throw err;
+                }
 
-            let groupJid = null;
-            if (id) {
-                // Actualización: recuperar el grupo actual para obtener el JID previo
-                const existingGroups = await depsHistoryHandler.getWabaReportGroups(projectId);
-                const existingGroup = existingGroups.find((g: any) => g.id === id);
-                if (existingGroup && existingGroup.jid) {
-                    groupJid = existingGroup.jid;
+                // Enviar invitaciones
+                if (groupContacts.length > 0) {
+                    console.log(`[MetaGroupsAPI] Enviando invitaciones a ${groupContacts.length} contactos...`);
+                    const inviteMessage = `¡Hola! Te invitamos a unirte al grupo oficial de reportes de RialWay *"${groupName}"*. Para unirte, haz clic en el siguiente enlace de invitación: ${inviteLink}`;
                     
+                    for (const contact of groupContacts) {
+                        if (contact.phone) {
+                            await sendDirectWabaMessage(contact.phone, inviteMessage, whatsappNumberId, whatsappToken);
+                        }
+                    }
+                }
+
+                return groupId;
+            };
+
+            const metaConfig = await depsHistoryHandler.getMetaOnboardingData(projectId, true);
+            let groupJid = null;
+            let metaError: any = null;
+
+            // Recuperar el grupo actual si se proporciona un ID
+            let existingGroup: any = null;
+            if (id) {
+                const existingGroups = await depsHistoryHandler.getWabaReportGroups(projectId);
+                existingGroup = existingGroups.find((g: any) => g.id === id);
+            }
+
+            if (existingGroup && existingGroup.jid && !existingGroup.jid.includes('@g.us')) {
+                // Caso A: El grupo ya existía como grupo de Meta
+                groupJid = existingGroup.jid;
+                if (metaConfig?.whatsappToken && metaConfig?.whatsappNumberId) {
                     try {
+                        // 1. Actualizar el subject si cambió
+                        if (existingGroup.name !== name) {
+                            console.log(`[MetaGroupsAPI] Actualizando subject del grupo Meta ${groupJid} a: ${name}`);
+                            const updateUrl = `https://graph.facebook.com/v22.0/${groupJid}`;
+                            await axios.post(updateUrl, {
+                                messaging_product: 'whatsapp',
+                                subject: name
+                            }, {
+                                headers: {
+                                    'Authorization': `Bearer ${metaConfig.whatsappToken}`,
+                                    'Content-Type': 'application/json'
+                                }
+                            });
+                            console.log(`[MetaGroupsAPI] Subject de grupo Meta ${groupJid} actualizado con éxito.`);
+                        }
+
+                        // 2. Enviar invitación a los contactos nuevos
+                        const oldPhones = (existingGroup.contacts || []).map((c: any) => c.phone).filter(Boolean);
+                        const newContacts = contacts.filter((c: any) => c.phone && !oldPhones.includes(c.phone));
+                        if (newContacts.length > 0) {
+                            console.log(`[MetaGroupsAPI] Se detectaron ${newContacts.length} contactos nuevos. Obteniendo enlace de invitación...`);
+                            const inviteUrl = `https://graph.facebook.com/v22.0/${groupJid}/invite_link`;
+                            const resInvite = await axios.post(inviteUrl, {
+                                messaging_product: 'whatsapp'
+                            }, {
+                                headers: {
+                                    'Authorization': `Bearer ${metaConfig.whatsappToken}`,
+                                    'Content-Type': 'application/json'
+                                }
+                            });
+                            const inviteLink = resInvite.data.invite_link;
+                            console.log(`[MetaGroupsAPI] Enlace de invitación obtenido para el grupo existente: ${inviteLink}`);
+
+                            const inviteMessage = `¡Hola! Te invitamos a unirte al grupo oficial de reportes de RialWay *"${name}"*. Para unirte, haz clic en el siguiente enlace de invitación: ${inviteLink}`;
+                            for (const contact of newContacts) {
+                                await sendDirectWabaMessage(contact.phone, inviteMessage, metaConfig.whatsappNumberId, metaConfig.whatsappToken);
+                            }
+                        }
+                    } catch (err: any) {
+                        console.error(`[MetaGroupsAPI] Error al actualizar el grupo de Meta ${groupJid}:`, err.response?.data || err.message);
+                    }
+                } else {
+                    console.warn(`[MetaGroupsAPI] No hay credenciales de Meta configuradas para actualizar el grupo Meta ${groupJid}.`);
+                }
+            } else if (existingGroup && existingGroup.jid && existingGroup.jid.includes('@g.us')) {
+                // Caso B: El grupo ya existía como grupo de Baileys
+                groupJid = existingGroup.jid;
+                
+                let sock: any = null;
+                const groupProvider = deps.groupProvider;
+                if (groupProvider && typeof groupProvider.getInstance === 'function') {
+                    sock = await groupProvider.getInstance();
+                }
+                if (!sock) {
+                    const adapterProvider = deps.adapterProvider;
+                    if (adapterProvider && typeof adapterProvider.getInstance === 'function') {
+                        sock = await adapterProvider.getInstance();
+                    }
+                }
+
+                if (sock && typeof sock.groupUpdateSubject === 'function') {
+                    try {
+                        const participantJids = contacts
+                            .map((c: any) => c.phone ? c.phone.replace(/[^0-9]/g, '') : '')
+                            .filter(Boolean)
+                            .map((num: string) => `${num}@s.whatsapp.net`);
+
                         // Actualizar nombre si cambió
                         if (existingGroup.name !== name) {
-                            console.log(`[WabaGroups] Actualizando subject del grupo ${groupJid} a: ${name}`);
+                            console.log(`[WabaGroups] Actualizando subject del grupo Baileys ${groupJid} a: ${name}`);
                             await sock.groupUpdateSubject(groupJid, name);
                         }
 
@@ -4014,35 +4152,80 @@ Hemos recibido tu pago con éxito.
                             .map((num: string) => `${num}@s.whatsapp.net`);
 
                         const toAdd = participantJids.filter((jid: string) => !oldParticipantJids.includes(jid));
-                        const toRemove = oldParticipantJids.filter((jid: string) => !participantJids.includes(jid));
+                        const toRemoveCorrect = oldParticipantJids.filter((jid: string) => !participantJids.includes(jid));
 
-                        if (toRemove.length > 0) {
-                            console.log(`[WabaGroups] Removiendo participantes de ${groupJid}:`, toRemove);
-                            await sock.groupParticipantsUpdate(groupJid, toRemove, 'remove');
+                        if (toRemoveCorrect.length > 0) {
+                            console.log(`[WabaGroups] Removiendo participantes de ${groupJid}:`, toRemoveCorrect);
+                            await sock.groupParticipantsUpdate(groupJid, toRemoveCorrect, 'remove');
                         }
                         if (toAdd.length > 0) {
                             console.log(`[WabaGroups] Agregando participantes a ${groupJid}:`, toAdd);
                             await sock.groupParticipantsUpdate(groupJid, toAdd, 'add');
                         }
                     } catch (wsErr: any) {
-                        console.warn(`[WabaGroups] Advertencia al actualizar grupo en WhatsApp (JID: ${groupJid}):`, wsErr.message || wsErr);
+                        console.warn(`[WabaGroups] Advertencia al actualizar grupo Baileys en WhatsApp (JID: ${groupJid}):`, wsErr.message || wsErr);
                     }
                 }
-            }
+            } else {
+                // Caso C: Es un grupo nuevo o el grupo existente no tenía JID
+                // 1. Intentar creación con Meta WABA
+                if (metaConfig?.whatsappToken && metaConfig?.whatsappNumberId) {
+                    try {
+                        groupJid = await attemptCreateMetaWabaGroup(name, contacts, metaConfig);
+                        console.log(`[MetaGroupsAPI] Grupo Meta creado y guardado con JID/ID: ${groupJid}`);
+                    } catch (err: any) {
+                        metaError = err.response?.data || err.message;
+                        console.warn(`[MetaGroupsAPI] Error al intentar crear grupo en Meta WABA. Detalle:`, JSON.stringify(metaError));
+                        console.log(`[MetaGroupsAPI] Procediendo con fallback a Baileys.`);
+                    }
+                } else {
+                    console.log(`[MetaGroupsAPI] No se detectaron credenciales de Meta WABA. Procediendo directamente con Baileys.`);
+                }
 
-            // Si es un nuevo grupo o el existente no tenía JID en la base
-            if (!groupJid) {
-                try {
-                    console.log(`[WabaGroups] Creando grupo WhatsApp '${name}' con participantes:`, participantJids);
-                    const groupMetadata = await sock.groupCreate(name, participantJids);
-                    groupJid = groupMetadata.id;
-                    console.log(`[WabaGroups] Grupo WhatsApp creado: ${groupJid}`);
-                } catch (wsErr: any) {
-                    console.error(`[WabaGroups] Error al crear grupo en WhatsApp:`, wsErr.message || wsErr);
-                    return res.status(500).json({ 
-                        success: false, 
-                        error: `No se pudo crear el grupo en WhatsApp: ${wsErr.message || wsErr}` 
-                    });
+                // 2. Si no se creó con Meta, procedemos con Baileys
+                if (!groupJid) {
+                    let sock: any = null;
+                    const groupProvider = deps.groupProvider;
+                    if (groupProvider && typeof groupProvider.getInstance === 'function') {
+                        sock = await groupProvider.getInstance();
+                    }
+                    if (!sock) {
+                        const adapterProvider = deps.adapterProvider;
+                        if (adapterProvider && typeof adapterProvider.getInstance === 'function') {
+                            sock = await adapterProvider.getInstance();
+                        }
+                    }
+
+                    if (!sock || typeof sock.groupCreate !== 'function') {
+                        const errorDetail = metaError ? ` Error previo de Meta: ${JSON.stringify(metaError)}.` : '';
+                        return res.status(400).json({ 
+                            success: false, 
+                            error: `WhatsApp no está conectado o no soporta creación de grupos.${errorDetail} Conecta WhatsApp primero en la sección de Conexión.` 
+                        });
+                    }
+
+                    const participantJids = contacts
+                        .map((c: any) => c.phone ? c.phone.replace(/[^0-9]/g, '') : '')
+                        .filter(Boolean)
+                        .map((num: string) => `${num}@s.whatsapp.net`);
+
+                    if (participantJids.length === 0) {
+                        return res.status(400).json({ success: false, error: 'El grupo debe contener al menos un contacto con número de teléfono válido.' });
+                    }
+
+                    try {
+                        console.log(`[WabaGroups] Creando grupo WhatsApp '${name}' vía Baileys con participantes:`, participantJids);
+                        const groupMetadata = await sock.groupCreate(name, participantJids);
+                        groupJid = groupMetadata.id;
+                        console.log(`[WabaGroups] Grupo WhatsApp creado con éxito vía Baileys: ${groupJid}`);
+                    } catch (wsErr: any) {
+                        console.error(`[WabaGroups] Error al crear grupo en WhatsApp vía Baileys:`, wsErr.message || wsErr);
+                        const errorDetail = metaError ? ` (API de Meta también falló: ${JSON.stringify(metaError)})` : '';
+                        return res.status(500).json({ 
+                            success: false, 
+                            error: `No se pudo crear el grupo en WhatsApp vía Baileys: ${wsErr.message || wsErr}.${errorDetail}` 
+                        });
+                    }
                 }
             }
 
@@ -4063,24 +4246,41 @@ Hemos recibido tu pago con éxito.
             const existingGroup = existingGroups.find((g: any) => g.id === id);
 
             if (existingGroup && existingGroup.jid) {
-                let sock: any = null;
-                const groupProvider = deps.groupProvider;
-                if (groupProvider && typeof groupProvider.getInstance === 'function') {
-                    sock = await groupProvider.getInstance();
-                }
-                if (!sock) {
-                    const adapterProvider = deps.adapterProvider;
-                    if (adapterProvider && typeof adapterProvider.getInstance === 'function') {
-                        sock = await adapterProvider.getInstance();
+                if (existingGroup.jid.includes('@g.us')) {
+                    // Grupo de Baileys: salir
+                    let sock: any = null;
+                    const groupProvider = deps.groupProvider;
+                    if (groupProvider && typeof groupProvider.getInstance === 'function') {
+                        sock = await groupProvider.getInstance();
                     }
-                }
+                    if (!sock) {
+                        const adapterProvider = deps.adapterProvider;
+                        if (adapterProvider && typeof adapterProvider.getInstance === 'function') {
+                            sock = await adapterProvider.getInstance();
+                        }
+                    }
 
-                if (sock && typeof sock.groupLeave === 'function') {
-                    try {
-                        console.log(`[WabaGroups] Saliendo del grupo WhatsApp ${existingGroup.jid}...`);
-                        await sock.groupLeave(existingGroup.jid);
-                    } catch (wsErr: any) {
-                        console.warn(`[WabaGroups] No se pudo salir del grupo WhatsApp ${existingGroup.jid}:`, wsErr.message || wsErr);
+                    if (sock && typeof sock.groupLeave === 'function') {
+                        try {
+                            console.log(`[WabaGroups] Saliendo del grupo WhatsApp Baileys ${existingGroup.jid}...`);
+                            await sock.groupLeave(existingGroup.jid);
+                        } catch (wsErr: any) {
+                            console.warn(`[WabaGroups] No se pudo salir del grupo WhatsApp ${existingGroup.jid}:`, wsErr.message || wsErr);
+                        }
+                    }
+                } else {
+                    // Grupo de Meta: revocar enlace de invitación
+                    const metaConfig = await depsHistoryHandler.getMetaOnboardingData(projectId, true);
+                    if (metaConfig?.whatsappToken) {
+                        console.log(`[MetaGroupsAPI] Revocando enlace de invitación para el grupo Meta ${existingGroup.jid}...`);
+                        try {
+                            await axios.delete(`https://graph.facebook.com/v22.0/${existingGroup.jid}/invite_link`, {
+                                headers: { 'Authorization': `Bearer ${metaConfig.whatsappToken}` }
+                            });
+                            console.log(`[MetaGroupsAPI] Enlace de invitación revocado con éxito.`);
+                        } catch (metaErr: any) {
+                            console.warn(`[MetaGroupsAPI] Advertencia al revocar enlace del grupo Meta ${existingGroup.jid}:`, metaErr.response?.data || metaErr.message);
+                        }
                     }
                 }
             }
