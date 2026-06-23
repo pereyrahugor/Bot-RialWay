@@ -376,21 +376,64 @@
   .nav-brand-logo {
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: 10px;
     font-family: 'Poppins', sans-serif;
-    font-size: 0.78rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
     color: #fff;
-    white-space: nowrap;
+    min-width: 0;
+    flex: 1;
   }
 
   .nav-brand-logo i {
     color: #0099FF;
-    font-size: 1rem;
+    font-size: 1.15rem;
+    flex-shrink: 0;
   }
 
   [data-theme="light"] .nav-brand-logo {
+    color: #1e293b;
+  }
+
+  .nav-brand-details {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+    line-height: 1.25;
+  }
+
+  .nav-brand-name {
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: inherit;
+  }
+
+  .nav-brand-sub {
+    font-size: 0.65rem;
+    font-weight: 400;
+    color: rgba(255, 255, 255, 0.45);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 1px;
+    cursor: pointer;
+    transition: color 0.15s ease;
+    max-width: 130px;
+  }
+
+  .nav-brand-sub:hover {
+    color: rgba(255, 255, 255, 0.85);
+    text-decoration: underline;
+  }
+
+  [data-theme="light"] .nav-brand-sub {
+    color: #6b7280;
+  }
+
+  [data-theme="light"] .nav-brand-sub:hover {
     color: #1e293b;
   }
 
@@ -869,8 +912,14 @@
       display: none !important;
     }
 
-    .nav-brand-logo {
-      display: none !important;
+    .mobile-brand-logo {
+      margin-left: auto;
+      gap: 10px;
+    }
+
+    .mobile-brand-details {
+      align-items: flex-end;
+      text-align: right;
     }
 
     .nav-sidebar.collapsed .nav-label {

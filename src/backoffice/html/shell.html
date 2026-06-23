@@ -71,6 +71,13 @@
         <button id="sidebar-menu-btn" class="mobile-appbar-btn" aria-label="Menu">
             <i class="fas fa-bars"></i>
         </button>
+        <span class="nav-brand-logo mobile-brand-logo">
+            <span class="nav-brand-details mobile-brand-details">
+                <span class="nav-brand-name" title="{{PROJECT_NAME}}">{{PROJECT_NAME}}</span>
+                <span class="nav-brand-sub" title="Copiar ID de proyecto" onclick="navigator.clipboard.writeText('{{PROJECT_ID}}').then(() => showToast('ID de proyecto copiado', 'success')).catch(err => console.error(err))">{{PROJECT_ID}}</span>
+            </span>
+            <i class="fas fa-brain"></i>
+        </span>
     </header>
 
     <!-- Navbar lateral -->
@@ -79,9 +86,15 @@
             <button id="sidebar-toggler" class="nav-toggler" aria-label="Colapsar menu">
                 <i class="fas fa-chevron-left"></i>
             </button>
-            <span class="nav-brand">
-                <span class="nav-brand-logo"><i class="fas fa-brain"></i> NEUROLINKS</span>
-            </span>
+            <div class="nav-brand">
+                <span class="nav-brand-logo">
+                    <i class="fas fa-brain"></i>
+                    <span class="nav-brand-details">
+                        <span class="nav-brand-name" title="{{PROJECT_NAME}}">{{PROJECT_NAME}}</span>
+                        <span class="nav-brand-sub" title="Copiar ID de proyecto" onclick="navigator.clipboard.writeText('{{PROJECT_ID}}').then(() => showToast('ID de proyecto copiado', 'success')).catch(err => console.error(err))">{{PROJECT_ID}}</span>
+                    </span>
+                </span>
+            </div>
         </div>
 
         <div class="nav-sidebar-scroll">
