@@ -77,16 +77,24 @@ export const useSupabaseAuthState = async (
     };
 
     let saveTimeout: NodeJS.Timeout | null = null;
-    const saveToDbDebounced = async () => {
+    const saveToDbDebounced = async (immediate = false) => {
         if (saveTimeout) clearTimeout(saveTimeout);
+        if (immediate) {
+            try {
+                await saveToDb();
+            } catch (err) {
+                console.error('[SupabaseAdapter] ❌ Error en guardado inmediato:', err);
+            }
+            saveTimeout = null;
+            return;
+        }
         saveTimeout = setTimeout(async () => {
             try {
                 await saveToDb();
             } finally {
                 saveTimeout = null;
             }
-        }, 1800000); // Agrupar cambios durante 30 minutos para no saturar Supabase
-
+        }, 2000); // Agrupar cambios durante 2 segundos para asegurar persistencia rápida antes de posibles reconexiones
     };
 
     // Baileys espera que 'creds' esté disponible directamente (initAuthCreds lo inicializa si no existe)
@@ -124,7 +132,7 @@ export const useSupabaseAuthState = async (
         },
         saveCreds: async () => {
             sessionData['creds.json'] = creds;
-            await saveToDbDebounced();
+            await saveToDbDebounced(true); // Guardar credenciales inmediatamente
         },
         clearSession
     };
