@@ -16,6 +16,7 @@ const logger = pino({ level: 'error' });
 export class SupabaseBaileysProvider extends BaileysProvider {
     saveCreds: any = null;
     qrCodeString: string | null = null;
+    public pairingCode: string | null = null;
     public preventAutoStart = false;
     private initialized = false;
     private lidToPnCache = new Map<string, string>();
@@ -160,6 +161,25 @@ export class SupabaseBaileysProvider extends BaileysProvider {
         // Asignar el store al vendor como null para fácil acceso y compatibilidad
         (this.vendor as any).store = null;
 
+        const usePairingCode = this.globalVendorArgs.usePairingCode;
+        const phoneNumber = this.globalVendorArgs.phoneNumber;
+        this.pairingCode = null;
+
+        if (usePairingCode && phoneNumber && !this.vendor.authState.creds.registered) {
+            setTimeout(async () => {
+                try {
+                    const cleanPhone = phoneNumber.replace(/[^0-9]/g, '');
+                    console.log(`[SupabaseBaileysProvider] 🔑 Solicitando código de vinculación para: ${cleanPhone}...`);
+                    const code = await this.vendor.requestPairingCode(cleanPhone);
+                    this.pairingCode = code;
+                    console.log(`[SupabaseBaileysProvider] 🔑 Código de vinculación recibido: ${code}`);
+                    this.emit('pairing_code', code);
+                } catch (err: any) {
+                    console.error('[SupabaseBaileysProvider] ❌ Error requesting pairing code:', err);
+                }
+            }, 3000);
+        }
+
         // Logging de eventos de historial para depuración
         this.vendor.ev.on('messaging-history.set', ({ chats, contacts, messages, isLatest }: any) => {
             console.log(`[SupabaseBaileysProvider] 📥 [${botName}] History Sync: ${chats?.length || 0} chats, ${contacts?.length || 0} contactos, ${messages?.length || 0} mensajes. (isLatest: ${isLatest})`);
@@ -193,6 +213,7 @@ export class SupabaseBaileysProvider extends BaileysProvider {
             if (connection === 'open') {
                 console.log(`[SupabaseBaileysProvider] ✅ Conexión ABIERTA para: ${this.globalVendorArgs.name}`);
                 this.qrCodeString = null; // Limpiar QR al conectar
+                this.pairingCode = null; // Limpiar código al conectar
                 this.emit('ready', true);
             }
 
@@ -203,6 +224,7 @@ export class SupabaseBaileysProvider extends BaileysProvider {
                 
                 this.initialized = false;
                 this.qrCodeString = null;
+                this.pairingCode = null; // Limpiar código al cerrar
                 
                 const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
                 if (shouldReconnect) {

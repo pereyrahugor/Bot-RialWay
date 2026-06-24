@@ -1334,7 +1334,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     });
 
     app.post('/api/backoffice/baileys/start', bodyParser.json(), async (req: any, res: any) => {
-        const { isGroup } = req.body;
+        const { isGroup, usePairingCode, phoneNumber } = req.body;
         const provider = isGroup ? deps.groupProvider : deps.adapterProvider;
 
         if (!provider) {
@@ -1348,9 +1348,13 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             return res.json({ success: true, message: 'El proveedor ya está conectado' });
         }
 
-        console.log(`[BACKOFFICE] Iniciando generación de QR para Baileys (Grupo: ${!!isGroup})...`);
+        console.log(`[BACKOFFICE] Iniciando vinculación para Baileys (Grupo: ${!!isGroup}, PairingCode: ${!!usePairingCode})...`);
 
         try {
+            if (provider.globalVendorArgs) {
+                provider.globalVendorArgs.usePairingCode = !!usePairingCode;
+                provider.globalVendorArgs.phoneNumber = phoneNumber || undefined;
+            }
             if ('preventAutoStart' in provider) {
                 provider.preventAutoStart = false;
             }

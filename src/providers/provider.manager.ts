@@ -373,8 +373,13 @@ export const hasActiveSession = async (adapterProvider: any, groupProvider: any 
             const qrFilename = isGroup ? 'bot.groups.qr.png' : 'bot.qr.png';
             const hasQr = fs.existsSync(path.join(process.cwd(), qrFilename));
             const qrString = provider.qrCodeString || null;
+            const pairingCode = provider.pairingCode || null;
 
             if (isReady) return { active: true, type: 'baileys', message: 'Conectado' };
+
+            if (pairingCode) {
+                return { active: false, qr: false, pairingCode, type: 'baileys', message: 'Esperando vinculación por código' };
+            }
 
             if (hasQr || qrString) {
                 let qrImage = null;

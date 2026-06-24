@@ -33,13 +33,30 @@ window.conexionView = {
                         </div>
                         <div id="session-error" class="mb-3"></div>
                         <div id="baileys-start-container" style="display:none;" class="text-center my-5">
-                            <p class="info-text mb-4">La conexion de Baileys no esta activa. Pulsa el boton para generar el codigo QR.</p>
-                            <button id="generate-qr-btn" class="btn">
-                                <i class="fas fa-qrcode"></i> Generar QR Baileys
-                            </button>
+                            <p class="info-text mb-4">La conexión de Baileys no está activa. Elige tu método de vinculación:</p>
+                            
+                            <div class="flex flex-col gap-4 max-w-sm mx-auto p-4 rounded-2xl mb-4" style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05);">
+                                <!-- Opción 1: Código QR -->
+                                <div>
+                                    <button id="generate-qr-btn" class="btn w-full">
+                                        <i class="fas fa-qrcode"></i> Generar QR Baileys
+                                    </button>
+                                </div>
+                                
+                                <div class="text-xs text-gray-500 font-semibold my-1">— O BIEN —</div>
+                                
+                                <!-- Opción 2: Código de Vinculación -->
+                                <div class="flex flex-col gap-2">
+                                    <input type="text" id="pairing-phone-input" class="input text-center" placeholder="Ej: 5491122334455" style="background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:white; border-radius:12px; padding:10px;">
+                                    <button id="generate-pairing-btn" class="btn w-full" style="background: linear-gradient(135deg, #0099ff, #0066cc);">
+                                        <i class="fas fa-key"></i> Vincular con Código
+                                    </button>
+                                </div>
+                            </div>
+
                             <div id="generate-qr-loading" style="display:none;" class="mt-4 flex flex-col items-center gap-2">
                                 <i class="fas fa-spinner animate-spin-loader text-accent-bright text-2xl"></i>
-                                <p class="info-text text-center">Iniciando motor de WhatsApp... esto tardara unos segundos.</p>
+                                <p class="info-text text-center">Iniciando motor de WhatsApp... esto tardará unos segundos.</p>
                             </div>
                         </div>
                         <div id="qr-section" style="display:none;" class="mt-5">
