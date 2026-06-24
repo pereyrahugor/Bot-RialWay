@@ -18,7 +18,7 @@ export class SupabaseBaileysProvider extends BaileysProvider {
     qrCodeString: string | null = null;
     public pairingCode: string | null = null;
     public preventAutoStart = false;
-    private initialized = false;
+    public initialized = false;
     private lidToPnCache = new Map<string, string>();
 
     constructor(args: any = {}) {

@@ -370,6 +370,11 @@ export const hasActiveSession = async (adapterProvider: any, groupProvider: any 
 
             if (isMeta) return { active: true, type: 'meta', message: 'Conectado via API' };
 
+            // Si el motor fue apagado intencionalmente o no está inicializado, reportar Desconectado inmediatamente
+            if (provider.preventAutoStart || !provider.initialized) {
+                return { active: false, type: 'baileys', message: 'Desconectado' };
+            }
+
             const qrFilename = isGroup ? 'bot.groups.qr.png' : 'bot.qr.png';
             const hasQr = fs.existsSync(path.join(process.cwd(), qrFilename));
             const qrString = provider.qrCodeString || null;
