@@ -8,6 +8,7 @@ async function fetchStatus() {
         const res = await fetch(`/api/dashboard-status?token=${token}`);
         if (res.status === 401) return logout();
         const data = await res.json();
+        console.log('[fetchStatus] status data received:', data);
 
         if (data) {
             currentProjectId = data.activeProjectId || (data.metaOnboarding && data.metaOnboarding.project_id) || 'default';
@@ -144,6 +145,7 @@ async function fetchStatus() {
 }
 
 function renderProviderStatus(status, label) {
+    console.log('[renderProviderStatus] status:', status, 'label:', label);
     const statusEl      = document.getElementById('session-status');
     const qrSection     = document.getElementById('qr-section');
     const sessionInfo   = document.getElementById('session-info');
@@ -165,7 +167,12 @@ function renderProviderStatus(status, label) {
         if (startContainer) startContainer.style.display = 'none';
         
         const qrImg = document.querySelector('.qr');
-        if (qrImg) qrImg.style.display = 'none';
+        if (qrImg) {
+            qrImg.style.display = 'none';
+            if (qrImg.nextElementSibling) {
+                qrImg.nextElementSibling.style.display = 'none'; // Ocultar "Generando QR... por favor espera"
+            }
+        }
         
         let codeContainer = document.getElementById('pairing-code-container');
         if (!codeContainer) {
@@ -199,7 +206,17 @@ function renderProviderStatus(status, label) {
         if (codeContainer) codeContainer.remove();
         
         const qrImg = document.querySelector('.qr');
-        if (qrImg) { qrImg.src = status.qrImage || '/qr.png'; qrImg.style.display = 'inline-block'; if (qrImg.nextElementSibling) qrImg.nextElementSibling.style.display = 'none'; }
+        if (qrImg) { 
+            qrImg.src = status.qrImage || '/qr.png'; 
+            qrImg.style.display = 'inline-block'; 
+            // Restaurar el título original
+            const qrBox = qrSection.querySelector('.inline-block');
+            if (qrBox) {
+                const title = qrBox.querySelector('h3');
+                if (title) title.textContent = 'Escaneá con WhatsApp';
+            }
+            if (qrImg.nextElementSibling) qrImg.nextElementSibling.style.display = 'none'; 
+        }
     } else {
         statusEl.textContent = `⏳ ${label}: ${status.message || 'Cargando...'}`;
         if (startContainer && !status.active) {
