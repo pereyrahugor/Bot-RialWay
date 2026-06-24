@@ -364,8 +364,7 @@ export const hasActiveSession = async (adapterProvider: any, groupProvider: any 
             const isReady = !!(
                 provider?.vendor?.authState?.creds?.me?.id || 
                 provider?.vendor?.user?.id || 
-                provider?.vendor?.user || 
-                provider?.globalVendorArgs?.sock?.user
+                provider?.globalVendorArgs?.sock?.user?.id
             );
 
             if (isMeta) return { active: true, type: 'meta', message: 'Conectado via API' };
