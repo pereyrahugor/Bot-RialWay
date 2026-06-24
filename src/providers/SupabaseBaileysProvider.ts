@@ -201,13 +201,18 @@ export class SupabaseBaileysProvider extends BaileysProvider {
             }
 
             if (qr) {
-                this.qrCodeString = qr;
-                this.emit('qr', qr);
-                this.emit('require_action', {
-                    title: 'Vincular WhatsApp',
-                    instructions: ['Escanea el código QR'],
-                    payload: { qr },
-                });
+                const usePairingCode = this.globalVendorArgs.usePairingCode;
+                if (!usePairingCode) {
+                    this.qrCodeString = qr;
+                    this.emit('qr', qr);
+                    this.emit('require_action', {
+                        title: 'Vincular WhatsApp',
+                        instructions: ['Escanea el código QR'],
+                        payload: { qr },
+                    });
+                } else {
+                    console.log(`[SupabaseBaileysProvider] ℹ️ Omitiendo emisión de QR porque usePairingCode está activo.`);
+                }
             }
 
             if (connection === 'open') {
