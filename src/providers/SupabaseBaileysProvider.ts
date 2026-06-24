@@ -226,6 +226,11 @@ export class SupabaseBaileysProvider extends BaileysProvider {
                 this.qrCodeString = null;
                 this.pairingCode = null; // Limpiar código al cerrar
                 
+                if (this.preventAutoStart) {
+                    console.log(`[SupabaseBaileysProvider] ℹ️ Conexión cerrada intencionalmente para ${this.globalVendorArgs.name}. No se reintentará reconexión.`);
+                    return;
+                }
+                
                 const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
                 if (shouldReconnect) {
                     // Si el error es 515 (restartRequired), reintentamos rápidamente en 5 segundos.
@@ -356,10 +361,12 @@ export class SupabaseBaileysProvider extends BaileysProvider {
     /**
      * Detiene la conexión del socket de Baileys y limpia los recursos del motor.
      */
-    public stopProvider = async (): Promise<void> => {
+     public stopProvider = async (): Promise<void> => {
         console.log(`[SupabaseBaileysProvider] 🛑 Deteniendo instancia para: ${this.globalVendorArgs.name || 'default'}`);
         this.initialized = false;
+        this.preventAutoStart = true;
         this.qrCodeString = null;
+        this.pairingCode = null;
         
         if (this.vendor) {
             try {
