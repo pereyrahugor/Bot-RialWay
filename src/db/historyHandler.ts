@@ -1074,6 +1074,53 @@ export class HistoryHandler {
         }
     }
 
+    /**
+     * Limpia todo el historial de mensajes para un contacto específico en un proyecto.
+     */
+    static async clearChatHistory(rawChatId: string, forcedProjectId?: string): Promise<boolean> {
+        const chatId = this.normalizeId(rawChatId);
+        const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+        if (process.env.STORAGE_MODE === "local") {
+            const success = await LocalHistoryStore.clearChatHistory(chatId, currentProjectId);
+            if (success) {
+                historyEvents.emit('chat_history_cleared', { chatId, projectId: currentProjectId });
+            }
+            return success;
+        }
+
+        try {
+            // Eliminar todos los mensajes del chat en el proyecto actual
+            const { error } = await supabase
+                .from('messages')
+                .delete()
+                .eq('chat_id', chatId)
+                .eq('project_id', currentProjectId);
+
+            if (error) {
+                console.error('[HistoryHandler] Error al limpiar historial de chat:', error.message);
+                return false;
+            }
+
+            // También reiniciamos unread_count en la tabla chats
+            await supabase
+                .from('chats')
+                .update({ unread_count: 0 })
+                .eq('id', chatId)
+                .eq('project_id', currentProjectId);
+
+            this.invalidateChatCache(chatId, currentProjectId);
+
+            historyEvents.emit('chat_history_cleared', {
+                chatId,
+                projectId: currentProjectId
+            });
+            return true;
+        } catch (err: any) {
+            console.error('[HistoryHandler] Excepción en clearChatHistory:', err.message);
+            return false;
+        }
+    }
+
     static async getAssignedAgent(rawChatId: string, forcedProjectId?: string): Promise<string> {
         try {
             const chat = await this.getChat(rawChatId, forcedProjectId);

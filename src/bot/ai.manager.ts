@@ -163,6 +163,21 @@ export class AiManager {
             await state.update({ assignedAgent: 'asistente1' });
             return await flowDynamic("✅ Historial de conversación y asignación de asistente reiniciados.");
         }
+
+        // --- COMANDO DE HILO NUEVO (BORRAR HISTORIAL COMPLETO DE MENSAJES) ---
+        if (ctx.body && ctx.body.trim().toUpperCase() === '#HILO_NUEVO#') {
+            const chatId = ctx.from;
+            console.log(`[AiManager] 🗑️ Borrando todo el historial de chat para el contacto ${chatId}`);
+            
+            // Borrar el historial de la base de datos (mensajes)
+            await HistoryHandler.clearChatHistory(chatId, dynamicProjectId);
+            
+            // Resetear el agente asignado a asistente1
+            await HistoryHandler.setAssignedAgent(chatId, 'asistente1', dynamicProjectId);
+            await state.update({ assignedAgent: 'asistente1' });
+            
+            return await flowDynamic("✅ Se ha borrado todo el historial de conversación de este contacto y se ha iniciado un nuevo hilo de chat.");
+        }
         
         await typing(ctx, provider);
         try {

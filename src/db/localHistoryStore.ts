@@ -338,6 +338,25 @@ export class LocalHistoryStore {
         return false;
     }
 
+    static async clearChatHistory(chatId: string, projectId: string): Promise<boolean> {
+        const messages = this.getMessagesList(projectId);
+        const filtered = messages.filter(m => m.chat_id !== chatId);
+        
+        // Ponemos el unread_count en 0
+        const chats = this.getChats(projectId);
+        const idx = chats.findIndex(c => c.id === chatId);
+        if (idx !== -1) {
+            chats[idx].unread_count = 0;
+            this.saveChats(projectId, chats);
+        }
+
+        if (filtered.length !== messages.length) {
+            this.saveMessagesList(projectId, filtered);
+            return true;
+        }
+        return false;
+    }
+
     // --- TICKETS METHODS ---
 
     static getTicketsFile(projectId: string): string {
