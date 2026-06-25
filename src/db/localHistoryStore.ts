@@ -692,4 +692,42 @@ export class LocalHistoryStore {
         }
         this.saveChatTagsForProject(projectId, filtered);
     }
+
+    // --- QUICK MESSAGES METHODS ---
+
+    static getQuickMessagesFile(projectId: string): string {
+        return `quick_messages_${projectId}.json`;
+    }
+
+    static getQuickMessages(projectId: string): any[] {
+        return readJsonFile<any[]>(this.getQuickMessagesFile(projectId), []);
+    }
+
+    static saveQuickMessages(projectId: string, quickMessages: any[]) {
+        writeJsonFile(this.getQuickMessagesFile(projectId), quickMessages);
+    }
+
+    static async createQuickMessage(projectId: string, title: string, message: string): Promise<any> {
+        const quickMessages = this.getQuickMessages(projectId);
+        const newQM = {
+            id: crypto.randomUUID(),
+            project_id: projectId,
+            title,
+            message,
+            created_at: new Date().toISOString()
+        };
+        quickMessages.push(newQM);
+        this.saveQuickMessages(projectId, quickMessages);
+        return newQM;
+    }
+
+    static async deleteQuickMessage(id: string, projectId: string): Promise<boolean> {
+        const quickMessages = this.getQuickMessages(projectId);
+        const filtered = quickMessages.filter(qm => qm.id !== id);
+        if (filtered.length !== quickMessages.length) {
+            this.saveQuickMessages(projectId, filtered);
+            return true;
+        }
+        return false;
+    }
 }

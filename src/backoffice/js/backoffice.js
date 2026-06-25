@@ -618,9 +618,11 @@ async function selectChat(id) {
     const tagsBtn = document.getElementById('open-tags-btn');
     const crmBtn = document.getElementById('open-crm-btn');
     const ticketBtn = document.getElementById('open-ticket-btn');
+    const quickMsgBtn = document.getElementById('quick-msg-btn');
     if (tagsBtn) tagsBtn.disabled = false;
     if (crmBtn) crmBtn.disabled = false;
     if (ticketBtn) ticketBtn.disabled = false;
+    if (quickMsgBtn) quickMsgBtn.disabled = false;
 
     renderActiveChatTags();
     populateCRMFields(chat);
@@ -681,6 +683,8 @@ function updateInputState(botEnabled) {
     attachBtn.disabled = isBotEnabled;
     const emojiBtn = document.getElementById('emoji-btn');
     if (emojiBtn) emojiBtn.disabled = isBotEnabled;
+    const quickMsgBtn = document.getElementById('quick-msg-btn');
+    if (quickMsgBtn) quickMsgBtn.disabled = false; // Siempre habilitado si hay un chat seleccionado
     const micBtn = document.getElementById('mic-btn');
     if (micBtn && !_isRecording) micBtn.disabled = isBotEnabled;
 
@@ -692,6 +696,12 @@ function updateInputState(botEnabled) {
         input.parentElement.style.borderColor = '#f87171';
         input.style.opacity = '1';
         input.placeholder = "Escribe un mensaje aquí";
+    }
+
+    // Refrescar el estado de los mensajes rápidos si el popover está abierto
+    const popover = document.getElementById('quick-messages-popover');
+    if (popover && popover.style.display !== 'none') {
+        window.loadQuickMessages();
     }
 }
 
@@ -3533,6 +3543,143 @@ function executeUnreadFilter(enabled) {
     _showOnlyUnreadChats = enabled;
     renderChatList();
 }
+
+// --- MENSAJES RÁPIDOS (QUICK MESSAGES) ---
+
+window.toggleQuickMessages = function(e) {
+    if (e) e.stopPropagation();
+    const popover = document.getElementById('quick-messages-popover');
+    if (!popover) return;
+    const isShowing = popover.style.display !== 'none';
+    if (isShowing) {
+        popover.style.display = 'none';
+    } else {
+        popover.style.display = 'flex';
+        window.loadQuickMessages();
+    }
+};
+
+window.loadQuickMessages = async function() {
+    const listEl = document.getElementById('qm-list');
+    if (!listEl) return;
+
+    try {
+        const activeChat = chats.find(c => c.id === activeChatId);
+        // Si el bot está activo, no son seleccionables (modo intervención humana desactivado)
+        const isBotActive = activeChat ? activeChat.bot_enabled : true;
+
+        const res = await fetch(`/api/backoffice/quick-messages?token=${token}&projectId=${activeChat?.project_id || ''}`);
+        if (!res.ok) throw new Error('Error al cargar mensajes rápidos');
+        const qMessages = await res.json();
+
+        if (!Array.isArray(qMessages) || qMessages.length === 0) {
+            listEl.innerHTML = '<div class="qm-empty">No hay mensajes rápidos guardados.</div>';
+            return;
+        }
+
+        listEl.innerHTML = qMessages.map(qm => {
+            const disabledClass = isBotActive ? 'disabled' : '';
+            return `
+                <div class="qm-item ${disabledClass}" onclick="window.sendQuickMessage('${qm.id}', '${encodeURIComponent(qm.message)}', ${isBotActive})">
+                    <div class="qm-item-info">
+                        <div class="qm-item-title">${qm.title}</div>
+                        <div class="qm-item-body">${qm.message}</div>
+                    </div>
+                    <button class="qm-delete-btn" onclick="window.deleteQuickMessage(event, '${qm.id}')" title="Eliminar mensaje rápido">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </div>
+            `;
+        }).join('');
+    } catch (e) {
+        console.error('Error cargando mensajes rápidos:', e);
+        listEl.innerHTML = '<div class="qm-empty">Error al cargar mensajes rápidos.</div>';
+    }
+};
+
+window.saveQuickMessage = async function() {
+    const titleInput = document.getElementById('qm-title-input');
+    const msgInput = document.getElementById('qm-message-input');
+    if (!titleInput || !msgInput) return;
+
+    const title = titleInput.value.trim();
+    const message = msgInput.value.trim();
+
+    if (!title || !message) {
+        alert('Por favor, ingresa un título y un mensaje');
+        return;
+    }
+
+    try {
+        const activeChat = chats.find(c => c.id === activeChatId);
+        const res = await fetch(`/api/backoffice/quick-messages?token=${token}&projectId=${activeChat?.project_id || ''}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title, message })
+        });
+
+        if (res.ok) {
+            titleInput.value = '';
+            msgInput.value = '';
+            window.loadQuickMessages();
+        } else {
+            alert('Error al guardar el mensaje rápido');
+        }
+    } catch (e) {
+        console.error('Error al guardar mensaje rápido:', e);
+    }
+};
+
+window.deleteQuickMessage = async function(e, id) {
+    if (e) e.stopPropagation();
+    if (!confirm('¿Estás seguro de eliminar este mensaje rápido?')) return;
+
+    try {
+        const activeChat = chats.find(c => c.id === activeChatId);
+        const res = await fetch(`/api/backoffice/quick-messages/${id}?token=${token}&projectId=${activeChat?.project_id || ''}`, {
+            method: 'DELETE'
+        });
+
+        if (res.ok) {
+            window.loadQuickMessages();
+        } else {
+            alert('Error al eliminar el mensaje rápido');
+        }
+    } catch (e) {
+        console.error('Error al eliminar mensaje rápido:', e);
+    }
+};
+
+window.sendQuickMessage = async function(id, encodedMsg, isBotActive) {
+    if (isBotActive) {
+        showToast('⚠️ No seleccionable: Desactiva el Bot para enviar mensajes manuales', 'warning');
+        return;
+    }
+    const messageText = decodeURIComponent(encodedMsg);
+    
+    // Ocultar popover
+    const popover = document.getElementById('quick-messages-popover');
+    if (popover) popover.style.display = 'none';
+
+    // Rellenar textarea
+    const input = document.getElementById('message-input');
+    if (input) {
+        input.value = messageText;
+        window.autoResizeChatTextarea(input);
+        
+        // Enviar mensaje de inmediato
+        await sendMessage();
+    }
+};
+
+// Cerrar popover si se hace click fuera
+document.addEventListener('click', (e) => {
+    const popover = document.getElementById('quick-messages-popover');
+    const quickBtn = document.getElementById('quick-msg-btn');
+    if (popover && popover.style.display !== 'none' && !popover.contains(e.target) && !quickBtn.contains(e.target)) {
+        popover.style.display = 'none';
+    }
+});
 
 // Exponer métodos para ser llamados por otros módulos
 window.executeUnreadFilter = executeUnreadFilter;

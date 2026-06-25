@@ -337,6 +337,19 @@ export class HistoryHandler {
                 GRANT ALL ON TABLE waba_report_groups TO service_role;
                 GRANT ALL ON TABLE waba_report_groups TO authenticated;
                 GRANT SELECT ON TABLE waba_report_groups TO anon;`
+            },
+            {
+                name: 'quick_messages',
+                sql: `CREATE TABLE IF NOT EXISTS quick_messages (
+                    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                );
+                GRANT ALL ON TABLE quick_messages TO service_role;
+                GRANT ALL ON TABLE quick_messages TO authenticated;
+                GRANT SELECT ON TABLE quick_messages TO anon;`
             }
         ];
 
@@ -3201,6 +3214,80 @@ export class HistoryHandler {
         } catch (err: any) {
             console.error('[HistoryHandler] Error en deleteWabaReportGroup:', err.message);
             return { success: false, error: err.message };
+        }
+    }
+
+    /**
+     * Obtiene todos los mensajes rápidos para un proyecto.
+     */
+    static async getQuickMessages(projectId: string): Promise<any[]> {
+        const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
+        if (process.env.STORAGE_MODE === "local") {
+            return LocalHistoryStore.getQuickMessages(currentProjectId);
+        }
+        try {
+            const { data, error } = await supabase
+                .from('quick_messages')
+                .select('*')
+                .eq('project_id', currentProjectId)
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+            return data || [];
+        } catch (err: any) {
+            console.error('[HistoryHandler] Error en getQuickMessages:', err.message);
+            return [];
+        }
+    }
+
+    /**
+     * Crea un nuevo mensaje rápido para el proyecto.
+     */
+    static async createQuickMessage(projectId: string, title: string, message: string): Promise<any> {
+        const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
+        if (process.env.STORAGE_MODE === "local") {
+            return LocalHistoryStore.createQuickMessage(currentProjectId, title, message);
+        }
+        try {
+            const { data, error } = await supabase
+                .from('quick_messages')
+                .insert({
+                    project_id: currentProjectId,
+                    title,
+                    message,
+                    created_at: new Date().toISOString()
+                })
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data;
+        } catch (err: any) {
+            console.error('[HistoryHandler] Error en createQuickMessage:', err.message);
+            return null;
+        }
+    }
+
+    /**
+     * Elimina un mensaje rápido por su ID.
+     */
+    static async deleteQuickMessage(id: string, projectId: string): Promise<boolean> {
+        const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
+        if (process.env.STORAGE_MODE === "local") {
+            return LocalHistoryStore.deleteQuickMessage(id, currentProjectId);
+        }
+        try {
+            const { error } = await supabase
+                .from('quick_messages')
+                .delete()
+                .eq('id', id)
+                .eq('project_id', currentProjectId);
+
+            if (error) throw error;
+            return true;
+        } catch (err: any) {
+            console.error('[HistoryHandler] Error en deleteQuickMessage:', err.message);
+            return false;
         }
     }
 

@@ -807,6 +807,43 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
     });
 
 
+    // --- QUICK MESSAGES ---
+
+    app.get('/api/backoffice/quick-messages', backofficeAuth, async (req: any, res: any) => {
+        try {
+            const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
+            const messages = await depsHistoryHandler.getQuickMessages(projectId);
+            res.json(messages);
+        } catch (err: any) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
+    app.post('/api/backoffice/quick-messages', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
+        try {
+            const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
+            const { title, message } = req.body;
+            if (!title || !message) {
+                return res.status(400).json({ success: false, error: 'Falta título o mensaje' });
+            }
+            const qm = await depsHistoryHandler.createQuickMessage(projectId, title, message);
+            res.json({ success: true, data: qm });
+        } catch (err: any) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
+    app.delete('/api/backoffice/quick-messages/:id', backofficeAuth, async (req: any, res: any) => {
+        try {
+            const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
+            const { id } = req.params;
+            const success = await depsHistoryHandler.deleteQuickMessage(id, projectId);
+            res.json({ success });
+        } catch (err: any) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
     app.get('/api/backoffice/messages/:chatId', backofficeAuth, async (req: any, res: any) => {
         const limit = parseInt(req.query.limit as string) || 50;
         const offset = parseInt(req.query.offset as string) || 0;

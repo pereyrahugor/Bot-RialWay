@@ -190,15 +190,37 @@ window.backofficeView = {
                         <i class="fas fa-plus"></i>
                     </button>
                     <input type="file" id="file-input" style="display:none;" onchange="handleFileSelect(this)">
-                    <div class="input-wrapper">
+                    <div class="input-wrapper" style="position: relative;">
                         <button class="btn-icon input-action-btn" id="emoji-btn" title="Emojis" disabled onclick="toggleEmojiPicker(event)">
                             <i class="far fa-face-smile"></i>
+                        </button>
+                        <button class="btn-icon input-action-btn" id="quick-msg-btn" title="Mensajes Rápidos" disabled onclick="window.toggleQuickMessages(event)">
+                            <i class="fas fa-bolt"></i>
                         </button>
                         <textarea id="message-input" placeholder="Escribe un mensaje" disabled
                             rows="1"
                             onkeydown="window.handleChatTextareaKey(event, window.sendMessage)"
                             oninput="window.autoResizeChatTextarea(this)"
                             style="flex:1;background:transparent;border:0;outline:none;color:var(--text-main);font-size:16px;padding:8px 0;min-width:0;resize:none;overflow-y:auto;max-height:120px;font-family:inherit;line-height:1.4;display:block;"></textarea>
+
+                        <!-- Popover de Mensajes Rápidos -->
+                        <div id="quick-messages-popover" class="quick-messages-popover" style="display: none;">
+                            <div class="qm-header">
+                                <h4>Mensajes Rápidos</h4>
+                                <button class="qm-close-btn" onclick="window.toggleQuickMessages(event)"><i class="fas fa-times"></i></button>
+                            </div>
+                            <div class="qm-form">
+                                <input type="text" id="qm-title-input" placeholder="Título para identificarlo..." />
+                                <textarea id="qm-message-input" placeholder="Mensaje rápido..."></textarea>
+                                <button class="qm-save-btn" onclick="window.saveQuickMessage()">Guardar</button>
+                            </div>
+                            <div class="qm-list-container">
+                                <h5>Guardados:</h5>
+                                <div id="qm-list" class="qm-list">
+                                    <div class="qm-empty">No hay mensajes rápidos guardados.</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <button class="btn-icon input-action-btn" id="mic-btn" title="Grabar audio" disabled onclick="toggleRecording()">
                         <i class="fas fa-microphone"></i>
