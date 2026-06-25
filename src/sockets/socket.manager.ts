@@ -84,6 +84,12 @@ export const initSocketIO = (serverInstance: any, { processUserMessage }: any) =
                     if (msg.trim().toLowerCase() === "#reset") {
                         await state.clear();
                         replyText = "🔄 Chat reiniciado.";
+                    } else if (msg.trim().toUpperCase() === "#HILO_NUEVO#") {
+                        await state.clear();
+                        const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(null) || HistoryHandler.PROJECT_IDENTIFIER;
+                        await HistoryHandler.clearChatHistory(ip, dynamicProjectId);
+                        await HistoryHandler.setAssignedAgent(ip, 'asistente1', dynamicProjectId);
+                        replyText = "✅ Se ha borrado todo el historial de conversación de este contacto y se ha iniciado un nuevo hilo de chat.";
                     } else {
                         // Llamar al procesador de mensajes centralizado
                         await processUserMessage(
