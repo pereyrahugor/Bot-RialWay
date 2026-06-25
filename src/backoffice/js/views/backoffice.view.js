@@ -168,6 +168,25 @@ window.backofficeView = {
 
                 <div id="emoji-picker" class="emoji-picker-container" style="display:none;"></div>
 
+                <!-- Popover de Mensajes Rápidos -->
+                <div id="quick-messages-popover" class="quick-messages-popover" style="display: none;">
+                    <div class="qm-header">
+                        <h4>Mensajes Rápidos</h4>
+                        <button class="qm-close-btn" onclick="window.toggleQuickMessages(event)"><i class="fas fa-times"></i></button>
+                    </div>
+                    <div class="qm-form">
+                        <input type="text" id="qm-title-input" placeholder="Título para identificarlo..." />
+                        <textarea id="qm-message-input" placeholder="Mensaje rápido..."></textarea>
+                        <button class="qm-save-btn" onclick="window.saveQuickMessage()">Guardar</button>
+                    </div>
+                    <div class="qm-list-container">
+                        <h5>Guardados:</h5>
+                        <div id="qm-list" class="qm-list">
+                            <div class="qm-empty">No hay mensajes rápidos guardados.</div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- File preview overlay -->
                 <div id="file-preview-overlay" style="display:none; position:absolute; inset:0; z-index:50; background:#111; flex-direction:column;">
                     <div id="file-preview-header" style="display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-bottom:1px solid rgba(255,255,255,0.1);">
@@ -202,25 +221,6 @@ window.backofficeView = {
                             onkeydown="window.handleChatTextareaKey(event, window.sendMessage)"
                             oninput="window.autoResizeChatTextarea(this)"
                             style="flex:1;background:transparent;border:0;outline:none;color:var(--text-main);font-size:16px;padding:8px 0;min-width:0;resize:none;overflow-y:auto;max-height:120px;font-family:inherit;line-height:1.4;display:block;"></textarea>
-
-                        <!-- Popover de Mensajes Rápidos -->
-                        <div id="quick-messages-popover" class="quick-messages-popover" style="display: none;">
-                            <div class="qm-header">
-                                <h4>Mensajes Rápidos</h4>
-                                <button class="qm-close-btn" onclick="window.toggleQuickMessages(event)"><i class="fas fa-times"></i></button>
-                            </div>
-                            <div class="qm-form">
-                                <input type="text" id="qm-title-input" placeholder="Título para identificarlo..." />
-                                <textarea id="qm-message-input" placeholder="Mensaje rápido..."></textarea>
-                                <button class="qm-save-btn" onclick="window.saveQuickMessage()">Guardar</button>
-                            </div>
-                            <div class="qm-list-container">
-                                <h5>Guardados:</h5>
-                                <div id="qm-list" class="qm-list">
-                                    <div class="qm-empty">No hay mensajes rápidos guardados.</div>
-                                </div>
-                            </div>
-                        </div>
                     </div>
                     <button class="btn-icon input-action-btn" id="mic-btn" title="Grabar audio" disabled onclick="toggleRecording()">
                         <i class="fas fa-microphone"></i>
@@ -538,7 +538,7 @@ window.backofficeView = {
 
         // Cargar backoffice.js si no esta cargado (primera visita)
         if (!window._backofficeScriptLoaded) {
-            await loadViewScript('/js/backoffice.js?v=14');
+            await loadViewScript('/js/backoffice.js?v=15');
             window._backofficeScriptLoaded = true;
         }
         // Siempre re-inicializar: tanto primera visita como re-visitas

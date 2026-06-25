@@ -6132,15 +6132,15 @@
 /* ── Mensajes Rápidos Popover ── */
 .quick-messages-popover {
   position: absolute;
-  bottom: 60px;
-  left: 0;
+  bottom: 80px;
+  left: 12px;
   width: 320px;
   max-height: 400px;
   background: rgba(30, 41, 59, 0.95);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 14px;
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
-  z-index: 50;
+  z-index: 9999;
   display: flex;
   flex-direction: column;
   backdrop-filter: blur(10px);
