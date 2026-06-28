@@ -38,6 +38,10 @@ export const initSocketIO = (serverInstance: any, { processUserMessage }: any) =
             io.emit('ticket_updated', payload);
         });
 
+        historyEvents.on('ticket_deleted', (payload) => {
+            io.emit('ticket_deleted', payload);
+        });
+
         historyEvents.on('setting_changed', (payload) => {
             io.emit('setting_changed', payload);
         });

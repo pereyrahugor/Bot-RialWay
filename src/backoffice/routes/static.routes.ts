@@ -40,13 +40,13 @@ export const registerStaticRoutes = (app: any, { __dirname, provider, groupProvi
                 if (htmlPath) {
                     let htmlContent = fs.readFileSync(htmlPath, 'utf8');
                     const botName = process.env.ASSISTANT_NAME || process.env.RAILWAY_PROJECT_NAME || "Neurolinks";
-                    
+
                     console.log(`[Static] 🟢 Sirviendo ${filename} para ${route}. botName=${botName}`);
 
                     // Helper con timeout para evitar bloqueos por red hacia Supabase
                     const getSettingSafe = async (key: string, defaultValue: string = 'true'): Promise<string> => {
                         try {
-                            const timeoutPromise = new Promise<string>((_, reject) => 
+                            const timeoutPromise = new Promise<string>((_, reject) =>
                                 setTimeout(() => reject(new Error('Timeout')), 2500)
                             );
                             const result = await Promise.race([
@@ -98,7 +98,7 @@ export const registerStaticRoutes = (app: any, { __dirname, provider, groupProvi
                     htmlContent = htmlContent.replace(/{{SHOW_CRM_STYLE}}/g, showCRM);
                     htmlContent = htmlContent.replace(/{{SHOW_SYSTEM_CONFIG_STYLE}}/g, showSystemConfig);
                     htmlContent = htmlContent.replace(/{{SYSTEM_CONFIG_VISIBLE_JS}}/g, systemConfigVisibleJs);
-                    
+
                     res.setHeader('Content-Type', 'text/html');
                     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
                     console.log(`[Static] ✅ ${filename} procesado y enviado.`);
@@ -112,7 +112,7 @@ export const registerStaticRoutes = (app: any, { __dirname, provider, groupProvi
                 res.status(500).send('Error interno al servir HTML');
             }
         };
-        
+
         // Registrar rutas con opcionalmente middlewares
         if (middlewares.length > 0) {
             app.get(route, ...middlewares, handler);
@@ -127,7 +127,8 @@ export const registerStaticRoutes = (app: any, { __dirname, provider, groupProvi
     serveHtmlPage("/login", "login.html");
     serveHtmlPage("/webreset", "webreset.html");
 
-    // Rutas SPA: todas sirven shell.html; el router JS carga la view correspondiente
+    // Rutas SPA: todas sirven shell.html; el router JS carga la view correspondiente.
+    // agregar más rutas para que cuando se haga "refresh" no tire errores.
     serveHtmlPage("/backoffice", "shell.html");
     serveHtmlPage("/dashboard", "shell.html");
     serveHtmlPage("/conexion", "shell.html");
@@ -143,6 +144,8 @@ export const registerStaticRoutes = (app: any, { __dirname, provider, groupProvi
     serveHtmlPage("/mercado-libre-bot", "shell.html");
     serveHtmlPage("/mercado-pago", "shell.html");
     serveHtmlPage("/lista-negra", "shell.html");
+    serveHtmlPage("/reportes", "shell.html");
+    serveHtmlPage("/tickets", "shell.html");
 
     // Favicon directo (browsers lo piden en / automáticamente) — busca en src/assets primero, luego en assets/
     app.get("/favicon.ico", (_req: any, res: any) => {
@@ -191,7 +194,7 @@ export const registerStaticRoutes = (app: any, { __dirname, provider, groupProvi
                 res.setHeader('Content-Type', 'image/png');
                 return res.end(imgBuffer);
             }
-            
+
             res.status(404).send('QR not found (no file, no memory)');
         } catch (e) {
             console.error("[Static] Error serving QR:", e);
@@ -206,14 +209,14 @@ export const registerStaticRoutes = (app: any, { __dirname, provider, groupProvi
             res.setHeader('Content-Type', 'image/png');
             return fs.createReadStream(qrPath).pipe(res);
         }
-        
+
         // Fallback para grupos usando el groupProvider pasado por config
         if (groupProvider && groupProvider.qrCodeString) {
-             console.log("[Static] Group QR physical file missing, generating from memory...");
-             const QRCode = await import('qrcode');
-             const imgBuffer = await QRCode.toBuffer(groupProvider.qrCodeString);
-             res.setHeader('Content-Type', 'image/png');
-             return res.end(imgBuffer);
+            console.log("[Static] Group QR physical file missing, generating from memory...");
+            const QRCode = await import('qrcode');
+            const imgBuffer = await QRCode.toBuffer(groupProvider.qrCodeString);
+            res.setHeader('Content-Type', 'image/png');
+            return res.end(imgBuffer);
         }
 
         res.status(404).send('QR Groups not found');

@@ -282,7 +282,7 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,video/mp4,*/*;q=0.8'
                             }
                         });
-                        const contentType = response.headers['content-type'] || '';
+                        const contentType = String(response.headers['content-type'] || '');
                         let ext = 'bin';
                         if (contentType.includes('video')) ext = 'mp4';
                         else if (contentType.includes('image')) ext = 'jpg';
@@ -554,11 +554,37 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
 export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies) => {
     const { adapterProvider, HistoryHandler: depsHistoryHandler, openaiMain, upload } = deps;
 
+    if (!(process as any)._hasGlobalLogHandler) {
+        (process as any)._hasGlobalLogHandler = true;
+        process.on('uncaughtException', (err: any) => {
+            console.error('[UncaughtException]', err);
+            try {
+                HistoryHandlerClass.saveSystemLog('SYSTEM', 'ERROR', err?.message || String(err), null, { stack: err?.stack, source: 'uncaughtException' });
+            } catch (e) {}
+        });
+        process.on('unhandledRejection', (reason: any) => {
+            console.error('[UnhandledRejection]', reason);
+            try {
+                const msg = reason ? (reason.message || typeof reason === 'string' ? reason : JSON.stringify(reason)) : 'Unhandled Promise Rejection';
+                HistoryHandlerClass.saveSystemLog('SYSTEM', 'ERROR', msg, null, { reason, source: 'unhandledRejection' });
+            } catch (e) {}
+        });
+    }
+
     // Helper to dynamically extract projectId from query, body, or headers
     const resolveProjectId = (req: any): string | null => {
         const pId = req.query.projectId || (req.body && req.body.projectId) || req.headers['x-project-id'] || (req.auth && req.auth.projectId);
         return (pId && pId !== 'default') ? pId : null;
     };
+
+    // --- SYSTEM LOGS ---
+    app.post('/api/backoffice/log-error', backofficeAuth, bodyParser.json(), (req: any, res: any) => {
+        res.json({ success: true });
+        try {
+            const { message, clientId, details } = req.body || {};
+            HistoryHandlerClass.saveSystemLog('SYSTEM', 'ERROR', message || 'Error desconocido del cliente', clientId || 'Cliente Web', details || {});
+        } catch (e) {}
+    });
 
     // --- AUTH ---
 
@@ -2129,7 +2155,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                                     headers: downloadHeaders
                                 });
 
-                                const contentType = response.headers['content-type'] || '';
+                                const contentType = String(response.headers['content-type'] || '');
                                 let ext = 'bin';
                                 if (contentType.includes('video')) ext = 'mp4';
                                 else if (contentType.includes('image')) ext = 'jpg';
