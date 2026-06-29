@@ -2634,10 +2634,12 @@ export class HistoryHandler {
         const cacheKey = `${targetProjectId}:${key}`;
         const now = Date.now();
 
-        // 1. Intentar obtener desde cache en memoria
-        const cached = this.settingsCache.get(cacheKey);
-        if (cached && (now - cached.timestamp < this.CACHE_TTL_MS)) {
-            return cached.value;
+        // 1. Intentar obtener desde cache en memoria (excepto credenciales para garantizar realtime)
+        if (key !== 'ADMIN_USER' && key !== 'ADMIN_PASS') {
+            const cached = this.settingsCache.get(cacheKey);
+            if (cached && (now - cached.timestamp < this.CACHE_TTL_MS)) {
+                return cached.value;
+            }
         }
 
         const { data, error } = await supabase
