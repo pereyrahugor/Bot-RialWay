@@ -109,7 +109,7 @@ window.initWebchatView = function () {
 
     function _handleFile(file) {
         if (!file) return;
-        if (file.size > 15 * 1024 * 1024) { alert('Archivo demasiado grande (max 15MB)'); return; }
+        if (file.size > 15 * 1024 * 1024) { window.swalAlert('Atención', 'Archivo demasiado grande (max 15MB)', 'warning'); return; }
         if (file.type.startsWith('image/')) {
             const img = new Image();
             img.onload = () => {

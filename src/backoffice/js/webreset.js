@@ -27,7 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (delRes.status === 401) return logout();
       const delData = await delRes.json();
       if (!delData.success) {
-        alert('Error al borrar la sesión: ' + (delData.error || 'Error desconocido'));
+        window.swalAlert('Error', 'Error al borrar la sesión: ' + (delData.error || 'Error desconocido'), 'error');
         return;
       }
       // 2. Reiniciar bot en Railway
@@ -54,11 +54,11 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         }, 1000);
       } else {
-        alert('Error al solicitar reinicio: ' + (data.error || 'Error desconocido'));
+        window.swalAlert('Error', 'Error al solicitar reinicio: ' + (data.error || 'Error desconocido'), 'error');
       }
     } catch (err) {
       console.error('Error en el proceso de reinicio:', err);
-      alert('Error de red o servidor: ' + err.message);
+      window.swalAlert('Error', 'Error de red o servidor: ' + err.message, 'error');
     }
   });
 });

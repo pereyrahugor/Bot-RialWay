@@ -42,9 +42,6 @@ window.crmTareasView = {
                             <li onclick="_closeTareasMenu(); openClosedLeadsModal()">
                                 <i class="fas fa-box-archive"></i> Leads Cerrados
                             </li>
-                            <li id="btn-new-user" onclick="_closeTareasMenu(); window.openNewUserModal()" style="display:none;">
-                                <i class="fas fa-user-plus"></i> Nuevo Usuario
-                            </li>
                             <li onclick="_closeTareasMenu(); toggleCRMConfigModal()">
                                 <i class="fas fa-sliders"></i> Configurar
                             </li>

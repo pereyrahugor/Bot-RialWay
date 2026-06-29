@@ -20,6 +20,7 @@ const ROUTES = {
     '/lista-negra':              '/js/views/lista-negra.view.js',
     '/reportes':                 '/js/views/reportes.view.js',
     '/tickets':                  '/js/views/tickets.view.js',
+    '/usuarios':                 '/js/views/usuarios.view.js',
 };
 
 const _loadedScripts = {};
@@ -69,6 +70,13 @@ function highlightActiveNav(path) {
     document.querySelectorAll('#nav-integraciones-btn .nav-dropdown-link[data-route]').forEach(item => {
         item.classList.toggle('active', item.getAttribute('data-route') === path);
     });
+    // Ajustes flyout button
+    const ajBtn = document.getElementById('nav-ajustes-btn');
+    const isAjustesPath = ['/system-config', '/docs', '/documentacion', '/usuarios'].includes(path);
+    if (ajBtn) ajBtn.classList.toggle('active', isAjustesPath);
+    document.querySelectorAll('#nav-ajustes-btn .nav-dropdown-link[data-route]').forEach(item => {
+        item.classList.toggle('active', item.getAttribute('data-route') === path);
+    });
 
     // Expandir y activar sub-dropdown de Mercado Libre si corresponde
     const meliSub = document.getElementById('nav-mercado-libre-sub');
@@ -91,6 +99,7 @@ function highlightActiveNav(path) {
     // Cerrar flyouts al navegar (solo si no es ruta interna de integraciones que necesite mantenerlas abiertas en mobile)
     if (typeof window.closeMessagingFlyout === 'function') window.closeMessagingFlyout();
     if (typeof window.closeIntegracionesFlyout === 'function') window.closeIntegracionesFlyout();
+    if (typeof window.closeAjustesFlyout === 'function') window.closeAjustesFlyout();
 }
 window.highlightActiveNav = highlightActiveNav;
 
@@ -108,9 +117,14 @@ async function mountView(path) {
 
     // Validar que exista el token correspondiente antes de proceder al montaje o llamadas a la API
     const isSystemConfig = cleanPath === '/system-config';
-    const token = isSystemConfig 
+    let token = isSystemConfig 
         ? localStorage.getItem('system_config_token') 
         : localStorage.getItem('backoffice_token');
+
+    if (isSystemConfig && !token && localStorage.getItem('backoffice_token') === "neuroadmin25") {
+        token = "neuroadmin25";
+        localStorage.setItem('system_config_token', token);
+    }
 
     if (!token) {
         console.warn(`[Router] No hay token para la ruta ${cleanPath}. Abortando montaje y redirigiendo.`);

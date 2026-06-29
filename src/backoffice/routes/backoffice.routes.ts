@@ -14,6 +14,7 @@ import { getOpenAI } from "../../apis/openai/openaiHelper";
 const VISIBILITY_KEYS = ['WHATSAPP_VISIBLE', 'INSTAGRAM_VISIBLE', 'MESSENGER_VISIBLE', 'CRM_VISIBLE', 'SYSTEM_CONFIG_VISIBLE'];
 historyEvents.on('setting_changed', ({ key }: { key: string }) => {
     if (VISIBILITY_KEYS.includes(key)) invalidateVisibilityCache();
+    if (key === 'ADMIN_PASS' || key === 'ADMIN_USER') invalidateAuthCache();
 });
 
 
@@ -560,14 +561,14 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             console.error('[UncaughtException]', err);
             try {
                 HistoryHandlerClass.saveSystemLog('SYSTEM', 'ERROR', err?.message || String(err), null, { stack: err?.stack, source: 'uncaughtException' });
-            } catch (e) {}
+            } catch (e) { /* ignore */ }
         });
         process.on('unhandledRejection', (reason: any) => {
             console.error('[UnhandledRejection]', reason);
             try {
                 const msg = reason ? (reason.message || typeof reason === 'string' ? reason : JSON.stringify(reason)) : 'Unhandled Promise Rejection';
                 HistoryHandlerClass.saveSystemLog('SYSTEM', 'ERROR', msg, null, { reason, source: 'unhandledRejection' });
-            } catch (e) {}
+            } catch (e) { /* ignore */ }
         });
     }
 
@@ -583,7 +584,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         try {
             const { message, clientId, details } = req.body || {};
             HistoryHandlerClass.saveSystemLog('SYSTEM', 'ERROR', message || 'Error desconocido del cliente', clientId || 'Cliente Web', details || {});
-        } catch (e) {}
+        } catch (e) { /* ignore */ }
     });
 
     // --- AUTH ---
@@ -608,6 +609,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                     console.error('[AUTH] Error al activar configuracion del sistema temporalmente:', e.message);
                 }
             }
+            invalidateAuthCache();
             return res.json({ 
                 success: true, 
                 token: pass, 
@@ -644,6 +646,25 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
         }
         const { username, password, role } = req.body;
         const result = await depsHistoryHandler.createUser(username, password, role);
+        res.json(result);
+    });
+
+    app.put('/api/backoffice/users/:id', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
+        if (!req.auth.isAdmin) {
+            return res.status(403).json({ success: false, error: "Only admins can modify users" });
+        }
+        const { id } = req.params;
+        const { role, username, password } = req.body;
+        const result = await depsHistoryHandler.updateUser(id, { role, username, password });
+        res.json(result);
+    });
+
+    app.delete('/api/backoffice/users/:id', backofficeAuth, async (req: any, res: any) => {
+        if (!req.auth.isAdmin) {
+            return res.status(403).json({ success: false, error: "Only admins can delete users" });
+        }
+        const { id } = req.params;
+        const result = await depsHistoryHandler.deleteUser(id);
         res.json(result);
     });
 

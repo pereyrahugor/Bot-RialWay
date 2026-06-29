@@ -12,6 +12,36 @@
     <link rel="stylesheet" href="/style/vendor/fontawesome/css/all.min.css">
     <link rel="stylesheet" href="/style/tailwind.css?v=6">
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        window.swalConfirm = async function(title, text) {
+            if (typeof Swal !== 'undefined') {
+                const res = await Swal.fire({
+                    title: title || 'Confirmación',
+                    text: text || '¿Estás seguro de continuar?',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#0099FF',
+                    cancelButtonColor: '#6b7280',
+                    confirmButtonText: 'Sí, continuar',
+                    cancelButtonText: 'Cancelar'
+                });
+                return res.isConfirmed;
+            }
+            return confirm(text || title);
+        };
+        window.swalAlert = function(title, text, icon) {
+            if (typeof Swal !== 'undefined') {
+                return Swal.fire({
+                    title: title || 'Atención',
+                    text: text || '',
+                    icon: icon || 'info',
+                    confirmButtonColor: '#0099FF'
+                });
+            }
+            alert(text || title);
+        };
+    </script>
     <script src="/js/toast.js"></script>
     <script>window.BOT_NAME = '{{BOT_NAME}}'; window.__SYSTEM_CONFIG_VISIBLE = '{{SYSTEM_CONFIG_VISIBLE_JS}}' !== 'false';</script>
     <style>
@@ -253,6 +283,13 @@
                            onclick="event.preventDefault(); closeAjustesFlyout(); navigate('/system-config')">
                             <i class="fas fa-gears"></i>
                             <span class="nav-label">Configuracion</span>
+                        </a>
+                    </li>
+                    <li class="nav-item" id="btn-global-new-user" data-route="/usuarios">
+                        <a href="#" class="nav-link nav-dropdown-link"
+                           onclick="event.preventDefault(); closeAjustesFlyout(); navigate('/usuarios')">
+                            <i class="fas fa-user-plus"></i>
+                            <span class="nav-label">Nuevo Usuario</span>
                         </a>
                     </li>
                     <li class="nav-item" data-route="/docs">

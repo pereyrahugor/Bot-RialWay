@@ -546,7 +546,7 @@ window.metaView = (() => {
         if (!_currentTemplate) return;
         
         // Confirmar envío
-        if (!confirm(`¿Iniciar envío rápido de la plantilla "${_currentTemplate.name}" a los contactos filtrados?`)) {
+        if (!await window.swalConfirm('¿Iniciar envío rápido?', `¿Iniciar envío rápido de la plantilla "${_currentTemplate.name}" a los contactos filtrados?`)) {
             return;
         }
 

@@ -174,15 +174,21 @@ function renderBoard() {
         colEl.dataset.id = col.id;
         colEl.innerHTML = `
             <div class="column-header">
-                <div class="column-title-group">
-                    <i class="fas ${col.icon}" style="color:${col.color};"></i>
-                    <span class="column-title">${col.title}</span>
+                <div class="column-title-group" style="min-width:0; flex:1; display:flex; align-items:center; gap:8px; overflow:hidden;">
+                    <i class="fas ${col.icon}" style="color:${col.color}; flex-shrink:0;"></i>
+                    <span class="column-title" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; min-width: 0;">${col.title}</span>
                 </div>
-                <span class="column-badge" id="badge-${col.id}">0</span>
+                <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
+                    <button class="btn-card-action" style="padding:4px 8px; font-size:0.7rem;" onclick="event.stopPropagation(); window.resetColumnWidth('${col.id}', event)" title="Restaurar tamaño por defecto">
+                        <i class="fas fa-rotate-left"></i>
+                    </button>
+                    <span class="column-badge" id="badge-${col.id}">0</span>
+                </div>
             </div>
             <div class="kanban-cards" id="cards-${col.id}"></div>
         `;
         board.appendChild(colEl);
+        if (typeof window.observeKanbanColumn === 'function') window.observeKanbanColumn(colEl, col.id);
     });
     distributeCards();
     _initKanbanScrollBehaviorTareas();
@@ -279,14 +285,7 @@ function createCardElement(ticket, lead, metadata) {
         : '';
 
     let titleHtml = '';
-    if (isVisible('crm-ticket-title')) {
-        const cuilSpan = (cuit && isVisible('crm-cuit')) ? ` <span style="font-size:0.7rem; opacity:0.6;">(${cuit})</span>` : '';
-        if (ticket.titulo && ticket.titulo.trim() !== '') {
-            titleHtml = `<div class="card-title">${ticket.titulo}${cuilSpan}</div>`;
-        } else if (cuilSpan) {
-            titleHtml = `<div class="card-title">${cuilSpan}</div>`;
-        }
-    } else if (cuit && isVisible('crm-cuit')) {
+    if (cuit && isVisible('crm-cuit')) {
         titleHtml = `<div class="card-title"><span style="font-size:0.7rem; opacity:0.6;">CUIL: ${cuit}</span></div>`;
     }
 
@@ -302,7 +301,7 @@ function createCardElement(ticket, lead, metadata) {
     }
 
     const alertHtml = isVisible('crm-due-date')
-        ? `<div class="card-alert ${getAlertClass(alertDateStr)}" id="alert-card-${ticket.id}"><i class="fas fa-bell"></i> ${alertFormatted}</div>`
+        ? `<div class="card-alert ${getAlertClass(alertDateStr)}" id="alert-card-${ticket.id}" onclick="event.stopPropagation(); openCardModal('${ticket.id}'); setTimeout(() => { const inp = document.getElementById('edit-alert-date'); if(inp) inp.focus(); }, 100);"><i class="fas fa-bell"></i> ${alertFormatted}</div>`
         : '';
 
     card.innerHTML = `
@@ -320,10 +319,10 @@ function createCardElement(ticket, lead, metadata) {
         <div class="card-footer">
             ${alertHtml}
             <div style="display:flex; gap:8px;">
-                <button class="btn-action btn-action-primary" title="Cerrar Lead" onclick="event.stopPropagation(); confirmCloseTicket('${ticket.id}')">
+                <button class="btn-card-action" title="Cerrar Lead" onclick="event.stopPropagation(); confirmCloseTicket('${ticket.id}')">
                     <i class="fas fa-check"></i>
                 </button>
-                <button class="btn-action btn-action-primary" title="Ver Detalles/Editar" onclick="event.stopPropagation(); openCardModal('${ticket.id}')">
+                <button class="btn-card-action" title="Ver Detalles/Editar" onclick="event.stopPropagation(); openCardModal('${ticket.id}')">
                     <i class="fas fa-pen"></i>
                 </button>
             </div>
@@ -625,7 +624,7 @@ window.openWhatsAppDirect = () => {
 
 // --- Cierre de Leads ---
 window.confirmCloseTicket = async (ticketId) => {
-    if (!confirm('¿Seguro quieres cerrar este lead? Se moverá al historial de cerrados.')) return;
+    if (!await window.swalConfirm('¿Cerrar lead?', '¿Seguro quieres cerrar este lead? Se moverá al historial de cerrados.')) return;
     
     showToast('Cerrando lead...', 'info');
     try {
@@ -686,7 +685,7 @@ window.openClosedLeadsModal = async () => {
                         <div style="font-size:0.8rem; color:var(--accent); margin-top:5px;"><i class="fas fa-calendar-check"></i> Cerrado el: ${closedDate}</div>
                     </div>
                     <div style="display:flex; gap:10px;">
-                        <button class="btn-action btn-action-primary" onclick="localStorage.setItem('activeChat', '${t.chat_id}'); if(window.navigate) window.navigate('/backoffice'); else window.location.href='/backoffice';" title="Ver Chat">
+                        <button class="btn-card-action" onclick="localStorage.setItem('activeChat', '${t.chat_id}'); if(window.navigate) window.navigate('/backoffice'); else window.location.href='/backoffice';" title="Ver Chat">
                             <i class="fas fa-comments"></i>
                         </button>
                     </div>
@@ -750,41 +749,6 @@ function renderAssigneeSelect() {
     _csdSync('edit-lead-assignee');
 }
 
-window.openNewUserModal = () => {
-    document.getElementById('modal-users').classList.add('active');
-    loadTeam();
-};
-
-window.saveNewUser = async () => {
-    const username = document.getElementById('new-user-name').value.trim();
-    const password = document.getElementById('new-user-pass').value.trim();
-    const role = document.getElementById('new-user-role').value;
-
-    if (!username || !password) {
-        showToast('Completa usuario y contraseña', 'warning');
-        return;
-    }
-
-    try {
-        const res = await fetch(`/api/backoffice/users?token=${activeToken}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password, role })
-        });
-        const data = await res.json();
-        if (data.success) {
-            showToast('Usuario creado con éxito', 'success');
-            document.getElementById('new-user-name').value = '';
-            document.getElementById('new-user-pass').value = '';
-            await loadTeam();
-        } else {
-            showToast('Error: ' + data.error, 'error');
-        }
-    } catch (e) {
-        showToast('Error de conexión', 'error');
-    }
-};
-
 // --- Configuración Dinámica de Campos ---
 window.toggleCRMConfigModal = () => {
     const modal = document.getElementById('crm-config-modal');
@@ -823,7 +787,6 @@ function renderCRMConfigFields() {
     window.crmConfig.sort((a, b) => a.order - b.order).forEach((field, index) => {
         const item = document.createElement('div');
         item.className = 'sortable-item';
-        item.draggable = true;
         item.dataset.id = field.id;
         item.dataset.index = index;
         
@@ -835,52 +798,28 @@ function renderCRMConfigFields() {
             </div>
         `;
 
-        item.addEventListener('dragstart', handleDragStart);
-        item.addEventListener('dragover', handleDragOver);
-        item.addEventListener('drop', handleDrop);
-        item.addEventListener('dragend', () => item.classList.remove('dragging'));
-
         list.appendChild(item);
     });
+
+    if (typeof Sortable !== 'undefined' && !Sortable.get(list)) {
+        new Sortable(list, {
+            animation: 150,
+            handle: '.sort-handle',
+            onEnd: () => {
+                const newOrder = Array.from(list.children).map(child => child.dataset.id);
+                newOrder.forEach((id, index) => {
+                    const field = window.crmConfig.find(f => f.id === id);
+                    if (field) field.order = index;
+                });
+            }
+        });
+    }
 }
 
 window.updateFieldVisibility = (id, visible) => {
     const field = window.crmConfig.find(f => f.id === id);
     if (field) field.visible = visible;
 };
-
-let dragSrcEl = null;
-function handleDragStart(e) {
-    e.currentTarget.classList.add('dragging');
-    dragSrcEl = e.currentTarget;
-    e.dataTransfer.effectAllowed = 'move';
-}
-
-function handleDragOver(e) {
-    if (e.preventDefault) e.preventDefault();
-    return false;
-}
-
-function handleDrop(e) {
-    if (e.stopPropagation) e.stopPropagation();
-    
-    if (dragSrcEl !== e.currentTarget) {
-        const fromId = dragSrcEl.getAttribute('data-id');
-        const toId = e.currentTarget.getAttribute('data-id');
-        
-        const fromIndex = window.crmConfig.findIndex(f => f.id === fromId);
-        const toIndex = window.crmConfig.findIndex(f => f.id === toId);
-        
-        if (fromIndex !== -1 && toIndex !== -1) {
-            const [movedItem] = window.crmConfig.splice(fromIndex, 1);
-            window.crmConfig.splice(toIndex, 0, movedItem);
-            
-            window.crmConfig.forEach((f, idx) => f.order = idx);
-            renderCRMConfigFields();
-        }
-    }
-    return false;
-}
 
 // --- Creación Manual de Leads ---
 function openNewLeadModal() { document.getElementById('new-lead-modal').classList.add('active'); }

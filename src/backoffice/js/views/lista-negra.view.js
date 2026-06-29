@@ -296,7 +296,7 @@ window.listaNegraView = (() => {
     }
 
     async function _deleteEntry(chatId) {
-        if (!confirm('¿Eliminar este contacto de la lista negra?')) return;
+        if (!await window.swalConfirm('¿Eliminar contacto?', '¿Eliminar este contacto de la lista negra?')) return;
         try {
             await fetch(`/api/backoffice/blacklist/${encodeURIComponent(chatId)}?token=${_token}`, { method: 'DELETE' });
             _entries = _entries.filter(e => e.chat_id !== chatId);
@@ -392,11 +392,11 @@ window.listaNegraView = (() => {
 
     // ── ACTIVAR / DESACTIVAR ──────────────────────────────────────────────
 
-    function _onToggle(checked) {
+    async function _onToggle(checked) {
         if (checked) {
             _activar();
         } else {
-            const confirmed = confirm('¿Desactivar la Lista Negra? Se eliminarán TODOS los registros de contactos en la lista.');
+            const confirmed = await window.swalConfirm('¿Desactivar Lista Negra?', '¿Desactivar la Lista Negra? Se eliminarán TODOS los registros de contactos en la lista.');
             if (!confirmed) {
                 const toggle = document.getElementById('ln-toggle');
                 if (toggle) toggle.checked = true;
