@@ -67,6 +67,12 @@
   [data-theme="light"] ::-webkit-scrollbar-thumb:hover {
     background: #1D4ED8;
   }
+
+  /* Password reveal eye icon — dark mode */
+  [data-theme="dark"] input[type="password"]::-ms-reveal,
+  [data-theme="dark"] input[type="password"]::-webkit-credentials-auto-fill-button {
+    filter: invert(1);
+  }
 }
 
 /* ─── Components ─────────────────────────────────────────────────── */
