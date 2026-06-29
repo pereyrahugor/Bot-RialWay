@@ -38,7 +38,7 @@ export class LoginAdminSelenium {
             // 1. Localizar y escribir en el campo de usuario
             const userInput = await this.driver.wait(
                 until.elementLocated(By.xpath(userXPath)), 
-                10000 // Timeout máximo de 10 segundos
+                5000 // Timeout máximo de 10 segundos
             );
             await userInput.sendKeys(username);
 
@@ -54,7 +54,7 @@ export class LoginAdminSelenium {
             await this.driver.wait(async (d) => {
                 const currentUrl = await d.getCurrentUrl();
                 return currentUrl !== targetUrl;
-            }, 15000);
+            }, 10000);
 
             const finalUrl = await this.driver.getCurrentUrl();
             console.log(`[SeleniumAuth] Sesión de administrador iniciada con éxito. URL actual: ${finalUrl}`);
