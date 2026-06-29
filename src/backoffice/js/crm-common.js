@@ -1,3 +1,4 @@
+/* global Swal */
 // Interceptor de Fetch global para codificar automáticamente el token en query strings
 (function() {
     const originalFetch = window.fetch;
@@ -520,7 +521,7 @@ window.applyCRMConfig = () => {
         const el = container.querySelector(`[data-field="${f.id}"]`);
         if (el) {
             el.style.order = f.order;
-            el.style.display = f.visible ? 'block' : 'none';
+            el.style.display = f.visible ? 'flex' : 'none';
         }
     });
 };
@@ -616,3 +617,292 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 });
+
+window.autoFitColumns = () => {
+    document.querySelectorAll('.kanban-column').forEach(col => {
+        let maxCardWidth = 320;
+        col.querySelectorAll('.kanban-card, .kanban-card-expanded').forEach(card => {
+            const width = card.scrollWidth + 32;
+            if (width > maxCardWidth) maxCardWidth = width;
+        });
+        const newWidth = Math.min(Math.max(maxCardWidth, 280), 800) + 'px';
+        col.style.width = newWidth;
+        if (col.dataset.id) {
+            localStorage.setItem('col_width_' + col.dataset.id, newWidth);
+        }
+    });
+    if (typeof window.showToast === 'function') window.showToast('Columnas autoajustadas', 'success');
+};
+
+window.observeKanbanColumn = (colEl, colId) => {
+    const savedWidth = localStorage.getItem('col_width_' + colId);
+    if (savedWidth) {
+        colEl.style.width = savedWidth;
+    }
+    if (typeof window.ResizeObserver !== 'undefined') {
+        const observer = new window.ResizeObserver(entries => {
+            for (let entry of entries) {
+                if (entry.target.style.width) {
+                    localStorage.setItem('col_width_' + colId, entry.target.style.width);
+                } else {
+                    localStorage.setItem('col_width_' + colId, entry.contentRect.width + 'px');
+                }
+            }
+        });
+        observer.observe(colEl);
+    }
+};
+
+window.resetColumnWidth = (colId, e) => {
+    if (e) e.stopPropagation();
+    localStorage.removeItem('col_width_' + colId);
+    const col = document.querySelector(`.kanban-column[data-id="${colId}"]`);
+    if (col) {
+        col.style.width = '425px';
+    }
+    if (typeof window.showToast === 'function') window.showToast('Tamaño de columna restaurado', 'success');
+};
+
+window.openNewUserModal = async () => {
+    const modal = document.getElementById('modal-users');
+    if (modal) modal.classList.add('active');
+    await window.loadGlobalTeam();
+};
+
+window.loadGlobalTeam = async () => {
+    try {
+        const activeToken = localStorage.getItem('system_config_token') || localStorage.getItem('backoffice_token');
+        if (!activeToken) return;
+        const res = await fetch(`/api/backoffice/users?token=${activeToken}`);
+        const teamUsers = await res.json();
+        
+        const list = document.getElementById('team-list-container');
+        if (list) {
+            list.innerHTML = `
+                <style>
+                    .user-card-item { display: flex; flex-direction: column; gap: 1rem; padding: 1rem; border-bottom: 1px solid var(--border); }
+                    .user-card-item:last-child { border-bottom: none; }
+                    .user-card-left { display: flex; align-items: center; justify-content: center; gap: 0.75rem; width: 100%; }
+                    .user-card-avatar { display: none; }
+                    .user-card-info { min-width: 0; text-align: center; }
+                    .user-card-right { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.85rem; width: 100%; }
+                    .user-card-csd { width: 100%; max-width: 280px; margin: 0 auto; }
+                    .user-card-actions { display: flex; align-items: center; justify-content: center; gap: 0.5rem; width: 100%; }
+
+                    @media (min-width: 640px) and (max-width: 1023px) {
+                        .user-card-item { flex-direction: column; gap: 1.25rem; padding: 1.25rem; }
+                        .user-card-left { justify-content: flex-start; }
+                        .user-card-avatar { display: flex; align-items: center; justify-content: center; width: 42px; height: 42px; background: var(--bg); border-radius: 50%; color: var(--accent); flex-shrink: 0; }
+                        .user-card-info { text-align: left; }
+                        .user-card-right { flex-direction: row; align-items: center; justify-content: space-between; width: 100%; }
+                        .user-card-csd { margin: 0; flex: 1; max-width: 320px; }
+                        .user-card-actions { width: auto; justify-content: flex-end; }
+                    }
+
+                    @media (min-width: 1024px) {
+                        .user-card-item { flex-direction: row; align-items: center; justify-content: space-between; gap: 1.5rem; padding: 1rem 1.25rem; }
+                        .user-card-left { width: auto; justify-content: flex-start; }
+                        .user-card-avatar { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; background: var(--bg); border-radius: 50%; color: var(--accent); flex-shrink: 0; }
+                        .user-card-info { text-align: left; }
+                        .user-card-right { flex-direction: row; align-items: center; justify-content: flex-end; width: auto; gap: 1rem; }
+                        .user-card-csd { margin: 0; width: auto; min-width: 200px; }
+                        .user-card-actions { width: auto; justify-content: flex-end; }
+                    }
+                </style>
+            ` + (teamUsers.map(u => `
+                <div class="user-card-item">
+                    <div class="user-card-left">
+                        <div class="user-card-avatar">
+                            <i class="fas fa-user"></i>
+                        </div>
+                        <div class="user-card-info">
+                            <strong style="color:var(--text); font-size: 1.05rem; display: block; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">${u.username}</strong>
+                            <div style="font-size: 0.75rem; color: var(--text-dim);">${u.role === 'admin' ? 'Administrador' : 'Operador'}</div>
+                        </div>
+                    </div>
+                    <div class="user-card-right">
+                        <div class="csd-wrap csd-sm user-card-csd">
+                            <select hidden onchange="window.updateUserRole('${u.id}', this.value)">
+                                <option value="subuser" ${u.role === 'subuser' ? 'selected' : ''}>Vendedor / Operador (Limitado)</option>
+                                <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Administrador (Total)</option>
+                            </select>
+                            <button class="csd-btn w-full" type="button" onclick="_csdToggle(this)">
+                                <span class="csd-label text-xs sm:text-sm truncate">${u.role === 'admin' ? 'Administrador (Total)' : 'Vendedor / Operador (Limitado)'}</span>
+                                <i class="fas fa-chevron-down csd-chevron flex-shrink-0"></i>
+                            </button>
+                            <div class="csd-menu">
+                                <button class="csd-item ${u.role === 'subuser' ? 'selected' : ''} text-xs sm:text-sm" type="button" data-val="subuser" onclick="_csdSelect(this,'subuser')">Vendedor / Operador (Limitado)</button>
+                                <button class="csd-item ${u.role === 'admin' ? 'selected' : ''} text-xs sm:text-sm" type="button" data-val="admin" onclick="_csdSelect(this,'admin')">Administrador (Total)</button>
+                            </div>
+                        </div>
+                        <div class="user-card-actions">
+                            <button onclick="window.openEditUserModal('${u.id}', '${u.username}')" title="Editar Usuario" style="background: none; border: none; color: var(--accent); cursor: pointer; padding: 6px 14px; font-size: 16px; transition: opacity 0.2s;">
+                                <i class="fas fa-pen"></i>
+                            </button>
+                            <button onclick="window.deleteUser('${u.id}')" title="Eliminar Usuario" style="background: none; border: none; color: #ef4444; cursor: pointer; padding: 6px 14px; font-size: 16px; transition: opacity 0.2s;">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('') || '<div style="padding: 30px; text-align: center; color: var(--text-dim);">No hay usuarios registrados</div>');
+        }
+
+        if (typeof window.loadTeam === 'function') {
+            window.loadTeam();
+        }
+    } catch (e) {
+        console.error('Error al cargar equipo global:', e);
+    }
+};
+
+window.saveNewUser = async () => {
+    const activeToken = localStorage.getItem('system_config_token') || localStorage.getItem('backoffice_token');
+    const usernameEl = document.getElementById('new-user-name');
+    const passwordEl = document.getElementById('new-user-pass');
+    const roleEl = document.getElementById('new-user-role');
+    
+    if (!usernameEl || !passwordEl || !roleEl) return;
+    
+    const username = usernameEl.value.trim();
+    const password = passwordEl.value.trim();
+    const role = roleEl.value;
+
+    if (!username || !password) {
+        if (typeof window.showToast === 'function') window.showToast('Completa usuario y contraseña', 'warning');
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/backoffice/users?token=${activeToken}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password, role })
+        });
+        const data = await res.json();
+        if (data.success) {
+            if (typeof window.showToast === 'function') window.showToast('Usuario creado con éxito', 'success');
+            usernameEl.value = '';
+            passwordEl.value = '';
+            await window.loadGlobalTeam();
+        } else {
+            if (typeof window.showToast === 'function') window.showToast('Error: ' + data.error, 'error');
+        }
+    } catch (e) {
+        console.error(e);
+        if (typeof window.showToast === 'function') window.showToast('Error de conexión', 'error');
+    }
+};
+
+window.updateUserRole = async (id, role) => {
+    const activeToken = localStorage.getItem('system_config_token') || localStorage.getItem('backoffice_token');
+    try {
+        const res = await fetch(`/api/backoffice/users/${id}?token=${activeToken}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role })
+        });
+        const data = await res.json();
+        if (data.success) {
+            if (typeof window.showToast === 'function') window.showToast('Rol de usuario actualizado exitosamente', 'success');
+            await window.loadGlobalTeam();
+        } else {
+            if (typeof window.showToast === 'function') window.showToast('Error: ' + data.error, 'error');
+            await window.loadGlobalTeam();
+        }
+    } catch (e) {
+        console.error(e);
+        if (typeof window.showToast === 'function') window.showToast('Error de conexión', 'error');
+    }
+};
+
+window.deleteUser = async (id) => {
+    if (typeof Swal !== 'undefined') {
+        const resSwal = await Swal.fire({
+            title: '¿Eliminar usuario?',
+            text: '¿Estás seguro de que deseas eliminar este usuario del equipo?',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#ef4444',
+            cancelButtonColor: '#6b7280',
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar'
+        });
+        if (!resSwal.isConfirmed) return;
+    } else {
+        if (!confirm('¿Estás seguro de que deseas eliminar este usuario?')) return;
+    }
+
+    const activeToken = localStorage.getItem('system_config_token') || localStorage.getItem('backoffice_token');
+    try {
+        const res = await fetch(`/api/backoffice/users/${id}?token=${activeToken}`, {
+            method: 'DELETE'
+        });
+        const data = await res.json();
+        if (data.success) {
+            if (typeof window.showToast === 'function') window.showToast('Usuario eliminado con éxito', 'success');
+            await window.loadGlobalTeam();
+        } else {
+            if (typeof window.showToast === 'function') window.showToast('Error: ' + data.error, 'error');
+        }
+    } catch (e) {
+        console.error(e);
+        if (typeof window.showToast === 'function') window.showToast('Error de conexión', 'error');
+    }
+};
+
+window.openEditUserModal = (id, username) => {
+    const modal = document.getElementById('edit-user-modal');
+    const idInput = document.getElementById('edit-user-id');
+    const usernameInput = document.getElementById('edit-user-username');
+    const passwordInput = document.getElementById('edit-user-password');
+    if (!modal || !idInput || !usernameInput || !passwordInput) return;
+    
+    idInput.value = id;
+    usernameInput.value = username;
+    passwordInput.value = '';
+    modal.style.display = 'flex';
+};
+
+window.closeEditUserModal = () => {
+    const modal = document.getElementById('edit-user-modal');
+    if (modal) modal.style.display = 'none';
+};
+
+window.saveEditUser = async () => {
+    const activeToken = localStorage.getItem('system_config_token') || localStorage.getItem('backoffice_token');
+    const id = document.getElementById('edit-user-id')?.value;
+    const usernameEl = document.getElementById('edit-user-username');
+    const passwordEl = document.getElementById('edit-user-password');
+    if (!id || !usernameEl || !passwordEl) return;
+
+    const username = usernameEl.value.trim();
+    const password = passwordEl.value.trim();
+
+    if (!username) {
+        if (typeof window.showToast === 'function') window.showToast('El nombre de usuario no puede estar vacío', 'warning');
+        return;
+    }
+
+    const updates = { username };
+    if (password) updates.password = password;
+
+    try {
+        const res = await fetch(`/api/backoffice/users/${id}?token=${activeToken}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updates)
+        });
+        const data = await res.json();
+        if (data.success) {
+            if (typeof window.showToast === 'function') window.showToast('Usuario actualizado exitosamente', 'success');
+            window.closeEditUserModal();
+            await window.loadGlobalTeam();
+        } else {
+            if (typeof window.showToast === 'function') window.showToast('Error: ' + data.error, 'error');
+        }
+    } catch (e) {
+        console.error(e);
+        if (typeof window.showToast === 'function') window.showToast('Error de conexión', 'error');
+    }
+};

@@ -218,7 +218,7 @@ async function _initSystemConfigPage() {
         // ─────────────────────────────────────────────────────────────────────────────────────────
 
         if (!hasChanges) {
-            alert('No se detectaron cambios para guardar.');
+            window.swalAlert('Info', 'No se detectaron cambios para guardar.', 'info');
             return;
         }
 
@@ -237,7 +237,7 @@ async function _initSystemConfigPage() {
             const data = await response.json();
 
             if (data.success) {
-                alert('✅ Configuración guardada correctamente.');
+                window.swalAlert('Éxito', 'Configuración guardada correctamente.', 'success');
                 Object.assign(initialVariables, settingsToSave);
                 // Limpiar los campos de credenciales tras guardar para evitar re-guardado involuntario
                 credentialFields.forEach(key => {
@@ -253,11 +253,11 @@ async function _initSystemConfigPage() {
                     }
                 }
             } else {
-                alert('❌ Error: ' + (data.error || 'Error desconocido'));
+                window.swalAlert('Error', data.error || 'Error desconocido', 'error');
             }
         } catch (err) {
             console.error('Error saving settings:', err);
-            alert('Error de conexión al guardar.');
+            window.swalAlert('Error', 'Error de conexión al guardar.', 'error');
         } finally {
             updateBtn.disabled = false;
             updateBtn.innerHTML = '<i class="fas fa-save" style="margin-right:8px;"></i> Guardar (Sin reiniciar)';
@@ -340,7 +340,7 @@ async function _initSystemConfigPage() {
         const assistantId = assistantIdInput ? assistantIdInput.value : '';
 
         if (!assistantId) {
-            alert(`Debes ingresar un ID para el Asistente ${index} para sincronizar.`);
+            window.swalAlert('Atención', `Debes ingresar un ID para el Asistente ${index} para sincronizar.`, 'warning');
             return;
         }
 
@@ -361,7 +361,7 @@ async function _initSystemConfigPage() {
                 syncStatus.textContent = '✅ Sincronizado.';
                 syncStatus.style.color = '#10b981';
             } else {
-                alert('Error: ' + data.error);
+                window.swalAlert('Error', data.error, 'error');
             }
         } catch (err) {
             console.error('Error syncing prompt:', err);
@@ -395,7 +395,7 @@ async function _initSystemConfigPage() {
                 syncStatus.style.color = '#10b981';
                 initialVariables[settingKey] = prompt;
             } else {
-                alert('Error: ' + data.error);
+                window.swalAlert('Error', data.error, 'error');
             }
         } catch (err) {
             console.error('Error saving prompt:', err);
@@ -461,13 +461,13 @@ async function _initSystemConfigPage() {
                         if (typeof _csdSync === 'function') _csdSync('ID_GRUPO_RESUMEN_2');
                     }
 
-                    alert(`🎉 Se cargaron ${data.groups.length} grupos de WhatsApp correctamente.`);
+                    window.swalAlert('Éxito', `Se cargaron ${data.groups.length} grupos de WhatsApp correctamente.`, 'success');
                 } else {
-                    alert('❌ Error al cargar grupos: ' + (data.error || 'Asegúrate de que el bot esté conectado por QR.'));
+                    window.swalAlert('Error al cargar grupos', data.error || 'Asegúrate de que el bot esté conectado por QR.', 'error');
                 }
             } catch (err) {
                 console.error('Error loading WhatsApp groups:', err);
-                alert('❌ Error de conexión al obtener los grupos.');
+                window.swalAlert('Error de conexión', 'No se pudieron obtener los grupos.', 'error');
             } finally {
                 btnLoadGroups.disabled = false;
                 if (loadGroupsSpinner) loadGroupsSpinner.style.display = 'none';

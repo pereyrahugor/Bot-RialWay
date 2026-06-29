@@ -154,11 +154,11 @@ window.notificacionesView = (() => {
     }
 
     // ── TOGGLE ────────────────────────────────────────────────────────────
-    function _onToggle(checked) {
+    async function _onToggle(checked) {
         if (checked) {
             _activar();
         } else {
-            const confirmed = confirm('¿Desactivar las Notificaciones? Esto reseteará todos los mensajes sin leer a 0.');
+            const confirmed = await window.swalConfirm('¿Desactivar Notificaciones?', '¿Desactivar las Notificaciones? Esto reseteará todos los mensajes sin leer a 0.');
             if (!confirmed) {
                 const toggle = document.getElementById('notif-toggle');
                 if (toggle) toggle.checked = true;

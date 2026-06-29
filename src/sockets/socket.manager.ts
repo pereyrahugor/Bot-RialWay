@@ -54,6 +54,10 @@ export const initSocketIO = (serverInstance: any, { processUserMessage }: any) =
             io.emit('message_status_update', payload);
         });
 
+        historyEvents.on('user_updated', (payload) => {
+            io.emit('user_updated', payload);
+        });
+
         io.on('connection', (socket) => {
             // console.log('💬 Cliente web conectado');
             socket.on('message', async (msg) => {

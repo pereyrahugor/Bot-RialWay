@@ -32,8 +32,8 @@
                             clientId: user,
                             details: details
                         })
-                    }).catch(() => {}); // Consumir error silenciosamente si falla la red
-                } catch (err) {} finally {
+                    }).catch(() => { /* ignore */ }); // Consumir error silenciosamente si falla la red
+                } catch (err) { /* ignore */ } finally {
                     _isReporting = false;
                 }
             }, 0);
@@ -49,7 +49,7 @@
         try {
             const msg = args.map(arg => (typeof arg === 'object' && arg ? (arg.message || JSON.stringify(arg)) : String(arg))).join(' ');
             reportGlobalError(msg, { source: 'console.error', args });
-        } catch (e) {}
+        } catch (e) { /* ignore */ }
     };
 
     // 2. Interceptar window.onerror

@@ -116,6 +116,7 @@ export class HistoryHandler {
         // 0.2. Suscribirse a cambios en tiempo real de la tabla settings
         this.subscribeToSettingsChanges();
         this.subscribeToTicketChanges();
+        this.subscribeToUsersChanges();
 
         console.log('🔍 [HistoryHandler] Verificando tablas de historial...');
 
@@ -2585,6 +2586,29 @@ export class HistoryHandler {
             });
     }
 
+    static subscribeToUsersChanges() {
+        if (!supabase) return;
+        const projectId = this.PROJECT_IDENTIFIER;
+        supabase
+            .channel(`users-changes-${projectId}`)
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'users'
+            }, (payload: any) => {
+                if (payload.new?.project_id !== projectId && payload.old?.project_id !== projectId) return;
+                console.log(`📡 [Realtime] Cambio detectado en tabla users para proyecto ${projectId}`);
+                historyEvents.emit('user_updated', payload.new || payload.old);
+            })
+            .subscribe((status: string) => {
+                if (status === 'SUBSCRIBED') {
+                    console.log(`✅ [Realtime] Suscrito a tabla users para proyecto ${projectId}`);
+                } else if (status === 'CHANNEL_ERROR') {
+                    console.error(`❌ [Realtime] Error en suscripción de users. Verifica que Realtime esté habilitado en la tabla 'users' en Supabase.`);
+                }
+            });
+    }
+
     static invalidateSettingCache(key: string, projectId: string | null = null) {
         const targetProjectId = projectId || HistoryHandler.PROJECT_IDENTIFIER;
         this.settingsCache.delete(`${targetProjectId}:${key}`);
@@ -2957,6 +2981,47 @@ export class HistoryHandler {
             return { success: true, user: data };
         } catch (err: any) {
             console.error('[HistoryHandler] Error en createUser:', err);
+            return { success: false, error: err.message };
+        }
+    }
+
+    static async updateUserRole(userId: string, role: string) {
+        return this.updateUser(userId, { role });
+    }
+
+    static async updateUser(userId: string, updates: { role?: string; username?: string; password?: string }) {
+        try {
+            const cleanUpdates: any = {};
+            if (updates.role) cleanUpdates.role = updates.role;
+            if (updates.username) cleanUpdates.username = updates.username;
+            if (updates.password) cleanUpdates.password = updates.password;
+
+            const { data, error } = await supabase
+                .from('users')
+                .update(cleanUpdates)
+                .eq('id', userId)
+                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER)
+                .select()
+                .single();
+            if (error) throw error;
+            return { success: true, user: data };
+        } catch (err: any) {
+            console.error('[HistoryHandler] Error en updateUser:', err);
+            return { success: false, error: err.message };
+        }
+    }
+
+    static async deleteUser(userId: string) {
+        try {
+            const { error } = await supabase
+                .from('users')
+                .delete()
+                .eq('id', userId)
+                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
+            if (error) throw error;
+            return { success: true };
+        } catch (err: any) {
+            console.error('[HistoryHandler] Error en deleteUser:', err);
             return { success: false, error: err.message };
         }
     }

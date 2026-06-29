@@ -269,7 +269,7 @@ window.initConexionView = function () {
                 const data = await res.json();
                 if (!res.ok || !data.success) throw new Error(data.error || 'Server error');
             } catch (e) {
-                alert("Error al cambiar el estado del bot");
+                window.swalAlert("Error", "Error al cambiar el estado del bot", "error");
                 botToggle.checked = !enabled;
             }
         });
@@ -278,8 +278,8 @@ window.initConexionView = function () {
     // --- Reload Bot ---
     const reloadBtn = document.getElementById('system-reload-btn');
     if (reloadBtn) {
-        reloadBtn.addEventListener('click', async () => {
-            if (!confirm("¿Estás seguro de que deseas reiniciar el motor del bot? El servicio estará fuera de línea unos 30-45 segundos.")) return;
+        reloadBtn.addEventListener('click', async function restartBot() {
+            if (!await window.swalConfirm('¿Reiniciar bot?', '¿Seguro que quieres reiniciar el bot? Esto desconectará temporalmente el servicio.')) return;
             reloadBtn.disabled = true;
             reloadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reiniciando...';
             try {
@@ -289,11 +289,11 @@ window.initConexionView = function () {
                     body: JSON.stringify({ token: localStorage.getItem('backoffice_token') })
                 });
                 if (res.ok) {
-                    alert("Reinicio solicitado. La página se recargará en 10 segundos.");
+                    window.swalAlert("Reinicio solicitado", "La página se recargará en 10 segundos.", "success");
                     setTimeout(() => window.location.reload(), 10000);
                 }
             } catch (e) {
-                alert("Error al solicitar el reinicio");
+                window.swalAlert("Error", "Error al solicitar el reinicio", "error");
                 reloadBtn.disabled = false;
                 reloadBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Reiniciar';
             }
@@ -322,7 +322,7 @@ window.initConexionView = function () {
                 setTimeout(() => window.location.reload(), 5000);
             } catch (err) {
                 console.error(err);
-                alert("Hubo un error: " + err.message);
+                window.swalAlert("Error", "Hubo un error: " + err.message, "error");
                 confirmSi.disabled = false;
                 confirmSi.innerText = 'SÍ, REINICIAR';
             }
@@ -352,7 +352,7 @@ window.initConexionView = function () {
                 setTimeout(() => window.location.reload(), 5000);
             } catch (err) {
                 console.error(err);
-                alert("Hubo un error al desvincular Meta: " + err.message);
+                window.swalAlert("Error", "Hubo un error al desvincular Meta: " + err.message, "error");
                 confirmUnlinkSi.disabled = false;
                 confirmUnlinkSi.innerText = 'SÍ, DESVINCULAR';
             }
@@ -383,7 +383,7 @@ window.initConexionView = function () {
                     setTimeout(fetchStatus, 1500);
                 } else {
                     const err = await res.json();
-                    alert('Error al iniciar generador de QR: ' + (err.error || 'error desconocido'));
+                    window.swalAlert("Error", 'Error al iniciar generador de QR: ' + (err.error || 'error desconocido'), "error");
                     generateQrBtn.style.display = 'inline-flex';
                     if (generatePairingBtn) generatePairingBtn.style.display = 'inline-flex';
                     if (pairingPhoneInput) pairingPhoneInput.style.display = 'block';
@@ -391,7 +391,7 @@ window.initConexionView = function () {
                 }
             } catch (e) {
                 console.error(e);
-                alert('Error al iniciar generador de QR');
+                window.swalAlert("Error", 'Error al iniciar generador de QR', "error");
                 generateQrBtn.style.display = 'inline-flex';
                 if (generatePairingBtn) generatePairingBtn.style.display = 'inline-flex';
                 if (pairingPhoneInput) pairingPhoneInput.style.display = 'block';
@@ -408,7 +408,7 @@ window.initConexionView = function () {
         generatePairingBtn.addEventListener('click', async () => {
             const phoneNumber = pairingPhoneInput.value.trim();
             if (!phoneNumber) {
-                alert('Por favor ingresa un número de teléfono válido (con código de país, ej: 5491122334455)');
+                window.swalAlert("Atención", 'Por favor ingresa un número de teléfono válido (con código de país, ej: 5491122334455)', "warning");
                 return;
             }
             
@@ -437,7 +437,7 @@ window.initConexionView = function () {
                     setTimeout(fetchStatus, 1500);
                 } else {
                     const err = await res.json();
-                    alert('Error al iniciar vinculación: ' + (err.error || 'error desconocido'));
+                    window.swalAlert("Error", 'Error al iniciar vinculación: ' + (err.error || 'error desconocido'), "error");
                     generatePairingBtn.style.display = 'inline-flex';
                     if (generateQrBtn) generateQrBtn.style.display = 'inline-flex';
                     if (pairingPhoneInput) pairingPhoneInput.style.display = 'block';
@@ -445,7 +445,7 @@ window.initConexionView = function () {
                 }
             } catch (e) {
                 console.error(e);
-                alert('Error al iniciar vinculación');
+                window.swalAlert("Error", 'Error al iniciar vinculación', "error");
                 generatePairingBtn.style.display = 'inline-flex';
                 if (generateQrBtn) generateQrBtn.style.display = 'inline-flex';
                 if (pairingPhoneInput) pairingPhoneInput.style.display = 'block';

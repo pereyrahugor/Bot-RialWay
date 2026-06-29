@@ -233,7 +233,7 @@ window.mercadoPagoView = (() => {
         const disconnectBtn = document.getElementById('mp-disconnect-btn');
         if (disconnectBtn) {
             disconnectBtn.addEventListener('click', async () => {
-                if (!confirm('¿Estás seguro de que deseas desvincular Mercado Pago?')) return;
+                if (!await window.swalConfirm('¿Desvincular Mercado Pago?', '¿Estás seguro de que deseas desvincular Mercado Pago?')) return;
 
                 disconnectBtn.disabled = true;
                 disconnectBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Desvinculando...';

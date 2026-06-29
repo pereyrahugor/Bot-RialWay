@@ -319,15 +319,14 @@ async function fetchChats(refresh = false) {
         renderChatList();
         
         // Auto-abrir chat si venimos desde el CRM
-        if (!activeChatId) {
-            const pendingChatId = localStorage.getItem('activeChat');
-            if (pendingChatId) {
-                localStorage.removeItem('activeChat');
-                console.log('[CRM] Auto-abriendo chat:', pendingChatId);
-                // Esperar un breve instante para asegurar que el DOM está listo
-                setTimeout(() => selectChat(pendingChatId), 100);
-                return;
-            }
+        const pendingChatId = localStorage.getItem('activeChat');
+        if (pendingChatId) {
+            localStorage.removeItem('activeChat');
+            activeChatId = pendingChatId;
+            console.log('[CRM] Auto-abriendo chat:', pendingChatId);
+            // Esperar un breve instante para asegurar que el DOM está listo
+            setTimeout(() => selectChat(pendingChatId), 100);
+            return;
         }
         
         if (activeChatId) {
@@ -1178,7 +1177,7 @@ async function startRecording() {
         micBtn.title = 'Detener grabacion';
     } catch (err) {
         if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-            alert('Permiso de microfono denegado. Habilitalo en la configuracion del navegador.');
+            window.swalAlert('Permiso denegado', 'Permiso de microfono denegado. Habilitalo en la configuracion del navegador.', 'error');
         } else {
             console.error('Error al iniciar grabacion:', err);
         }
@@ -1213,16 +1212,16 @@ async function sendAudioFile(file) {
         });
         if (res.ok) {
             const data = await res.json();
-            if (data.warning) alert('⚠️ ' + data.warning);
+            if (data.warning) window.swalAlert('Advertencia', data.warning, 'warning');
         } else {
             let errorMsg = 'Error desconocido';
             const text = await res.text();
             try { errorMsg = JSON.parse(text).error || errorMsg; } catch (_) { errorMsg = text || errorMsg; }
-            alert('Error al enviar audio: ' + errorMsg);
+            window.swalAlert('Error al enviar audio', errorMsg, 'error');
         }
     } catch (err) {
         console.error('Error al enviar audio:', err);
-        alert('Error de conexion al enviar el audio');
+        window.swalAlert('Error de conexión', 'Error de conexion al enviar el audio', 'error');
     } finally {
         isSending = false;
         if (micBtn) micBtn.disabled = false;
@@ -1274,15 +1273,15 @@ async function sendMessage() {
             });
             if (res.ok) {
                 const data = await res.json();
-                if (data.warning) alert('⚠️ ' + data.warning);
+                if (data.warning) window.swalAlert('Advertencia', data.warning, 'warning');
             } else {
                 const text = await res.text();
                 let msg = 'Error desconocido';
                 try { msg = JSON.parse(text).error || msg; } catch (_) { msg = text || msg; }
-                alert('Error al enviar: ' + msg);
+                window.swalAlert('Error al enviar', msg, 'error');
             }
         } catch (_) {
-            alert('Error de conexión al enviar el archivo');
+            window.swalAlert('Error de conexión', 'Error de conexión al enviar el archivo', 'error');
         } finally {
             isSending = false;
             btn.disabled = false;
@@ -1618,7 +1617,7 @@ async function createTag() {
 }
 
 async function deleteTag(id) {
-    if (!confirm('¿Eliminar esta etiqueta?')) return;
+    if (!await window.swalConfirm('¿Eliminar etiqueta?', '¿Eliminar esta etiqueta?')) return;
     const res = await fetch(`/api/backoffice/tags/${id}?token=${token}`, {
         method: 'DELETE'
     });
@@ -1737,6 +1736,12 @@ socket.on('contact_updated', (payload) => {
         
         // Re-renderizar lista de chats
         renderChatList();
+    }
+});
+socket.on('user_updated', (payload) => {
+    console.log('📡 Usuario actualizado en tiempo real:', payload);
+    if (typeof window.loadGlobalTeam === 'function') {
+        window.loadGlobalTeam();
     }
 });
 
@@ -2193,7 +2198,7 @@ async function closeActiveTicket() {
         return;
     }
 
-    if (!confirm('¿Desea cerrar el ticket actual?')) return;
+    if (!await window.swalConfirm('¿Cerrar ticket?', '¿Desea cerrar el ticket actual?')) return;
 
     try {
         const res = await fetch(`/api/backoffice/tickets/${ticketId}?token=${token}`, {
@@ -2236,7 +2241,7 @@ async function deleteActiveTicket() {
     const ticketId = document.getElementById('crm-lead-jump')?.value;
     if (!ticketId) return;
 
-    if (!confirm('⚠️ ¿Está seguro de ELIMINAR este ticket? esta acción no se puede deshacer.')) return;
+    if (!await window.swalConfirm('¿Eliminar ticket?', '⚠️ ¿Está seguro de ELIMINAR este ticket? esta acción no se puede deshacer.')) return;
 
     try {
         const res = await fetch(`/api/backoffice/tickets/${ticketId}?token=${token}`, {
@@ -3067,7 +3072,7 @@ async function startImportExcel() {
     const statusText = document.getElementById('import-status-text');
 
     if (!fileInput.files || fileInput.files.length === 0) {
-        alert('Por favor selecciona un archivo Excel.');
+        window.swalAlert('Atención', 'Por favor selecciona un archivo Excel.', 'warning');
         return;
     }
 
@@ -3100,7 +3105,7 @@ async function startImportExcel() {
             setTimeout(async () => {
                 await fetchChats(true);
                 await fetchBotTags();
-                alert(`Importación finalizada: ${data.imported} contactos procesados.`);
+                window.swalAlert('¡Importación Exitosa!', `Importación finalizada: ${data.imported} contactos procesados.`, 'success');
                 toggleImportModal();
             }, 1500);
         } else {
@@ -3110,7 +3115,7 @@ async function startImportExcel() {
         console.error('[Import] Error:', e);
         statusText.innerText = '❌ Error: ' + e.message;
         statusText.style.color = '#f87171';
-        alert('Error al importar: ' + e.message);
+        window.swalAlert('Error al importar', e.message, 'error');
     } finally {
         btn.disabled = false;
     }
@@ -3204,7 +3209,7 @@ let forwardMediaUrl = '';
 let forwardMediaType = '';
 
 async function deleteMessage(chatId, messageId) {
-    if (!confirm('¿Estás seguro de que quieres eliminar este mensaje?')) return;
+    if (!await window.swalConfirm('¿Eliminar mensaje?', '¿Estás seguro de que quieres eliminar este mensaje?')) return;
     
     try {
         const res = await fetch(`/api/backoffice/messages/${chatId}/${messageId}?token=${token}`, {
@@ -3221,16 +3226,16 @@ async function deleteMessage(chatId, messageId) {
             } else {
                 console.log(data.message);
                 if (data.message.includes('Nota:')) {
-                    alert(data.message);
+                    window.swalAlert('Aviso', data.message, 'info');
                 }
             }
         } else {
             const err = await res.json();
-            alert('Error al eliminar mensaje: ' + (err.error || 'error desconocido'));
+            window.swalAlert('Error', 'Error al eliminar mensaje: ' + (err.error || 'error desconocido'), 'error');
         }
     } catch (e) {
         console.error(e);
-        alert('Error al eliminar el mensaje');
+        window.swalAlert('Error', 'Error al eliminar el mensaje', 'error');
     }
 }
 
@@ -3312,18 +3317,18 @@ async function executeForward(targetChatId) {
         });
         
         if (res.ok) {
-            alert('Archivo reenviado correctamente');
+            window.swalAlert('¡Éxito!', 'Archivo reenviado correctamente', 'success');
             closeForwardModal();
             if (targetChatId === activeChatId) {
                 fetchMessages(activeChatId, true);
             }
         } else {
             const err = await res.json();
-            alert('Error al reenviar archivo: ' + (err.error || 'error desconocido'));
+            window.swalAlert('Error', 'Error al reenviar archivo: ' + (err.error || 'error desconocido'), 'error');
         }
     } catch (e) {
         console.error(e);
-        alert('Error al reenviar archivo');
+        window.swalAlert('Error', 'Error al reenviar archivo', 'error');
     }
 }
 
@@ -3606,7 +3611,7 @@ window.saveQuickMessage = async function() {
     const message = msgInput.value.trim();
 
     if (!title || !message) {
-        alert('Por favor, ingresa un título y un mensaje');
+        window.swalAlert('Atención', 'Por favor, ingresa un título y un mensaje', 'warning');
         return;
     }
 
@@ -3623,7 +3628,7 @@ window.saveQuickMessage = async function() {
             msgInput.value = '';
             window.loadQuickMessages();
         } else {
-            alert('Error al guardar el mensaje rápido');
+            window.swalAlert('Error', 'Error al guardar el mensaje rápido', 'error');
         }
     } catch (e) {
         console.error('Error al guardar mensaje rápido:', e);
@@ -3632,7 +3637,7 @@ window.saveQuickMessage = async function() {
 
 window.deleteQuickMessage = async function(e, id) {
     if (e) e.stopPropagation();
-    if (!confirm('¿Estás seguro de eliminar este mensaje rápido?')) return;
+    if (!await window.swalConfirm('¿Eliminar mensaje rápido?', '¿Estás seguro de eliminar este mensaje rápido?')) return;
 
     try {
         const activeChat = chats.find(c => c.id === activeChatId);
@@ -3643,7 +3648,7 @@ window.deleteQuickMessage = async function(e, id) {
         if (res.ok) {
             window.loadQuickMessages();
         } else {
-            alert('Error al eliminar el mensaje rápido');
+            window.swalAlert('Error', 'Error al eliminar el mensaje rápido', 'error');
         }
     } catch (e) {
         console.error('Error al eliminar mensaje rápido:', e);

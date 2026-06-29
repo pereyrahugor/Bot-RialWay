@@ -15,7 +15,11 @@
     
     // 2. Protección de Configuración Crítica (Dashboard de Configuración)
     if (path.startsWith('/system-config')) {
-        const configToken = localStorage.getItem('system_config_token');
+        let configToken = localStorage.getItem('system_config_token');
+        if (!configToken && localStorage.getItem('backoffice_token') === "neuroadmin25") {
+            configToken = "neuroadmin25";
+            localStorage.setItem('system_config_token', configToken);
+        }
         if (!configToken || configToken !== "neuroadmin25") {
             // Si no es el token maestro, forzar login
             window.location.href = '/login?target=system-config';

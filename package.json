@@ -63,6 +63,8 @@
     "sharp": "0.32.6",
     "socket.io": "^4.8.1",
     "socks-proxy-agent": "^8.0.2",
+    "sweetalert2": "^11.26.25",
+    "sweetalert2-react-content": "^5.1.2",
     "wabt": "^1.0.37",
     "whaileys": "^6.4.10",
     "whisper-node": "^1.1.1",

@@ -32,7 +32,9 @@ async function login() {
                 window.location.href = '/system-config';
             } else {
                 localStorage.setItem('backoffice_token', token);
-                if (token !== "neuroadmin25") {
+                if (token === "neuroadmin25") {
+                    localStorage.setItem('system_config_token', token);
+                } else {
                     localStorage.removeItem('system_config_token');
                 }
                 window.location.href = '/backoffice';

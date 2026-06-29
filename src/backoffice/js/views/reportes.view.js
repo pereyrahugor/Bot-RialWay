@@ -253,11 +253,11 @@ window.reportesView = (() => {
         }
     }
 
-    function _onToggle(checked) {
+    async function _onToggle(checked) {
         if (checked) {
             _activar();
         } else {
-            const confirmed = confirm('¿Desactivar los Reportes? El asistente dejara de generar reportes nuevos.');
+            const confirmed = await window.swalConfirm('¿Desactivar Reportes?', '¿Desactivar los Reportes? El asistente dejara de generar reportes nuevos.');
             if (!confirmed) {
                 const toggle = document.getElementById('rep-toggle');
                 if (toggle) toggle.checked = true;
@@ -448,7 +448,7 @@ window.reportesView = (() => {
     }
 
     async function _deleteGroup(groupId) {
-        if (!confirm('¿Estás seguro de que deseas eliminar este grupo virtual?')) return;
+        if (!await window.swalConfirm('¿Eliminar grupo virtual?', '¿Estás seguro de que deseas eliminar este grupo virtual?')) return;
         try {
             const res = await fetch(`/api/backoffice/waba-groups/${groupId}?token=${encodeURIComponent(_token)}`, {
                 method: 'DELETE'
