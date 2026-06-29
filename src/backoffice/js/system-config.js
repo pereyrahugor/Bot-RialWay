@@ -134,13 +134,15 @@ async function _initSystemConfigPage() {
     function updateClientSlugVisibility() {
         const clientSlugSel = document.getElementById('CLIENT_SLUG');
         const aquavitaContainer = document.getElementById('aquavita-credentials-container');
-        if (!clientSlugSel || !aquavitaContainer) return;
+        const ganemosNetContainer = document.getElementById('ganemos-net-credentials-container');
+        if (!clientSlugSel) return;
         
         const val = clientSlugSel.value;
-        if (val === 'aquavita') {
-            aquavitaContainer.style.display = 'grid';
-        } else {
-            aquavitaContainer.style.display = 'none';
+        if (aquavitaContainer) {
+            aquavitaContainer.style.display = val === 'aquavita' ? 'grid' : 'none';
+        }
+        if (ganemosNetContainer) {
+            ganemosNetContainer.style.display = val === 'ganemos-net' ? 'grid' : 'none';
         }
     }
 
