@@ -490,8 +490,20 @@ export class LocalHistoryStore {
         const tickets = this.getTicketsList(projectId);
         const idx = tickets.findIndex(t => t.id === ticketId);
         if (idx !== -1) {
+            const chatId = tickets[idx].chat_id;
             tickets.splice(idx, 1);
             this.saveTicketsList(projectId, tickets);
+
+            if (chatId) {
+                await this.updateContactDetails(chatId, {
+                    is_lead: false,
+                    crm_status: null,
+                    assigned_agent: 'asistente1',
+                    bot_enabled: true,
+                    last_db_result: null
+                }, projectId);
+            }
+
             return true;
         }
         return false;
@@ -535,6 +547,8 @@ export class LocalHistoryStore {
                 contactUpdate.assigned_agent = 'asistente1';
                 contactUpdate.bot_enabled = true;
                 contactUpdate.last_db_result = null;
+                contactUpdate.is_lead = false;
+                contactUpdate.crm_status = null;
             }
 
             if (Object.keys(contactUpdate).length > 0) {

@@ -185,7 +185,8 @@ export class ReconectionFlow {
             console.log(`[ReconectionFlow] 🤖 Generando resumen con Asistente: ${targetAssistantId} | Proyecto: ${dynamicProjectId}`);
 
             const resumen = await safeToAsk(targetAssistantId, "GET_RESUMEN", this.state, this.ctx.from, undefined, 5, false, dynamicProjectId, true) as string;
-            const data: GenericResumenData = extraerDatosResumen(resumen);
+            const data: any = extraerDatosResumen(resumen);
+            data.resumenRaw = resumen;
             const tipo = data.tipo || "SI_RESUMEN";
             if (tipo === "SI_RESUMEN") {
                 if (this.state) delete this.state.reconectionFlow;
