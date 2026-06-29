@@ -759,34 +759,31 @@ window.loadGlobalTeam = async () => {
 window.saveNewUser = async () => {
     const activeToken = localStorage.getItem('system_config_token') || localStorage.getItem('backoffice_token');
     const usernameEl = document.getElementById('new-user-name');
-    const passEl = document.getElementById('new-user-pass');
+    const passwordEl = document.getElementById('new-user-pass');
     const roleEl = document.getElementById('new-user-role');
     
-    if (!usernameEl || !passEl || !roleEl) return;
+    if (!usernameEl || !passwordEl || !roleEl) return;
     
     const username = usernameEl.value.trim();
-    const credVal = passEl.value.trim();
+    const password = passwordEl.value.trim();
     const role = roleEl.value;
 
-    if (!username || !credVal) {
+    if (!username || !password) {
         if (typeof window.showToast === 'function') window.showToast('Completa usuario y contraseña', 'warning');
         return;
     }
 
     try {
-        const payload = { username, role };
-        payload['pass' + 'word'] = credVal;
-
         const res = await fetch(`/api/backoffice/users?token=${activeToken}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            body: JSON.stringify({ username, password, role })
         });
         const data = await res.json();
         if (data.success) {
             if (typeof window.showToast === 'function') window.showToast('Usuario creado con éxito', 'success');
             usernameEl.value = '';
-            passEl.value = '';
+            passwordEl.value = '';
             await window.loadGlobalTeam();
         } else {
             if (typeof window.showToast === 'function') window.showToast('Error: ' + data.error, 'error');
@@ -858,12 +855,12 @@ window.openEditUserModal = (id, username) => {
     const modal = document.getElementById('edit-user-modal');
     const idInput = document.getElementById('edit-user-id');
     const usernameInput = document.getElementById('edit-user-username');
-    const passInput = document.getElementById('edit-user-password');
-    if (!modal || !idInput || !usernameInput || !passInput) return;
+    const passwordInput = document.getElementById('edit-user-password');
+    if (!modal || !idInput || !usernameInput || !passwordInput) return;
     
     idInput.value = id;
     usernameInput.value = username;
-    passInput.value = '';
+    passwordInput.value = '';
     modal.style.display = 'flex';
 };
 
@@ -876,11 +873,11 @@ window.saveEditUser = async () => {
     const activeToken = localStorage.getItem('system_config_token') || localStorage.getItem('backoffice_token');
     const id = document.getElementById('edit-user-id')?.value;
     const usernameEl = document.getElementById('edit-user-username');
-    const passEl = document.getElementById('edit-user-password');
-    if (!id || !usernameEl || !passEl) return;
+    const passwordEl = document.getElementById('edit-user-password');
+    if (!id || !usernameEl || !passwordEl) return;
 
     const username = usernameEl.value.trim();
-    const credVal = passEl.value.trim();
+    const password = passwordEl.value.trim();
 
     if (!username) {
         if (typeof window.showToast === 'function') window.showToast('El nombre de usuario no puede estar vacío', 'warning');
@@ -888,9 +885,7 @@ window.saveEditUser = async () => {
     }
 
     const updates = { username };
-    if (credVal) {
-        updates['pass' + 'word'] = credVal;
-    }
+    if (password) updates.password = password;
 
     try {
         const res = await fetch(`/api/backoffice/users/${id}?token=${activeToken}`, {
