@@ -2536,6 +2536,9 @@ export class HistoryHandler {
                 if (payload.eventType === 'UPDATE') {
                     historyEvents.emit('ticket_updated', payload.new);
                 }
+                if (payload.eventType === 'DELETE') {
+                    historyEvents.emit('ticket_deleted', payload.old);
+                }
             })
             .subscribe((status: string) => {
                 if (status === 'SUBSCRIBED') {

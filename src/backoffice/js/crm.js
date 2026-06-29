@@ -183,12 +183,23 @@ window.syncCRM = syncCRM; // Exportar globalmente
 function renderBoard() {
     const board = document.getElementById('kanban-board-inner');
     if (!board) return;
+
+    if (board.children.length === columns.length) {
+        columns.forEach(col => {
+            const titleEl = board.querySelector(`.kanban-column[data-id="${col.id}"] .column-title`);
+            if (titleEl && titleEl.innerText !== col.title) {
+                titleEl.innerText = col.title;
+            }
+        });
+        distributeCards();
+        return;
+    }
+
     board.innerHTML = '';
 
     columns.forEach((col, index) => {
         const columnEl = document.createElement('div');
-        columnEl.className = 'kanban-column animate-fade';
-        columnEl.style.animationDelay = `${index * 0.1}s`;
+        columnEl.className = 'kanban-column';
         columnEl.dataset.id = col.id;
         
         columnEl.innerHTML = `

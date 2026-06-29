@@ -375,15 +375,28 @@ window.ticketsView = (() => {
             const s = typeof socket !== 'undefined' ? socket : (typeof window.crmSocket !== 'undefined' ? window.crmSocket : io());
             
             s.on('ticket_updated', async (payload) => {
+                if (_activeTicket && payload && payload.id === _activeTicket.id) {
+                    _activeTicket = { ..._activeTicket, ...payload };
+                    _updateChatUI();
+                }
+                
                 await _fetchAll();
                 
-                if (_activeTicket && payload && payload.id === _activeTicket.id) {
+                if (_activeTicket) {
                     const updatedTicket = _activeTicketsCache.find(x => x.id === _activeTicket.id);
                     if (updatedTicket) {
                         _activeTicket = updatedTicket;
                         _updateChatUI();
                     }
                 }
+            });
+
+            s.on('ticket_deleted', async (payload) => {
+                if (_activeTicket && payload && payload.id === _activeTicket.id) {
+                    _activeTicket = null;
+                    _updateChatUI();
+                }
+                await _fetchAll();
             });
         }
     }
@@ -399,8 +412,10 @@ window.ticketsView = (() => {
     }
 
     async function _fetchAll() {
-        _fetchColumn('pending');
-        _fetchColumn('Cerrado');
+        await Promise.all([
+            _fetchColumn('pending'),
+            _fetchColumn('Cerrado')
+        ]);
     }
 
     let _activeTicket = null;
