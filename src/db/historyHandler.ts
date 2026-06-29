@@ -2190,11 +2190,13 @@ export class HistoryHandler {
                     if (details.contact.source !== undefined) chatUpdate.source = details.contact.source;
                 }
 
-                // Si el estado es cerrado, aplicar lógica de reset de bot
+                // Si el estado es cerrado, aplicar lógica de reset de bot y de-clasificación de lead
                 if (ticketUpdate.estado === 'Cerrado') {
                     chatUpdate.assigned_agent = 'asistente1';
                     chatUpdate.bot_enabled = true;
                     chatUpdate.last_db_result = null;
+                    chatUpdate.is_lead = false;
+                    chatUpdate.crm_status = null;
                 }
 
                 if (Object.keys(chatUpdate).length > 0) {
@@ -2242,6 +2244,14 @@ export class HistoryHandler {
         try {
             console.log(`[HistoryHandler] Eliminando ticket ${ticketId}`);
 
+            // Obtener el ticket para conocer el chat_id antes de eliminarlo
+            const { data: ticket } = await supabase
+                .from('tickets')
+                .select('chat_id')
+                .eq('id', ticketId)
+                .eq('project_id', currentProjectId)
+                .single();
+
             const { error } = await supabase
                 .from('tickets')
                 .delete()
@@ -2249,6 +2259,32 @@ export class HistoryHandler {
                 .eq('project_id', currentProjectId);
 
             if (error) throw error;
+
+            if (ticket && ticket.chat_id) {
+                // Actualizar contacto para que deje de ser lead y resetear bot
+                const chatUpdate = {
+                    is_lead: false,
+                    crm_status: null,
+                    assigned_agent: 'asistente1',
+                    bot_enabled: true,
+                    last_db_result: null
+                };
+
+                await supabase
+                    .from('chats')
+                    .update(chatUpdate)
+                    .eq('id', ticket.chat_id)
+                    .eq('project_id', currentProjectId);
+
+                historyEvents.emit('contact_updated', {
+                    chatId: ticket.chat_id,
+                    project_id: currentProjectId,
+                    details: chatUpdate
+                });
+
+                this.invalidateChatCache(ticket.chat_id, currentProjectId);
+                historyEvents.emit('bot_toggled', { chatId: ticket.chat_id, enabled: true, assigned_agent: 'asistente1', projectId: currentProjectId });
+            }
 
             historyEvents.emit('ticket_deleted', { id: ticketId, projectId: currentProjectId });
             return { success: true };

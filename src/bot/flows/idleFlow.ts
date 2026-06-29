@@ -212,6 +212,54 @@ async function dispatchVirtualGroupReports(projectId: string, message: string, s
     }
 }
 
+async function reportAndClose(
+    tipo: string,
+    resumen: string,
+    data: any,
+    ctx: any,
+    state: any,
+    provider: any,
+    dynamicProjectId: string,
+    ID_GRUPO_RESUMEN: string,
+    ID_GRUPO_RESUMEN_2: string,
+    sheetId: any,
+    sheetRange: any
+) {
+    const userId = ctx.from;
+    const targetGroup = (tipo === 'SI_RESUMEN_G2') ? ID_GRUPO_RESUMEN_2 : ID_GRUPO_RESUMEN;
+    
+    console.log(`[idleFlow] Procesando reporte y cierre para tipo: ${tipo} | Proyecto: ${dynamicProjectId}`);
+    data.linkWS = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
+
+    const resumenConLink = formatSummary(resumen, data, userId);
+
+    if (tipo !== 'NO_REPORTAR_BAJA') {
+        try {
+            const groupProvider = getGroupProvider();
+            const providerToSend = groupProvider || provider;
+            console.log(`[idleFlow] Enviando resumen (${tipo}) via ${providerToSend.constructor.name} a ${targetGroup}`);
+
+            await providerToSend.sendMessage(targetGroup, resumenConLink, {});
+            console.log(`✅ ${tipo}: Resumen enviado a ${targetGroup}`);
+
+            await sendMediaToGroup(providerToSend, state, targetGroup, data, true);
+        } catch (err: any) {
+            console.error(`❌ ${tipo} Error en envío de reporte:`, err?.message || err);
+        }
+
+        await dispatchVirtualGroupReports(dynamicProjectId, resumenConLink, state, provider, data);
+    }
+
+    await cleanUpMediaFiles(state);
+
+    if (sheetId) {
+        await addToSheet(data, sheetId ?? undefined, sheetRange ?? undefined);
+    }
+
+    // Resetear al asistente 1 al cerrar la conversación
+    await HistoryHandler.setAssignedAgent(userId, 'asistente1', dynamicProjectId);
+}
+
 //** Flow para cierre de conversación, generación de resumen y envio a grupo de WS */
 const idleFlow = addKeyword(EVENTS.ACTION).addAction(
     async (ctx, { endFlow, provider, state, flowDynamic, gotoFlow }) => {
@@ -350,32 +398,16 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
             const tipo = (data.tipo ?? '').replace(/[^A-Z0-9_]/gi, '').toUpperCase();
 
             if (tipo === 'NO_REPORTAR_BAJA') {
-                // No seguimiento, no enviar resumen al grupo ws, envia resumen a sheet, envia msj de cierre
                 console.log('NO_REPORTAR_BAJA: No se realiza seguimiento ni se envía resumen al grupo.');
-                data.linkWS = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
-
-                // Limpieza de imagen o video si existe
-                const lastImage = state.get('lastImage');
-                if (lastImage && typeof lastImage === 'string' && fs.existsSync(lastImage)) {
-                    fs.unlinkSync(lastImage);
-                    await state.update({ lastImage: null });
-                }
-                const lastVideo = state.get('lastVideo');
-                if (lastVideo && typeof lastVideo === 'string' && fs.existsSync(lastVideo)) {
-                    fs.unlinkSync(lastVideo);
-                    await state.update({ lastVideo: null });
-                }
-
-                await addToSheet(data, sheetId ?? undefined, sheetRange ?? undefined);
-                // Resetear al asistente 1 al cerrar la conversación
-                await HistoryHandler.setAssignedAgent(userId, 'asistente1', dynamicProjectId);
-                return endFlow(); //("BNI, cambiando la forma en que el mundo hace negocios\nGracias por su contacto.");
+                await reportAndClose('NO_REPORTAR_BAJA', resumen, data, ctx, state, provider, dynamicProjectId, ID_GRUPO_RESUMEN, ID_GRUPO_RESUMEN_2, sheetId, sheetRange);
+                return endFlow();
             } else if (tipo === 'NO_REPORTAR_SEGUIR') {
-                // Solo este activa seguimiento
                 console.log('NO_REPORTAR_SEGUIR: Se realiza seguimiento, pero no se envía resumen al grupo.');
                 
                 data.linkWS = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
-                await addToSheet(data, sheetId ?? undefined, sheetRange ?? undefined); // Enviamos a sheets siempre antes del seguimiento
+                if (sheetId) {
+                    await addToSheet(data, sheetId ?? undefined, sheetRange ?? undefined);
+                }
 
                 const reconFlow = new ReconectionFlow({
                     ctx,
@@ -385,32 +417,36 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                     gotoFlow,
                     maxAttempts: 3,
                     onSuccess: async (newData) => {
-                        // Si el usuario respondió directamente, omitimos el redireccionamiento para evitar ejecuciones dobles,
-                        // ya que el bot procesará el mensaje entrante de forma natural.
                         if (newData && (newData as any).userResponded) {
                             console.log(`[idleFlow] El usuario respondió al seguimiento. Dejando que el bot lo procese naturalmente.`);
                             return;
                         }
-                        // Derivar al flujo conversacional usando gotoFlow
-                        if (typeof gotoFlow === 'function') {
-                            if (ctx.type === 'voice_note' || ctx.type === 'VOICE_NOTE') {
-                                const mod = await import('./welcomeFlowVoice');
-                                return gotoFlow(mod.welcomeFlowVoice);
-                            } else {
-                                const mod = await import('./welcomeFlowTxt');
-                                return gotoFlow(mod.welcomeFlowTxt);
-                            }
+                        if (newData && (newData as any).resumenRaw) {
+                            console.log(`[idleFlow] Seguimiento finalizado con resumen. Reportando y cerrando...`);
+                            const finalTipo = ((newData as any).tipo ?? '').replace(/[^A-Z0-9_]/gi, '').toUpperCase() || 'SI_RESUMEN';
+                            await reportAndClose(
+                                finalTipo,
+                                (newData as any).resumenRaw,
+                                newData,
+                                ctx,
+                                state,
+                                provider,
+                                dynamicProjectId,
+                                ID_GRUPO_RESUMEN,
+                                ID_GRUPO_RESUMEN_2,
+                                sheetId,
+                                sheetRange
+                            );
                         }
                     },
                     onFail: async () => {
-                        console.log('NO_REPORTAR_SEGUIR: No se obtuvo respuesta luego del seguimiento (ya reportado a sheets).');
+                        console.log('NO_REPORTAR_SEGUIR: No se obtuvo respuesta luego del seguimiento. Reseteando agente...');
+                        await HistoryHandler.setAssignedAgent(userId, 'asistente1', dynamicProjectId);
                     }
                 });
                 return await reconFlow.start();
-                // No cerrar el hilo aquí, dejar abierto para que el usuario pueda responder
-                // Bloque SI_RESUMEN_G2
+
             } else if (tipo === 'SI_REPORTAR_SEGUIR') {
-                // Se envía resumen al grupo y se activa seguimiento
                 console.log('SI_REPORTAR_SEGUIR: Se envía resumen al grupo y se realiza seguimiento.');
                 data.linkWS = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
 
@@ -432,7 +468,9 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                 await dispatchVirtualGroupReports(dynamicProjectId, resumenConLink, state, provider, data);
                 await cleanUpMediaFiles(state);
 
-                await addToSheet(data, sheetId ?? undefined, sheetRange ?? undefined);
+                if (sheetId) {
+                    await addToSheet(data, sheetId ?? undefined, sheetRange ?? undefined);
+                }
 
                 const reconFlow = new ReconectionFlow({
                     ctx,
@@ -442,111 +480,45 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                     gotoFlow,
                     maxAttempts: 3,
                     onSuccess: async (newData) => {
-                        // Si el usuario respondió directamente, omitimos el redireccionamiento para evitar ejecuciones dobles,
-                        // ya que el bot procesará el mensaje entrante de forma natural.
                         if (newData && (newData as any).userResponded) {
                             console.log(`[idleFlow] El usuario respondió al seguimiento. Dejando que el bot lo procese naturalmente.`);
                             return;
                         }
-                        // Derivar al flujo conversacional usando gotoFlow
-                        if (typeof gotoFlow === 'function') {
-                            if (ctx.type === 'voice_note' || ctx.type === 'VOICE_NOTE') {
-                                const mod = await import('./welcomeFlowVoice');
-                                return gotoFlow(mod.welcomeFlowVoice);
-                            } else {
-                                const mod = await import('./welcomeFlowTxt');
-                                return gotoFlow(mod.welcomeFlowTxt);
-                            }
+                        if (newData && (newData as any).resumenRaw) {
+                            console.log(`[idleFlow] Seguimiento finalizado con resumen. Reportando y cerrando...`);
+                            const finalTipo = ((newData as any).tipo ?? '').replace(/[^A-Z0-9_]/gi, '').toUpperCase() || 'SI_RESUMEN';
+                            await reportAndClose(
+                                finalTipo,
+                                (newData as any).resumenRaw,
+                                newData,
+                                ctx,
+                                state,
+                                provider,
+                                dynamicProjectId,
+                                ID_GRUPO_RESUMEN,
+                                ID_GRUPO_RESUMEN_2,
+                                sheetId,
+                                sheetRange
+                            );
                         }
                     },
                     onFail: async () => {
-                        console.log('SI_REPORTAR_SEGUIR: No se obtuvo respuesta luego del seguimiento.');
+                        console.log('SI_REPORTAR_SEGUIR: No se obtuvo respuesta luego del seguimiento. Reseteando agente...');
+                        await HistoryHandler.setAssignedAgent(userId, 'asistente1', dynamicProjectId);
                     }
                 });
                 return await reconFlow.start();
-                // No cerrar el hilo aquí, dejar abierto para que el usuario pueda responder
-                // Bloque SI_RESUMEN_G2
+
             } else if (tipo === 'SI_RESUMEN_G2') {
-                console.log('SI_RESUMEN_G2: Solo se envía resumen al grupo y sheets.');
-                data.linkWS = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
-
-                const resumenConLink = formatSummary(resumen, data, userId);
-                try {
-                    const groupProvider = getGroupProvider();
-                    const providerToSend = groupProvider || provider;
-                    console.log(`[idleFlow] Enviando resumen (SI_RESUMEN_G2) via ${providerToSend.constructor.name} a ${ID_GRUPO_RESUMEN_2}`);
-                    
-                    // Usar sendMessage por compatibilidad con Meta y mejor manejo en Baileys
-                    await providerToSend.sendMessage(ID_GRUPO_RESUMEN_2, resumenConLink, {});
-                    console.log(`✅ SI_RESUMEN_G2: Resumen enviado a ${ID_GRUPO_RESUMEN_2}`);
-
-                    await sendMediaToGroup(providerToSend, state, ID_GRUPO_RESUMEN_2, data, true);
-
-                } catch (err: any) {
-                    console.error(`❌ SI_RESUMEN_G2 Error:`, err?.message || err);
-                }
-
-                await dispatchVirtualGroupReports(dynamicProjectId, resumenConLink, state, provider, data);
-                await cleanUpMediaFiles(state);
-
-                await addToSheet(data, sheetId ?? undefined, sheetRange ?? undefined);
-                // Resetear al asistente 1 al cerrar la conversación
-                await HistoryHandler.setAssignedAgent(userId, 'asistente1', dynamicProjectId);
+                await reportAndClose('SI_RESUMEN_G2', resumen, data, ctx, state, provider, dynamicProjectId, ID_GRUPO_RESUMEN, ID_GRUPO_RESUMEN_2, sheetId, sheetRange);
                 return;
 
             } else if (tipo === 'SI_RESUMEN') {
-                console.log('SI_RESUMEN: Solo se envía resumen al grupo y sheets.');
-                data.linkWS = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
-
-                const resumenConLink = formatSummary(resumen, data, userId);
-                try {
-                    const groupProvider = getGroupProvider();
-                    const providerToSend = groupProvider || provider;
-                    console.log(`[idleFlow] Enviando resumen (SI_RESUMEN) via ${providerToSend.constructor.name} a ${ID_GRUPO_RESUMEN}`);
-
-                    await providerToSend.sendMessage(ID_GRUPO_RESUMEN, resumenConLink, {});
-                    console.log(`✅ SI_RESUMEN: Resumen enviado a ${ID_GRUPO_RESUMEN}`);
-
-                    await sendMediaToGroup(providerToSend, state, ID_GRUPO_RESUMEN, data, true);
-
-                } catch (err: any) {
-                    console.error(`❌ SI_RESUMEN Error:`, err?.message || err);
-                }
-
-                await dispatchVirtualGroupReports(dynamicProjectId, resumenConLink, state, provider, data);
-                await cleanUpMediaFiles(state);
-
-                await addToSheet(data, sheetId ?? undefined, sheetRange ?? undefined);
-                // Resetear al asistente 1 al cerrar la conversación
-                await HistoryHandler.setAssignedAgent(userId, 'asistente1', dynamicProjectId);
+                await reportAndClose('SI_RESUMEN', resumen, data, ctx, state, provider, dynamicProjectId, ID_GRUPO_RESUMEN, ID_GRUPO_RESUMEN_2, sheetId, sheetRange);
                 return;
 
             } else {
-                // DEFAULT
-                console.log('Tipo desconocido, procesando como SI_RESUMEN por defecto.');
-                data.linkWS = `https://wa.me/${ctx.from.replace(/[^0-9]/g, '')}`;
-
-                const resumenConLink = formatSummary(resumen, data, userId);
-                try {
-                    const groupProvider = getGroupProvider();
-                    const providerToSend = groupProvider || provider;
-                    console.log(`[idleFlow] Enviando resumen (DEFAULT) via ${providerToSend.constructor.name} a ${ID_GRUPO_RESUMEN}`);
-
-                    await providerToSend.sendMessage(ID_GRUPO_RESUMEN, resumenConLink, {});
-                    console.log(`✅ DEFAULT: Resumen enviado a ${ID_GRUPO_RESUMEN}`);
-
-                    await sendMediaToGroup(providerToSend, state, ID_GRUPO_RESUMEN, data, true);
-
-                } catch (err: any) {
-                    console.error(`❌ DEFAULT Error:`, err?.message || err);
-                }
-
-                await dispatchVirtualGroupReports(dynamicProjectId, resumenConLink, state, provider, data);
-                await cleanUpMediaFiles(state);
-
-                await addToSheet(data, sheetId ?? undefined, sheetRange ?? undefined);
-                // Resetear al asistente 1 al cerrar la conversación por inactividad
-                await HistoryHandler.setAssignedAgent(userId, 'asistente1', dynamicProjectId);
+                await reportAndClose('DEFAULT', resumen, data, ctx, state, provider, dynamicProjectId, ID_GRUPO_RESUMEN, ID_GRUPO_RESUMEN_2, sheetId, sheetRange);
                 return;
             }
         } catch (error: any) {

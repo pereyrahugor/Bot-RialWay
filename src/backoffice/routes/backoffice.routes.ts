@@ -1928,7 +1928,8 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
     app.get('/api/backoffice/whatsapp/template-excel/:templateName', backofficeAuth, async (req: any, res: any) => {
         try {
-            await syncMetaProvider(resolveProjectId(req));
+            const projectId = resolveProjectId(req);
+            await syncMetaProvider(projectId);
             const { templateName } = req.params;
             const provider = (adapterProvider.constructor.name === 'MetaCloudProvider') ? adapterProvider : deps.groupProvider;
             if (!provider || typeof provider.getTemplates !== 'function') {
@@ -2011,7 +2012,7 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
 
             // --- CONTACTOS REALES ---
             const { startDate, endDate, tagIds } = req.query;
-            let chats = await depsHistoryHandler.listChats(5000, 0); 
+            let chats = await depsHistoryHandler.listChats(5000, 0, undefined, undefined, undefined, undefined, projectId); 
             if (chats && chats.length > 0) {
                 // Filtrar por fecha
                 if (startDate || endDate) {
