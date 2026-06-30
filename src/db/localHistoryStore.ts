@@ -542,6 +542,8 @@ export class LocalHistoryStore {
             const priorityVal = details.priority || details.prioridad;
             if (priorityVal) tickets[idx].prioridad = priorityVal;
             
+            const contactDetails = details.contact || {};
+            
             if (details.estado) {
                 tickets[idx].estado = details.estado;
             } else if (contactDetails.crm_status) {
@@ -553,7 +555,6 @@ export class LocalHistoryStore {
             // Also update contact details in chats (for leads)
             const chatId = tickets[idx].chat_id;
             const contactUpdate: Partial<LocalChat> = {};
-            const contactDetails = details.contact || {};
 
             if (details.contacto_nombre || contactDetails.name) contactUpdate.name = details.contacto_nombre || contactDetails.name;
             if (details.contacto_email || contactDetails.email) contactUpdate.email = details.contacto_email || contactDetails.email;

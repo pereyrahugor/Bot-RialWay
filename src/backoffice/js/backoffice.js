@@ -1391,10 +1391,16 @@ async function loadCRMJump(chatId) {
                 // Rellenar opciones según columnas del CRM
                 statusSelect.innerHTML = crmColumns.map(c => `<option value="${c.id}">${c.title}</option>`).join('');
 
-                // Buscar estado actual en metadatos
+                // Buscar estado actual en el ticket o en metadatos
                 const meta = _boCrmData[activeTicketId] || {};
-                const currentColumnId = meta.columnId || 'UNASSIGNED';
+                let currentColumnId = lastTicket.estado || meta.columnId || 'UNASSIGNED';
+                if (currentColumnId === 'Abierto') currentColumnId = 'UNASSIGNED';
+                
                 statusSelect.value = currentColumnId;
+                if (statusSelect.selectedIndex === -1) {
+                    const col = crmColumns.find(c => c.id === currentColumnId || c.title === currentColumnId);
+                    if (col) statusSelect.value = col.id;
+                }
             }
         } else {
             container.style.display = 'none';
