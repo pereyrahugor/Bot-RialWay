@@ -1199,6 +1199,18 @@ export class HistoryHandler {
     }, forcedProjectId?: string) {
         const chatId = this.normalizeId(rawChatId);
         let currentProjectId = forcedProjectId;
+
+        const originalCrmStatus = details.crm_status;
+        const originalIsLead = details.is_lead;
+
+        if (details.crm_status === 'Cerrado') {
+            (details as any).assigned_agent = 'asistente1';
+            (details as any).bot_enabled = true;
+            (details as any).last_db_result = null;
+            (details as any).is_lead = false;
+            (details as any).crm_status = null;
+        }
+
         if (process.env.STORAGE_MODE === "local") {
             const success = await LocalHistoryStore.updateContactDetails(chatId, details as any, currentProjectId || HistoryHandler.PROJECT_IDENTIFIER);
             if (success) {
@@ -1207,12 +1219,10 @@ export class HistoryHandler {
                     project_id: currentProjectId || HistoryHandler.PROJECT_IDENTIFIER,
                     details
                 });
-                if (details.is_lead === true) {
-                    const tickets = LocalHistoryStore.getTicketsList(currentProjectId || HistoryHandler.PROJECT_IDENTIFIER);
-                    const activeTicket = tickets.find(t => t.chat_id === chatId && t.estado === 'Abierto');
-                    if (activeTicket) {
-                        historyEvents.emit('ticket_updated', { id: activeTicket.id, chat_id: chatId, ...activeTicket });
-                    }
+                const tickets = LocalHistoryStore.getTicketsList(currentProjectId || HistoryHandler.PROJECT_IDENTIFIER);
+                const activeTicket = tickets.find(t => t.chat_id === chatId);
+                if (activeTicket) {
+                    historyEvents.emit('ticket_updated', { id: activeTicket.id, chat_id: chatId, ...activeTicket });
                 }
             }
             return { success };
@@ -1245,68 +1255,75 @@ export class HistoryHandler {
 
             if (error) throw error;
 
-            if (details.is_lead === true) {
-                // Check if an open ticket exists
-                const { data: existingTicket, error: lookupErr } = await supabase
+            // Sincronizar ticket de lead
+            const { data: existingTicket, error: lookupErr } = await supabase
+                .from('tickets')
+                .select('id, estado')
+                .eq('chat_id', chatId)
+                .eq('project_id', currentProjectId)
+                .neq('estado', 'Cerrado');
+
+            if (!lookupErr && existingTicket && existingTicket.length > 0) {
+                const activeTicketId = existingTicket[0].id;
+                const ticketUpdatePayload: any = { updated_at: new Date().toISOString() };
+                if (details.notes !== undefined) {
+                    ticketUpdatePayload.descripcion = details.notes;
+                }
+                if (originalCrmStatus) {
+                    ticketUpdatePayload.estado = originalCrmStatus;
+                }
+
+                const { error: updateTicketErr } = await supabase
                     .from('tickets')
-                    .select('id')
-                    .eq('chat_id', chatId)
+                    .update(ticketUpdatePayload)
+                    .eq('id', activeTicketId)
+                    .eq('project_id', currentProjectId);
+
+                if (!updateTicketErr) {
+                    historyEvents.emit('ticket_updated', {
+                        id: activeTicketId,
+                        chat_id: chatId,
+                        ...ticketUpdatePayload
+                    });
+                }
+            } else if (!lookupErr && (!existingTicket || existingTicket.length === 0) && (details.is_lead === true || originalIsLead === true)) {
+                console.log(`[HistoryHandler] 🎟️ Auto-creating ticket for lead: ${chatId}`);
+
+                const { data: chatData } = await supabase
+                    .from('chats')
+                    .select('name')
+                    .eq('id', chatId)
                     .eq('project_id', currentProjectId)
-                    .eq('estado', 'Abierto');
+                    .maybeSingle();
+                const name = chatData?.name || details.name || chatId;
 
-                if (!lookupErr && (!existingTicket || existingTicket.length === 0)) {
-                    console.log(`[HistoryHandler] 🎟️ Auto-creating ticket for lead: ${chatId}`);
+                const { data: proyectoRow } = await supabase
+                    .from('proyectos_railway')
+                    .select('cliente_id')
+                    .eq('railway_project_id', currentProjectId)
+                    .maybeSingle();
+                const clienteId = (proyectoRow as any)?.cliente_id || null;
 
-                    const { data: chatData } = await supabase
-                        .from('chats')
-                        .select('name')
-                        .eq('id', chatId)
-                        .eq('project_id', currentProjectId)
-                        .maybeSingle();
-                    const name = chatData?.name || details.name || chatId;
+                const initialStatus = originalCrmStatus || 'Abierto';
 
-                    const { data: proyectoRow } = await supabase
-                        .from('proyectos_railway')
-                        .select('cliente_id')
-                        .eq('railway_project_id', currentProjectId)
-                        .maybeSingle();
-                    const clienteId = (proyectoRow as any)?.cliente_id || null;
+                const { data: newTicket, error: ticketErr } = await supabase
+                    .from('tickets')
+                    .insert({
+                        project_id: currentProjectId,
+                        chat_id: chatId,
+                        titulo: `Lead: ${name}`,
+                        descripcion: details.notes || 'Lead detectado automáticamente',
+                        estado: initialStatus,
+                        tipo: 'Nuevo Lead',
+                        prioridad: 'Media',
+                        created_at: new Date().toISOString(),
+                        ...(clienteId ? { cliente_id: clienteId } : {})
+                    })
+                    .select()
+                    .single();
 
-                    const { data: newTicket, error: ticketErr } = await supabase
-                        .from('tickets')
-                        .insert({
-                            project_id: currentProjectId,
-                            chat_id: chatId,
-                            titulo: `Lead: ${name}`,
-                            descripcion: details.notes || 'Lead detectado automáticamente',
-                            estado: 'Abierto',
-                            tipo: 'Nuevo Lead',
-                            prioridad: 'Media',
-                            created_at: new Date().toISOString(),
-                            ...(clienteId ? { cliente_id: clienteId } : {})
-                        })
-                        .select()
-                        .single();
-
-                    if (!ticketErr && newTicket) {
-                        historyEvents.emit('ticket_updated', { id: newTicket.id, chat_id: chatId, ...newTicket });
-                    }
-                } else if (!lookupErr && existingTicket && existingTicket.length > 0 && details.notes) {
-                    console.log(`[HistoryHandler] 🎟️ Updating existing open ticket description for lead: ${chatId}`);
-                    const activeTicketId = existingTicket[0].id;
-                    const { error: updateTicketErr } = await supabase
-                        .from('tickets')
-                        .update({ descripcion: details.notes, updated_at: new Date().toISOString() })
-                        .eq('id', activeTicketId)
-                        .eq('project_id', currentProjectId);
-                    if (!updateTicketErr) {
-                        historyEvents.emit('ticket_updated', {
-                            id: activeTicketId,
-                            chat_id: chatId,
-                            descripcion: details.notes,
-                            updated_at: new Date().toISOString()
-                        });
-                    }
+                if (!ticketErr && newTicket) {
+                    historyEvents.emit('ticket_updated', { id: newTicket.id, chat_id: chatId, ...newTicket });
                 }
             }
 

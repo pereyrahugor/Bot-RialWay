@@ -167,36 +167,51 @@ export class LocalHistoryStore {
         const chats = this.getChats(projectId);
         const idx = chats.findIndex(c => c.id === chatId);
         if (idx !== -1) {
+            const originalCrmStatus = details.crm_status;
+            const originalIsLead = details.is_lead;
+
+            if (details.crm_status === 'Cerrado') {
+                details.assigned_agent = 'asistente1';
+                details.bot_enabled = true;
+                details.last_db_result = null;
+                details.is_lead = false;
+                details.crm_status = null;
+            }
+
             chats[idx] = { ...chats[idx], ...details };
             this.saveChats(projectId, chats);
 
-            if (details.is_lead === true) {
-                const tickets = this.getTicketsList(projectId);
-                const activeTicketIdx = tickets.findIndex(t => t.chat_id === chatId && t.estado === 'Abierto');
-                if (activeTicketIdx === -1) {
-                    console.log(`[LocalHistoryStore] 🎟️ Auto-creating ticket for lead: ${chatId}`);
-                    const newTicket: LocalTicket = {
-                        id: crypto.randomUUID(),
-                        project_id: projectId,
-                        chat_id: chatId,
-                        titulo: `Lead: ${chats[idx].name || chatId}`,
-                        descripcion: details.notes || 'Lead detectado automáticamente',
-                        estado: 'Abierto',
-                        prioridad: 'Media',
-                        tipo: 'Soporte',
-                        created_at: new Date().toISOString(),
-                        updated_at: new Date().toISOString(),
-                        attachments: [],
-                        chats_adjuntos: []
-                    };
-                    tickets.push(newTicket);
-                    this.saveTicketsList(projectId, tickets);
-                } else if (details.notes) {
-                    console.log(`[LocalHistoryStore] 🎟️ Updating existing ticket description for lead: ${chatId}`);
+            const tickets = this.getTicketsList(projectId);
+            const activeTicketIdx = tickets.findIndex(t => t.chat_id === chatId && t.estado !== 'Cerrado');
+
+            if (activeTicketIdx !== -1) {
+                if (details.notes !== undefined) {
                     tickets[activeTicketIdx].descripcion = details.notes;
-                    tickets[activeTicketIdx].updated_at = new Date().toISOString();
-                    this.saveTicketsList(projectId, tickets);
                 }
+                if (originalCrmStatus) {
+                    tickets[activeTicketIdx].estado = originalCrmStatus;
+                }
+                tickets[activeTicketIdx].updated_at = new Date().toISOString();
+                this.saveTicketsList(projectId, tickets);
+            } else if (details.is_lead === true || originalIsLead === true) {
+                console.log(`[LocalHistoryStore] 🎟️ Auto-creating ticket for lead: ${chatId}`);
+                const initialStatus = originalCrmStatus || 'Abierto';
+                const newTicket: LocalTicket = {
+                    id: crypto.randomUUID(),
+                    project_id: projectId,
+                    chat_id: chatId,
+                    titulo: `Lead: ${chats[idx].name || chatId}`,
+                    descripcion: details.notes || 'Lead detectado automáticamente',
+                    estado: initialStatus,
+                    prioridad: 'Media',
+                    tipo: 'Nuevo Lead',
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                    attachments: [],
+                    chats_adjuntos: []
+                };
+                tickets.push(newTicket);
+                this.saveTicketsList(projectId, tickets);
             }
             return true;
         }
