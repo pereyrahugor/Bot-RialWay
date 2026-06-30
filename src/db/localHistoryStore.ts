@@ -542,7 +542,11 @@ export class LocalHistoryStore {
             const priorityVal = details.priority || details.prioridad;
             if (priorityVal) tickets[idx].prioridad = priorityVal;
             
-            if (details.estado) tickets[idx].estado = details.estado;
+            if (details.estado) {
+                tickets[idx].estado = details.estado;
+            } else if (contactDetails.crm_status) {
+                tickets[idx].estado = contactDetails.crm_status;
+            }
             tickets[idx].updated_at = new Date().toISOString();
             this.saveTicketsList(projectId, tickets);
 

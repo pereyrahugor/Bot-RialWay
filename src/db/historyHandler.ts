@@ -2185,6 +2185,8 @@ export class HistoryHandler {
 
             if (details.estado !== undefined) {
                 ticketUpdate.estado = details.estado;
+            } else if (details.contact?.crm_status !== undefined) {
+                ticketUpdate.estado = details.contact.crm_status;
             } else if (details.contact?.crm_status === 'Cerrado' || details.contact?.crm_status === 'Vendido') {
                 ticketUpdate.estado = 'Cerrado';
             }
