@@ -427,8 +427,15 @@ export class LocalHistoryStore {
     ) {
         let tickets = this.getTicketsList(projectId);
 
-        if (estado && estado !== "all") {
-            tickets = tickets.filter(t => t.estado.toLowerCase() === estado.toLowerCase());
+        if (estado && estado !== "all" && estado !== 'null' && estado !== 'undefined' && estado !== '') {
+            if (estado.includes(',')) {
+                const list = estado.split(',').map(s => s.toLowerCase());
+                tickets = tickets.filter(t => list.includes(t.estado.toLowerCase()));
+            } else if (estado === 'all_active') {
+                tickets = tickets.filter(t => t.estado.toLowerCase() !== 'cerrado');
+            } else {
+                tickets = tickets.filter(t => t.estado.toLowerCase() === estado.toLowerCase());
+            }
         }
         if (tipo && tipo !== "all") {
             tickets = tickets.filter(t => t.tipo.toLowerCase() === tipo.toLowerCase());

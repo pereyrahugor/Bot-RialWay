@@ -2130,7 +2130,13 @@ export class HistoryHandler {
             }
 
             if (estado && estado !== 'null' && estado !== 'undefined' && estado !== '') {
-                query = query.eq('estado', estado);
+                if (estado.includes(',')) {
+                    query = query.in('estado', estado.split(','));
+                } else if (estado === 'all_active') {
+                    query = query.neq('estado', 'Cerrado');
+                } else {
+                    query = query.eq('estado', estado);
+                }
             } else if (estado === 'null' || estado === 'undefined') {
                 // No aplicar filtro de estado (trae todos)
             } else {
