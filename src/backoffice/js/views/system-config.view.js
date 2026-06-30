@@ -247,8 +247,10 @@ window.systemConfigView = {
                                     <div class="variable-group" style="padding:0; background:none; border:none;">
                                         <h3>AQUAVITA_SWS_PASSWORD</h3>
                                         <p class="description">Contraseña de autenticación en SWS</p>
-                                        <input type="password" name="AQUAVITA_SWS_PASSWORD" id="AQUAVITA_SWS_PASSWORD" autocomplete="new-password" style="width:100%;">
-                                        <button type="button" class="toggle-password-inline" onclick="toggleFieldVisibility('AQUAVITA_SWS_PASSWORD', this)"><i class="fas fa-eye"></i> Mostrar</button>
+                                        <div class="input-wrapper" style="position:relative; width:100%;">
+                                            <input type="password" name="AQUAVITA_SWS_PASSWORD" id="AQUAVITA_SWS_PASSWORD" autocomplete="new-password" style="width:100%;">
+                                            <button type="button" class="toggle-password-inline" onclick="toggleFieldVisibility('AQUAVITA_SWS_PASSWORD', this)"><i class="fas fa-eye"></i> Mostrar</button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

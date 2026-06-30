@@ -25,8 +25,10 @@ export async function rechargeUserSelenium(
     if (!localDriver) {
         console.log("[Ganemos-net] No se proveyó WebDriver. Iniciando nueva instancia...");
         const options = new chrome.Options();
+        options.addArguments('--headless=new');
         options.addArguments('--no-sandbox');
         options.addArguments('--disable-dev-shm-usage');
+        options.addArguments('--disable-gpu');
 
         localDriver = await new Builder()
             .forBrowser('chrome')

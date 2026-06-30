@@ -82,5 +82,78 @@ export const ganemosModule = {
     CREAR_USUARIO: async (args: any, context: any) => ganemosModule.tools.CREAR_JUGADOR(args, context),
     RECARGAR: async (args: any, context: any) => ganemosModule.tools.DEPOSITAR(args, context),
     RETIRO: async (args: any, context: any) => ganemosModule.tools.RETIRAR(args, context),
-  }
+  },
+
+  // ----------------------------------------------------
+  // NATIVE OPENAI TOOLS SCHEMAS
+  // ----------------------------------------------------
+  openAiTools: [
+    {
+      "type": "function",
+      "function": {
+        "name": "CREAR_JUGADOR",
+        "description": "Crea una nueva cuenta de jugador en la plataforma Ganemos-net, con la opción de realizar una carga inicial automática.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "nombre": {
+              "type": "string",
+              "description": "Nombre de pila o base del cliente para generar su usuario (ej. lucas)."
+            },
+            "recharge": {
+              "type": "boolean",
+              "description": "Indica si se debe realizar una recarga de créditos inmediatamente después de crear la cuenta."
+            },
+            "monto": {
+              "type": "number",
+              "description": "Monto de créditos a recargar si la opción recharge es verdadera (ej. 1000)."
+            }
+          },
+          "required": ["nombre", "recharge"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "DEPOSITAR",
+        "description": "Carga/Deposita créditos o saldo en la cuenta de un jugador registrado en la plataforma Ganemos-net.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "username": {
+              "type": "string",
+              "description": "Nombre de usuario exacto del jugador (ej. lucash8420)."
+            },
+            "monto": {
+              "type": "number",
+              "description": "Monto numérico de créditos a depositar (ej. 500)."
+            }
+          },
+          "required": ["username", "monto"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "RETIRAR",
+        "description": "Retira/Debita créditos o saldo de la cuenta de un jugador registrado en la plataforma Ganemos-net.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "username": {
+              "type": "string",
+              "description": "Nombre de usuario exacto del jugador (ej. lucash8420)."
+            },
+            "monto": {
+              "type": "number",
+              "description": "Monto numérico de créditos a retirar (ej. 300)."
+            }
+          },
+          "required": ["username", "monto"]
+        }
+      }
+    }
+  ]
 };
