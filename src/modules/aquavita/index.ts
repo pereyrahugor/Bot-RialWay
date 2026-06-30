@@ -564,5 +564,312 @@ export const aquavitaModule = {
     OBTENER_LINK_MERCADO_PAGO: async (args: any) => aquavitaModule.tools.linkPago(args),
     PRODUCTOS: async (args: any) => aquavitaModule.tools.productos(args),
     REPARTO: async (args: any, context: any) => aquavitaModule.tools.reparto(args, context)
-  }
+  },
+
+  // ----------------------------------------------------
+  // NATIVE OPENAI TOOLS SCHEMAS FOR AQUAVITA
+  // ----------------------------------------------------
+  openAiTools: [
+    {
+      "type": "function",
+      "function": {
+        "name": "BUSCAR_CLIENTE",
+        "description": "Busca clientes registrados en el sistema Aquavita usando datos aproximados como nombre, teléfono, domicilio o filtros de dirección específicos.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "datosCliente": { "type": "string", "description": "Nombre, apellido o dato general para buscar al cliente." },
+            "telefono": { "type": "string", "description": "Número de teléfono de contacto del cliente." },
+            "domicilio": { "type": "string", "description": "Calle y altura de la dirección (Córdoba Capital)." },
+            "piso": { "type": "string", "description": "Piso de la dirección del cliente." },
+            "depto": { "type": "string", "description": "Departamento de la dirección." }
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "BUSCAR_CLIENTE_POR_CONTACTO",
+        "description": "Busca un cliente de forma exacta usando su teléfono o email de contacto.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "telefono": { "type": "string", "description": "Teléfono de contacto exacto." },
+            "email": { "type": "string", "description": "Correo electrónico del contacto." }
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "CREAR_CLIENTE",
+        "description": "Crea y da de alta a un nuevo cliente en el sistema de Aquavita.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "cliente": {
+              "type": "object",
+              "description": "Objeto con los datos del nuevo cliente.",
+              "properties": {
+                "nombre": { "type": "string", "description": "Nombre completo o de pila." },
+                "apellido": { "type": "string", "description": "Apellido del cliente." },
+                "direccion": { "type": "string", "description": "Calle y altura (ej: 'Colón 1500')." },
+                "telefono": { "type": "string", "description": "Teléfono de contacto." },
+                "email": { "type": "string", "description": "Correo electrónico." },
+                "cuit": { "type": "string", "description": "CUIT, CUIL o DNI del cliente." }
+              },
+              "required": ["nombre", "direccion"]
+            },
+            "reparto_id": { "type": "integer", "description": "ID del reparto inicial (por defecto 1)." }
+          },
+          "required": ["cliente"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "AGREGAR_CONTACTO",
+        "description": "Agrega un nuevo contacto (teléfono o correo) asociado a la cuenta de un cliente existente.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "cliente_id": { "type": "integer", "description": "ID numérico del cliente en el sistema." },
+            "telefono": { "type": "string", "description": "Número de teléfono a agregar." },
+            "email": { "type": "string", "description": "Correo electrónico a agregar." },
+            "nombre": { "type": "string", "description": "Nombre del contacto a agregar." }
+          },
+          "required": ["cliente_id"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "OBTENER_CREDENCIALES_AUTOGESTION",
+        "description": "Obtiene las credenciales de la web de autogestión de un cliente.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "cliente_id": { "type": "integer", "description": "ID numérico del cliente." }
+          },
+          "required": ["cliente_id"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "OBTENER_SUCURSALES",
+        "description": "Obtiene la lista de sucursales asociadas a la cuenta de un cliente.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "cliente_id": { "type": "integer", "description": "ID numérico del cliente." }
+          },
+          "required": ["cliente_id"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "INCIDENCIA",
+        "description": "Genera y crea un ticket de incidencia (reclamo, sugerencia o problema técnico) para un cliente.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "cliente_id": { "type": "integer", "description": "ID numérico del cliente." },
+            "tipoIncidente_id": { "type": "integer", "description": "ID del tipo de incidente (ej: 1 para rotura de dispenser)." },
+            "observaciones": { "type": "string", "description": "Detalles u observaciones de la incidencia." }
+          },
+          "required": ["cliente_id", "tipoIncidente_id", "observaciones"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "BUSCAR_INCIDENCIA",
+        "description": "Busca incidentes registrados recientemente para un cliente específico.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "cliente_id": { "type": "integer", "description": "ID numérico del cliente." },
+            "tipoIncidente_id": { "type": "integer", "description": "ID del tipo de incidente para filtrar." }
+          },
+          "required": ["cliente_id"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "SALDO_CUENTA",
+        "description": "Obtiene el saldo de cuenta actual (saldos de consumo, facturación y saldo total) de un cliente.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "cliente_id": { "type": "integer", "description": "ID numérico del cliente." }
+          },
+          "required": ["cliente_id"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "OBTENER_DATOS_CLIENTE",
+        "description": "Obtiene la ficha técnica y de datos completos de un cliente registrado por su ID.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "cliente_id": { "type": "integer", "description": "ID numérico del cliente." }
+          },
+          "required": ["cliente_id"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "PRECIO",
+        "description": "Obtiene la lista de precios asignada y vigente para un cliente específico.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "cliente_id": { "type": "integer", "description": "ID numérico del cliente." }
+          },
+          "required": ["cliente_id"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "MATRIZ_LISTA_PRECIOS",
+        "description": "Obtiene la matriz completa de listas de precios del sistema.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "tipoLista_id": { "type": "integer", "description": "Tipo de lista de precios (por defecto 1)." },
+            "lista_id": { "type": "string", "description": "Filtrar por ID de lista específica." }
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "ABONOS_TIPOS",
+        "description": "Consulta los tipos de abonos configurados en el sistema entre un rango de fechas.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "desde": { "type": "string", "description": "Fecha desde (formato DD/MM/YYYY)." },
+            "hasta": { "type": "string", "description": "Fecha hasta (formato DD/MM/YYYY)." },
+            "concepto": { "type": "string", "description": "Filtrar abonos por concepto." },
+            "activo": { "type": "boolean", "description": "Filtro por abonos activos." }
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "HISTORIAL_FACTURAS",
+        "description": "Obtiene el historial de facturas emitidas para un cliente específico.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "cliente_id": { "type": "integer", "description": "ID numérico del cliente." },
+            "fechaDesde": { "type": "string", "description": "Fecha de inicio del historial (DD/MM/YYYY)." },
+            "fechaHasta": { "type": "string", "description": "Fecha de fin del historial (DD/MM/YYYY)." },
+            "saldoPendiente": { "type": "boolean", "description": "Filtrar solo facturas con saldo pendiente (por pagar)." }
+          },
+          "required": ["cliente_id"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "RECIBOS_PAGO",
+        "description": "Consulta el historial de recibos de pago emitidos a favor de un cliente.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "cliente_id": { "type": "integer", "description": "ID numérico del cliente." },
+            "fechaReciboDesde": { "type": "string", "description": "Fecha de inicio de búsqueda (DD/MM/YYYY)." },
+            "fechaReciboHasta": { "type": "string", "description": "Fecha de fin de búsqueda (DD/MM/YYYY)." },
+            "saldoDisponible": { "type": "boolean", "description": "Filtrar solo recibos con saldo disponible." }
+          },
+          "required": ["cliente_id"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "REENVIAR_FACTURA_POR_MAIL",
+        "description": "Solicita reenviar una factura electrónica al correo del cliente usando el ID de la factura.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "facturaId": { "type": "integer", "description": "ID numérico de la factura." }
+          },
+          "required": ["facturaId"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "LINK_PAGO",
+        "description": "Genera un enlace de cobro de Mercado Pago para un cliente y monto específicos.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "cliente_id": { "type": "integer", "description": "ID numérico del cliente." },
+            "monto": { "type": "number", "description": "Monto de dinero a pagar." }
+          },
+          "required": ["cliente_id", "monto"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "PRODUCTOS",
+        "description": "Obtiene la lista de productos y dispensers disponibles para el cliente, pudiendo filtrar por categoría.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "cliente_id": { "type": "integer", "description": "ID numérico del cliente." },
+            "categoria": { "type": "string", "description": "Categoría a filtrar (ej. 'soda', 'bidon', 'dispenser')." }
+          },
+          "required": ["cliente_id"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "REPARTO",
+        "description": "Verifica si una dirección dada está dentro de la zona de reparto habitual y calcula el cliente más cercano y días de visita.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "calle": { "type": "string", "description": "Nombre de la calle." },
+            "numero": { "type": "string", "description": "Altura/Número de la puerta." },
+            "calleYAltura": { "type": "string", "description": "Dirección completa (calle y número, ej: Colón 450)." },
+            "codigoPostal": { "type": "string", "description": "Código postal de la dirección." },
+            "localidad": { "type": "string", "description": "Localidad o ciudad (por defecto Córdoba Capital)." }
+          }
+        }
+      }
+    }
+  ]
 };

@@ -19,7 +19,7 @@ export async function rechargeUserSelenium(
     console.log(`[Ganemos-net] Iniciando recarga de saldo de ${amount} para: ${username}...`);
 
     let localDriver: WebDriver | undefined = driver;
-    let shouldQuit = true; // Por defecto cerramos al final: "y listo, cerramos navegador"
+    const shouldQuit = true; // Por defecto cerramos al final: "y listo, cerramos navegador"
 
     // Si no se pasa un driver activo, creamos uno nuevo y nos logueamos
     if (!localDriver) {
@@ -49,7 +49,7 @@ export async function rechargeUserSelenium(
         } catch (authErr: any) {
             console.error("❌ [Ganemos-net] Excepción durante el login para recarga:", authErr.message || authErr);
             if (localDriver) {
-                try { await localDriver.quit(); } catch (e) {}
+                try { await localDriver.quit(); } catch (e) { /* ignore */ }
             }
             return false;
         }
@@ -146,7 +146,7 @@ export async function rechargeUserSelenium(
                 const screenshotPath = path.join(process.cwd(), 'recharge_failure.png');
                 fs.writeFileSync(screenshotPath, screenshot, 'base64');
                 console.log(`📸 Captura de pantalla guardada en: ${screenshotPath}`);
-            } catch (e) {}
+            } catch (e) { /* ignore */ }
 
             if (shouldQuit && localDriver) {
                 await localDriver.quit();
@@ -172,9 +172,9 @@ export async function rechargeUserSelenium(
                 const screenshotPath = path.join(process.cwd(), 'recharge_failure.png');
                 fs.writeFileSync(screenshotPath, screenshot, 'base64');
                 console.log(`📸 Captura de pantalla guardada en: ${screenshotPath}`);
-            } catch (e) {}
+            } catch (e) { /* ignore */ }
 
-            try { await localDriver.quit(); } catch (e) {}
+            try { await localDriver.quit(); } catch (e) { /* ignore */ }
         }
         return false;
     }

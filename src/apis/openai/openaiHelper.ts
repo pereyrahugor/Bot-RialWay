@@ -82,17 +82,18 @@ function safeParseJson(jsonStr: string | undefined): any {
  * Sincroniza las herramientas (tools) definidas en las variables de entorno con el asistente de OpenAI.
  * Esto evita tener que configurar manualmente el Dashboard.
  */
-export async function syncAssistantTools(assistantId: string): Promise<boolean> {
+export async function syncAssistantTools(assistantId: string, projectId: string | null = null): Promise<boolean> {
     const openai = await getOpenAI();
     if (!openai || !assistantId) return false;
 
     try {
         const { HistoryHandler } = await import("../../db/historyHandler");
-        let toolsJson = await HistoryHandler.getConfig('OPENAI_TOOLS_DEFINITION');
+        const targetProjectId = projectId || HistoryHandler.PROJECT_IDENTIFIER;
+        let toolsJson = await HistoryHandler.getSetting('OPENAI_TOOLS_DEFINITION', targetProjectId);
 
         if (!toolsJson) {
             console.log("[openaiHelper] No se detectó OPENAI_TOOLS_DEFINITION. Verificando DB_TABLES para autogeneración...");
-            const dbTablesStr = await HistoryHandler.getConfig('DB_TABLES');
+            const dbTablesStr = await HistoryHandler.getSetting('DB_TABLES', targetProjectId);
             
             if (dbTablesStr && dbTablesStr.trim() !== "") {
                 try {
@@ -102,7 +103,7 @@ export async function syncAssistantTools(assistantId: string): Promise<boolean> 
                     await autoUpdateBotAbilities(tableNames);
                     
                     // Re-intentar obtener la definición recién generada
-                    toolsJson = await HistoryHandler.getConfig('OPENAI_TOOLS_DEFINITION');
+                    toolsJson = await HistoryHandler.getSetting('OPENAI_TOOLS_DEFINITION', targetProjectId);
                 } catch (genError: any) {
                     console.error("[openaiHelper] ❌ Error en autogeneración de tools:", genError.message);
                 }
@@ -115,10 +116,50 @@ export async function syncAssistantTools(assistantId: string): Promise<boolean> 
         }
 
         const tools = safeParseJson(toolsJson);
-        console.log(`[openaiHelper] 🔄 Sincronizando ${tools.length} herramientas con el asistente ${assistantId}...`);
+        if (!Array.isArray(tools)) {
+            console.log("[openaiHelper] ⚠️ Definición de tools no es un array válido.");
+            return false;
+        }
+
+        // --- FILTRADO AUTOMÁTICO DE HERRAMIENTAS POR PROMPT DEL ASISTENTE ---
+        // 1. Identificar cuál de los 5 asistentes (asistente1..5) corresponde a este assistantId
+        const assistantsKeys = ['ASSISTANT_ID', 'ASSISTANT_2', 'ASSISTANT_3', 'ASSISTANT_4', 'ASSISTANT_5'];
+        let assistantIndex = '1';
+        for (const envKey of assistantsKeys) {
+            const val = await HistoryHandler.getSetting(envKey, targetProjectId);
+            if (val === assistantId) {
+                if (envKey === 'ASSISTANT_ID') assistantIndex = '1';
+                else assistantIndex = envKey.replace('ASSISTANT_', '');
+                break;
+            }
+        }
+
+        // 2. Obtener el prompt específico del asistente correspondiente
+        const promptKey = assistantIndex === '1' ? 'ASSISTANT_PROMPT' : `ASSISTANT_PROMPT_${assistantIndex}`;
+        const prompt = await HistoryHandler.getSetting(promptKey, targetProjectId);
+
+        // 3. Filtrar herramientas: Solo incluimos la herramienta si su nombre lógico se menciona en el prompt
+        let filteredTools = tools;
+        if (prompt && prompt.trim() !== '') {
+            filteredTools = tools.filter((tool: any) => {
+                const funcName = tool.function?.name || tool.name;
+                if (!funcName) return true; // Si no tiene nombre por alguna razón, dejarla
+                
+                // Buscamos la palabra exacta del nombre de la herramienta en el prompt
+                const regex = new RegExp(`\\b${funcName}\\b`, 'i');
+                const isMentioned = regex.test(prompt);
+                
+                if (!isMentioned) {
+                    console.log(`🔍 [openaiHelper] Excluyendo herramienta '${funcName}' para el asistente ${assistantIndex} (No mencionada en el prompt).`);
+                }
+                return isMentioned;
+            });
+        }
+
+        console.log(`[openaiHelper] 🔄 Sincronizando ${filteredTools.length} de ${tools.length} herramientas con el asistente ${assistantId}...`);
 
         await openai.beta.assistants.update(assistantId, {
-            tools: tools
+            tools: filteredTools
         });
 
         console.log("[openaiHelper] ✅ Herramientas sincronizadas correctamente.");
@@ -222,13 +263,12 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
 
         // 3. Preparar Herramientas (Tools)
         let tools: any[] = [];
-        const toolsJson = await HistoryHandler.getConfig('OPENAI_TOOLS_DEFINITION');
+        const toolsJson = await HistoryHandler.getSetting('OPENAI_TOOLS_DEFINITION', projectId);
         if (toolsJson) {
-
             try {
                 const rawTools = safeParseJson(toolsJson);
                 if (Array.isArray(rawTools)) {
-                    tools = rawTools.map(tool => {
+                    const unparsedTools = rawTools.map(tool => {
                         let processed = tool;
                         // 1. Envolver si falta el nivel superior
                         if (!processed.type && (processed.name || processed.parameters || processed.description)) {
@@ -246,8 +286,20 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
                         }
                         return processed;
                     });
-                }
 
+                    // Filtrar dinámicamente las herramientas por mención en el prompt del sistema
+                    if (systemPrompt && systemPrompt.trim() !== '') {
+                        tools = unparsedTools.filter((tool: any) => {
+                            const funcName = tool.function?.name || tool.name;
+                            if (!funcName) return true;
+                            // Filtro de palabra exacta del nombre del tool en el prompt
+                            const regex = new RegExp(`\\b${funcName}\\b`, 'i');
+                            return regex.test(systemPrompt);
+                        });
+                    } else {
+                        tools = unparsedTools;
+                    }
+                }
             } catch (e) {
                 console.error("[openaiHelper] Error parseando o reparando tools:", e);
             }

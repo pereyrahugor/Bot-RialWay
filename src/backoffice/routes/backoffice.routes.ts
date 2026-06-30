@@ -490,12 +490,45 @@ export const processBulkTemplate = async (req: any, res: any, deps: BackofficeDe
                     // Para NAMED, mapeamos según los nombres definidos en la plantilla
                     if (isNamed) {
                         const namedParams = compDef.example?.body_text_named_params || [];
-                        for (const np of namedParams) {
-                            const val = String(row[np.param_name] || row[np.param_name.toLowerCase()] || '-');
+                        const varNames: string[] = [];
+                        if (namedParams.length > 0) {
+                            namedParams.forEach((np: any) => varNames.push(np.param_name));
+                        } else {
+                            // Fallback: Extraer variables del texto del cuerpo
+                            const varRegex = /\{\{([^}]+)\}\}/g;
+                            let match;
+                            while ((match = varRegex.exec(compDef.text || '')) !== null) {
+                                const varName = match[1].trim();
+                                if (!varNames.includes(varName)) {
+                                    varNames.push(varName);
+                                }
+                            }
+                        }
+
+                        for (const varName of varNames) {
+                            // Buscar en el row del excel de forma case-insensitive
+                            const matchedKey = Object.keys(row).find(k => k.toLowerCase() === varName.toLowerCase());
+                            let val = matchedKey ? String(row[matchedKey] ?? '') : '';
+                            
+                            // Auto-completado desde DB si es una variable de nombre y viene vacía
+                            const lowerVar = varName.toLowerCase();
+                            const isNameVar = ['nombre', 'name', 'nombre_cliente', 'nombrecliente'].includes(lowerVar);
+                            if (isNameVar && (!val || val.trim() === '' || val === '-')) {
+                                try {
+                                    const chat = await depsHistoryHandler.getChat(phone, projectId);
+                                    if (chat && chat.name) {
+                                        val = chat.name;
+                                        console.log(`👤 [BULK] Nombre autocompletado desde DB para ${phone}: ${val}`);
+                                    }
+                                } catch (dbErr: any) {
+                                    console.warn(`⚠️ [BULK] No se pudo obtener el nombre desde DB para ${phone}:`, dbErr.message);
+                                }
+                            }
+
                             bodyParams.push({
                                 type: 'text',
-                                parameter_name: np.param_name,
-                                text: val
+                                parameter_name: varName,
+                                text: val || '-'
                             });
                         }
                     } else {
@@ -1991,19 +2024,23 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
             const text = bodyComponent?.text || '';
             const varNames: string[] = [];
             
-            // Si la plantilla es NAMED, usamos los nombres oficiales de Meta
-            const isNamed = template.parameter_format === 'named';
+            // Detección robusta: si tiene parameter_format='named' (case-insensitive)
+            const isNamed = (template.parameter_format || '').toLowerCase() === 'named';
             const bodyNamedParams = bodyComponent?.example?.body_text_named_params || [];
             
             if (isNamed && bodyNamedParams.length > 0) {
                 bodyNamedParams.forEach((p: any) => varNames.push(p.param_name));
-            } else {
-                // Positional: Extraer {{1}}, {{2}}...
-                const varRegex = /\{\{(\w+)\}\}/g;
+            }
+            
+            // Fallback: Si no es named o si varNames quedó vacío, escaneamos el texto del cuerpo.
+            // Esto sirve para Positional ({{1}}) o si es Named ({{nombre}}) pero no tenía ejemplos oficiales.
+            if (varNames.length === 0 && text) {
+                const varRegex = /\{\{([^}]+)\}\}/g;
                 let match;
                 while ((match = varRegex.exec(text)) !== null) {
-                    if (!varNames.includes(match[1])) {
-                        varNames.push(match[1]); 
+                    const varName = match[1].trim();
+                    if (!varNames.includes(varName)) {
+                        varNames.push(varName); 
                     }
                 }
             }
@@ -2093,7 +2130,11 @@ export const registerBackofficeRoutes = (app: any, deps: BackofficeDependencies)
                     // Llenar variables si coinciden con los nombres de campos del chat
                     for (let i = 1; i < headers.length; i++) {
                         const h = headers[i];
-                        if (autoCompletable.includes(h)) {
+                        const lowerH = h.toLowerCase();
+                        
+                        if (lowerH === 'nombre' || lowerH === 'name' || lowerH === 'nombre_cliente' || lowerH === 'nombrecliente') {
+                            row.push(chat.name || '');
+                        } else if (autoCompletable.includes(h)) {
                             row.push(chat[h] || '');
                         } else {
                             row.push('');

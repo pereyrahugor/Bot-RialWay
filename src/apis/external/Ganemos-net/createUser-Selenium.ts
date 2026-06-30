@@ -176,7 +176,7 @@ export async function createUserSelenium(
             } catch (screenErr: any) {
                 console.error("⚠️ No se pudo tomar la captura de pantalla:", screenErr.message);
             }
-            try { await driver.quit(); } catch (e) {}
+            try { await driver.quit(); } catch (e) { /* ignore */ }
         }
         return null;
     }
