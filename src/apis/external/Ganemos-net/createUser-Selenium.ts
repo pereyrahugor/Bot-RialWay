@@ -28,10 +28,10 @@ export async function createUserSelenium(
     console.log(`[Ganemos-net] Iniciando creación de usuario para baseName: ${baseName} | recharge: ${recharge}`);
 
     const options = new chrome.Options();
-    // Headless desactivado por defecto para facilitar depuración visual.
-    // options.addArguments('--headless=new');
+    options.addArguments('--headless=new');
     options.addArguments('--no-sandbox');
     options.addArguments('--disable-dev-shm-usage');
+    options.addArguments('--disable-gpu');
 
     console.log("🔌 Iniciando instancia de Chrome...");
     const driver: WebDriver = await new Builder()
@@ -69,7 +69,8 @@ export async function createUserSelenium(
             until.elementLocated(By.xpath(createButtonXPath)),
             10000
         );
-        await createBtn.click();
+        // Hacemos click usando Javascript para evitar que banners o notificaciones de carga intercepten el click visual
+        await driver.executeScript("arguments[0].click();", createBtn);
 
         // 4. Esperar a estar en la URL: https://agents.ganamosnet.org/user/create-player
         const createPlayerUrl = "https://agents.ganamosnet.org/user/create-player";

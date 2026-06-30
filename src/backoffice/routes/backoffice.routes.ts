@@ -12,9 +12,52 @@ import { getOpenAI } from "../../apis/openai/openaiHelper";
 
 // Invalidar visibility cache cuando cambia cualquier setting de visibilidad via Realtime
 const VISIBILITY_KEYS = ['WHATSAPP_VISIBLE', 'INSTAGRAM_VISIBLE', 'MESSENGER_VISIBLE', 'CRM_VISIBLE', 'SYSTEM_CONFIG_VISIBLE'];
-historyEvents.on('setting_changed', ({ key }: { key: string }) => {
+historyEvents.on('setting_changed', async ({ key, value, projectId }: { key: string; value: any; projectId: string }) => {
     if (VISIBILITY_KEYS.includes(key)) invalidateVisibilityCache();
     if (key === 'ADMIN_PASS' || key === 'ADMIN_USER') invalidateAuthCache();
+
+    // Sincronización automática de herramientas según el CLIENT_SLUG configurado
+    if (key === 'CLIENT_SLUG') {
+        const slug = String(value || '').trim().toLowerCase();
+        console.log(`📡 [toolRouter/OpenAI] CLIENT_SLUG cambiado a '${slug}' en proyecto ${projectId}.`);
+        
+        // Intentar cargar el módulo cliente dinámicamente desde el registro
+        try {
+            const { moduleRegistry } = await import('../../bot/toolRegistry');
+            const activeModule = moduleRegistry[slug];
+            
+            if (activeModule && activeModule.openAiTools) {
+                console.log(`🤖 [OpenAI] Registrando automáticamente herramientas del módulo '${slug}' para proyecto ${projectId}...`);
+                await HistoryHandlerClass.saveSetting('OPENAI_TOOLS_DEFINITION', JSON.stringify(activeModule.openAiTools), projectId);
+            } else {
+                // Si el slug está vacío o no tiene herramientas nativas de OpenAI, limpiamos la definición actual del proyecto
+                const currentTools = await HistoryHandlerClass.getConfig('OPENAI_TOOLS_DEFINITION', projectId);
+                if (currentTools && currentTools.trim() !== '') {
+                    console.log(`🗑️ [OpenAI] Quitando herramientas para proyecto ${projectId} (SLUG vacío o sin herramientas)...`);
+                    await HistoryHandlerClass.saveSetting('OPENAI_TOOLS_DEFINITION', '', projectId);
+                }
+            }
+        } catch (err: any) {
+            console.error(`❌ [OpenAI] Error al resolver el módulo de cliente para registrar herramientas:`, err.message);
+        }
+    }
+
+    // Si cambian las definiciones de herramientas, sincronizarlas de inmediato con todos los asistentes de OpenAI
+    if (key === 'OPENAI_TOOLS_DEFINITION') {
+        try {
+            const { syncAssistantTools } = await import('../../apis/openai/openaiHelper');
+            const assistantsKeys = ['ASSISTANT_ID', 'ASSISTANT_2', 'ASSISTANT_3', 'ASSISTANT_4', 'ASSISTANT_5'];
+            for (const envKey of assistantsKeys) {
+                const assistantId = await HistoryHandlerClass.getConfig(envKey, projectId);
+                if (assistantId && assistantId.trim() !== '') {
+                    console.log(`🔄 [OpenAI] Sincronizando herramientas para Asistente (${envKey}: ${assistantId}) en proyecto ${projectId}...`);
+                    await syncAssistantTools(assistantId);
+                }
+            }
+        } catch (e: any) {
+            console.error(`❌ [OpenAI] Error al sincronizar herramientas de asistentes:`, e.message);
+        }
+    }
 });
 
 

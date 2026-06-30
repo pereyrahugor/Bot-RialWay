@@ -299,7 +299,23 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
                             await HistoryHandler.updateLastDbResult(userId, toolResult, projectId ?? undefined);
                         }
                     } else {
-                        toolResult = JSON.stringify({ error: `Function ${funcName} not implemented.` });
+                        // Intentar enrutar a herramientas del cliente o Mercado Pago
+                        try {
+                            const { executeClientTool } = await import("../../bot/toolRouter");
+                            const context = {
+                                state,
+                                ctx: { from: userId },
+                                projectId
+                            };
+                            console.log(`[ChatCompletion] Enrutando tool call '${funcName}' al router de cliente...`);
+                            const routerRes = await executeClientTool(funcName, args, context);
+                            
+                            // Si retorna un string, lo envolvemos en un objeto resultado; si es objeto, lo pasamos directo
+                            toolResult = typeof routerRes === 'string' ? JSON.stringify({ result: routerRes }) : JSON.stringify(routerRes);
+                        } catch (err: any) {
+                            console.error(`[ChatCompletion] Error enrutando tool '${funcName}':`, err.message);
+                            toolResult = JSON.stringify({ error: `Function ${funcName} failed: ` + err.message });
+                        }
                     }
 
                     // Agregar el resultado de la herramienta al historial

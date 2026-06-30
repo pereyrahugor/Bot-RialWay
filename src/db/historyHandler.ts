@@ -2545,7 +2545,7 @@ export class HistoryHandler {
                 if (!key) return;
                 this.invalidateSettingCache(key);
                 console.log(`📡 [Realtime] Setting cambiado: ${key} = ${value}`);
-                historyEvents.emit('setting_changed', { key, value });
+                historyEvents.emit('setting_changed', { key, value, projectId });
             })
             .subscribe((status: string) => {
                 if (status === 'SUBSCRIBED') {
