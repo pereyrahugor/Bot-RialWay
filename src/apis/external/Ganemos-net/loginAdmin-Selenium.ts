@@ -50,11 +50,34 @@ export class LoginAdminSelenium {
             const submitButton = await this.driver.findElement(By.xpath(submitButtonXPath));
             await submitButton.click();
 
-            // 4. Esperar a que la URL cambie tras hacer clic (indicando redirección exitosa)
-            await this.driver.wait(async (d) => {
+            // 4. Esperar a que la URL cambie tras hacer clic o aparezca un mensaje de error en pantalla
+            const loginResult: any = await this.driver.wait(async (d) => {
                 const currentUrl = await d.getCurrentUrl();
-                return currentUrl !== targetUrl;
-            }, 10000);
+                if (currentUrl !== targetUrl) {
+                    return { success: true };
+                }
+
+                // Buscar elementos que contengan texto de error en la interfaz
+                const errorElements = await d.findElements(By.xpath("//*[contains(text(), 'Error') or contains(text(), 'error') or contains(text(), '504')]"));
+                if (errorElements.length > 0) {
+                    for (const el of errorElements) {
+                        try {
+                            const text = await el.getText();
+                            if (text && (text.includes('504') || text.toLowerCase().includes('error'))) {
+                                return { success: false, error: text };
+                            }
+                        } catch (e) {
+                            // Ignorar si el elemento ya no está en el DOM
+                        }
+                    }
+                }
+                return false;
+            }, 15000);
+
+            if (loginResult && !loginResult.success) {
+                console.error(`❌ [SeleniumAuth] Login fallido por error del servidor de Ganamos: "${loginResult.error}"`);
+                return false;
+            }
 
             const finalUrl = await this.driver.getCurrentUrl();
             console.log(`[SeleniumAuth] Sesión de administrador iniciada con éxito. URL actual: ${finalUrl}`);

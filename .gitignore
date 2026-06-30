@@ -20,6 +20,9 @@ md_planning/
 docs/whatsapp_embedded_signup_plan.md
 /_archivados_planning
 /scratch
+src/scratch/
+*_failure.png
+users_search_result.png
 scripts/meta-tools/
 
 API_EXTERNAL_DOCUMENTATION.md

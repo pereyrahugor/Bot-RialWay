@@ -1,9 +1,9 @@
 // src/bot/toolRegistry.ts
 import { aquavitaModule } from "../modules/aquavita/index";
+import { ganemosModule } from "../modules/ganemos-net/index";
 
 export const moduleRegistry = {
   aquavita: aquavitaModule,
-  // En el futuro, agregar otros clientes aquí
-  // lugarextra: lugarExtraModule,
-  // cdm: cdmModule
+  ganemos: ganemosModule,
+  "ganemos-net": ganemosModule
 };

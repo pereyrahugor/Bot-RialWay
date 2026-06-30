@@ -32,6 +32,13 @@ async function runLoginTest() {
             console.log("🎉 TEST EXITOSO: El login fue completado y validado correctamente.");
         } else {
             console.log("❌ TEST FALLIDO: El login no se pudo completar o el elemento de éxito post-login no se encontró.");
+            console.log("📸 Tomando captura de pantalla por fallo...");
+            const screenshot = await driver.takeScreenshot();
+            const fs = await import('fs');
+            const path = await import('path');
+            const screenshotPath = path.join(process.cwd(), 'login_failure.png');
+            fs.writeFileSync(screenshotPath, screenshot, 'base64');
+            console.log(`📸 Captura de pantalla guardada en: ${screenshotPath}`);
         }
     } catch (e: any) {
         console.error("💥 Error durante la ejecución del test:", e.message || e);

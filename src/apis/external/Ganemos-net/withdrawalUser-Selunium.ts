@@ -5,21 +5,21 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 /**
- * Servicio para recargar fichas/saldo a un usuario en Ganemosnet utilizando Selenium.
+ * Servicio para procesar retiros de saldo/fichas de un usuario en Ganemosnet utilizando Selenium.
  * 
- * @param username Nombre de usuario a recargar.
- * @param amount Monto a depositar.
+ * @param username Nombre de usuario del cual retirar.
+ * @param amount Monto a retirar.
  * @param driver Instancia existente de WebDriver (opcional). Si no se provee, se creará una nueva y se iniciará sesión.
  */
-export async function rechargeUserSelenium(
+export async function withdrawalUser(
     username: string,
     amount: number,
     driver?: WebDriver
 ): Promise<boolean> {
-    console.log(`[Ganemos-net] Iniciando recarga de saldo de ${amount} para: ${username}...`);
+    console.log(`[Ganemos-net] Iniciando retiro de saldo de ${amount} para: ${username}...`);
 
     let localDriver: WebDriver | undefined = driver;
-    let shouldQuit = true; // Por defecto cerramos al final: "y listo, cerramos navegador"
+    let shouldQuit = true; // Por defecto cerramos al final: "cerrar navegador"
 
     // Si no se pasa un driver activo, creamos uno nuevo y nos logueamos
     if (!localDriver) {
@@ -40,12 +40,12 @@ export async function rechargeUserSelenium(
 
             const logged = await authenticator.login(adminUser, adminPass);
             if (!logged) {
-                console.error("❌ [Ganemos-net] Fallo en la autenticación del administrador para recarga.");
+                console.error("❌ [Ganemos-net] Fallo en la autenticación del administrador para retiro.");
                 await localDriver.quit();
                 return false;
             }
         } catch (authErr: any) {
-            console.error("❌ [Ganemos-net] Excepción durante el login para recarga:", authErr.message || authErr);
+            console.error("❌ [Ganemos-net] Excepción durante el login para retiro:", authErr.message || authErr);
             if (localDriver) {
                 try { await localDriver.quit(); } catch (e) {}
             }
@@ -82,34 +82,43 @@ export async function rechargeUserSelenium(
         console.log("[Ganemos-net] Buscando usuario...");
         await new Promise(resolve => setTimeout(resolve, 2000));
 
-        // 4. Buscar el botón "Depositar" (se busca el elemento enlace por su texto literal en DOM)
-        console.log("[Ganemos-net] Buscando enlace 'Depositar' en la lista...");
-        const depositBtnXPath = "//a[text()='Depositar']";
-        const depositBtn = await localDriver.wait(
-            until.elementLocated(By.xpath(depositBtnXPath)),
-            10000
-        );
-        await depositBtn.click();
+        // 4. Buscar el botón "Retiro"
+        // Intentaremos primero con un selector de texto literal robusto (para evitar fallos por cambio en el DOM),
+        // y como fallback usaremos el XPath absoluto provisto por el usuario.
+        console.log("[Ganemos-net] Buscando botón 'Retiro'...");
+        let withdrawalBtn;
+        try {
+            withdrawalBtn = await localDriver.wait(
+                until.elementLocated(By.xpath("//a[text()='Retiro']")),
+                5000
+            );
+        } catch (e) {
+            console.log("[Ganemos-net] Selector literal no encontrado. Usando XPath absoluto de respaldo...");
+            const absoluteXPath = "/html/body/div[3]/div/div[2]/main/div[3]/div[1]/div[3]/div[1]/div[2]/div/div[3]/div/a[2]";
+            withdrawalBtn = await localDriver.findElement(By.xpath(absoluteXPath));
+        }
 
-        // 5. Esperar a que redirija a la página de depósito (/user/deposit/{id})
-        await localDriver.wait(until.urlContains('/user/deposit/'), 10000);
-        console.log("[Ganemos-net] Redirección a la página de depósito confirmada.");
+        await withdrawalBtn.click();
 
-        // 6. Ingresar el monto en el input de depósito
-        const amountInputXPath = "/html/body/div[3]/div/div[2]/main/div[2]/div/div/div[1]/div[5]/div[1]/div/div/div/div/input";
+        // 5. Esperar a que redirija a la página de retiro (/user/withdrawal/{id})
+        await localDriver.wait(until.urlContains('/user/withdrawal/'), 10000);
+        console.log("[Ganemos-net] Redirección a la página de retiro confirmada.");
+
+        // 6. Ingresar el monto en el input de cantidad
+        const amountInputXPath = "/html/body/div[3]/div/div[2]/main/div[2]/div/div/div[1]/div[5]/div/div[1]/input";
         const amountInput = await localDriver.wait(
             until.elementLocated(By.xpath(amountInputXPath)),
             10000
         );
         await amountInput.sendKeys(amount.toString());
 
-        // 7. Clic en el botón de depósito final
-        const submitDepositBtnXPath = "/html/body/div[3]/div/div[2]/main/div[2]/div/div/div[3]/button[2]";
-        const submitDepositBtn = await localDriver.findElement(By.xpath(submitDepositBtnXPath));
-        await submitDepositBtn.click();
+        // 7. Clic en el botón de retiro final
+        const submitWithdrawalBtnXPath = "/html/body/div[3]/div/div[2]/main/div[2]/div/div/div[2]/button[2]";
+        const submitWithdrawalBtn = await localDriver.findElement(By.xpath(submitWithdrawalBtnXPath));
+        await submitWithdrawalBtn.click();
 
-        // Esperar a que se procese la operación y redirija a /users/all o similar
-        console.log("[Ganemos-net] Enviando depósito y esperando confirmación...");
+        // Esperar a que se procese la operación y redirija a /users/all
+        console.log("[Ganemos-net] Enviando solicitud de retiro...");
         
         const result: any = await localDriver.wait(async (d) => {
             const currUrl = await d.getCurrentUrl();
@@ -118,7 +127,7 @@ export async function rechargeUserSelenium(
             }
             
             // Buscar cartel de error en pantalla
-            const errorElements = await d.findElements(By.xpath("//*[contains(text(), 'Error') or contains(text(), 'error') or contains(text(), 'insuficiente') or contains(text(), 'inválido')]"));
+            const errorElements = await d.findElements(By.xpath("//*[contains(text(), 'Error') or contains(text(), 'error') or contains(text(), 'insuficiente') or contains(text(), 'inválido') or contains(text(), 'límite')]"));
             if (errorElements.length > 0) {
                 for (const el of errorElements) {
                     try {
@@ -128,8 +137,8 @@ export async function rechargeUserSelenium(
                                 return { success: false, error: text };
                             }
                         }
-                    } catch (e) {
-                        // Elemento obsoleto o inexistente
+                    } catch (err) {
+                        // Elemento obsoleto
                     }
                 }
             }
@@ -137,11 +146,11 @@ export async function rechargeUserSelenium(
         }, 15000);
 
         if (result && !result.success) {
-            console.error(`❌ [Ganemos-net] Error al realizar depósito: "${result.error}"`);
+            console.error(`❌ [Ganemos-net] Error al realizar retiro: "${result.error}"`);
             
             try {
                 const screenshot = await localDriver.takeScreenshot();
-                const screenshotPath = path.join(process.cwd(), 'recharge_failure.png');
+                const screenshotPath = path.join(process.cwd(), 'withdrawal_failure.png');
                 fs.writeFileSync(screenshotPath, screenshot, 'base64');
                 console.log(`📸 Captura de pantalla guardada en: ${screenshotPath}`);
             } catch (e) {}
@@ -152,9 +161,9 @@ export async function rechargeUserSelenium(
             return false;
         }
 
-        console.log(`🎉 [Ganemos-net] Recarga de saldo completada con éxito para ${username}.`);
+        console.log(`🎉 [Ganemos-net] Retiro completado con éxito para ${username} por un monto de ${amount}.`);
         
-        // Cerrar el navegador al finalizar la operación en todos los casos
+        // Cerrar el navegador al finalizar la operación
         if (shouldQuit && localDriver) {
             await localDriver.quit();
             console.log("[Ganemos-net] Navegador cerrado correctamente.");
@@ -162,12 +171,12 @@ export async function rechargeUserSelenium(
         return true;
 
     } catch (error: any) {
-        console.error("❌ Error en el proceso de recarga de usuario de Selenium:", error.message || error);
+        console.error("❌ Error en el proceso de retiro de usuario de Selenium:", error.message || error);
         
         if (localDriver) {
             try {
                 const screenshot = await localDriver.takeScreenshot();
-                const screenshotPath = path.join(process.cwd(), 'recharge_failure.png');
+                const screenshotPath = path.join(process.cwd(), 'withdrawal_failure.png');
                 fs.writeFileSync(screenshotPath, screenshot, 'base64');
                 console.log(`📸 Captura de pantalla guardada en: ${screenshotPath}`);
             } catch (e) {}

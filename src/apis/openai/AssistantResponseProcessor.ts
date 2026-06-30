@@ -52,6 +52,13 @@ function limpiarBloquesJSON(texto: string): string {
         return `___SPECIAL_BLOCK_${index}___`;
     });
     
+    // Preservar #tool_nombre#... (Tolerante a espacios y opcionalmente con tag de cierre)
+    textoConMarcadores = textoConMarcadores.replace(/#\s*tool_([a-zA-Z0-9_-]+)\s*#\s*(\{[\s\S]*?\})(?:#\/\s*tool_\1\s*#)?/gi, (match) => {
+        const index = specialBlocks.length;
+        specialBlocks.push(match);
+        return `___SPECIAL_BLOCK_${index}___`;
+    });
+    
     // 2. Limpiar referencias de OpenAI tipo 【4:0†archivo.pdf】
     let limpio = textoConMarcadores.replace(/【.*?】/g, "");
 
@@ -182,12 +189,27 @@ export class AssistantResponseProcessor {
         const match = sanitizedTextResponse.match(apiBlockRegex);
         if (match) {
             const jsonStr = match[1].trim();
-            // console.log('[Debug] Bloque [API] detectado:', jsonStr);
             try {
                 jsonData = JSON.parse(jsonStr);
             } catch (e: any) {
-                // console.error('[AssistantResponseProcessor] Error al parsear bloque [API]:', e.message);
                 jsonData = null;
+            }
+        }
+
+        // 1b) Extraer formato alternativo #tool_nombre# ...
+        if (!jsonData) {
+            const toolBlockRegex = /#\s*tool_([a-zA-Z0-9_-]+)\s*#\s*(\{[\s\S]*?\})(?:#\/\s*tool_\1\s*#)?/is;
+            const toolMatch = sanitizedTextResponse.match(toolBlockRegex);
+            if (toolMatch) {
+                const toolName = toolMatch[1].trim().toUpperCase();
+                const jsonStr = toolMatch[2].trim();
+                try {
+                    jsonData = JSON.parse(jsonStr);
+                    // Inyectar el type para compatibilidad con executeClientTool
+                    jsonData.type = toolName;
+                } catch (e: any) {
+                    jsonData = null;
+                }
             }
         }
 
