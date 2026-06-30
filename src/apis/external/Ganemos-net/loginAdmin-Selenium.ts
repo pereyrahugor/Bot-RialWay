@@ -11,9 +11,6 @@ export class LoginAdminSelenium {
         this.driver = driver;
     }
 
-    private readonly usernameFieldDefault = 'turbobt';
-    private readonly passwordFieldDefault = 'coco1234';
-    
     /**
      * Realiza el login del administrador utilizando localizadores XPath.
      * 
@@ -22,6 +19,10 @@ export class LoginAdminSelenium {
      * @returns Promesa que resuelve a `true` si el login es exitoso o `false` en caso contrario.
      */
     public async login(username: string, password: string): Promise<boolean> {
+        if (!username || !password) {
+            console.error("❌ [SeleniumAuth] Las credenciales de administrador (GANAMOSNET_USER / GANAMOSNET_PASS) no están configuradas.");
+            return false;
+        }
         console.log(`[SeleniumAuth] Iniciando sesión para el administrador: ${username}...`);
 
         try {

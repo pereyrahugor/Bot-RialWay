@@ -42,8 +42,8 @@ export async function createUserSelenium(
     try {
         // 1. Iniciar sesión usando LoginAdminSelenium
         const authenticator = new LoginAdminSelenium(driver);
-        const adminUser = process.env.GANEMOS_ADMIN_USER || 'turbobt';
-        const adminPass = process.env.GANEMOS_ADMIN_PASS || 'coco1234';
+        const adminUser = process.env.GANAMOSNET_USER || '';
+        const adminPass = process.env.GANAMOSNET_PASS || '';
 
         const loginSuccess = await authenticator.login(adminUser, adminPass);
         if (!loginSuccess) {

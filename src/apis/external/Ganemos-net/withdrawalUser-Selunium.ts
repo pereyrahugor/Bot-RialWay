@@ -35,8 +35,8 @@ export async function withdrawalUser(
 
         try {
             const authenticator = new LoginAdminSelenium(localDriver);
-            const adminUser = process.env.GANEMOS_ADMIN_USER || 'turbobt';
-            const adminPass = process.env.GANEMOS_ADMIN_PASS || 'coco1234';
+            const adminUser = process.env.GANAMOSNET_USER || '';
+            const adminPass = process.env.GANAMOSNET_PASS || '';
 
             const logged = await authenticator.login(adminUser, adminPass);
             if (!logged) {
