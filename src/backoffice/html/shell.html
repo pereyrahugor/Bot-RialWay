@@ -1,20 +1,21 @@
 <!DOCTYPE html>
-<html lang="es" data-theme="light">
+<html lang="es" data-theme="light" style="height: 100%; width: 100%;">
+
 <head>
     <script>document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'light');</script>
     <script src="/js/auth-check.js"></script>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>{{BOT_NAME}} - Backoffice</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png">
     <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
-    <script>(function(){var v='?v=2';['link[rel*="icon"]','link[rel="apple-touch-icon"]'].forEach(function(s){document.querySelectorAll(s).forEach(function(e){e.href=e.href.split('?')[0]+v;});});}());</script>
+    <script>(function () { var v = '?v=2';['link[rel*="icon"]', 'link[rel="apple-touch-icon"]'].forEach(function (s) { document.querySelectorAll(s).forEach(function (e) { e.href = e.href.split('?')[0] + v; }); }); }());</script>
     <link rel="stylesheet" href="/style/vendor/fontawesome/css/all.min.css">
     <link rel="stylesheet" href="/style/tailwind.css?v=6">
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
-        window.swalConfirm = async function(title, text) {
+        window.swalConfirm = async function (title, text) {
             if (typeof Swal !== 'undefined') {
                 const res = await Swal.fire({
                     title: title || 'Confirmación',
@@ -30,7 +31,7 @@
             }
             return confirm(text || title);
         };
-        window.swalAlert = function(title, text, icon) {
+        window.swalAlert = function (title, text, icon) {
             if (typeof Swal !== 'undefined') {
                 return Swal.fire({
                     title: title || 'Atención',
@@ -47,12 +48,20 @@
     <style>
         /* Previene auto-zoom en iOS en todos los inputs de la app */
         @media (max-width: 1024px) {
-            input[type="text"], input[type="email"], input[type="number"], 
-            input[type="password"], input[type="search"], input[type="tel"], 
-            input[type="url"], textarea, select {
+
+            input[type="text"],
+            input[type="email"],
+            input[type="number"],
+            input[type="password"],
+            input[type="search"],
+            input[type="tel"],
+            input[type="url"],
+            textarea,
+            select {
                 font-size: 16px !important;
             }
         }
+
         /* Puntos de notificacion rojos en sidebar */
         .nav-dot {
             display: inline-block;
@@ -66,22 +75,26 @@
             position: relative;
             animation: nav-dot-pulse 2s infinite ease-in-out;
         }
+
         @keyframes nav-dot-pulse {
             0% {
                 transform: scale(0.95);
                 box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
             }
+
             70% {
                 transform: scale(1.15);
                 box-shadow: 0 0 0 6px rgba(239, 68, 68, 0);
             }
+
             100% {
                 transform: scale(0.95);
                 box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
             }
         }
+
         /* Posicionar punto de notificacion sobre el icono en sidebar colapsado */
-        .nav-sidebar.collapsed .nav-item > .nav-link > .nav-dot {
+        .nav-sidebar.collapsed .nav-item>.nav-link>.nav-dot {
             position: absolute;
             top: 10px;
             left: 28px;
@@ -89,12 +102,14 @@
         }
     </style>
 </head>
+
 <body class="flex h-screen overflow-hidden font-body" style="height: 100dvh;">
 
     <!-- Fondo -->
     <div class="bg-page"></div>
 
-    <canvas id="neural-bg" aria-hidden="true" class="fixed inset-0 w-full h-full pointer-events-none" style="z-index:0; opacity:0.18;"></canvas>
+    <canvas id="neural-bg" aria-hidden="true" class="fixed inset-0 w-full h-full pointer-events-none"
+        style="z-index:0; opacity:0.18;"></canvas>
 
     <!-- App bar mobile -->
     <header class="mobile-appbar">
@@ -104,7 +119,8 @@
         <span class="nav-brand-logo mobile-brand-logo">
             <span class="nav-brand-details mobile-brand-details">
                 <span class="nav-brand-name" title="{{PROJECT_NAME}}">{{PROJECT_NAME}}</span>
-                <span class="nav-brand-sub" title="Copiar ID de proyecto" onclick="navigator.clipboard.writeText('{{PROJECT_ID}}').then(() => showToast('ID de proyecto copiado', 'success')).catch(err => console.error(err))">{{PROJECT_ID}}</span>
+                <span class="nav-brand-sub" title="Copiar ID de proyecto"
+                    onclick="navigator.clipboard.writeText('{{PROJECT_ID}}').then(() => showToast('ID de proyecto copiado', 'success')).catch(err => console.error(err))">{{PROJECT_ID}}</span>
             </span>
             <i class="fas fa-brain"></i>
         </span>
@@ -121,7 +137,8 @@
                     <i class="fas fa-brain"></i>
                     <span class="nav-brand-details">
                         <span class="nav-brand-name" title="{{PROJECT_NAME}}">{{PROJECT_NAME}}</span>
-                        <span class="nav-brand-sub" title="Copiar ID de proyecto" onclick="navigator.clipboard.writeText('{{PROJECT_ID}}').then(() => showToast('ID de proyecto copiado', 'success')).catch(err => console.error(err))">{{PROJECT_ID}}</span>
+                        <span class="nav-brand-sub" title="Copiar ID de proyecto"
+                            onclick="navigator.clipboard.writeText('{{PROJECT_ID}}').then(() => showToast('ID de proyecto copiado', 'success')).catch(err => console.error(err))">{{PROJECT_ID}}</span>
                     </span>
                 </span>
             </div>
@@ -150,7 +167,7 @@
                         <li class="nav-item"><span class="nav-link nav-dropdown-title">Mensajeria</span></li>
                         <li class="nav-item {{SHOW_BACKOFFICE_STYLE}}" data-route="/backoffice">
                             <a href="#" class="nav-link nav-dropdown-link"
-                               onclick="event.preventDefault(); closeMessagingFlyout(); navigate('/backoffice')">
+                                onclick="event.preventDefault(); closeMessagingFlyout(); navigate('/backoffice')">
                                 <i class="fas fa-comments"></i>
                                 <span class="nav-label">Conversaciones</span>
                                 <span class="nav-dot" id="dot-conversaciones" style="display: none;"></span>
@@ -158,14 +175,14 @@
                         </li>
                         <li class="nav-item">
                             <a href="#" class="nav-link nav-dropdown-link"
-                               onclick="event.preventDefault(); closeMessagingFlyout(); toggleLeadsPanel(event)">
+                                onclick="event.preventDefault(); closeMessagingFlyout(); toggleLeadsPanel(event)">
                                 <i class="fas fa-user-group"></i>
                                 <span class="nav-label">Contactos</span>
                             </a>
                         </li>
                         <li class="nav-item" data-route="/tickets">
                             <a href="#" class="nav-link nav-dropdown-link"
-                               onclick="event.preventDefault(); closeMessagingFlyout(); navigate('/tickets')">
+                                onclick="event.preventDefault(); closeMessagingFlyout(); navigate('/tickets')">
                                 <i class="fas fa-ticket-alt"></i>
                                 <span class="nav-label">Tickets</span>
                                 <span class="nav-dot" id="dot-tickets" style="display: none;"></span>
@@ -173,7 +190,7 @@
                         </li>
                         <li class="nav-item" data-route="/reportes">
                             <a href="#" class="nav-link nav-dropdown-link"
-                               onclick="event.preventDefault(); closeMessagingFlyout(); navigate('/reportes')">
+                                onclick="event.preventDefault(); closeMessagingFlyout(); navigate('/reportes')">
                                 <i class="fas fa-file-lines"></i>
                                 <span class="nav-label">Reportes</span>
                                 <span class="nav-dot" id="dot-reportes" style="display: none;"></span>
@@ -181,14 +198,14 @@
                         </li>
                         <li class="nav-item" data-route="/conexion">
                             <a href="#" class="nav-link nav-dropdown-link"
-                               onclick="event.preventDefault(); closeMessagingFlyout(); navigate('/conexion')">
+                                onclick="event.preventDefault(); closeMessagingFlyout(); navigate('/conexion')">
                                 <i class="fas fa-plug-circle-bolt"></i>
                                 <span class="nav-label">Conexion</span>
                             </a>
                         </li>
                         <li class="nav-item {{SHOW_BACKOFFICE_STYLE}}" data-route="/webchat">
                             <a href="#" class="nav-link nav-dropdown-link"
-                               onclick="event.preventDefault(); closeMessagingFlyout(); navigate('/webchat')">
+                                onclick="event.preventDefault(); closeMessagingFlyout(); navigate('/webchat')">
                                 <i class="fas fa-headset"></i>
                                 <span class="nav-label">Webchat</span>
                             </a>
@@ -209,7 +226,7 @@
                         <li class="nav-item"><span class="nav-link nav-dropdown-title">Integraciones</span></li>
                         <li class="nav-item {{SHOW_CRM_STYLE}}" data-route="/crm">
                             <a href="#" class="nav-link nav-dropdown-link"
-                               onclick="event.preventDefault(); closeIntegracionesFlyout(); navigate('/crm')">
+                                onclick="event.preventDefault(); closeIntegracionesFlyout(); navigate('/crm')">
                                 <i class="fas fa-id-card-clip"></i>
                                 <span class="nav-label">CRM</span>
                                 <span class="nav-dot" id="dot-crm" style="display: none;"></span>
@@ -217,7 +234,7 @@
                         </li>
                         <li class="nav-item {{SHOW_CRM_STYLE}}" data-route="/crm-tareas">
                             <a href="#" class="nav-link nav-dropdown-link"
-                               onclick="event.preventDefault(); closeIntegracionesFlyout(); navigate('/crm-tareas')">
+                                onclick="event.preventDefault(); closeIntegracionesFlyout(); navigate('/crm-tareas')">
                                 <i class="fas fa-calendar-check"></i>
                                 <span class="nav-label">Tareas</span>
                                 <span class="nav-dot" id="dot-tareas" style="display: none;"></span>
@@ -225,7 +242,7 @@
                         </li>
                         <li class="nav-item {{SHOW_BACKOFFICE_STYLE}}" data-route="/meta">
                             <a href="#" class="nav-link nav-dropdown-link"
-                               onclick="event.preventDefault(); closeIntegracionesFlyout(); navigate('/meta')">
+                                onclick="event.preventDefault(); closeIntegracionesFlyout(); navigate('/meta')">
                                 <i class="fab fa-meta"></i>
                                 <span class="nav-label">Meta</span>
                             </a>
@@ -234,24 +251,32 @@
                             <a href="#" class="nav-link nav-dropdown-link" onclick="toggleMeliSubMenu(event)">
                                 <i class="fas fa-handshake"></i>
                                 <span class="nav-label">Mercado Libre</span>
-                                <i class="fas fa-chevron-down nav-sub-dropdown-icon" style="font-size: 0.7rem; margin-left: auto; transition: transform 0.2s;"></i>
+                                <i class="fas fa-chevron-down nav-sub-dropdown-icon"
+                                    style="font-size: 0.7rem; margin-left: auto; transition: transform 0.2s;"></i>
                             </a>
-                            <ul class="nav-sub-dropdown-menu" style="height: 0; overflow: hidden; transition: height 0.2s; padding-left: 1.25rem; list-style: none; display: flex; flex-direction: column; gap: 4px;">
+                            <ul class="nav-sub-dropdown-menu"
+                                style="height: 0; overflow: hidden; transition: height 0.2s; padding-left: 1.25rem; list-style: none; display: flex; flex-direction: column; gap: 4px;">
                                 <li class="nav-item" data-route="/mercado-libre-productos">
-                                    <a href="#" class="nav-link nav-dropdown-link" onclick="event.preventDefault(); closeIntegracionesFlyout(); navigate('/mercado-libre-productos')">
-                                        <i class="fas fa-boxes" style="font-size: 0.8rem; width: 16px; text-align: center;"></i>
+                                    <a href="#" class="nav-link nav-dropdown-link"
+                                        onclick="event.preventDefault(); closeIntegracionesFlyout(); navigate('/mercado-libre-productos')">
+                                        <i class="fas fa-boxes"
+                                            style="font-size: 0.8rem; width: 16px; text-align: center;"></i>
                                         <span class="nav-label" style="font-size: 0.85rem;">Productos</span>
                                     </a>
                                 </li>
                                 <li class="nav-item" data-route="/mercado-libre-bot">
-                                    <a href="#" class="nav-link nav-dropdown-link" onclick="event.preventDefault(); closeIntegracionesFlyout(); navigate('/mercado-libre-bot')">
-                                        <i class="fas fa-robot" style="font-size: 0.8rem; width: 16px; text-align: center;"></i>
+                                    <a href="#" class="nav-link nav-dropdown-link"
+                                        onclick="event.preventDefault(); closeIntegracionesFlyout(); navigate('/mercado-libre-bot')">
+                                        <i class="fas fa-robot"
+                                            style="font-size: 0.8rem; width: 16px; text-align: center;"></i>
                                         <span class="nav-label" style="font-size: 0.85rem;">Mercado Libre: Bot</span>
                                     </a>
                                 </li>
                                 <li class="nav-item" data-route="/mercado-pago">
-                                    <a href="#" class="nav-link nav-dropdown-link" onclick="event.preventDefault(); closeIntegracionesFlyout(); navigate('/mercado-pago')">
-                                        <i class="fas fa-wallet" style="font-size: 0.8rem; width: 16px; text-align: center;"></i>
+                                    <a href="#" class="nav-link nav-dropdown-link"
+                                        onclick="event.preventDefault(); closeIntegracionesFlyout(); navigate('/mercado-pago')">
+                                        <i class="fas fa-wallet"
+                                            style="font-size: 0.8rem; width: 16px; text-align: center;"></i>
                                         <span class="nav-label" style="font-size: 0.85rem;">Mercado Pago</span>
                                     </a>
                                 </li>
@@ -259,7 +284,7 @@
                         </li>
                         <li class="nav-item" data-route="/lista-negra">
                             <a href="#" class="nav-link nav-dropdown-link"
-                               onclick="event.preventDefault(); closeIntegracionesFlyout(); navigate('/lista-negra')">
+                                onclick="event.preventDefault(); closeIntegracionesFlyout(); navigate('/lista-negra')">
                                 <i class="fas fa-ban"></i>
                                 <span class="nav-label">Lista Negra</span>
                             </a>
@@ -280,27 +305,28 @@
                     <li class="nav-item"><span class="nav-link nav-dropdown-title">Ajustes</span></li>
                     <li class="nav-item {{SHOW_SYSTEM_CONFIG_STYLE}}" data-route="/system-config">
                         <a href="#" class="nav-link nav-dropdown-link"
-                           onclick="event.preventDefault(); closeAjustesFlyout(); navigate('/system-config')">
+                            onclick="event.preventDefault(); closeAjustesFlyout(); navigate('/system-config')">
                             <i class="fas fa-gears"></i>
                             <span class="nav-label">Configuracion</span>
                         </a>
                     </li>
                     <li class="nav-item" id="btn-global-new-user" data-route="/usuarios">
                         <a href="#" class="nav-link nav-dropdown-link"
-                           onclick="event.preventDefault(); closeAjustesFlyout(); navigate('/usuarios')">
+                            onclick="event.preventDefault(); closeAjustesFlyout(); navigate('/usuarios')">
                             <i class="fas fa-user-plus"></i>
                             <span class="nav-label">Nuevo Usuario</span>
                         </a>
                     </li>
                     <li class="nav-item" data-route="/docs">
                         <a href="#" class="nav-link nav-dropdown-link"
-                           onclick="event.preventDefault(); closeAjustesFlyout(); navigate('/docs')">
+                            onclick="event.preventDefault(); closeAjustesFlyout(); navigate('/docs')">
                             <i class="fas fa-book"></i>
                             <span class="nav-label">Manual</span>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <div class="nav-link nav-dropdown-link nav-theme-row" onclick="document.getElementById('theme-toggle-input').click()">
+                        <div class="nav-link nav-dropdown-link nav-theme-row"
+                            onclick="document.getElementById('theme-toggle-input').click()">
                             <span class="nav-label">Tema</span>
                             <label class="nav-theme-toggle" onclick="event.stopPropagation()">
                                 <input type="checkbox" id="theme-toggle-input" class="sr-only" onchange="toggleTheme()">
@@ -316,7 +342,8 @@
                 </ul>
             </li>
             <li class="nav-item">
-                <a href="https://clientesneurolinks.com/portal/dashboard" class="nav-link" target="_blank" rel="noopener">
+                <a href="https://clientesneurolinks.com/portal/dashboard" class="nav-link" target="_blank"
+                    rel="noopener">
                     <i class="fas fa-arrow-left"></i>
                     <span class="nav-label">Volver a mi portal</span>
                 </a>
@@ -343,4 +370,5 @@
     <script src="/js/neural-bg.js"></script>
     <script src="/js/app.js"></script>
 </body>
+
 </html>

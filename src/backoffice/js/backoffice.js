@@ -39,7 +39,7 @@ async function initCRMData() {
         const resSettings = await fetch(`/api/backoffice/settings?token=${token}`);
         if (!resSettings.ok) return;
         const settings = await resSettings.json();
-        
+
         const colSettingValue = settings.CRM_COLUMNS;
         if (colSettingValue) {
             crmColumns = JSON.parse(colSettingValue);
@@ -182,10 +182,10 @@ socket.on('bot_toggled', (payload) => {
         if (payload.assigned_agent) {
             chat.assigned_agent = payload.assigned_agent;
             // Si el backend lo devuelve como assigned_to (usado en la tabla), lo actualizamos también
-            chat.assigned_to = payload.assigned_agent; 
+            chat.assigned_to = payload.assigned_agent;
         }
     }
-    
+
     if (activeChatId === payload.chatId) {
         const toggle = document.getElementById('bot-toggle');
         if (toggle) toggle.checked = payload.enabled;
@@ -268,7 +268,7 @@ function loadChatsFromCache() {
 
 async function fetchChats(refresh = false) {
     if (loadingChats) return;
-    
+
     // Si es la carga inicial y hay caché, renderizamos inmediatamente
     if (chats.length === 0 && !refresh) {
         const cachedData = loadChatsFromCache();
@@ -298,7 +298,7 @@ async function fetchChats(refresh = false) {
             logout();
             return;
         }
-        
+
         const newChats = await res.json();
         if (!Array.isArray(newChats)) {
             console.error('❌ La respuesta del servidor no es un arreglo válido de chats:', newChats);
@@ -317,7 +317,7 @@ async function fetchChats(refresh = false) {
 
         chatOffset = chats.length;
         renderChatList();
-        
+
         // Auto-abrir chat si venimos desde el CRM
         const pendingChatId = localStorage.getItem('activeChat');
         if (pendingChatId) {
@@ -328,7 +328,7 @@ async function fetchChats(refresh = false) {
             setTimeout(() => selectChat(pendingChatId), 100);
             return;
         }
-        
+
         if (activeChatId) {
             const activeChat = chats.find(c => c.id === activeChatId);
             if (activeChat) {
@@ -364,12 +364,12 @@ async function fetchBotTags() {
 function renderBulkFilterDropdown() {
     const select = document.getElementById('bulk-filter-tags');
     if (!select) return;
-    
+
     const selectedVals = Array.from(select.selectedOptions).map(o => o.value);
-    
-    select.innerHTML = 
+
+    select.innerHTML =
         _boBotTags.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
-        
+
     Array.from(select.options).forEach(opt => {
         if (selectedVals.includes(opt.value)) {
             opt.selected = true;
@@ -389,9 +389,9 @@ function handleSearch() {
 function renderFilterDropdown() {
     const select = document.getElementById('filter-tag');
     if (!select) return; // Si no existe el filtro en el HTML, no hacer nada
-    
+
     const currentValue = select.value;
-    select.innerHTML = '<option value="">Todas las etiquetas</option>' + 
+    select.innerHTML = '<option value="">Todas las etiquetas</option>' +
         _boBotTags.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
     select.value = currentValue;
 }
@@ -421,7 +421,7 @@ function getInitials(name) {
 }
 
 function getAvatarBg(str) {
-    const colors = ['#0078D4','#25d366','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#10b981','#f97316','#6366f1'];
+    const colors = ['#0078D4', '#25d366', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#10b981', '#f97316', '#6366f1'];
     let hash = 0;
     for (let i = 0; i < (str || '').length; i++) hash = (str.charCodeAt(i) + ((hash << 5) - hash)) | 0;
     return colors[Math.abs(hash) % colors.length];
@@ -467,12 +467,12 @@ function renderChatList(listToRender = chats) {
         let platformIcon = '';
         if (chat.type === 'instagram') platformIcon = '<i class="fab fa-instagram platform-instagram"></i>';
         else if (chat.type === 'messenger') platformIcon = '<i class="fab fa-facebook-messenger platform-messenger"></i>';
-        
+
         const showIconOverlay = currentPlatform === 'all' && chat.type !== 'whatsapp';
         const iconOverlayHtml = showIconOverlay ? `<div class="platform-icon-overlay">${platformIcon}</div>` : '';
 
         const tagsHtml = (chat.tags || []).map(t =>
-            `<span class="tag-pill" data-tag-color="${t.color||'#6366f1'}" style="${_tagStyle(t.color)}">${t.name}</span>`
+            `<span class="tag-pill" data-tag-color="${t.color || '#6366f1'}" style="${_tagStyle(t.color)}">${t.name}</span>`
         ).join('');
 
         const timeStr = formatLastMessageTime(chat.last_message_at);
@@ -524,11 +524,11 @@ function renderChatList(listToRender = chats) {
 async function switchPlatform(platform) {
     if (loadingChats) return;
     currentPlatform = platform;
-    
+
     // Actualizar UI de tabs
     document.querySelectorAll('.platform-tab').forEach(t => t.classList.remove('active'));
     document.getElementById(`tab-${platform}`).classList.add('active');
-    
+
     console.log(`[Platform] Cambiando a ${platform}`);
     fetchChats(true);
 }
@@ -537,7 +537,7 @@ async function checkPlatformVisibility() {
     try {
         const res = await fetch(`/api/backoffice/settings?token=${token}`);
         const settings = await res.json();
-        
+
         platformSettings.whatsapp = settings.WHATSAPP_VISIBLE !== 'false';
         platformSettings.instagram = settings.INSTAGRAM_VISIBLE === 'true';
         platformSettings.messenger = settings.MESSENGER_VISIBLE === 'true';
@@ -569,7 +569,7 @@ async function checkPlatformVisibility() {
 async function selectChat(id) {
     activeChatId = id;
     if (window.innerWidth <= 768) document.body.classList.add('mobile-chat-active');
-    
+
     let chat = chats.find(c => c.id === id);
     if (!chat) {
         console.log(`🔍 [UI] Chat ${id} no encontrado en la lista local, buscando en el servidor...`);
@@ -586,27 +586,27 @@ async function selectChat(id) {
             console.error('Error buscando chat en el servidor:', err);
         }
     }
-    
+
     if (!chat) {
         console.error(`❌ Chat ${id} no encontrado en local ni en el servidor.`);
         return;
     }
-    
+
     if (_notificationsActive && chat) {
         markChatAsRead(id);
     }
-    
+
     document.getElementById('active-chat-phone').innerText = chat.id.split('@')[0];
     const displayName = (chat.name && chat.name !== '[-]') ? chat.name : 'Lead sin nombre';
     document.getElementById('active-chat-name').innerText = displayName;
-    
+
     const headerAvatar = document.getElementById('active-chat-avatar');
     const nameForAvatar = (chat.name && chat.name !== '[-]') ? chat.name : chat.id.split('@')[0];
     const headerInitials = getInitials(nameForAvatar);
     const headerBg = getAvatarBg(chat.id || '');
     headerAvatar.style.background = headerBg;
     headerAvatar.innerHTML = `<span>${headerInitials}</span>`;
-    
+
     const botToggle = document.getElementById('bot-toggle');
     botToggle.disabled = false;
     botToggle.checked = chat.bot_enabled;
@@ -625,7 +625,7 @@ async function selectChat(id) {
 
     renderActiveChatTags();
     populateCRMFields(chat);
-    
+
     // Refrescar paneles si están abiertos
     if (document.getElementById('crm-panel').classList.contains('active')) {
         populateCRMFields(chat);
@@ -646,7 +646,7 @@ function renderActiveChatTags() {
     if (!container) return;
     if (chat && chat.tags) {
         container.innerHTML = chat.tags.map(t =>
-            `<span class="tag-pill" data-tag-color="${t.color||'#6366f1'}" style="${_tagStyle(t.color)}">${t.name}</span>`
+            `<span class="tag-pill" data-tag-color="${t.color || '#6366f1'}" style="${_tagStyle(t.color)}">${t.name}</span>`
         ).join('');
     } else {
         container.innerHTML = '';
@@ -673,7 +673,7 @@ function updateInputState(botEnabled) {
 
     // Normalización estricta a booleano
     const isBotEnabled = (botEnabled === true || botEnabled === 'true' || botEnabled === 1 || botEnabled === '1');
-    
+
     console.log(`[UI] Actualizando estado de input. Bot habilitado: ${isBotEnabled}`);
 
     // Bot activo = todo bloqueado; bot inactivo = todo habilitado
@@ -690,7 +690,7 @@ function updateInputState(botEnabled) {
     if (isBotEnabled) {
         input.parentElement.style.borderColor = 'var(--accent)';
         input.style.opacity = '0.6';
-        input.placeholder = "🤖 Bot activo - Desactiva para intervenir";
+        input.placeholder = "Asistente Activo";
     } else {
         input.parentElement.style.borderColor = '#f87171';
         input.style.opacity = '1';
@@ -796,7 +796,7 @@ const mediaCache = {
                 const transaction = this.db.transaction(['media'], 'readonly');
                 const store = transaction.objectStore('media');
                 const request = store.get(url);
-                
+
                 request.onsuccess = async (e) => {
                     const cached = e.target.result;
                     if (cached === 'NOT_FOUND') { resolve(null); return; }
@@ -869,10 +869,10 @@ function _waFmtTime(s) {
 }
 
 function _initWaPlayer(playerEl) {
-    const audio  = playerEl.querySelector('audio');
+    const audio = playerEl.querySelector('audio');
     const timeEl = playerEl.querySelector('.wa-audio-time');
-    const bars   = playerEl.querySelectorAll('.wa-bar');
-    const icon   = playerEl.querySelector('.wa-play-btn i');
+    const bars = playerEl.querySelectorAll('.wa-bar');
+    const icon = playerEl.querySelector('.wa-play-btn i');
     if (!audio || !timeEl) return;
 
     const updateBars = () => {
@@ -895,7 +895,7 @@ function waTogglePlay(pid) {
     const box = document.getElementById(pid);
     if (!box) return;
     const audio = box.querySelector('audio');
-    const icon  = box.querySelector('.wa-play-btn i');
+    const icon = box.querySelector('.wa-play-btn i');
     document.querySelectorAll('.wa-audio-player').forEach(p => {
         if (p.id !== pid) {
             const a = p.querySelector('audio');
@@ -958,7 +958,7 @@ function renderMessages() {
 function generateMessageHtml(m, isNew = false) {
     const date = new Date(m.created_at);
     const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    
+
     let contentHtml = m.content || '';
     const type = m.type || 'text';
 
@@ -1036,7 +1036,7 @@ function generateMessageHtml(m, isNew = false) {
                 </div>
             </div>`;
     }
-    
+
     const deleteBtn = m.role === 'assistant' ? `
         <button class="delete-btn" onclick="event.stopPropagation(); deleteMessage('${m.chat_id || activeChatId}', '${m.id || m.external_id}')" title="Eliminar mensaje">
             <i class="fas fa-trash-can"></i>
@@ -1061,7 +1061,7 @@ function generateMessageHtml(m, isNew = false) {
 async function toggleBot(enabled) {
     const res = await fetch('/api/backoffice/toggle-bot', {
         method: 'POST',
-        headers: { 
+        headers: {
             'Content-Type': 'application/json',
             'Authorization': 'token=' + token
         },
@@ -1336,7 +1336,7 @@ function toggleCRMPanel(e) {
     if (e && e.stopPropagation) e.stopPropagation();
     const panel = document.getElementById('crm-panel');
     const isOpening = !panel.classList.contains('active');
-    
+
     if (isOpening) {
         closeAllPanels('crm-panel');
         const chat = chats.find(c => c.id === activeChatId);
@@ -1349,7 +1349,7 @@ function toggleTagsPanel(e) {
     if (e && e.stopPropagation) e.stopPropagation();
     const panel = document.getElementById('tags-panel');
     const isOpening = !panel.classList.contains('active');
-    
+
     if (isOpening) {
         closeAllPanels('tags-panel');
         renderTagManager();
@@ -1372,13 +1372,13 @@ async function loadCRMJump(chatId) {
 
         if (Array.isArray(tickets) && tickets.length > 0) {
             container.style.display = 'none';
-            select.innerHTML = '<option value="">🚀 Ver en CRM...</option>' + 
+            select.innerHTML = '<option value="">🚀 Ver en CRM...</option>' +
                 tickets.map(t => `<option value="${t.id}" data-chat="${t.chat_id}">${t.titulo} (${t.tipo})</option>`).join('');
-            
+
             // Tomar el primer ticket como el activo para la vista rápida
             const lastTicket = tickets[0];
             activeTicketId = lastTicket.id;
-            
+
             // Rellenar campos del ticket en el sidebar
             const titleEl = document.getElementById('crm-ticket-title');
             if (titleEl) titleEl.value = lastTicket.titulo || '';
@@ -1390,7 +1390,7 @@ async function loadCRMJump(chatId) {
             if (statusSelect) {
                 // Rellenar opciones según columnas del CRM
                 statusSelect.innerHTML = crmColumns.map(c => `<option value="${c.id}">${c.title}</option>`).join('');
-                
+
                 // Buscar estado actual en metadatos
                 const meta = _boCrmData[activeTicketId] || {};
                 const currentColumnId = meta.columnId || 'UNASSIGNED';
@@ -1492,7 +1492,7 @@ function populateCRMFields(chat) {
         _csdSync('crm-status-select-side');
         console.log(`[CRM] Poblando estado: ${currentVal} -> Asignado: ${statusEl.value}`);
     }
-    
+
     const dueDateEl = document.getElementById('crm-due-date');
     if (dueDateEl) dueDateEl.value = chat.crm_due_date ? chat.crm_due_date.split('T')[0] : '';
 
@@ -1558,7 +1558,7 @@ async function saveCRMDetails() {
                 _boCrmData[activeTicketId].columnId = col.id;
                 _boCrmData[activeTicketId].priority = details.priority;
                 _boCrmData[activeTicketId].alertDate = details.crm_due_date;
-                
+
                 const resSet = await fetch(`/api/backoffice/save-setting?token=${token}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1590,7 +1590,7 @@ async function saveCRMDetails() {
             document.getElementById('active-chat-name').innerText = updatedName;
             renderChatList();
         }
-        
+
         showToast('✅ Cambios guardados y sincronizados');
     } catch (e) {
         console.error('[saveCRMDetails] Error:', e);
@@ -1643,7 +1643,7 @@ async function addTagToChat(tagId) {
             if (!chat.tags) chat.tags = [];
             if (!chat.tags.find(t => t.id === tagId)) chat.tags.push(tag);
         }
-        handleSearch(); 
+        handleSearch();
         renderActiveChatTags();
         renderTagManager();
     }
@@ -1667,7 +1667,7 @@ async function removeTagFromChat(tagId) {
 function renderTagManager() {
     const editorList = document.getElementById('tag-list-editor');
     if (!editorList) return;
-    
+
     editorList.innerHTML = `
         <div style="max-height: 280px; overflow-y: auto; overflow-x: hidden; margin-top: 10px;">
             ${_boBotTags.map(t => `
@@ -1688,7 +1688,7 @@ function renderTagManager() {
             return `
                 <div onclick="${isAssigned ? 'removeTagFromChat' : 'addTagToChat'}('${t.id}')"
                      class="tag-pill"
-                     data-tag-color="${t.color||'#6366f1'}" style="cursor:pointer; ${_tagStyle(t.color)}${isAssigned ? ' transform:scale(1.04);' : ' opacity:0.55;'}">
+                     data-tag-color="${t.color || '#6366f1'}" style="cursor:pointer; ${_tagStyle(t.color)}${isAssigned ? ' transform:scale(1.04);' : ' opacity:0.55;'}">
                     ${t.name} ${isAssigned ? '✓' : '+'}
                 </div>
             `;
@@ -1722,18 +1722,18 @@ socket.on('contact_updated', (payload) => {
     console.log('📡 Contacto actualizado:', payload);
     const chatId = payload.chatId;
     const details = payload.details || {};
-    
+
     // Buscar y actualizar el chat local en el array de chats
     const chatIndex = chats.findIndex(c => normChatId(c.id) === normChatId(chatId));
     if (chatIndex !== -1) {
         // Combinar datos nuevos
         chats[chatIndex] = { ...chats[chatIndex], ...details };
-        
+
         // Si es el chat activo, actualizar la vista
         if (normChatId(chatId) === normChatId(activeChatId)) {
             populateCRMFields(chats[chatIndex]);
         }
-        
+
         // Re-renderizar lista de chats
         renderChatList();
     }
@@ -1753,7 +1753,7 @@ async function fetchPendingTicketsCount() {
     try {
         const res = await fetch(`/api/backoffice/tickets/pending-count?token=${token}&tipo=Soporte`);
         const { count } = await res.json();
-        
+
         const badge = document.getElementById('tickets-badge');
         if (!badge) return;
         if (count > 0) {
@@ -1769,18 +1769,18 @@ async function fetchPendingTicketsCount() {
 
 function setTicketsFilter(filter) {
     currentTicketsFilter = filter;
-    
+
     // Update tabs UI
     document.getElementById('tab-pending').classList.toggle('active', filter === 'pending');
     document.getElementById('tab-closed').classList.toggle('active', filter === 'Cerrado');
-    
+
     fetchTickets();
 }
 
 async function fetchTickets() {
     const list = document.getElementById('tickets-list');
     list.innerHTML = '<div style="text-align:center; padding:20px; opacity:0.5;">Cargando tickets...</div>';
-    
+
     try {
         const estadoParam = currentTicketsFilter === 'pending' ? '' : `&estado=${currentTicketsFilter}`;
         const res = await fetch(`/api/backoffice/tickets?token=${token}${estadoParam}`);
@@ -1860,7 +1860,7 @@ async function updateTicketStatus(ticketId, nuevoEstado) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ estado: nuevoEstado })
         });
-        
+
         const result = await res.json();
         if (result.success) {
             showToast(`Ticket ${nuevoEstado === 'Cerrado' ? 'cerrado' : 'actualizado'} correctamente`);
@@ -1921,7 +1921,7 @@ function _ticketChatSearch(query) {
     box.style.display = 'block';
     box.innerHTML = matches.map(c => {
         const label = c.name || c.id.split('@')[0];
-        return `<div onclick="_ticketAddChat('${c.id}', '${label.replace(/'/g,"\\'")}'); document.getElementById('ticket-chat-search').value=''; document.getElementById('ticket-chat-suggestions').style.display='none';"
+        return `<div onclick="_ticketAddChat('${c.id}', '${label.replace(/'/g, "\\'")}'); document.getElementById('ticket-chat-search').value=''; document.getElementById('ticket-chat-suggestions').style.display='none';"
                      style="padding:10px 14px; cursor:pointer; font-size:0.85rem; color:var(--text-main); transition:background 0.15s;"
                      onmouseover="this.style.background='rgba(0,153,255,0.1)'" onmouseout="this.style.background=''">
                 <i class="fas fa-comment" style="color:#0099FF; margin-right:8px;"></i>${label}
@@ -2008,7 +2008,7 @@ async function createTicket() {
 async function fetchLeads() {
     const list = document.getElementById('leads-list');
     list.innerHTML = '<div style="text-align:center; padding:20px; opacity:0.5;">Cargando leads editados...</div>';
-    
+
     try {
         const res = await fetch(`/api/backoffice/leads?token=${token}`);
         const leads = await res.json();
@@ -2021,7 +2021,7 @@ async function fetchLeads() {
         list.innerHTML = leads.map(l => {
             const date = l.last_human_message_at ? new Date(l.last_human_message_at).toLocaleDateString() : 'Sin actividad';
             const name = l.name || l.id.split('@')[0];
-            
+
             return `
                 <div class="ticket-item" onclick="selectLead('${l.id}')" style="cursor:pointer;">
                     <div class="ticket-header">
@@ -2052,12 +2052,12 @@ function selectLead(chatId) {
 function realToggleLeads(e) {
     if (e && e.stopPropagation) e.stopPropagation();
     console.log('🔘 [PANEL] Intentando abrir panel de Leads...');
-    
+
     const leadsPanel = document.getElementById('leads-panel');
-    
+
     // Cerrar otros explícitamente
     closeAllPanels('leads-panel');
-    
+
     if (leadsPanel) {
         leadsPanel.classList.toggle('active');
         const isOpen = leadsPanel.classList.contains('active');
@@ -2072,12 +2072,12 @@ window.realToggleLeads = realToggleLeads;
 function realToggleTickets(e) {
     if (e && e.stopPropagation) e.stopPropagation();
     console.log('🔘 [PANEL] Intentando abrir panel de Tickets...');
-    
+
     const ticketsPanel = document.getElementById('tickets-panel');
-    
+
     // Cerrar otros explícitamente
     closeAllPanels('tickets-panel');
-    
+
     if (ticketsPanel) {
         ticketsPanel.classList.toggle('active');
         const isOpen = ticketsPanel.classList.contains('active');
@@ -2091,7 +2091,7 @@ window.realToggleTickets = realToggleTickets;
 
 function toggleMetaPanel(e) {
     if (e && e.stopPropagation) e.stopPropagation();
-    
+
     console.log('🔘 [PANEL] Toggle Meta Panel initiated...');
     const metaPanel = document.getElementById('meta-panel');
 
@@ -2101,12 +2101,12 @@ function toggleMetaPanel(e) {
     if (metaPanel) {
         metaPanel.classList.toggle('active');
         const isOpen = metaPanel.classList.contains('active');
-        
+
         if (isOpen) {
             checkMetaStatus(); // Refrescar estado
         } else {
             metaPanel.style.transform = 'translateX(100%)';
-            setTimeout(() => { if(!metaPanel.classList.contains('active')) metaPanel.style.visibility = 'hidden'; }, 400);
+            setTimeout(() => { if (!metaPanel.classList.contains('active')) metaPanel.style.visibility = 'hidden'; }, 400);
         }
 
         console.log(`📊 [PANEL] Meta Panel Status: ${isOpen ? 'OPEN' : 'CLOSED'}`);
@@ -2121,38 +2121,38 @@ window.realToggleMeta = toggleMetaPanel;
 function launchMetaOnboarding() {
     const activeToken = localStorage.getItem('system_config_token') || localStorage.getItem('backoffice_token');
     fetch('/api/backoffice/whatsapp/config?token=' + activeToken)
-      .then(res => res.json())
-      .then(data => {
-          if (!data.appId || !data.railwayProjectId) {
-              showToast('⚠️ Faltan credenciales de Meta o Project ID en el servidor', 'error');
-              return;
-          }
-          
-          // Abrir DuskCodes con parámetros de redirección dinámica
-          const url = new URL('https://duskcodes.com.ar/meta-auth');
-          const currentOrigin = window.location.origin;
-          
-          url.searchParams.append('railwayProjectId', data.railwayProjectId);
-          url.searchParams.append('RAILWAY_PROJECT_ID', data.railwayProjectId);
-          url.searchParams.append('projectId', data.railwayProjectId);
-          url.searchParams.append('metaAppId', data.appId);
-          url.searchParams.append('metaAppSecret', data.appSecret);
-          if (data.configId) url.searchParams.append('configId', data.configId);
-          url.searchParams.append('projectUrl', currentOrigin);
-          url.searchParams.append('redirectUri', `${currentOrigin}/api/backoffice/whatsapp/onboard-callback`);
-          
-          const width = 600;
-          const height = 800;
-          const left = (window.screen.width / 2) - (width / 2);
-          const top = (window.screen.height / 2) - (height / 2);
+        .then(res => res.json())
+        .then(data => {
+            if (!data.appId || !data.railwayProjectId) {
+                showToast('⚠️ Faltan credenciales de Meta o Project ID en el servidor', 'error');
+                return;
+            }
 
-          window.open(url.toString(), 'MetaOnboarding', 
-            `width=${width},height=${height},top=${top},left=${left},scrollbars=yes,status=no,menubar=no`);
-      })
-      .catch(err => {
-          console.error(err);
-          showToast('❌ Error de conexión al obtener configuración', 'error');
-      });
+            // Abrir DuskCodes con parámetros de redirección dinámica
+            const url = new URL('https://duskcodes.com.ar/meta-auth');
+            const currentOrigin = window.location.origin;
+
+            url.searchParams.append('railwayProjectId', data.railwayProjectId);
+            url.searchParams.append('RAILWAY_PROJECT_ID', data.railwayProjectId);
+            url.searchParams.append('projectId', data.railwayProjectId);
+            url.searchParams.append('metaAppId', data.appId);
+            url.searchParams.append('metaAppSecret', data.appSecret);
+            if (data.configId) url.searchParams.append('configId', data.configId);
+            url.searchParams.append('projectUrl', currentOrigin);
+            url.searchParams.append('redirectUri', `${currentOrigin}/api/backoffice/whatsapp/onboard-callback`);
+
+            const width = 600;
+            const height = 800;
+            const left = (window.screen.width / 2) - (width / 2);
+            const top = (window.screen.height / 2) - (height / 2);
+
+            window.open(url.toString(), 'MetaOnboarding',
+                `width=${width},height=${height},top=${top},left=${left},scrollbars=yes,status=no,menubar=no`);
+        })
+        .catch(err => {
+            console.error(err);
+            showToast('❌ Error de conexión al obtener configuración', 'error');
+        });
 }
 
 
@@ -2164,7 +2164,7 @@ async function assignTicketToMe() {
         showToast('⚠️ Seleccione un chat primero', 'error');
         return;
     }
-    
+
     // Obtenemos el userId desde el token sub:ID si existe
     let userId = null;
     if (token.startsWith('sub:')) {
@@ -2192,7 +2192,7 @@ async function assignTicketToMe() {
 
 async function closeActiveTicket() {
     if (!activeChatId) return;
-    const ticketId = document.getElementById('crm-lead-jump')?.value; 
+    const ticketId = document.getElementById('crm-lead-jump')?.value;
     if (!ticketId) {
         showToast('⚠️ No hay un ticket activo detectado para este chat', 'error');
         return;
@@ -2274,7 +2274,7 @@ if (urlParams.get('openPanel') === 'meta') {
 
 // Listeners para Infinite Scroll - con null check para no crashear si el script carga fuera del view
 const _chatListEl = document.getElementById('chat-list');
-if (_chatListEl) _chatListEl.addEventListener('scroll', function() {
+if (_chatListEl) _chatListEl.addEventListener('scroll', function () {
     const { scrollTop, scrollHeight, clientHeight } = this;
     if (scrollTop + clientHeight >= scrollHeight - 20) {
         if (!loadingChats && !allChatsLoaded) fetchChats();
@@ -2282,7 +2282,7 @@ if (_chatListEl) _chatListEl.addEventListener('scroll', function() {
 });
 
 const _messagesEl = document.getElementById('messages');
-if (_messagesEl) _messagesEl.addEventListener('scroll', function() {
+if (_messagesEl) _messagesEl.addEventListener('scroll', function () {
     if (this.scrollTop < 50 && !loadingMessages && !allMessagesLoaded) {
         fetchMessages(activeChatId);
     }
@@ -2293,7 +2293,7 @@ if (_messagesEl) _messagesEl.addEventListener('scroll', function() {
 let availableTemplates = [];
 let libraryTemplates = [];
 let currentSelectedTemplate = null;
-window.isMetaConnected = false; 
+window.isMetaConnected = false;
 
 async function checkMetaStatus() {
     try {
@@ -2308,7 +2308,7 @@ async function checkMetaStatus() {
         if (isConnected) {
             console.log('✅ [META-STATUS] Cuenta vinculada:', config.waba_id);
             window.isMetaConnected = true;
-            
+
             // Actualizar enlaces dinámicos con el WABA ID para abrir la cuenta correcta directamente
             if (config.waba_id) {
                 const libLink = document.getElementById('link-meta-library');
@@ -2316,7 +2316,7 @@ async function checkMetaStatus() {
                 if (libLink) libLink.href = `https://business.facebook.com/latest/whatsapp_manager/template_library?asset_id=${config.waba_id}`;
                 if (newLink) newLink.href = `https://business.facebook.com/latest/whatsapp_manager/message_templates?asset_id=${config.waba_id}`;
             }
-            
+
             const metaPanel = document.getElementById('meta-panel');
             if (metaPanel) {
                 const content = metaPanel.querySelector('.tickets-list');
@@ -2352,7 +2352,7 @@ async function checkMetaStatus() {
         } else {
             console.warn('⚠️ [META-STATUS] Meta no vinculado o pendiente.');
             window.isMetaConnected = false;
-            
+
             // Revertir a UI de Onboarding si el panel existe
             const metaPanel = document.getElementById('meta-panel');
             if (metaPanel) {
@@ -2400,7 +2400,7 @@ function toggleBulkModal() {
 
 function switchMetaTab(tab) {
     const viewsMap = { 'my': 'view-my-templates', 'detail': 'view-template-detail' };
-    
+
     // Reset active states
     Object.values(viewsMap).forEach(id => {
         const el = document.getElementById(id);
@@ -2424,22 +2424,22 @@ function switchMetaTab(tab) {
 
 function useTemplateAsBase() {
     if (!currentSelectedTemplate) return;
-    
+
     // Cambiar a la pestaña de Nueva Plantilla
     switchMetaTab('new');
-    
+
     // Rellenar formulario
     document.getElementById('tpl-name').value = `${currentSelectedTemplate.name}_copy`;
     document.getElementById('tpl-category').value = currentSelectedTemplate.category;
     document.getElementById('tpl-lang').value = currentSelectedTemplate.language;
-    
+
     let bodyText = '';
     if (currentSelectedTemplate.components && Array.isArray(currentSelectedTemplate.components)) {
         const bodyComp = currentSelectedTemplate.components.find(c => c.type === 'BODY' || c.type === 'message' || c.type?.toUpperCase() === 'BODY');
         if (bodyComp) {
             bodyText = bodyComp.text || bodyComp.content || (bodyComp.example?.body_text?.[0]?.[0]) || '';
         }
-        
+
         // Fallback si el body está vacío
         if (!bodyText) {
             for (const comp of currentSelectedTemplate.components) {
@@ -2453,11 +2453,11 @@ function useTemplateAsBase() {
         bodyText = currentSelectedTemplate.body;
     }
     document.getElementById('tpl-body').value = bodyText;
-    
+
     // Disparar actualización de variables
     const event = new Event('input', { bubbles: true });
     document.getElementById('tpl-body').dispatchEvent(event);
-    
+
     showToast('✨ Datos cargados. Personaliza tu plantilla y envíala a revisión.');
 }
 
@@ -2478,7 +2478,7 @@ async function loadTemplates() {
 async function loadLibraryTemplates() {
     const grid = document.getElementById('library-templates-grid');
     if (grid) grid.innerHTML = '<div style="grid-column: 1/-1; text-align:center; padding:40px; opacity:0.5;"><i class="fas fa-circle-notch fa-spin fa-2x"></i><p>Explorando Biblioteca de Meta...</p></div>';
-    
+
     try {
         const res = await fetch(`/api/backoffice/whatsapp/library-templates?token=${token}`);
         const data = await res.json();
@@ -2520,7 +2520,7 @@ function populateLibraryFilters() {
     const cats = [...new Set(libraryTemplates.map(t => t.category))].sort();
 
     // Llenar Idiomas
-    langSelect.innerHTML = '<option value="">Todos los idiomas</option>' + 
+    langSelect.innerHTML = '<option value="">Todos los idiomas</option>' +
         finalLangs.map(l => `<option value="${l.value}">${l.label}</option>`).join('');
 
     // Forzar selección de 'AR' (valor 'ar')
@@ -2534,7 +2534,7 @@ function populateLibraryFilters() {
     }
 
     // Llenar Categorías
-    catSelect.innerHTML = '<option value="">Todas las categorías</option>' + 
+    catSelect.innerHTML = '<option value="">Todas las categorías</option>' +
         cats.map(c => `<option value="${c}">${c}</option>`).join('');
 }
 
@@ -2572,14 +2572,14 @@ function renderTemplateCards(container, templates, isLibrary = false) {
 
         // Buscar contenido de forma agresiva en los componentes
         let text = 'Sin contenido de previsualización';
-        
+
         if (t.components && Array.isArray(t.components)) {
             // 1. Buscar el componente BODY (el más común para el mensaje principal)
             const body = t.components.find(c => c.type === 'BODY' || c.type === 'message' || c.type?.toUpperCase() === 'BODY');
             if (body) {
                 text = body.text || body.content || (body.example?.header_text?.[0]) || (body.example?.body_text?.[0]?.[0]) || text;
             }
-            
+
             // 2. Si no hay body o está vacío, buscar en cualquier componente que tenga texto
             if (text === 'Sin contenido de previsualización') {
                 for (const comp of t.components) {
@@ -2594,13 +2594,13 @@ function renderTemplateCards(container, templates, isLibrary = false) {
             // Soporte para objetos planos que vienen con .body
             text = t.body;
         }
-        
+
         // Limpiar variables {{1}} para que no se vea feo si son muchas
         const cleanText = text.length > 150 ? text.substring(0, 147) + '...' : text;
-        
+
         const statusClass = t.status === 'APPROVED' ? 'meta-status-approved' : (t.status === 'REJECTED' ? 'meta-status-rejected' : 'meta-status-pending');
         const statusLabel = t.status === 'APPROVED' ? 'Aprobada' : (t.status === 'REJECTED' ? 'Rechazada' : 'Pendiente');
-        
+
         return `
             <div class="meta-card" onclick="showTemplateDetail('${t.id || t.name}', ${isLibrary}, '${t.language}')">
                 <div class="meta-card-tag ${statusClass}">${isLibrary ? 'BIBLIOTECA' : statusLabel}</div>
@@ -2622,18 +2622,18 @@ function showTemplateDetail(idOrName, isLibrary, language) {
     if (!template) return;
 
     currentSelectedTemplate = template;
-    
+
     // Usar la lógica centralizada de pestañas para mostrar el detalle
     switchMetaTab('detail');
-    
+
     // Show detail
     const detailView = document.getElementById('view-template-detail');
     detailView.style.display = 'block';
-    
+
     document.getElementById('detail-tpl-name').innerText = template.name;
     document.getElementById('detail-tpl-lang-badge').innerHTML = `<i class="fas fa-globe"></i> ${template.language.toUpperCase()}`;
     document.getElementById('detail-tpl-cat-badge').innerHTML = `<i class="fas fa-tag"></i> ${template.category}`;
-    
+
     // Mostrar ID en el detalle si existe
     const nameHeader = document.getElementById('detail-tpl-name');
     if (template.id && !document.getElementById('detail-tpl-id')) {
@@ -2645,7 +2645,7 @@ function showTemplateDetail(idOrName, isLibrary, language) {
     } else if (document.getElementById('detail-tpl-id')) {
         document.getElementById('detail-tpl-id').innerText = `ID: ${template.id || ''}`;
     }
-    
+
     const statusEl = document.getElementById('detail-tpl-status');
     const statusClass = template.status === 'APPROVED' ? 'meta-status-approved' : (template.status === 'REJECTED' ? 'meta-status-rejected' : 'meta-status-pending');
     statusEl.className = `meta-card-tag ${statusClass}`;
@@ -2690,13 +2690,13 @@ function showTemplateDetail(idOrName, isLibrary, language) {
         if (bubble) {
             const oldIntegrated = bubble.querySelector('.wa-preview-btns-container-integrated');
             if (oldIntegrated) oldIntegrated.remove();
-            
+
             const oldExternal = bubble.parentNode.querySelectorAll('.wa-preview-btns-container');
             oldExternal.forEach(b => b.remove());
         }
 
         let html = '';
-        
+
         // 1. Header Media (IMAGE, VIDEO, DOCUMENT)
         const headerComp = template.components?.find(c => c.type === 'HEADER');
         if (headerComp && headerComp.format && headerComp.format !== 'TEXT') {
@@ -2712,11 +2712,11 @@ function showTemplateDetail(idOrName, isLibrary, language) {
         }
 
         if (headerText) html += `<div style="font-weight:700; margin-bottom:8px;">${headerText}</div>`;
-        
+
         html += `<div style="white-space: pre-wrap;">${bodyText}</div>`;
-        
+
         if (footerText) html += `<div style="color:var(--text-muted); font-size:0.8rem; margin-top:8px;">${footerText}</div>`;
-        
+
         previewFinal.innerHTML = html;
 
         // 2. Botones Integrados
@@ -2724,15 +2724,15 @@ function showTemplateDetail(idOrName, isLibrary, language) {
         if (buttonsComp && buttonsComp.buttons && bubble) {
             const btnsContainer = document.createElement('div');
             btnsContainer.className = 'wa-preview-btns-container-integrated';
-            
+
             buttonsComp.buttons.forEach(b => {
                 const btn = document.createElement('div');
                 btn.className = 'wa-preview-btn-item';
-                
+
                 let icon = '<i class="fas fa-reply"></i>';
                 if (b.type === 'URL') icon = '<i class="fas fa-external-link-alt"></i>';
                 if (b.type === 'PHONE_NUMBER') icon = '<i class="fas fa-phone"></i>';
-                
+
                 btn.innerHTML = `${icon} ${b.text}`;
                 btnsContainer.appendChild(btn);
             });
@@ -2877,12 +2877,12 @@ async function startBulkSend() {
     const progressDiv = document.getElementById('bulk-progress');
     const progressBar = document.getElementById('bulk-progress-bar');
     const statusText = document.getElementById('bulk-status-text');
-    
+
     if (fileInput.files.length === 0) {
         showToast('⚠️ Suba un archivo Excel para iniciar', 'error');
         return;
     }
-    
+
     const file = fileInput.files[0];
     const languageCode = currentSelectedTemplate.language || 'es';
 
@@ -2890,25 +2890,25 @@ async function startBulkSend() {
     formData.append('file', file);
     formData.append('templateName', templateName);
     formData.append('languageCode', languageCode);
-    
+
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Iniciando...';
     progressDiv.style.display = 'block';
     progressBar.style.width = '0%';
     statusText.innerText = 'Subiendo y procesando...';
-    
+
     try {
         const res = await fetch(`/api/backoffice/whatsapp/send-bulk-template?token=${token}`, {
             method: 'POST',
             body: formData
         });
-        
+
         if (res.status === 202) {
             statusText.innerText = '✅ Proceso iniciado en segundo plano.';
             progressBar.style.width = '100%';
             progressBar.style.background = '#10b981';
             showToast('🚀 Envío masivo iniciado correctamente');
-            
+
             setTimeout(() => {
                 toggleBulkModal();
                 btn.disabled = false;
@@ -2916,7 +2916,7 @@ async function startBulkSend() {
                 progressDiv.style.display = 'none';
                 fileInput.value = '';
             }, 2000);
-            
+
         } else {
             const data = await res.json();
             throw new Error(data.error || 'Error al iniciar envío');
@@ -2945,11 +2945,11 @@ window.toggleBulkModal = toggleBulkModal;
 window.downloadBulkExcel = () => {
     if (currentSelectedTemplate) {
         let url = `/api/backoffice/whatsapp/template-excel/${currentSelectedTemplate.name}?token=${encodeURIComponent(token)}`;
-        
+
         const start = document.getElementById('bulk-filter-start')?.value;
         const end = document.getElementById('bulk-filter-end')?.value;
         const select = document.getElementById('bulk-filter-tags');
-        
+
         let tags = '';
         if (select && select.selectedOptions) {
             tags = Array.from(select.selectedOptions).map(o => o.value).join(',');
@@ -2958,7 +2958,7 @@ window.downloadBulkExcel = () => {
         if (start) url += `&startDate=${start}`;
         if (end) url += `&endDate=${end}`;
         if (tags) url += `&tagIds=${tags}`;
-        
+
         window.open(url, '_blank');
     }
 };
@@ -2975,7 +2975,7 @@ window.reopenActiveTicket = reopenActiveTicket;
 window.addEventListener('DOMContentLoaded', () => {
     const urlParams = new URLSearchParams(window.location.search);
     const panel = urlParams.get('panel');
-    
+
     if (panel === 'leads' || panel === 'contacts') {
         setTimeout(() => window.toggleLeadsPanel(), 1000);
     } else if (panel === 'tickets') {
@@ -2994,21 +2994,21 @@ async function startContactSync() {
     const loading = document.getElementById('sync-loading');
     const result = document.getElementById('sync-result');
     const summaryText = document.getElementById('sync-summary');
-    
+
     if (!modal) return;
-    
+
     // Reset modal
     modal.style.display = 'flex';
     loading.style.display = 'block';
     result.style.display = 'none';
-    
+
     try {
         const res = await fetch(`/api/backoffice/whatsapp/sync-contacts?token=${token}`, {
             method: 'POST'
         });
-        
+
         const data = await res.json();
-        
+
         if (data.success) {
             const { contacts, labels, associations, meta_sync_triggered } = data.summary;
             if (meta_sync_triggered) {
@@ -3026,7 +3026,7 @@ async function startContactSync() {
             // Refrescar datos locales
             await fetchChats(true);
             await fetchBotTags();
-            
+
             loading.style.display = 'none';
             result.style.display = 'block';
         } else {
@@ -3050,7 +3050,7 @@ function toggleImportModal() {
     const modal = document.getElementById('import-modal');
     if (!modal) return;
     modal.style.display = modal.style.display === 'flex' ? 'none' : 'flex';
-    
+
     // Reset state if closing
     if (modal.style.display === 'none') {
         document.getElementById('import-progress').style.display = 'none';
@@ -3095,12 +3095,12 @@ async function startImportExcel() {
         statusText.innerText = 'Procesando datos en el servidor...';
 
         const data = await res.json();
-        
+
         if (data.success) {
             progressBar.style.width = '100%';
             statusText.innerText = `¡Éxito! Se importaron ${data.imported} contactos.`;
             statusText.style.color = '#10b981';
-            
+
             // Refrescar chats
             setTimeout(async () => {
                 await fetchChats(true);
@@ -3131,18 +3131,18 @@ window.closeSyncModal = closeSyncModal;
 // --- NUEVOS CONTROLADORES PARA EMOJIS Y LIGHTBOX ---
 
 const EMOJI_LIST = [
-    '😀','😃','😄','😁','😆','😅','😂','🤣','😊','😇','🙂','🙃','😉','😌','😍','🥰',
-    '😘','😗','😙','😚','😋','😛','😝','😜','🤪','🤨','🧐','🤓','😎','🤩','🥳','😏',
-    '😒','😞','😔','😟','😕','🙁','☹️','😣','😖','😫','😩','🥺','😢','😭','😤','😠',
-    '😡','🤬','🤯','😳','🥵','🥶','😱','😨','😰','😥','😓','🤗','🤔','🤭','🤫','🤥',
-    '😶','😐','😑','😬','🙄','😯','😦','😧','😮','😲','🥱','😴','🤤','😪','😵','🤐',
-    '🥴','🤢','🤮','🤧','😷','🤒','🤕','🤑','🤠','😈','👿','👹','👺','🤡','💩','👻',
-    '💀','☠️','👽','👾','🤖','🎃','😺','😸','😻','😼','😽','🙀','😿','😾','👋','🤚',
-    '🖐️','✋','🖖','👌','🤏','✌️','🤞','🤟','🤘','🤙','👈','👉','👆','🖕','👇','☝️',
-    '👍','👎','✊','👊','🤛','🤜','👏','🙌','👐','🤲','🤝','🙏','✍️','💅','🤳','💪',
-    '🦾','👂','🦻','👃','🧠','🦷','🦴','👀','👁️','👅','👄','💋','🩸','❤️','🧡','💛',
-    '💚','💙','💜','🖤','🤍','🤎','💔','💖','💗','💓','💞','💕','💟','❣️',
-    '✨','⭐','🌟','💫','🔥','💥','💯','🎉','🎊','🎈','🎂','🎁','🎗️'
+    '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰',
+    '😘', '😗', '😙', '😚', '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🤩', '🥳', '😏',
+    '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠',
+    '😡', '🤬', '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓', '🤗', '🤔', '🤭', '🤫', '🤥',
+    '😶', '😐', '😑', '😬', '🙄', '😯', '😦', '😧', '😮', '😲', '🥱', '😴', '🤤', '😪', '😵', '🤐',
+    '🥴', '🤢', '🤮', '🤧', '😷', '🤒', '🤕', '🤑', '🤠', '😈', '👿', '👹', '👺', '🤡', '💩', '👻',
+    '💀', '☠️', '👽', '👾', '🤖', '🎃', '😺', '😸', '😻', '😼', '😽', '🙀', '😿', '😾', '👋', '🤚',
+    '🖐️', '✋', '🖖', '👌', '🤏', '✌️', '🤞', '🤟', '🤘', '🤙', '👈', '👉', '👆', '🖕', '👇', '☝️',
+    '👍', '👎', '✊', '👊', '🤛', '🤜', '👏', '🙌', '👐', '🤲', '🤝', '🙏', '✍️', '💅', '🤳', '💪',
+    '🦾', '👂', '🦻', '👃', '🧠', '🦷', '🦴', '👀', '👁️', '👅', '👄', '💋', '🩸', '❤️', '🧡', '💛',
+    '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '💖', '💗', '💓', '💞', '💕', '💟', '❣️',
+    '✨', '⭐', '🌟', '💫', '🔥', '💥', '💯', '🎉', '🎊', '🎈', '🎂', '🎁', '🎗️'
 ];
 
 function toggleEmojiPicker(event) {
@@ -3152,7 +3152,7 @@ function toggleEmojiPicker(event) {
 
     if (picker.style.display === 'none' || picker.style.display === '') {
         if (picker.children.length === 0) {
-            picker.innerHTML = EMOJI_LIST.map(emoji => 
+            picker.innerHTML = EMOJI_LIST.map(emoji =>
                 `<div class="emoji-item" onclick="insertEmoji('${emoji}')">${emoji}</div>`
             ).join('');
         }
@@ -3165,14 +3165,14 @@ function toggleEmojiPicker(event) {
 function insertEmoji(emoji) {
     const input = document.getElementById('message-input');
     if (!input) return;
-    
+
     const start = input.selectionStart || 0;
     const end = input.selectionEnd || 0;
     const text = input.value;
-    
+
     input.value = text.substring(0, start) + emoji + text.substring(end);
     input.focus();
-    
+
     const newPos = start + emoji.length;
     input.setSelectionRange(newPos, newPos);
 }
@@ -3181,7 +3181,7 @@ function openLightbox(src) {
     const modal = document.getElementById('lightbox-modal');
     const img = document.getElementById('lightbox-img');
     const downloadLink = document.getElementById('lightbox-download-link');
-    
+
     if (modal && img && downloadLink) {
         img.src = src;
         downloadLink.href = src;
@@ -3210,17 +3210,17 @@ let forwardMediaType = '';
 
 async function deleteMessage(chatId, messageId) {
     if (!await window.swalConfirm('¿Eliminar mensaje?', '¿Estás seguro de que quieres eliminar este mensaje?')) return;
-    
+
     try {
         const res = await fetch(`/api/backoffice/messages/${chatId}/${messageId}?token=${token}`, {
             method: 'DELETE'
         });
-        
+
         if (res.ok) {
             const data = await res.json();
             allMessages = allMessages.filter(m => m.id !== messageId && m.external_id !== messageId);
             renderMessages();
-            
+
             if (data.deletedInWhatsApp) {
                 console.log('Mensaje eliminado del Backoffice y de WhatsApp');
             } else {
@@ -3242,13 +3242,13 @@ async function deleteMessage(chatId, messageId) {
 function openForwardModal(mediaUrl, mediaType) {
     forwardMediaUrl = mediaUrl;
     forwardMediaType = mediaType;
-    
+
     const modal = document.getElementById('forward-modal');
     if (modal) modal.style.display = 'flex';
-    
+
     const searchInput = document.getElementById('forward-search-input');
     if (searchInput) searchInput.value = '';
-    
+
     renderForwardChatsList();
 }
 
@@ -3266,24 +3266,24 @@ function handleForwardSearch() {
 function renderForwardChatsList() {
     const listContainer = document.getElementById('forward-chats-list');
     if (!listContainer) return;
-    
+
     const query = (document.getElementById('forward-search-input')?.value || '').toLowerCase();
-    
+
     const filteredChats = chats.filter(chat => {
         const name = (chat.name || '').toLowerCase();
         const phone = chat.id.toLowerCase();
         return name.includes(query) || phone.includes(query);
     });
-    
+
     if (filteredChats.length === 0) {
         listContainer.innerHTML = `<div style="padding: 20px; text-align: center; opacity: 0.5; color: var(--text-muted);">No se encontraron contactos</div>`;
         return;
     }
-    
+
     listContainer.innerHTML = filteredChats.map(chat => {
         const displayName = (chat.name && chat.name !== '[-]') ? chat.name : chat.id.split('@')[0];
         const displayPhone = chat.id.split('@')[0];
-        
+
         return `
             <div class="forward-chat-item">
                 <div style="display: flex; flex-direction: column;">
@@ -3300,9 +3300,9 @@ function renderForwardChatsList() {
 
 async function executeForward(targetChatId) {
     if (!forwardMediaUrl || !targetChatId) return;
-    
+
     console.log(`Reenviando media a ${targetChatId}...`);
-    
+
     try {
         const res = await fetch(`/api/backoffice/forward-message?token=${token}`, {
             method: 'POST',
@@ -3315,7 +3315,7 @@ async function executeForward(targetChatId) {
                 mediaType: forwardMediaType
             })
         });
-        
+
         if (res.ok) {
             window.swalAlert('¡Éxito!', 'Archivo reenviado correctamente', 'success');
             closeForwardModal();
@@ -3346,7 +3346,7 @@ window.executeForward = executeForward;
 console.log('✅ [BACKOFFICE] Cargado Correctamente.');
 
 // Funcion de re-inicializacion para SPA (llamada en cada visita a la view)
-window.initBackofficeView = function() {
+window.initBackofficeView = function () {
     fetchChats(true);
     checkMetaStatus();
     initCRMData();
@@ -3358,7 +3358,7 @@ window.initBackofficeView = function() {
     // Re-attach scroll listeners en el nuevo DOM
     const chatList = document.getElementById('chat-list');
     if (chatList) {
-        chatList.addEventListener('scroll', function() {
+        chatList.addEventListener('scroll', function () {
             const { scrollTop, scrollHeight, clientHeight } = this;
             if (scrollTop + clientHeight >= scrollHeight - 20) {
                 if (!loadingChats && !allChatsLoaded) fetchChats();
@@ -3367,7 +3367,7 @@ window.initBackofficeView = function() {
     }
     const messagesEl = document.getElementById('messages');
     if (messagesEl) {
-        messagesEl.addEventListener('scroll', function() {
+        messagesEl.addEventListener('scroll', function () {
             if (this.scrollTop < 50 && !loadingMessages && !allMessagesLoaded) {
                 fetchMessages(activeChatId);
             }
@@ -3378,13 +3378,13 @@ window.initBackofficeView = function() {
     const msgInput = document.getElementById('message-input');
     const micBtn = document.getElementById('mic-btn');
     if (msgInput && micBtn) {
-        msgInput.addEventListener('input', function() {
+        msgInput.addEventListener('input', function () {
             micBtn.style.display = this.value.length > 0 ? 'none' : '';
         });
     }
 };
 
-window._backofficeAbortAll = function() {
+window._backofficeAbortAll = function () {
     if (_fetchChatsController) { _fetchChatsController.abort(); _fetchChatsController = null; }
     if (_fetchMessagesController) { _fetchMessagesController.abort(); _fetchMessagesController = null; }
     loadingChats = false;
@@ -3508,7 +3508,7 @@ function _updateNotificationsUI() {
         if (totalBadge) totalBadge.style.display = 'none';
         chats.forEach(c => c.unread_count = 0);
     }
-    
+
     // Restaurar el checkbox del filtro si es necesario
     const filterCheckbox = document.getElementById('unread-filter-checkbox');
     if (filterCheckbox) {
@@ -3526,7 +3526,7 @@ function _updateNotificationsUI() {
             }
         }
     }
-    
+
     renderChatList();
 }
 
@@ -3551,7 +3551,7 @@ function executeUnreadFilter(enabled) {
 
 // --- MENSAJES RÁPIDOS (QUICK MESSAGES) ---
 
-window.toggleQuickMessages = function(e) {
+window.toggleQuickMessages = function (e) {
     if (e) e.stopPropagation();
     const popover = document.getElementById('quick-messages-popover');
     if (!popover) return;
@@ -3564,7 +3564,7 @@ window.toggleQuickMessages = function(e) {
     }
 };
 
-window.loadQuickMessages = async function() {
+window.loadQuickMessages = async function () {
     const listEl = document.getElementById('qm-list');
     if (!listEl) return;
 
@@ -3602,7 +3602,7 @@ window.loadQuickMessages = async function() {
     }
 };
 
-window.saveQuickMessage = async function() {
+window.saveQuickMessage = async function () {
     const titleInput = document.getElementById('qm-title-input');
     const msgInput = document.getElementById('qm-message-input');
     if (!titleInput || !msgInput) return;
@@ -3635,7 +3635,7 @@ window.saveQuickMessage = async function() {
     }
 };
 
-window.deleteQuickMessage = async function(e, id) {
+window.deleteQuickMessage = async function (e, id) {
     if (e) e.stopPropagation();
     if (!await window.swalConfirm('¿Eliminar mensaje rápido?', '¿Estás seguro de eliminar este mensaje rápido?')) return;
 
@@ -3655,13 +3655,13 @@ window.deleteQuickMessage = async function(e, id) {
     }
 };
 
-window.sendQuickMessage = async function(id, encodedMsg, isBotActive) {
+window.sendQuickMessage = async function (id, encodedMsg, isBotActive) {
     if (isBotActive) {
         showToast('⚠️ No seleccionable: Desactiva el Bot para enviar mensajes manuales', 'warning');
         return;
     }
     const messageText = decodeURIComponent(encodedMsg);
-    
+
     // Ocultar popover
     const popover = document.getElementById('quick-messages-popover');
     if (popover) popover.style.display = 'none';
@@ -3671,7 +3671,7 @@ window.sendQuickMessage = async function(id, encodedMsg, isBotActive) {
     if (input) {
         input.value = messageText;
         window.autoResizeChatTextarea(input);
-        
+
         // Enviar mensaje de inmediato
         await sendMessage();
     }

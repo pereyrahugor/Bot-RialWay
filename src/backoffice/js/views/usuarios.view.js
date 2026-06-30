@@ -5,17 +5,16 @@ window.usuariosView = {
     getHTML() {
         return `
         <!-- Contenido principal -->
-        <div id="main-config-content" style="display:flex; opacity:1; flex:1; overflow:auto; flex-direction:column;">
-            <main class="crm-main-container relative" style="z-index:10; max-width:none; padding:0;">
+        <main class="crm-main-container relative" style="z-index:10; max-width:none; padding:0; flex:1; display:flex; flex-direction:column; overflow-y:auto; overflow-x:hidden;">
 
-                <div class="kanban-header animate-fade">
-                    <div class="header-info">
-                        <h1><i class="fas fa-users-cog kanban-header-icon" style="color:#0099FF;"></i> Gestion de Equipo y Usuarios</h1>
-                        <p>Registra nuevos sub-usuarios y administra el acceso de tu equipo al sistema en tiempo real</p>
-                    </div>
+            <div class="kanban-header animate-fade" style="flex-shrink:0;">
+                <div class="header-info">
+                    <h1><i class="fas fa-users-cog kanban-header-icon" style="color:#0099FF;"></i> Gestion de Equipo y Usuarios</h1>
+                    <p>Registra nuevos sub-usuarios y administra el acceso de tu equipo al sistema en tiempo real</p>
                 </div>
+            </div>
 
-                <div style="padding: 1rem 1.25rem 8rem 1.25rem;">
+            <div style="padding: 1rem 1.25rem 8rem 1.25rem; flex:1;">
                     <!-- Seccion 1: Registrar Nuevo Sub-Usuario -->
                     <div class="variables-grid">
                         <div class="variable-group">
@@ -74,7 +73,6 @@ window.usuariosView = {
                 </div>
 
             </main>
-        </div>
 
         <!-- Modal para editar usuario -->
         <div id="edit-user-modal" class="modal-overlay" style="display: none; z-index: 99999;">
