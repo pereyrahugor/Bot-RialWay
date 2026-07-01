@@ -421,7 +421,7 @@ export class AssistantResponseProcessor {
 
                     if (isMeta && fromNumber && typeof provider.sendMessage === 'function') {
                         console.log(`[AssistantResponseProcessor] Enviando PDF vía Meta (Directo): ${absolutePath}`);
-                        await provider.sendMessage(fromNumber, absolutePath, { body: "📄 Documento adjunto:" });
+                        await provider.sendMessage(fromNumber, absolutePath, { body: "📄 Documento adjunto:", mimetype: 'application/pdf' });
                     } else {
                         // Para Baileys y otros, flowDynamic es el método estándar y más fiable para enviar archivos locales
                         console.log(`[AssistantResponseProcessor] Enviando PDF vía FlowDynamic: ${absolutePath}`);

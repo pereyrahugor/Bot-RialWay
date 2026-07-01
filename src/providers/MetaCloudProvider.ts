@@ -561,7 +561,9 @@ class MetaCloudProvider extends ProviderClass {
             const lowerPath = finalPath.toLowerCase();
             let contentType = 'text/plain'; // Fallback por defecto a text/plain para evitar OAuthException de application/octet-stream
 
-            if (lowerPath.endsWith('.webp')) contentType = 'image/webp';
+            if (mimeType && mimeType.includes('/')) {
+                contentType = mimeType;
+            } else if (lowerPath.endsWith('.webp')) contentType = 'image/webp';
             else if (lowerPath.endsWith('.png')) contentType = 'image/png';
             else if (lowerPath.endsWith('.jpg') || lowerPath.endsWith('.jpeg')) contentType = 'image/jpeg';
             else if (lowerPath.endsWith('.pdf')) contentType = 'application/pdf';
@@ -680,7 +682,7 @@ class MetaCloudProvider extends ProviderClass {
             console.log(`[MetaCloudProvider] 📂 Media detectado en sendMessage:`, typeof mediaSource === 'string' ? mediaSource : JSON.stringify(mediaSource));
 
             const mediaUrl = typeof mediaSource === 'string' ? mediaSource : (mediaSource.url || mediaSource.path || mediaSource.link);
-            const mimeType = (typeof mediaSource === 'object') ? (mediaSource.mimetype || mediaSource.mimeType || '') : '';
+            const mimeType = (typeof mediaSource === 'object') ? (mediaSource.mimetype || mediaSource.mimeType || '') : (options.mimetype || options.mimeType || options.mime_type || '');
 
             // El caption no debe ser la ruta del archivo si el mensaje era una ruta
             const finalCaption = isMessagePath ? (options.body || options.caption || '') : (message || '');

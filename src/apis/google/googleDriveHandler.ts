@@ -38,8 +38,8 @@ export const downloadFileFromDrive = async (fileId: string): Promise<string> => 
         const isGoogleDoc = mimeType.startsWith("application/vnd.google-apps.");
         let fileName = fileMetadata.data.name || fileId;
 
-        // Si es un Google Doc, Sheet, Slide, etc., lo exportaremos como PDF
-        if (isGoogleDoc && !fileName.toLowerCase().endsWith(".pdf")) {
+        // Si es un Google Doc, Sheet, Slide, etc., o es un PDF nativo y no tiene la extensión .pdf, se la agregamos
+        if ((isGoogleDoc || mimeType === "application/pdf") && !fileName.toLowerCase().endsWith(".pdf")) {
             fileName = `${fileName}.pdf`;
         }
         const filePath = path.join(tempDir, fileName);
