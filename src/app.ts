@@ -145,8 +145,8 @@ const main = async () => {
         console.log('📡 [App] Detectada configuración de Meta parcial. Iniciando recuperación automática de IDs...');
         try {
             const mainToken = await HistoryHandler.getMainToken();
-            const appId = await HistoryHandler.getConfig('META_APP_ID') || '1493670789148486';
-            const appSecret = await HistoryHandler.getConfig('META_APP_SECRET') || '362b2ec20c00bdf51336fd165ad47160';
+            const appId = await HistoryHandler.getConfig('META_APP_ID');
+            const appSecret = await HistoryHandler.getConfig('META_APP_SECRET');
             const discovery = await discoverMetaIds(metaToken, mainToken, appId, appSecret);
             if (discovery && discovery.data?.phoneNumberId && discovery.data?.wabaId) {
                 console.log(`✅ [App] Recuperación exitosa: PhoneID=${discovery.data.phoneNumberId}, WABAID=${discovery.data.wabaId}`);

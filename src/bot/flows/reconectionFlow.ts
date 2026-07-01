@@ -64,9 +64,9 @@ export class ReconectionFlow {
             : (this.state?.assignedAssistantId || await HistoryHandler.getConfig('ASSISTANT_ID', dynamicProjectId) || this.ASSISTANT_ID);
 
         // 1. Cargar mensajes de seguimiento dinámicamente si no están en process.env
-        const msj1 = await HistoryHandler.getConfig('msjSeguimiento1', dynamicProjectId) || "Hola, ¿estás ahí?";
-        const msj2 = await HistoryHandler.getConfig('msjSeguimiento2', dynamicProjectId) || "¿Podrías indicarme tu nombre para continuar?";
-        const msj3 = await HistoryHandler.getConfig('msjSeguimiento3', dynamicProjectId) || "Parece que no podemos continuar sin tu nombre. ¡Hablamos luego!";
+        const msj1 = await HistoryHandler.getConfig('msjSeguimiento1', dynamicProjectId) || "";
+        const msj2 = await HistoryHandler.getConfig('msjSeguimiento2', dynamicProjectId) || "";
+        const msj3 = await HistoryHandler.getConfig('msjSeguimiento3', dynamicProjectId) || "";
 
         const t2 = await HistoryHandler.getConfig('timeOutSeguimiento2', dynamicProjectId);
         const t3 = await HistoryHandler.getConfig('timeOutSeguimiento3', dynamicProjectId);
@@ -108,7 +108,8 @@ export class ReconectionFlow {
             }
             if (typeof timeout !== 'number' || isNaN(timeout)) timeout = this.timeoutMs;
             if (!msg || typeof msg !== 'string' || msg.trim() === '') {
-                throw new Error(`[ReconectionFlow] El mensaje de seguimiento para el intento ${this.attempts} es vacío o inválido. Verifica tus variables de entorno.`);
+                console.log(`[ReconectionFlow] El mensaje de seguimiento ${this.attempts} está vacío en la configuración. Terminando ciclo.`);
+                break;
             }
 
             // --- Lógica para detectar y descargar PDF ---

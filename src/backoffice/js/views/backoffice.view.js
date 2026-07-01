@@ -92,7 +92,7 @@ window.backofficeView = {
                         <div class="header-actions-group">
                             <!-- Blacklist toggle: solo visible cuando la integración está activa -->
                             <button class="btn-icon" id="blacklist-toggle-btn"
-                                title="Lista Negra: contacto habilitado"
+                                title="Lista BOT/CRM Desactivado: contacto habilitado"
                                 style="display:none;"
                                 onclick="toggleBlacklist()"
                                 disabled>
@@ -130,7 +130,7 @@ window.backofficeView = {
                                         <i class="fas fa-user-pen"></i> Ficha del Cliente
                                     </li>
                                     <li id="mobile-blacklist-li" style="display:none;" onclick="toggleBlacklist(); _closeMobileHeaderMenu()">
-                                        <i class="fas fa-ban"></i> <span id="mobile-blacklist-label">Lista Negra</span>
+                                        <i class="fas fa-ban"></i> <span id="mobile-blacklist-label">Lista BOT/CRM Desactivado</span>
                                     </li>
                                     <li class="mobile-bot-toggle-row" onclick="_mobileToggleBotClick()">
                                         <i class="fas fa-robot"></i>

@@ -13,7 +13,7 @@ window.listaNegraView = (() => {
                 <div class="header-info">
                     <h1>
                         <i class="fas fa-ban kanban-header-icon" style="color:#0099FF;"></i>
-                        Lista Negra
+                        Lista BOT/CRM Desactivado
                     </h1>
                     <p>Control de contactos excluidos del bot o del CRM</p>
                 </div>
@@ -41,7 +41,7 @@ window.listaNegraView = (() => {
                                 <i class="fas fa-ban" style="font-size:1.4rem; color:#0099FF;"></i>
                             </span>
                         </div>
-                        <h2 style="margin:0 0 6px; font-size:1.25rem; font-weight:700; color:var(--text-main);">Lista Negra</h2>
+                        <h2 style="margin:0 0 6px; font-size:1.25rem; font-weight:700; color:var(--text-main);">Lista BOT/CRM Desactivado</h2>
                         <div style="height:3px; width:40px; background:linear-gradient(90deg,#0099FF,#0078D4); border-radius:10px; margin:0 auto 10px;"></div>
                         <p style="margin:0; font-size:0.88rem; color:var(--text-muted); line-height:1.6; max-width:380px; margin-inline:auto;">
                             Gestioná qué contactos no reciben atención automática del bot o quedan excluidos de los chats del CRM.
@@ -105,7 +105,7 @@ window.listaNegraView = (() => {
                         </div>
                         <div id="ln-empty" style="display:none; padding:48px 24px; text-align:center;">
                             <i class="fas fa-list-check" style="font-size:2.5rem; color:var(--text-muted); margin-bottom:12px; display:block;"></i>
-                            <p style="color:var(--text-muted); margin:0;">No hay contactos en la lista negra.</p>
+                            <p style="color:var(--text-muted); margin:0;">No hay contactos en la lista.</p>
                             <p style="color:var(--text-muted); font-size:0.82rem; margin:6px 0 0;">
                                 Abrí un chat y usá el ícono <i class="fas fa-ban" style="color:var(--text-muted);"></i> del encabezado para agregar un contacto.
                             </p>
@@ -296,7 +296,7 @@ window.listaNegraView = (() => {
     }
 
     async function _deleteEntry(chatId) {
-        if (!await window.swalConfirm('¿Eliminar contacto?', '¿Eliminar este contacto de la lista negra?')) return;
+        if (!await window.swalConfirm('¿Eliminar contacto?', '¿Eliminar este contacto de la lista?')) return;
         try {
             await fetch(`/api/backoffice/blacklist/${encodeURIComponent(chatId)}?token=${_token}`, { method: 'DELETE' });
             _entries = _entries.filter(e => e.chat_id !== chatId);
@@ -378,7 +378,7 @@ window.listaNegraView = (() => {
             const data = await res.json();
             if (data.success) {
                 _closeModal();
-                showToast && showToast('Contacto agregado a la lista negra', 'success');
+                showToast && showToast('Contacto agregado a la lista', 'success');
                 await _loadEntries();
             } else {
                 showToast && showToast('Error: ' + (data.error || 'Desconocido'), 'error');
@@ -396,7 +396,7 @@ window.listaNegraView = (() => {
         if (checked) {
             _activar();
         } else {
-            const confirmed = await window.swalConfirm('¿Desactivar Lista Negra?', '¿Desactivar la Lista Negra? Se eliminarán TODOS los registros de contactos en la lista.');
+            const confirmed = await window.swalConfirm('¿Desactivar Lista?', '¿Desactivar la lista? Se eliminarán TODOS los registros de contactos en la lista.');
             if (!confirmed) {
                 const toggle = document.getElementById('ln-toggle');
                 if (toggle) toggle.checked = true;
@@ -416,7 +416,7 @@ window.listaNegraView = (() => {
                 _isActive = true;
                 _render();
                 await _loadEntries();
-                showToast && showToast('Lista Negra activada', 'success');
+                showToast && showToast('Lista activada', 'success');
             } else {
                 showToast && showToast('Error activando: ' + (data.error || ''), 'error');
                 if (toggle) { toggle.checked = false; }
@@ -437,7 +437,7 @@ window.listaNegraView = (() => {
                 _isActive = false;
                 _entries = [];
                 _render();
-                showToast && showToast('Lista Negra desactivada y registros eliminados', 'success');
+                showToast && showToast('Lista desactivada y registros eliminados', 'success');
             } else {
                 showToast && showToast('Error desactivando: ' + (data.error || ''), 'error');
             }
@@ -461,7 +461,7 @@ window.listaNegraView = (() => {
     }
 
     return {
-        title: 'Lista Negra',
+        title: 'Lista BOT/CRM Desactivado',
         getHTML,
         init,
         destroy,

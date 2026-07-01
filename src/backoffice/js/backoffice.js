@@ -3448,10 +3448,10 @@ function _updateBlacklistBtn(isBlacklisted) {
     if (!btn) return;
     if (isBlacklisted) {
         btn.innerHTML = '<i class="fas fa-ban" style="color:#25D366;"></i>';
-        btn.title = 'Lista Negra: contacto bloqueado — Clic para quitar';
+        btn.title = 'Lista BOT/CRM Desactivado: contacto bloqueado — Clic para quitar';
     } else {
         btn.innerHTML = '<i class="fas fa-ban" style="color:var(--text-muted);"></i>';
-        btn.title = 'Lista Negra: contacto habilitado — Clic para agregar';
+        btn.title = 'Lista BOT/CRM Desactivado: contacto habilitado — Clic para agregar';
     }
 }
 
@@ -3473,13 +3473,13 @@ async function toggleBlacklist() {
             _currentChatBlacklisted = newState;
             _updateBlacklistBtn(_currentChatBlacklisted);
             const msg = newState
-                ? '⛔ Contacto agregado a lista negra (Sin Bot)'
-                : '✅ Contacto quitado de la lista negra';
+                ? '⛔ Contacto agregado a la lista (Sin Bot)'
+                : '✅ Contacto quitado de la lista';
             if (typeof showToast === 'function') showToast(msg, newState ? 'warning' : 'success');
         }
     } catch (e) {
         console.error('[Blacklist] Error en toggle:', e);
-        if (typeof showToast === 'function') showToast('Error al actualizar lista negra', 'error');
+        if (typeof showToast === 'function') showToast('Error al actualizar la lista', 'error');
     } finally {
         if (btn) btn.disabled = false;
     }

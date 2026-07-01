@@ -7,12 +7,45 @@ export type GenericResumenData = Record<string, string>;
 const extraerDatosResumen = (resumen: string): GenericResumenData => {
     const data: GenericResumenData = {};
     const lines = resumen.split(/\r?\n/);
+
+    const cleanValue = (val: string): string => {
+        let cleaned = val.trim();
+        while (true) {
+            const len = cleaned.length;
+            if (len < 2) break;
+            const first = cleaned[0];
+            const last = cleaned[len - 1];
+            if ((first === "'" && last === "'") ||
+                (first === '"' && last === '"') ||
+                (first === '`' && last === '`') ||
+                (first === '´' && last === '´') ||
+                (first === '’' && last === '’') ||
+                (first === '‘' && last === '‘') ||
+                (first === '[' && last === ']') ||
+                (first === '{' && last === '}') ||
+                (first === '(' && last === ')')) {
+                cleaned = cleaned.slice(1, -1).trim();
+                continue;
+            }
+            if (["'", '"', '`', '´', '’', '‘', '[', ']', '{', '}', '(', ')'].includes(first)) {
+                cleaned = cleaned.slice(1).trim();
+                continue;
+            }
+            if (["'", '"', '`', '´', '’', '‘', '[', ']', '{', '}', '(', ')'].includes(last)) {
+                cleaned = cleaned.slice(0, -1).trim();
+                continue;
+            }
+            break;
+        }
+        return cleaned;
+    };
+
     for (const line of lines) {
         // Regex mejorado para capturar "Clave: Valor" ignorando prefijos de markdown como -, *, # o números
         const match = line.match(/^\s*(?:[-*#\s\d.]*)\s*([\wÁÉÍÓÚáéíóúñÑ ._-]+)\s*[:=]\s*(.+)$/);
         if (match) {
             const key = match[1].trim().replace(/^[-–—\s]+/, '');
-            const value = match[2].trim();
+            const value = cleanValue(match[2]);
             data[key] = value;
             const lowerKey = key.toLowerCase();
             // Si la clave es 'Tipo', 'Type' o similar, normalizar a 'tipo'
