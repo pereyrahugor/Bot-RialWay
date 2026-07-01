@@ -44,7 +44,45 @@
         };
     </script>
     <script src="/js/toast.js"></script>
-    <script>window.BOT_NAME = '{{BOT_NAME}}'; window.__SYSTEM_CONFIG_VISIBLE = '{{SYSTEM_CONFIG_VISIBLE_JS}}' !== 'false';</script>
+    <script>
+        window.BOT_NAME = '{{BOT_NAME}}';
+        window.__SYSTEM_CONFIG_VISIBLE = '{{SYSTEM_CONFIG_VISIBLE_JS}}' !== 'false';
+        window.railwayProjectId = '{{PROJECT_ID}}';
+        (function() {
+            const originalFetch = window.fetch;
+            window.fetch = function(input, init) {
+                if (window.railwayProjectId) {
+                    if (typeof input === 'string') {
+                        if (input.includes('/api/')) {
+                            try {
+                                const urlObj = new URL(input, window.location.origin);
+                                if (!urlObj.searchParams.has('projectId')) {
+                                    urlObj.searchParams.set('projectId', window.railwayProjectId);
+                                    input = urlObj.pathname + urlObj.search + urlObj.hash;
+                                }
+                            } catch (e) {}
+                        }
+                    }
+                    if (init && init.headers) {
+                        if (Array.isArray(init.headers)) {
+                            if (!init.headers.some(h => h[0].toLowerCase() === 'x-project-id')) {
+                                init.headers.push(['x-project-id', window.railwayProjectId]);
+                            }
+                        } else if (typeof init.headers.set === 'function') {
+                            init.headers.set('x-project-id', window.railwayProjectId);
+                        } else {
+                            init.headers['x-project-id'] = window.railwayProjectId;
+                        }
+                    } else if (init) {
+                        init.headers = { 'x-project-id': window.railwayProjectId };
+                    } else {
+                        init = { headers: { 'x-project-id': window.railwayProjectId } };
+                    }
+                }
+                return originalFetch.call(this, input, init);
+            };
+        })();
+    </script>
     <style>
         /* Previene auto-zoom en iOS en todos los inputs de la app */
         @media (max-width: 1024px) {
