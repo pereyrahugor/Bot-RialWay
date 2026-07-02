@@ -10,9 +10,13 @@ const extraerDatosResumen = (resumen: string): GenericResumenData => {
 
     const cleanValue = (val: string): string => {
         let cleaned = val.trim();
-        while (true) {
+        let changing = true;
+        while (changing) {
             const len = cleaned.length;
-            if (len < 2) break;
+            if (len < 2) {
+                changing = false;
+                break;
+            }
             const first = cleaned[0];
             const last = cleaned[len - 1];
             if ((first === "'" && last === "'") ||
@@ -35,7 +39,7 @@ const extraerDatosResumen = (resumen: string): GenericResumenData => {
                 cleaned = cleaned.slice(0, -1).trim();
                 continue;
             }
-            break;
+            changing = false;
         }
         return cleaned;
     };

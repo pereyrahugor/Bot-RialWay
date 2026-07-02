@@ -71,8 +71,10 @@ async function fetchStatus() {
                 else if (quality === 'YELLOW') qualityLabel = `<span style="font-weight:600;color:#f59e0b;">🟡 Media (Amarillo)</span>`;
                 else if (quality === 'RED')    qualityLabel = `<span style="font-weight:600;color:#ef4444;">🔴 Baja (Rojo)</span>`;
 
-                const verificationStatus = obData.code_verification_status || obData.verificationStatus || 'not_verified';
-                const vStatusLabel = (verificationStatus === 'verified' || verificationStatus === 'VERIFIED')
+                const isVerified = (obData.is_official_business_account === true) || 
+                                   (obData.code_verification_status === 'verified' || obData.code_verification_status === 'VERIFIED') ||
+                                   (obData.name_status === 'APPROVED' || obData.name_status === 'VERIFIED');
+                const vStatusLabel = isVerified
                     ? '<span style="color:#10b981;font-weight:600;">✅ Verificado</span>'
                     : '<span style="color:#ef4444;font-weight:600;">❌ No Verificado</span>';
 
