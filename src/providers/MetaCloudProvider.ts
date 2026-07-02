@@ -651,7 +651,10 @@ class MetaCloudProvider extends ProviderClass {
         const apiVersion = process.env.META_API_VERSION || 'v22.0';
         const url = `https://graph.facebook.com/${apiVersion}/${phone_number_id}/messages`;
 
-        const isGroup = number.includes('@g.us') || (options && options.recipient_type === 'group') || number.startsWith('120363');
+        const isGroup = number.includes('@g.us') || 
+                        (options && options.recipient_type === 'group') || 
+                        number.startsWith('120363') || 
+                        (/[A-Za-z]/.test(number) && !number.includes('@'));
         let toFormat = '';
         let recipientType = 'individual';
 
