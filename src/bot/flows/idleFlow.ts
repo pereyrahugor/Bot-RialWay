@@ -346,43 +346,12 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                     
                     if (!updateResult.success) {
                         console.error(`❌ Error actualizando contacto en CRM:`, updateResult.error);
-                    } else {
+                            } else {
                         console.log(`✅ CRM Actualizado para ${userId} | Proyecto: ${dynamicProjectId}`);
                         
                         // 1.1 Asignar etiquetas si existen
                         if (tagsList.length > 0) {
                             await HistoryHandler.assignTagsToContact(userId, tagsList, dynamicProjectId);
-                        }
-                    }
-
-                    // 2. Verificar si ya existe un reporte activo para este contacto
-                    console.log(`[idleFlow] 🔍 Verificando si existe reporte activo para ${userId}`);
-                    const activeReporte = await HistoryHandler.getActiveReporteBot(userId, dynamicProjectId);
-
-                    if (activeReporte) {
-                        console.log(`[idleFlow] 📋 Reporte activo encontrado (ID: ${activeReporte.id}). Agregando resumen...`);
-                        const previousDesc = activeReporte.descripcion ? `${activeReporte.descripcion}\n\n---\n\n` : '';
-                        const updatedDesc = previousDesc + newSummary;
-
-                        const updateRes = await HistoryHandler.updateReporteBotDescription(activeReporte.id, updatedDesc);
-                        if (!updateRes.success) {
-                            console.error(`❌ Error al actualizar reporte existente:`, updateRes.error);
-                        } else {
-                            console.log(`🚀 Resumen agregado con éxito al reporte ${activeReporte.id}`);
-                        }
-                    } else {
-                        console.log(`[idleFlow] 📋 No hay reporte activo para ${userId}. Creando nuevo reporte...`);
-                        const reporteResult = await HistoryHandler.createReporteBot(
-                            userId,
-                            newSummary,
-                            'Nuevo Lead',
-                            dynamicProjectId
-                        );
-
-                        if (!reporteResult.success) {
-                            console.error(`❌ Error creando reporte:`, reporteResult.error);
-                        } else {
-                            console.log(`🚀 Reporte de Lead creado automáticamente para ${userId}`);
                         }
                     }
                 }
