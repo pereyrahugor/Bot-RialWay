@@ -217,22 +217,34 @@ function distributeCards() {
         let columnId = 'nodate';
 
         if (alertDateStr) {
-            const dateParts = alertDateStr.split('-');
-            const alertD = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
-            alertD.setHours(0, 0, 0, 0);
+            const cleanDateStr = alertDateStr.split('T')[0].split(' ')[0].trim();
+            const dateParts = cleanDateStr.split('-');
             
-            if (alertD < today) {
-                columnId = 'overdue';
-            } else if (alertD.getTime() === today.getTime()) {
-                columnId = 'today';
-            } else if (alertD.getTime() === tomorrow.getTime()) {
-                columnId = 'tomorrow';
-            } else if (alertD <= weekLimit) {
-                columnId = 'week';
-            } else {
-                columnId = 'later';
+            if (dateParts.length === 3) {
+                const year = parseInt(dateParts[0], 10);
+                const month = parseInt(dateParts[1], 10) - 1;
+                const day = parseInt(dateParts[2], 10);
+                
+                const alertD = new Date(year, month, day);
+                alertD.setHours(0, 0, 0, 0);
+                
+                if (!isNaN(alertD.getTime())) {
+                    if (alertD < today) {
+                        columnId = 'overdue';
+                    } else if (alertD.getTime() === today.getTime()) {
+                        columnId = 'today';
+                    } else if (alertD.getTime() === tomorrow.getTime()) {
+                        columnId = 'tomorrow';
+                    } else if (alertD <= weekLimit) {
+                        columnId = 'week';
+                    } else {
+                        columnId = 'later';
+                    }
+                }
             }
         }
+
+        console.log(`[CRM Tareas] Ticket ${ticket.id.slice(-8).toUpperCase()} (${ticket.titulo}): JID = ${ticket.chat_id} | Fecha Alerta = ${alertDateStr} -> Columna = ${columnId}`);
 
         const container = document.getElementById(`cards-${columnId}`);
         if (container) {

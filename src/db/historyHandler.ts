@@ -1255,6 +1255,49 @@ export class HistoryHandler {
 
             if (error) throw error;
 
+            // --- SINCRONIZACIÓN DUAL DE INSTANCIAS (LID <-> Teléfono) ---
+            try {
+                const { data: currentChat } = await supabase
+                    .from('chats')
+                    .select('metadata')
+                    .eq('id', chatId)
+                    .eq('project_id', currentProjectId)
+                    .maybeSingle();
+
+                let companionId: string | null = null;
+                if (currentChat) {
+                    const metadata = currentChat.metadata || {};
+                    if (metadata.lid) {
+                        companionId = this.normalizeId(metadata.lid);
+                    } else if (metadata.phone_jid) {
+                        companionId = this.normalizeId(metadata.phone_jid);
+                    } else {
+                        const { data: phoneChat } = await supabase
+                            .from('chats')
+                            .select('id')
+                            .eq('project_id', currentProjectId)
+                            .eq('metadata->>lid', `${chatId}@lid`)
+                            .maybeSingle();
+                        if (phoneChat) companionId = phoneChat.id;
+                    }
+                }
+
+                if (companionId && companionId !== chatId) {
+                    const syncDetails = { ...details };
+                    delete syncDetails.metadata; // Preservar metadatos individuales
+                    if (Object.keys(syncDetails).length > 0) {
+                        this.invalidateChatCache(companionId, currentProjectId);
+                        await supabase
+                            .from('chats')
+                            .update(syncDetails)
+                            .eq('id', companionId)
+                            .eq('project_id', currentProjectId);
+                    }
+                }
+            } catch (syncErr: any) {
+                console.error(`[HistoryHandler] Error en sincronización dual LID/Teléfono:`, syncErr.message);
+            }
+
             // Sincronizar ticket de lead
             const { data: existingTicket, error: lookupErr } = await supabase
                 .from('tickets')
@@ -2233,6 +2276,49 @@ export class HistoryHandler {
                         .eq('project_id', currentProjectId);
 
                     if (upChatErr) throw upChatErr;
+
+                    // --- SINCRONIZACIÓN DUAL DE INSTANCIAS (LID <-> Teléfono) ---
+                    try {
+                        const { data: currentChat } = await supabase
+                            .from('chats')
+                            .select('metadata')
+                            .eq('id', ticket.chat_id)
+                            .eq('project_id', currentProjectId)
+                            .maybeSingle();
+
+                        let companionId: string | null = null;
+                        if (currentChat) {
+                            const metadata = currentChat.metadata || {};
+                            if (metadata.lid) {
+                                companionId = this.normalizeId(metadata.lid);
+                            } else if (metadata.phone_jid) {
+                                companionId = this.normalizeId(metadata.phone_jid);
+                            } else {
+                                const { data: phoneChat } = await supabase
+                                    .from('chats')
+                                    .select('id')
+                                    .eq('project_id', currentProjectId)
+                                    .eq('metadata->>lid', `${ticket.chat_id}@lid`)
+                                    .maybeSingle();
+                                if (phoneChat) companionId = phoneChat.id;
+                            }
+                        }
+
+                        if (companionId && companionId !== ticket.chat_id) {
+                            const syncDetails = { ...chatUpdate };
+                            delete syncDetails.metadata; // Preservar metadatos individuales
+                            if (Object.keys(syncDetails).length > 0) {
+                                this.invalidateChatCache(companionId, currentProjectId);
+                                await supabase
+                                    .from('chats')
+                                    .update(syncDetails)
+                                    .eq('id', companionId)
+                                    .eq('project_id', currentProjectId);
+                            }
+                        }
+                    } catch (syncErr: any) {
+                        console.error(`[HistoryHandler] Error en sincronización dual LID/Teléfono en updateLeadAndTicket:`, syncErr.message);
+                    }
 
                     historyEvents.emit('contact_updated', {
                         chatId: ticket.chat_id,

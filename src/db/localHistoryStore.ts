@@ -181,6 +181,32 @@ export class LocalHistoryStore {
             chats[idx] = { ...chats[idx], ...details };
             this.saveChats(projectId, chats);
 
+            // --- SINCRONIZACIÓN DUAL DE INSTANCIAS (LID <-> Teléfono) LOCAL ---
+            try {
+                const metadata = chats[idx].metadata || {};
+                let companionId: string | null = null;
+                if (metadata.lid) {
+                    companionId = metadata.lid.split('@')[0];
+                } else if (metadata.phone_jid) {
+                    companionId = metadata.phone_jid.split('@')[0];
+                } else {
+                    const phoneChat = chats.find(c => c.metadata && c.metadata.lid === `${chatId}@lid`);
+                    if (phoneChat) companionId = phoneChat.id;
+                }
+
+                if (companionId && companionId !== chatId) {
+                    const compIdx = chats.findIndex(c => c.id === companionId);
+                    if (compIdx !== -1) {
+                        const syncDetails = { ...details };
+                        delete syncDetails.metadata; // Preservar metadatos separados
+                        chats[compIdx] = { ...chats[compIdx], ...syncDetails };
+                        this.saveChats(projectId, chats);
+                    }
+                }
+            } catch (syncErr: any) {
+                console.error(`[LocalHistoryStore] Error en sincronización dual LID/Teléfono:`, syncErr.message);
+            }
+
             const tickets = this.getTicketsList(projectId);
             const activeTicketIdx = tickets.findIndex(t => t.chat_id === chatId && t.estado !== 'Cerrado');
 

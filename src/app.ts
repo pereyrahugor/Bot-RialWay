@@ -474,5 +474,5 @@ export const processUserMessage = async (ctx: any, items: any) => {
     if (!aiManagerInstance) throw new Error("AiManager not initialized");
     return await aiManagerInstance.processUserMessage(ctx, items);
 };
-// Trigger nodemon reload after adding migrateLidChatToPhone and status@broadcast filter
+// Trigger nodemon reload after implementing dual-instance LID-JID updates mirroring
 

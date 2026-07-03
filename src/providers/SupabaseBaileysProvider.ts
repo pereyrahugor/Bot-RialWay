@@ -581,17 +581,36 @@ async function migrateLidChatToPhone(lid: string, phone: string, projectId: stri
             .eq('chat_id', lid)
             .eq('project_id', projectId);
 
-        // 6. Eliminar el chat del LID
-        const { error: deleteLidErr } = await supabase
+        // 6. Actualizar el chat LID en lugar de eliminarlo (para mantener compatibilidad con webs externas)
+        console.log(`[SupabaseBaileysProvider] 📝 Sincronizando chat LID '${lid}' con el de Teléfono '${phone}'...`);
+        const updatedLidMeta = {
+            ...(lidChat.metadata || {}),
+            phone_jid: `${phone}@s.whatsapp.net`
+        };
+        const { error: updateLidErr } = await supabase
             .from('chats')
-            .delete()
+            .update({
+                name: phoneChat?.name || lidChat.name,
+                email: phoneChat?.email || lidChat.email,
+                notes: phoneChat?.notes || lidChat.notes,
+                source: phoneChat?.source || lidChat.source,
+                crm_status: phoneChat?.crm_status || lidChat.crm_status,
+                crm_due_date: phoneChat?.crm_due_date || lidChat.crm_due_date,
+                is_lead: phoneChat?.is_lead !== undefined ? phoneChat.is_lead : lidChat.is_lead,
+                cuit_dni: phoneChat?.cuit_dni || lidChat.cuit_dni,
+                address: phoneChat?.address || lidChat.address,
+                tax_status: phoneChat?.tax_status || lidChat.tax_status,
+                offered_product: phoneChat?.offered_product || lidChat.offered_product,
+                assigned_to: phoneChat?.assigned_to || lidChat.assigned_to,
+                metadata: updatedLidMeta
+            })
             .eq('id', lid)
             .eq('project_id', projectId);
 
-        if (deleteLidErr) {
-            console.error(`[SupabaseBaileysProvider] Error eliminando chat LID antiguo:`, deleteLidErr.message);
+        if (updateLidErr) {
+            console.error(`[SupabaseBaileysProvider] Error actualizando chat LID:`, updateLidErr.message);
         } else {
-            console.log(`[SupabaseBaileysProvider] ✅ Chat LID '${lid}' eliminado correctamente. Migración finalizada.`);
+            console.log(`[SupabaseBaileysProvider] ✅ Chat LID '${lid}' sincronizado y conservado correctamente. Migración finalizada.`);
         }
 
     } catch (err: any) {
