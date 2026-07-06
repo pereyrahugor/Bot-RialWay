@@ -127,7 +127,7 @@ async function syncCRM() {
     try {
         const [resLeads, resTickets] = await Promise.all([
             fetch(`/api/backoffice/leads?token=${activeToken}&limit=300`),
-            fetch(`/api/backoffice/tickets?token=${activeToken}&estado=Abierto`) // Forzamos solo abiertos
+            fetch(`/api/backoffice/tickets?token=${activeToken}&estado=all_active`) // Traer todos los activos (Abierto, contactado, propuesta, etc.)
         ]);
 
         const leadsData = await resLeads.json();

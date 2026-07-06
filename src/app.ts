@@ -474,5 +474,5 @@ export const processUserMessage = async (ctx: any, items: any) => {
     if (!aiManagerInstance) throw new Error("AiManager not initialized");
     return await aiManagerInstance.processUserMessage(ctx, items);
 };
-// Trigger nodemon reload after resolving duplicate ticket creation in idleFlow
+// Trigger nodemon reload after fixing crm-tareas.js active ticket state query parameter
 

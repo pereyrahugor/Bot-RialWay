@@ -213,12 +213,16 @@ export class SupabaseBaileysProvider extends BaileysProvider {
             }
 
             this.vendor.ev.on('messaging-history.set', ({ chats, contacts, messages, isLatest }: any) => {
-                console.log(`[SupabaseBaileysProvider] 📥 [${botName}] History Sync: ${chats?.length || 0} chats, ${contacts?.length || 0} contactos, ${messages?.length || 0} mensajes. (isLatest: ${isLatest})`);
+                if (!botName.includes('groups')) {
+                    console.log(`[SupabaseBaileysProvider] 📥 [${botName}] History Sync: ${chats?.length || 0} chats, ${contacts?.length || 0} contactos, ${messages?.length || 0} mensajes. (isLatest: ${isLatest})`);
+                }
                 if (contacts && Array.isArray(contacts)) {
                     for (const c of contacts) {
                         if (c.id && c.id.endsWith('@lid') && c.phone) {
                             const formattedPhone = `${c.phone}@s.whatsapp.net`;
-                            console.log(`[SupabaseBaileysProvider] 🔗 Mapeo LID detectado en history sync: ${c.id} -> ${formattedPhone}`);
+                            if (!botName.includes('groups')) {
+                                console.log(`[SupabaseBaileysProvider] 🔗 Mapeo LID detectado en history sync: ${c.id} -> ${formattedPhone}`);
+                            }
                             this.lidToPnCache.set(c.id, formattedPhone);
                         }
                     }
@@ -226,14 +230,20 @@ export class SupabaseBaileysProvider extends BaileysProvider {
             });
 
             this.vendor.ev.on('contacts.upsert', (contacts: any) => {
-                console.log(`[SupabaseBaileysProvider] 📥 [${botName}] Contacts Upsert: ${contacts?.length || 0} nuevos contactos.`);
+                if (!botName.includes('groups')) {
+                    console.log(`[SupabaseBaileysProvider] 📥 [${botName}] Contacts Upsert: ${contacts?.length || 0} nuevos contactos.`);
+                }
                 for (const c of contacts) {
                     if (c.id && (c.id.endsWith('@lid') || c.id.endsWith('@s.whatsapp.net'))) {
-                        console.log(`[SupabaseBaileysProvider] 👥 Contact Upsert details: id=${c.id}, name=${c.name || c.verifiedName || ''}, phone=${c.phone || ''}`);
+                        if (!botName.includes('groups')) {
+                            console.log(`[SupabaseBaileysProvider] 👥 Contact Upsert details: id=${c.id}, name=${c.name || c.verifiedName || ''}, phone=${c.phone || ''}`);
+                        }
                         // Si el contacto viene con id (LID) y campo phone (número de teléfono), guardamos el mapeo en cache
                         if (c.id.endsWith('@lid') && c.phone) {
                             const formattedPhone = `${c.phone}@s.whatsapp.net`;
-                            console.log(`[SupabaseBaileysProvider] 🔗 Mapeo LID detectado en upsert: ${c.id} -> ${formattedPhone}`);
+                            if (!botName.includes('groups')) {
+                                console.log(`[SupabaseBaileysProvider] 🔗 Mapeo LID detectado en upsert: ${c.id} -> ${formattedPhone}`);
+                            }
                             this.lidToPnCache.set(c.id, formattedPhone);
                         }
                     }
@@ -243,10 +253,14 @@ export class SupabaseBaileysProvider extends BaileysProvider {
             this.vendor.ev.on('contacts.update', (updates: any) => {
                 for (const u of updates) {
                     if (u.id && (u.id.endsWith('@lid') || u.id.endsWith('@s.whatsapp.net'))) {
-                        console.log(`[SupabaseBaileysProvider] 👥 Contact Update details:`, JSON.stringify(u));
+                        if (!botName.includes('groups')) {
+                            console.log(`[SupabaseBaileysProvider] 👥 Contact Update details:`, JSON.stringify(u));
+                        }
                         if (u.id.endsWith('@lid') && u.phone) {
                             const formattedPhone = `${u.phone}@s.whatsapp.net`;
-                            console.log(`[SupabaseBaileysProvider] 🔗 Mapeo LID detectado en update: ${u.id} -> ${formattedPhone}`);
+                            if (!botName.includes('groups')) {
+                                console.log(`[SupabaseBaileysProvider] 🔗 Mapeo LID detectado en update: ${u.id} -> ${formattedPhone}`);
+                            }
                             this.lidToPnCache.set(u.id, formattedPhone);
                         }
                     }
@@ -339,7 +353,9 @@ export class SupabaseBaileysProvider extends BaileysProvider {
                             if (!body) continue;
 
                             let from = msg.key.remoteJid;
-                            console.log(`[SupabaseBaileysProvider] 📤 DETECTADO manual fromMe msg remoteJid=${from}, keyDetails=`, JSON.stringify(msg.key));
+                            if (!botName.includes('groups')) {
+                                console.log(`[SupabaseBaileysProvider] 📤 DETECTADO manual fromMe msg remoteJid=${from}, keyDetails=`, JSON.stringify(msg.key));
+                            }
                             if (from && from.endsWith('@lid')) {
                                 let resolvedPn = this.lidToPnCache.get(from);
                                 
@@ -394,7 +410,9 @@ export class SupabaseBaileysProvider extends BaileysProvider {
                     if (from && from.endsWith('@lid')) {
                         const resolvedPn = msg.key.senderPn || this.lidToPnCache.get(from);
                         if (resolvedPn && resolvedPn.endsWith('@s.whatsapp.net')) {
-                            console.log(`[SupabaseBaileysProvider] 🔄 Detectado LID (${from}). Resolviendo a JID de teléfono: ${resolvedPn}`);
+                            if (!botName.includes('groups')) {
+                                console.log(`[SupabaseBaileysProvider] 🔄 Detectado LID (${from}). Resolviendo a JID de teléfono: ${resolvedPn}`);
+                            }
                             
                             const lid = from.split('@')[0];
                             const phone = resolvedPn.split('@')[0];
