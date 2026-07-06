@@ -339,6 +339,27 @@ const main = async () => {
 
     registerProcessCallback(async (item: any) => {
         const { ctx, flowDynamic, state, provider, gotoFlow } = item;
+
+        if (ctx.body && ctx.body.trim() === '#GRUPO_TEST#') {
+            try {
+                const projectId = state.get('dynamicProjectId') || process.env.RAILWAY_PROJECT_ID;
+                const ID_GRUPO_RESUMEN = await HistoryHandler.getConfig('ID_GRUPO_RESUMEN', projectId) || '';
+                if (ID_GRUPO_RESUMEN) {
+                    console.log(`[GRUPO_TEST] Enviando mensaje de prueba a grupo: ${ID_GRUPO_RESUMEN}`);
+                    const groupProvider = getGroupProvider();
+                    const providerToSend = groupProvider || provider;
+                    await providerToSend.sendMessage(ID_GRUPO_RESUMEN, "Msj de test reporte a grupos", {});
+                    await flowDynamic("✅ Mensaje de prueba enviado al grupo.");
+                } else {
+                    await flowDynamic("❌ No hay un grupo de reporte 1 (ID_GRUPO_RESUMEN) configurado.");
+                }
+            } catch (err: any) {
+                console.error("Error en command #GRUPO_TEST#:", err);
+                await flowDynamic(`❌ Error al enviar mensaje: ${err.message}`);
+            }
+            return;
+        }
+
         const timeoutCierreValue = await HistoryHandler.getConfig('timeOutCierre') || 15;
         const setTime = Number(timeoutCierreValue) * 60 * 1000;
         reset(ctx, gotoFlow, setTime);
@@ -474,5 +495,5 @@ export const processUserMessage = async (ctx: any, items: any) => {
     if (!aiManagerInstance) throw new Error("AiManager not initialized");
     return await aiManagerInstance.processUserMessage(ctx, items);
 };
-// Trigger nodemon reload after fixing crm-tareas.js active ticket state query parameter
+// Trigger nodemon reload after implementing #GRUPO_TEST# command
 
