@@ -31,6 +31,19 @@ function formatSummary(resumen: string, data: GenericResumenData, userId?: strin
     return `📝 *RESUMEN DE CONVERSACIÓN*\n\n${cleanText}\n\n🔗 *Chat del usuario:* ${linkWS}`;
 }
 
+// Función auxiliar para enviar texto de forma nativa via Baileys para evitar redirección del wrapper
+async function sendTextToGroup(providerToSend: any, jid: string, text: string) {
+    const vendor = providerToSend?.vendor;
+    const isReady = !!(vendor?.authState?.creds?.me?.id || vendor?.user?.id);
+    if (vendor && isReady) {
+        console.log(`[idleFlow] Enviando mensaje nativo de Baileys a grupo: ${jid}`);
+        await vendor.sendMessage(jid, { text });
+    } else {
+        console.log(`[idleFlow] Enviando mensaje normal a: ${jid}`);
+        await providerToSend.sendMessage(jid, text, {});
+    }
+}
+
 // Función auxiliar para reenviar media
 async function sendMediaToGroup(provider: any, state: any, targetGroup: string, data: any, skipDelete: boolean = false) {
     // Detectar variaciones de "si" (si, sí, sii, si., Si, YES, etc - aunque el json suele ser español)
@@ -41,12 +54,18 @@ async function sendMediaToGroup(provider: any, state: any, targetGroup: string, 
     if (debeEnviar) {
         const lastImage = state.get('lastImage');
         const lastVideo = state.get('lastVideo');
+        const vendor = provider?.vendor;
+        const isReady = !!(vendor?.authState?.creds?.me?.id || vendor?.user?.id);
 
         if (lastImage && typeof lastImage === 'string') {
             if (fs.existsSync(lastImage)) {
                 await new Promise(resolve => setTimeout(resolve, 2000));
                 console.log(`📡 Intentando enviar imagen: ${lastImage} a ${targetGroup}`);
-                await provider.sendImage(targetGroup, lastImage, "");
+                if (vendor && isReady) {
+                    await vendor.sendMessage(targetGroup, { image: fs.readFileSync(lastImage) });
+                } else {
+                    await provider.sendImage(targetGroup, lastImage, "");
+                }
                 console.log(`✅ Imagen reenviada al grupo ${targetGroup}`);
                 if (!skipDelete) {
                     try {
@@ -61,10 +80,14 @@ async function sendMediaToGroup(provider: any, state: any, targetGroup: string, 
             if (fs.existsSync(lastVideo)) {
                 await new Promise(resolve => setTimeout(resolve, 2000));
                 console.log(`📡 Intentando enviar video: ${lastVideo} a ${targetGroup}`);
-                if (provider.sendVideo) {
-                    await provider.sendVideo(targetGroup, lastVideo, "");
+                if (vendor && isReady) {
+                    await vendor.sendMessage(targetGroup, { video: fs.readFileSync(lastVideo) });
                 } else {
-                    await provider.sendImage(targetGroup, lastVideo, "");
+                    if (provider.sendVideo) {
+                        await provider.sendVideo(targetGroup, lastVideo, "");
+                    } else {
+                        await provider.sendImage(targetGroup, lastVideo, "");
+                    }
                 }
                 console.log(`✅ Video reenviada al grupo ${targetGroup}`);
                 if (!skipDelete) {
@@ -140,13 +163,18 @@ async function dispatchVirtualGroupReports(projectId: string, message: string, s
                 for (const p of providersToTry) {
                     console.log(`[idleFlow] Grupo WhatsApp '${group.name}' (${group.jid}): enviando un solo reporte via ${p.name}...`);
                     try {
-                        await p.instance.sendMessage(group.jid, message, {});
+                        await sendTextToGroup(p.instance, group.jid, message);
                         
                         if (debeEnviarMedia) {
+                            const vendor = p.instance?.vendor;
+                            const isReady = !!(vendor?.authState?.creds?.me?.id || vendor?.user?.id);
+
                             if (lastImage && fs.existsSync(lastImage)) {
                                 await new Promise(resolve => setTimeout(resolve, 1500));
                                 console.log(`[idleFlow] Enviando imagen a grupo WhatsApp '${group.name}' via ${p.name}...`);
-                                if (typeof p.instance.sendImage === 'function') {
+                                if (vendor && isReady) {
+                                    await vendor.sendMessage(group.jid, { image: fs.readFileSync(lastImage) });
+                                } else if (typeof p.instance.sendImage === 'function') {
                                     await p.instance.sendImage(group.jid, lastImage, "");
                                 } else {
                                     await p.instance.sendMessage(group.jid, "", { media: lastImage });
@@ -155,7 +183,9 @@ async function dispatchVirtualGroupReports(projectId: string, message: string, s
                             if (lastVideo && fs.existsSync(lastVideo)) {
                                 await new Promise(resolve => setTimeout(resolve, 1500));
                                 console.log(`[idleFlow] Enviando video a grupo WhatsApp '${group.name}' via ${p.name}...`);
-                                if (typeof p.instance.sendVideo === 'function') {
+                                if (vendor && isReady) {
+                                    await vendor.sendMessage(group.jid, { video: fs.readFileSync(lastVideo) });
+                                } else if (typeof p.instance.sendVideo === 'function') {
                                     await p.instance.sendVideo(group.jid, lastVideo, "");
                                 } else {
                                     await p.instance.sendMessage(group.jid, "", { media: lastVideo });
@@ -239,7 +269,7 @@ async function reportAndClose(
             const providerToSend = groupProvider || provider;
             console.log(`[idleFlow] Enviando resumen (${tipo}) via ${providerToSend.constructor.name} a ${targetGroup}`);
 
-            await providerToSend.sendMessage(targetGroup, resumenConLink, {});
+            await sendTextToGroup(providerToSend, targetGroup, resumenConLink);
             console.log(`✅ ${tipo}: Resumen enviado a ${targetGroup}`);
 
             await sendMediaToGroup(providerToSend, state, targetGroup, data, true);
@@ -426,7 +456,7 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                     const providerToSend = groupProvider || provider;
                     console.log(`[idleFlow] Enviando resumen (SI_REPORTAR_SEGUIR) via ${providerToSend.constructor.name} a ${ID_GRUPO_RESUMEN}`);
                     
-                    await providerToSend.sendMessage(ID_GRUPO_RESUMEN, resumenConLink, {});
+                    await sendTextToGroup(providerToSend, ID_GRUPO_RESUMEN, resumenConLink);
                     console.log(`✅ SI_REPORTAR_SEGUIR: Resumen enviado a ${ID_GRUPO_RESUMEN}`);
                     await sendMediaToGroup(providerToSend, state, ID_GRUPO_RESUMEN, data, true);
 

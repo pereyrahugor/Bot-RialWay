@@ -28,6 +28,20 @@ import { safeToAsk } from "./apis/openai/openaiHelper";
 import { AssistantResponseProcessor } from "./apis/openai/AssistantResponseProcessor";
 import { transcribeAudioFile } from "./apis/openai/audioTranscriptior";
 import { withRetry } from "./utils/retryHelper";
+
+// --- Silence Verbose libsignal / session_record logs ---
+const originalConsoleInfo = console.info;
+console.info = function (...args: any[]) {
+    if (args[0] && typeof args[0] === 'string' && (
+        args[0].includes('Closing session:') || 
+        args[0].includes('Opening session:') || 
+        args[0].includes('Removing old closed session:')
+    )) {
+        return;
+    }
+    originalConsoleInfo.apply(console, args);
+};
+
 import { initSocketIO } from "./sockets/socket.manager";
 import { registerProviderEvents, hasActiveSession } from "./providers/provider.manager";
 import { startHumanInactivityWorker } from "./workers/humanInactivity.worker";
@@ -342,17 +356,39 @@ const main = async () => {
 
         if (ctx.body && ctx.body.trim() === '#GRUPO_TEST#') {
             try {
-                const projectId = state.get('dynamicProjectId') || process.env.RAILWAY_PROJECT_ID;
+                const botPhoneNumber = provider?.globalVendorArgs?.phone_number_id || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
+                const projectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || state.get('dynamicProjectId') || process.env.RAILWAY_PROJECT_ID;
                 const ID_GRUPO_RESUMEN = await HistoryHandler.getConfig('ID_GRUPO_RESUMEN', projectId) || '';
-                if (ID_GRUPO_RESUMEN) {
-                    console.log(`[GRUPO_TEST] Enviando mensaje de prueba a grupo: ${ID_GRUPO_RESUMEN}`);
-                    const groupProvider = getGroupProvider();
-                    const providerToSend = groupProvider || provider;
-                    await providerToSend.sendMessage(ID_GRUPO_RESUMEN, "Msj de test reporte a grupos", {});
-                    await flowDynamic("✅ Mensaje de prueba enviado al grupo.");
-                } else {
-                    await flowDynamic("❌ No hay un grupo de reporte 1 (ID_GRUPO_RESUMEN) configurado.");
+                
+                console.log(`[GRUPO_TEST] Command received. BotNumber: ${botPhoneNumber} | ProjectId: ${projectId} | GroupJID: ${ID_GRUPO_RESUMEN}`);
+
+                if (!ID_GRUPO_RESUMEN) {
+                    await flowDynamic("❌ No hay un grupo de reporte 1 (ID_GRUPO_RESUMEN) configurado para este proyecto.");
+                    return;
                 }
+
+                const groupProvider = getGroupProvider();
+                const isDualMode = !!groupProvider;
+                const activeBaileysProvider = isDualMode ? groupProvider : (provider.constructor.name.includes('Baileys') ? provider : null);
+
+                if (!activeBaileysProvider) {
+                    await flowDynamic("❌ El bot está corriendo en modo Meta API y no se detectó una sesión auxiliar de Baileys para grupos conectada.");
+                    return;
+                }
+
+                const vendor = activeBaileysProvider.vendor;
+                const isReady = !!(vendor?.authState?.creds?.me?.id || vendor?.user?.id);
+
+                if (!isReady || !vendor) {
+                    await flowDynamic("❌ La sesión de Baileys para reportes a grupos no está activa o sincronizada. Escanea el código QR en el Backoffice.");
+                    return;
+                }
+
+                console.log(`[GRUPO_TEST] Enviando mensaje nativo de Baileys al grupo: ${ID_GRUPO_RESUMEN}`);
+                // Usar el método nativo de Baileys para asegurar el envío correcto al grupo sin modificaciones de JID de BuilderBot
+                await vendor.sendMessage(ID_GRUPO_RESUMEN, { text: "Msj de test reporte a grupos" });
+                
+                await flowDynamic(`✅ Mensaje de prueba enviado al grupo: ${ID_GRUPO_RESUMEN}`);
             } catch (err: any) {
                 console.error("Error en command #GRUPO_TEST#:", err);
                 await flowDynamic(`❌ Error al enviar mensaje: ${err.message}`);
@@ -495,5 +531,5 @@ export const processUserMessage = async (ctx: any, items: any) => {
     if (!aiManagerInstance) throw new Error("AiManager not initialized");
     return await aiManagerInstance.processUserMessage(ctx, items);
 };
-// Trigger nodemon reload after implementing #GRUPO_TEST# command
+// Trigger nodemon reload after implementing robust group summary dispatch and silencing libsignal console logs
 
