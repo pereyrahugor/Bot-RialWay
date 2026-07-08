@@ -531,5 +531,5 @@ export const processUserMessage = async (ctx: any, items: any) => {
     if (!aiManagerInstance) throw new Error("AiManager not initialized");
     return await aiManagerInstance.processUserMessage(ctx, items);
 };
-// Trigger nodemon reload after implementing robust group summary dispatch and silencing libsignal console logs
+// Trigger nodemon reload after implementing key-by-key settings bootstrapper for new deploys
 

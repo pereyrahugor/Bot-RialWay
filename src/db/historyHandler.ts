@@ -2916,41 +2916,43 @@ export class HistoryHandler {
                 return;
             }
 
-            // 1. Verificar si el proyecto actual tiene configuración
-            const { data: currentSettings } = await supabase.from('settings').select('key').eq('project_id', currentProjectId).limit(1);
+            // 1. Obtener todas las llaves configuradas en el proyecto actual
+            const { data: currentSettings } = await supabase.from('settings').select('key').eq('project_id', currentProjectId);
+            const currentKeys = new Set((currentSettings || []).map(s => s.key));
 
-            if (!currentSettings || currentSettings.length === 0) {
-                console.log(`🆕 [Bootstrap] Proyecto ${currentProjectId} vacío. Intentando clonar desde '${MASTER_ID}'...`);
+            console.log(`[Bootstrap] Proyecto ${currentProjectId} tiene ${currentKeys.size} variables en DB.`);
 
-                // 2. Obtener configuración del maestro 'defaul'
-                const { data: masterSettings } = await supabase.from('settings').select('key, value').eq('project_id', MASTER_ID);
+            // 2. Obtener configuración del maestro 'defaul'
+            const { data: masterSettings } = await supabase.from('settings').select('key, value').eq('project_id', MASTER_ID);
 
-                if (masterSettings && masterSettings.length > 0) {
-                    // Lista de llaves que NUNCA deben clonarse automáticamente desde el maestro
-                    const protectedKeys = ['OPENAI_API_KEY', 'OPENAI_ADMIN_API_KEY', 'OPENAI_API_KEY_TOOLS'];
+            if (masterSettings && masterSettings.length > 0) {
+                // Lista de llaves que NUNCA deben clonarse automáticamente desde el maestro
+                const protectedKeys = ['OPENAI_API_KEY', 'OPENAI_ADMIN_API_KEY', 'OPENAI_API_KEY_TOOLS'];
 
-                    const settingsToInsert = masterSettings
-                        .filter(s => !protectedKeys.includes(s.key)) // Protección extra para llaves sensibles
-                        .filter(s => !process.env[s.key] || process.env[s.key] === '')
-                        .map(s => ({
-                            project_id: currentProjectId,
-                            key: s.key,
-                            value: s.value,
-                            updated_at: new Date().toISOString()
-                        }));
+                const settingsToInsert = masterSettings
+                    .filter(s => !protectedKeys.includes(s.key)) // Protección extra para llaves sensibles
+                    .filter(s => !currentKeys.has(s.key)) // Solo las que no existen en el proyecto actual
+                    .map(s => ({
+                        project_id: currentProjectId,
+                        key: s.key,
+                        value: s.value,
+                        updated_at: new Date().toISOString()
+                    }));
 
+                if (settingsToInsert.length > 0) {
+                    console.log(`🆕 [Bootstrap] Backfill/Clonando ${settingsToInsert.length} variables faltantes desde '${MASTER_ID}' para ${currentProjectId}...`);
                     const { error: cloneErr } = await supabase.from('settings').insert(settingsToInsert);
 
                     if (cloneErr) {
-                        console.error(`❌ [Bootstrap] Error al clonar desde '${MASTER_ID}':`, cloneErr);
+                        console.error(`❌ [Bootstrap] Error al clonar variables faltantes desde '${MASTER_ID}':`, cloneErr);
                     } else {
-                        console.log(`✅ [Bootstrap] Configuración clonada exitosamente desde '${MASTER_ID}' para ${currentProjectId}.`);
+                        console.log(`✅ [Bootstrap] ${settingsToInsert.length} variables clonadas exitosamente desde '${MASTER_ID}' para ${currentProjectId}.`);
                     }
                 } else {
-                    console.warn(`⚠️ [Bootstrap] No se encontró configuración en el proyecto maestro '${MASTER_ID}'. El bot iniciará sin variables.`);
+                    console.log(`✅ [Bootstrap] El proyecto ${currentProjectId} ya tiene todas las variables del maestro.`);
                 }
             } else {
-                console.log(`✅ [Bootstrap] El proyecto ${currentProjectId} ya cuenta con su propia configuración.`);
+                console.warn(`⚠️ [Bootstrap] No se encontró configuración en el proyecto maestro '${MASTER_ID}'. El bot iniciará sin variables.`);
             }
 
             // 3. Asegurar existencia de API_KEY única para este proyecto
