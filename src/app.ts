@@ -482,7 +482,43 @@ const main = async () => {
         app.post("/api/delete-session", async (_req: any, res: any) => {
             try {
                 console.log(`[API] 🗑️ Petición de eliminación de todas las sesiones para el proyecto`);
+                
+                // 1. Borrar todas las sesiones del proyecto de la base de datos
                 await deleteAllProjectSessionsFromDb();
+
+                // 2. Detener los proveedores y limpiar su memoria para que no re-guarden la sesión antigua
+                const providers = [adapterProvider, groupProvider];
+                for (const provider of providers) {
+                    if (provider && provider.constructor.name === 'SupabaseBaileysProvider') {
+                        console.log(`[API] Deteniendo proveedor Baileys: ${provider.globalVendorArgs?.name || 'default'}`);
+                        provider.preventAutoStart = true;
+                        if (provider.vendor) {
+                            try {
+                                provider.vendor.ev.removeAllListeners('connection.update');
+                                provider.vendor.ev.removeAllListeners('creds.update');
+                                provider.vendor.end(undefined);
+                            } catch (e: any) {
+                                console.warn('[API] Error cerrando socket de Baileys:', e.message);
+                            }
+                            provider.vendor = null;
+                        }
+                        provider.initialized = false;
+                        provider.qrCodeString = null;
+                        provider.pairingCode = null;
+                    }
+                }
+
+                // 3. Borrar la carpeta local de sesiones para evitar restauraciones automáticas
+                const sessionPath = path.join(process.cwd(), 'bot_sessions');
+                if (fs.existsSync(sessionPath)) {
+                    try {
+                        fs.rmSync(sessionPath, { recursive: true, force: true });
+                        console.log(`[API] ✅ Carpeta local de sesiones eliminada.`);
+                    } catch (fsErr: any) {
+                        console.warn('[API] Error borrando carpeta local bot_sessions:', fsErr.message);
+                    }
+                }
+
                 res.json({ success: true });
             } catch (err: any) {
                 console.error('Error en /api/delete-session:', err);
