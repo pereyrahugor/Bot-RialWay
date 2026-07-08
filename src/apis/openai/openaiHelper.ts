@@ -254,7 +254,42 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
         // Inyectar fecha y hora actual en el system prompt o como mensaje adicional
         const currentDatetimeArg = getArgentinaDatetimeString();
         const contactNameInfo = chatData?.name ? `\nNombre de Contacto: ${chatData.name}` : '';
-        messages[0].content += `\n\nFecha/Hora Actual (Argentina): ${currentDatetimeArg}\nID de Usuario: ${userId}${contactNameInfo}\nProject ID: ${projectId}`;
+        
+        // Obtener CLIENT_SLUG para formatear contexto personalizado de cliente
+        const slug = await HistoryHandler.getConfig('CLIENT_SLUG', projectId);
+        const cleanSlug = String(slug || '').trim().toLowerCase();
+        
+        let leadContext = '';
+        if (chatData) {
+            if (cleanSlug === 'ganemos' || cleanSlug === 'ganemos-net') {
+                leadContext = `\n\nDATOS DEL CLIENTE EN CRM (Úsalos para personalizar tu respuesta):
+- Nombre: ${chatData.name || 'No identificado'}
+- Usuario / DNI: ${chatData.cuit_dni || 'No registrado'}
+- Correo Electrónico: ${chatData.email || 'No registrado'}
+- Domicilio: ${chatData.address || 'No registrado'}
+- Notas del CRM: ${chatData.notes || 'Sin notas'}`;
+            } else if (cleanSlug === 'aquavita') {
+                leadContext = `\n\nDATOS DEL CLIENTE EN CRM (Úsalos para personalizar tu respuesta):
+- Nombre: ${chatData.name || 'No identificado'}
+- Nro Cliente / DNI: ${chatData.cuit_dni || 'No registrado'}
+- Correo Electrónico: ${chatData.email || 'No registrado'}
+- Dirección: ${chatData.address || 'No registrada'}
+- Tipo Cliente: ${chatData.tax_status || 'No identificado'}
+- Producto Ofrecido: ${chatData.offered_product || 'No especificado'}
+- Notas del CRM: ${chatData.notes || 'Sin notas'}`;
+            } else {
+                leadContext = `\n\nDATOS DEL CLIENTE EN CRM (Úsalos para personalizar tu respuesta):
+- Nombre: ${chatData.name || 'No identificado'}
+- Cuil / Cuit / DNI: ${chatData.cuit_dni || 'No registrado'}
+- Correo Electrónico: ${chatData.email || 'No registrado'}
+- Domicilio: ${chatData.address || 'No registrado'}
+- Situación Impositiva: ${chatData.tax_status || 'No registrada'}
+- Producto Ofrecido: ${chatData.offered_product || 'No especificado'}
+- Notas del CRM: ${chatData.notes || 'Sin notas'}`;
+            }
+        }
+
+        messages[0].content += `\n\nFecha/Hora Actual (Argentina): ${currentDatetimeArg}\nID de Usuario: ${userId}${contactNameInfo}\nProject ID: ${projectId}${leadContext}`;
         
         // Inyectar el último resultado de base de datos si existe en la base de datos
         if (lastDbResult) {

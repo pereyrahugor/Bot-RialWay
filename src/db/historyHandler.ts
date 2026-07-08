@@ -2826,6 +2826,46 @@ export class HistoryHandler {
         }
 
         let value = data ? data.value : null;
+
+        if (key === 'CRM_FIELDS_CONFIG' && (!value || value.trim() === '')) {
+            const slug = await this.getConfig('CLIENT_SLUG', targetProjectId);
+            const cleanSlug = String(slug || '').trim().toLowerCase();
+            
+            if (cleanSlug === 'ganemos' || cleanSlug === 'ganemos-net') {
+                value = JSON.stringify([
+                    { id: 'crm-ticket-title', label: 'Titulo del Ticket', visible: true, order: 0 },
+                    { id: 'crm-name', label: 'Nombre del Contacto', visible: true, order: 1 },
+                    { id: 'crm-phone', label: 'Teléfono', visible: true, order: 2 },
+                    { id: 'crm-cuit', label: 'Usuario / DNI', visible: true, order: 3 },
+                    { id: 'crm-email', label: 'Correo Electrónico', visible: true, order: 4 },
+                    { id: 'crm-address', label: 'Domicilio', visible: true, order: 5 },
+                    { id: 'crm-tax-status', label: 'Situación Impositiva', visible: true, order: 6 },
+                    { id: 'crm-product', label: 'Producto Ofrecido', visible: true, order: 7 },
+                    { id: 'crm-source', label: 'Fuente / Canal', visible: true, order: 8 },
+                    { id: 'crm-notes', label: 'Historial de Notas', visible: true, order: 9 },
+                    { id: 'crm-due-date', label: 'Fecha Alerta / Seguimiento', visible: true, order: 10 },
+                    { id: 'crm-priority', label: 'Prioridad', visible: true, order: 11 },
+                    { id: 'crm-status', label: 'Estado del Lead (CRM)', visible: true, order: 12 }
+                ]);
+            } else if (cleanSlug === 'aquavita') {
+                value = JSON.stringify([
+                    { id: 'crm-ticket-title', label: 'Titulo del Ticket', visible: true, order: 0 },
+                    { id: 'crm-name', label: 'Nombre del Contacto', visible: true, order: 1 },
+                    { id: 'crm-phone', label: 'Teléfono', visible: true, order: 2 },
+                    { id: 'crm-cuit', label: 'Nro Cliente / DNI', visible: true, order: 3 },
+                    { id: 'crm-email', label: 'Correo Electrónico', visible: true, order: 4 },
+                    { id: 'crm-address', label: 'Dirección', visible: true, order: 5 },
+                    { id: 'crm-tax-status', label: 'Tipo Cliente', visible: true, order: 6 },
+                    { id: 'crm-product', label: 'Producto Ofrecido', visible: true, order: 7 },
+                    { id: 'crm-source', label: 'Fuente / Canal', visible: true, order: 8 },
+                    { id: 'crm-notes', label: 'Historial de Notas', visible: true, order: 9 },
+                    { id: 'crm-due-date', label: 'Fecha Alerta / Seguimiento', visible: true, order: 10 },
+                    { id: 'crm-priority', label: 'Prioridad', visible: true, order: 11 },
+                    { id: 'crm-status', label: 'Estado del Lead (CRM)', visible: true, order: 12 }
+                ]);
+            }
+        }
+
         if ((key === 'ADMIN_USER' || key === 'ADMIN_PASS') && value && value.startsWith('b64:')) {
             try {
                 value = Buffer.from(value.slice(4), 'base64').toString('utf-8');

@@ -21,6 +21,14 @@ historyEvents.on('setting_changed', async ({ key, value, projectId }: { key: str
         const slug = String(value || '').trim().toLowerCase();
         console.log(`📡 [toolRouter/OpenAI] CLIENT_SLUG cambiado a '${slug}' en proyecto ${projectId}.`);
         
+        // Limpiar el CRM_FIELDS_CONFIG anterior para que al entrar al CRM cargue los nuevos defaults del slug elegido
+        try {
+            await HistoryHandlerClass.saveSetting('CRM_FIELDS_CONFIG', '', projectId);
+            console.log(`🧹 [CRM Config] Reset CRM_FIELDS_CONFIG a vacío para usar defaults de '${slug}' en ${projectId}.`);
+        } catch (e: any) {
+            console.error(`❌ [CRM Config] Error al resetear CRM_FIELDS_CONFIG en cambio de slug:`, e.message);
+        }
+        
         // Intentar cargar el módulo cliente dinámicamente desde el registro
         try {
             const { moduleRegistry } = await import('../../bot/toolRegistry');
