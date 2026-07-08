@@ -13,7 +13,7 @@ import { MetaCloudProvider } from "./providers/MetaCloudProvider";
 import { setAdapterProvider, setGroupProvider, getAdapterProvider, getGroupProvider } from "./providers/instances";
 
 // --- Utils & Handlers ---
-import { restoreSessionFromDb, startSessionSync, deleteSessionFromDb, isSessionInDb } from "./providers/sessionSync";
+import { restoreSessionFromDb, startSessionSync, deleteSessionFromDb, isSessionInDb, deleteAllProjectSessionsFromDb } from "./providers/sessionSync";
 import { ErrorReporter } from "./bot/errorReporter";
 import { updateMain } from "./apis/google/updateMain";
 import { WebChatManager } from "./backoffice";
@@ -481,11 +481,8 @@ const main = async () => {
         // API Session Control
         app.post("/api/delete-session", async (_req: any, res: any) => {
             try {
-                const rawSessionName = process.env.BOT_NAME || process.env.ASSISTANT_NAME || 'bot';
-                const sessionId = rawSessionName.replace(/[^a-zA-Z0-9_-]/g, '_');
-                console.log(`[API] 🗑️ Petición de eliminación para: ${sessionId}`);
-                await deleteSessionFromDb(sessionId);
-                await deleteSessionFromDb(`${sessionId}_groups`);
+                console.log(`[API] 🗑️ Petición de eliminación de todas las sesiones para el proyecto`);
+                await deleteAllProjectSessionsFromDb();
                 res.json({ success: true });
             } catch (err: any) {
                 console.error('Error en /api/delete-session:', err);

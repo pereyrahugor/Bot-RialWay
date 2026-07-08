@@ -152,6 +152,29 @@ export async function deleteSessionFromDb(sessionId: string = 'default') {
 }
 
 /**
+ * Elimina todas las sesiones asociadas a este proyecto en Supabase,
+ * independientemente de cómo se llame el bot/asistente.
+ */
+export async function deleteAllProjectSessionsFromDb() {
+    console.log(`[SessionSync] 🗑️ Eliminando todas las sesiones del proyecto '${projectId}'...`);
+    try {
+        const { error } = await supabase
+            .from('whatsapp_sessions')
+            .delete()
+            .eq('project_id', projectId);
+
+        if (error) {
+            console.error('[SessionSync] ❌ Error eliminando sesiones del proyecto:', error);
+        } else {
+            console.log('[SessionSync] ✅ Todas las sesiones del proyecto eliminadas correctamente.');
+        }
+    } catch (error) {
+        console.error('[SessionSync] ❌ Error crítico al eliminar sesiones del proyecto:', error);
+    }
+}
+
+
+/**
  * Inicia la sincronización UNIFICADA.
  * Estrategia: Sincronizar a los 30 segundos (estabilización), a los 2 minutos, y luego cada 1 hora.
  */
