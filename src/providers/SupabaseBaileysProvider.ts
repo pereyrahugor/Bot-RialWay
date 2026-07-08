@@ -182,7 +182,7 @@ export class SupabaseBaileysProvider extends BaileysProvider {
                 logger: logger as any,
                 printQRInTerminal: false,
                 generateHighQualityLinkPreview: true,
-                syncFullHistory: true,
+                syncFullHistory: false,
                 markOnlineOnConnect: false,
                 linkPreviewImageThumbnailWidth: 192
             }) as any;
