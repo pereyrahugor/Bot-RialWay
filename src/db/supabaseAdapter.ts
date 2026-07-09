@@ -46,8 +46,6 @@ export const useSupabaseAuthState = async (
 
     const saveToDb = async () => {
         try {
-            const os = await import('os');
-            console.log(`[SupabaseAdapter] 💾 Guardando full_backup para proyecto ${projectId} (Session: ${sessionId}, PID: ${process.pid}, Hostname: ${os.hostname()})`);
             const { error } = await supabase
                 .from('whatsapp_sessions')
                 .upsert({

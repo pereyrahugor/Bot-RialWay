@@ -184,13 +184,11 @@ export function startSessionSync(sessionId: string = 'default') {
 
     // 1. Ejecutar tras 30 segundos para permitir que el bot se estabilice y no leer archivos mientras se abren
     setTimeout(() => {
-        console.log('[SessionSync] ⏱️ Primer guardado (30s) ejecutándose...');
         syncToDb(sessionId).catch(err => console.error('[SessionSync] Error primer guardado:', err));
     }, 30 * 1000);
 
     // 2. Ejecutar a los 2 minutos (ventana típica para escanear QR y asegurar persistencia rápida)
     setTimeout(() => {
-        console.log('[SessionSync] ⏱️ Checkpoint de 2 minutos ejecutándose...');
         syncToDb(sessionId);
     }, 2 * 60 * 1000);
 
@@ -260,11 +258,6 @@ async function syncToDb(sessionId: string) {
 
         if (error) {
             console.error(`[SessionSync] Error subiendo respaldo unificado:`, error.message);
-        } else {
-            // NOTIFICAR solo si creds.json está presente (indicador de salud)
-            if (sessionMap['creds.json']) {
-                console.log(`[SessionSync] ✅ Sesión respaldada en DB (Single Record). Nombre: ${botName}`);
-            }
         }
 
     } catch (error) {
