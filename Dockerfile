@@ -49,9 +49,7 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 
 # Copiar archivos estáticos y recursos necesarios según la nueva estructura
-COPY --from=builder /app/src/frontend/html ./src/frontend/html
-COPY --from=builder /app/src/frontend/js ./src/frontend/js
-COPY --from=builder /app/src/frontend/style ./src/frontend/style
+COPY --from=builder /app/src/frontend ./src/frontend
 COPY --from=builder /app/src/backend/assets ./src/backend/assets
 COPY --from=builder /app/docs ./docs
 COPY --from=builder /app/package.json ./
