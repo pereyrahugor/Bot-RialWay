@@ -118,6 +118,7 @@ async function cleanUpMediaFiles(state: any) {
     await state.update({ lastImage: null, lastVideo: null });
 }
 
+/*
 // Envía el reporte a todos los grupos virtuales configurados para el proyecto
 async function dispatchVirtualGroupReports(projectId: string, message: string, state: any, provider: any, data: any) {
     try {
@@ -241,6 +242,7 @@ async function dispatchVirtualGroupReports(projectId: string, message: string, s
         console.error(`❌ Exception en dispatchVirtualGroupReports:`, err.message || err);
     }
 }
+*/
 
 async function reportAndClose(
     tipo: string,
@@ -277,7 +279,7 @@ async function reportAndClose(
             console.error(`❌ ${tipo} Error en envío de reporte:`, err?.message || err);
         }
 
-        await dispatchVirtualGroupReports(dynamicProjectId, resumenConLink, state, provider, data);
+        // await dispatchVirtualGroupReports(dynamicProjectId, resumenConLink, state, provider, data);
     }
 
     await cleanUpMediaFiles(state);
@@ -464,7 +466,7 @@ const idleFlow = addKeyword(EVENTS.ACTION).addAction(
                     console.error(`❌ SI_REPORTAR_SEGUIR Error:`, err?.message || err);
                 }
 
-                await dispatchVirtualGroupReports(dynamicProjectId, resumenConLink, state, provider, data);
+                // await dispatchVirtualGroupReports(dynamicProjectId, resumenConLink, state, provider, data);
                 await cleanUpMediaFiles(state);
 
                 if (sheetId) {
