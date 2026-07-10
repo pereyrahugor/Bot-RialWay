@@ -17,20 +17,6 @@ import { ErrorReporter } from "./backend/bot/errorReporter";
 import { updateMain } from "./backend/apis/google/updateMain";
 import { HistoryHandler } from "./backend/db/historyHandler";
 import { registerProcessCallback, handleQueue, userQueues, userLocks } from "./backend/bot/queueManager";
-
-// --- Silence Verbose libsignal / session_record logs ---
-const originalConsoleInfo = console.info;
-console.info = function (...args: any[]) {
-    if (args[0] && typeof args[0] === 'string' && (
-        args[0].includes('Closing session:') || 
-        args[0].includes('Opening session:') || 
-        args[0].includes('Removing old closed session:')
-    )) {
-        return;
-    }
-    originalConsoleInfo.apply(console, args);
-};
-
 // --- Managers & Routes ---
 import { registerBackofficeRoutes, processSendMessage, processBulkTemplate, processImportExcel } from "./backend/backoffice/routes/backoffice.routes";
 import { registerDashboardRoutes } from "./backend/backoffice/routes/dashboard.routes";
@@ -65,6 +51,20 @@ import { locationFlow } from "./backend/bot/flows/locationFlow";
 import { idleFlow } from "./backend/bot/flows/idleFlow";
 import { welcomeFlowButton } from "./backend/bot/flows/welcomeFlowButton";
 import { reset } from "./backend/bot/timeOut";
+
+// --- Silence Verbose libsignal / session_record logs ---
+const originalConsoleInfo = console.info;
+console.info = function (...args: any[]) {
+    if (args[0] && typeof args[0] === 'string' && (
+        args[0].includes('Closing session:') || 
+        args[0].includes('Opening session:') || 
+        args[0].includes('Removing old closed session:')
+    )) {
+        return;
+    }
+    originalConsoleInfo.apply(console, args);
+};
+
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

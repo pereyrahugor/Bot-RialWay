@@ -31,3 +31,10 @@ docs/BRIEFING_PROYECTO.md
 docs/CLOUDFLARE_WORKER_OPENAI.md
 docs/CLOUDFLARE_WORKER_GOOGLE.md
 
+# Directorios de desarrollo y temporales
+scripts/
+sessions/
+src/scratch/
+temp/
+tmp/
+
