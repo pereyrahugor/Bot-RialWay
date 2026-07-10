@@ -38,3 +38,9 @@ src/scratch/
 temp/
 tmp/
 
+# Ignorar archivos .env* en envs/ (o env's/) excepto .env
+envs/.env*
+!envs/.env
+env's/.env*
+!env's/.env
+
