@@ -3,31 +3,20 @@ import fs from "fs";
 import path from "path";
 import { spawn } from "child_process";
 import { fileURLToPath } from "url";
-import multer from "multer";
+
 import OpenAI from "openai";
 import { BaileysProvider } from "builderbot-provider-sherpa";
 import { createBot, createProvider, createFlow, MemoryDB } from "@builderbot/bot";
 import { httpInject } from "@builderbot-plugins/openai-assistants";
-import { SupabaseBaileysProvider } from "./providers/SupabaseBaileysProvider";
-import { MetaCloudProvider } from "./providers/MetaCloudProvider";
-import { setAdapterProvider, setGroupProvider, getAdapterProvider, getGroupProvider } from "./providers/instances";
+import { SupabaseBaileysProvider } from "./backend/providers/SupabaseBaileysProvider";
+import { MetaCloudProvider } from "./backend/providers/MetaCloudProvider";
+import { setAdapterProvider, setGroupProvider, getAdapterProvider, getGroupProvider } from "./backend/providers/instances";
 
-// --- Utils & Handlers ---
-import { restoreSessionFromDb, startSessionSync, deleteSessionFromDb, isSessionInDb, deleteAllProjectSessionsFromDb } from "./providers/sessionSync";
-import { ErrorReporter } from "./bot/errorReporter";
-import { updateMain } from "./apis/google/updateMain";
-import { WebChatManager } from "./backoffice";
-import { HistoryHandler } from "./db/historyHandler";
-import { registerProcessCallback, handleQueue, userQueues, userLocks } from "./bot/queueManager";
-
-// --- Managers & Routes ---
-import { processSendMessage, processBulkTemplate, processImportExcel, BackofficeDependencies } from "./backoffice/routes/backoffice.routes";
-import { mountBackoffice } from "./backoffice/index";
-import { registerRailwayRoutes } from "./apis/railway/railway.routes";
-import { safeToAsk } from "./apis/openai/openaiHelper";
-import { AssistantResponseProcessor } from "./apis/openai/AssistantResponseProcessor";
-import { transcribeAudioFile } from "./apis/openai/audioTranscriptior";
-import { withRetry } from "./utils/retryHelper";
+import { restoreSessionFromDb, startSessionSync, deleteSessionFromDb, isSessionInDb, deleteAllProjectSessionsFromDb } from "./backend/providers/sessionSync";
+import { ErrorReporter } from "./backend/bot/errorReporter";
+import { updateMain } from "./backend/apis/google/updateMain";
+import { HistoryHandler } from "./backend/db/historyHandler";
+import { registerProcessCallback, handleQueue, userQueues, userLocks } from "./backend/bot/queueManager";
 
 // --- Silence Verbose libsignal / session_record logs ---
 const originalConsoleInfo = console.info;
@@ -42,29 +31,40 @@ console.info = function (...args: any[]) {
     originalConsoleInfo.apply(console, args);
 };
 
-import { initSocketIO } from "./sockets/socket.manager";
-import { registerProviderEvents, hasActiveSession } from "./providers/provider.manager";
-import { startHumanInactivityWorker } from "./workers/humanInactivity.worker";
-import { startFileCleanupWorker } from "./workers/fileCleanup.worker";
-import { AiManager } from "./bot/ai.manager";
-import { registerExternalApiRoutes } from "./apis/external/external_api.routes";
-import { syncAssistantTools, getOpenAI, getOpenAIVision } from "./apis/openai/openaiHelper";
-import { discoverMetaIds } from "./apis/meta/metaDiscovery";
-import { RailwayApi } from "./apis/railway/Railway";
-import { smartBodyParser, compatibilityLayer, rootRedirect } from "./middleware/global";
-import { backofficeAuth } from "./backoffice/middleware/auth";
+// --- Managers & Routes ---
+import { registerBackofficeRoutes, processSendMessage, processBulkTemplate, processImportExcel } from "./backend/backoffice/routes/backoffice.routes";
+import { registerDashboardRoutes } from "./backend/backoffice/routes/dashboard.routes";
+import { registerStaticRoutes } from "./backend/backoffice/routes/static.routes";
+import { registerWebchatRoutes } from "./backend/backoffice/webchat/routes/webchat.routes";
+import { registerRailwayRoutes } from "./backend/apis/railway/railway.routes";
+import { upload } from "./backend/middleware/upload";
+import { safeToAsk } from "./backend/apis/openai/openaiHelper";
+import { AssistantResponseProcessor } from "./backend/apis/openai/AssistantResponseProcessor";
+import { transcribeAudioFile } from "./backend/apis/openai/audioTranscriptior";
+import { withRetry } from "./backend/utils/retryHelper";
+import { initSocketIO } from "./backend/sockets/socket.manager";
+import { registerProviderEvents, hasActiveSession } from "./backend/providers/provider.manager";
+import { startHumanInactivityWorker } from "./backend/workers/humanInactivity.worker";
+import { startFileCleanupWorker } from "./backend/workers/fileCleanup.worker";
+import { AiManager } from "./backend/bot/ai.manager";
+import { registerExternalApiRoutes } from "./backend/apis/external/external_api.routes";
+import { syncAssistantTools, getOpenAI, getOpenAIVision } from "./backend/apis/openai/openaiHelper";
+import { discoverMetaIds } from "./backend/apis/meta/metaDiscovery";
+import { RailwayApi } from "./backend/apis/railway/Railway";
+import { smartBodyParser, compatibilityLayer, rootRedirect } from "./backend/middleware/global";
+import { backofficeAuth } from "./backend/backoffice/middleware/auth";
 import bodyParser from 'body-parser';
 
 // --- Flows ---
-import { welcomeFlowTxt } from "./bot/flows/welcomeFlowTxt";
-import { welcomeFlowVoice } from "./bot/flows/welcomeFlowVoice";
-import { welcomeFlowImg } from "./bot/flows/welcomeFlowImg";
-import { welcomeFlowVideo } from "./bot/flows/welcomeFlowVideo";
-import { welcomeFlowDoc } from "./bot/flows/welcomeFlowDoc";
-import { locationFlow } from "./bot/flows/locationFlow";
-import { idleFlow } from "./bot/flows/idleFlow";
-import { welcomeFlowButton } from "./bot/flows/welcomeFlowButton";
-import { reset } from "./bot/timeOut";
+import { welcomeFlowTxt } from "./backend/bot/flows/welcomeFlowTxt";
+import { welcomeFlowVoice } from "./backend/bot/flows/welcomeFlowVoice";
+import { welcomeFlowImg } from "./backend/bot/flows/welcomeFlowImg";
+import { welcomeFlowVideo } from "./backend/bot/flows/welcomeFlowVideo";
+import { welcomeFlowDoc } from "./backend/bot/flows/welcomeFlowDoc";
+import { locationFlow } from "./backend/bot/flows/locationFlow";
+import { idleFlow } from "./backend/bot/flows/idleFlow";
+import { welcomeFlowButton } from "./backend/bot/flows/welcomeFlowButton";
+import { reset } from "./backend/bot/timeOut";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -73,25 +73,13 @@ export let adapterProvider: any;
 export let groupProvider: any;
 export let errorReporter: any;
 export let aiManagerInstance: AiManager;
-const webChatManager = new WebChatManager();
+
 
 // Las instancias de OpenAI se resuelven dinámicamente vía openaiHelper
 // const PORT = process.env.PORT || 8080;
 
-// Multer config
-const upload = multer({ 
-    storage: multer.diskStorage({
-        destination: (_req, _file, cb) => {
-            const dir = "uploads/";
-            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-            cb(null, dir);
-        },
-        filename: (_req, file, cb) => {
-            const ext = path.extname(file.originalname);
-            cb(null, `${Date.now()}-${Math.round(Math.random() * 1E9)}${ext}`);
-        }
-    })
-});
+
+
 
 // Error handling setup
 function registerSafeErrorHandlers() {
@@ -283,7 +271,7 @@ const main = async () => {
                 return backofficeAuth(req, res, async () => {
                     const contentType = req.headers['content-type'] || '';
                     const openaiMainDynamic = await getOpenAI();
-                    const deps: BackofficeDependencies = { adapterProvider, groupProvider, HistoryHandler, openaiMain: openaiMainDynamic, upload };
+                    
 
                     // Sincronizar Meta Provider antes de procesar si es necesario
                     const pId = req.query.projectId || (req.body && req.body.projectId) || req.headers['x-project-id'] || (req.auth && req.auth.projectId) || null;
@@ -309,24 +297,24 @@ const main = async () => {
                             }
                             if (isSend) {
                                 const { chatId, message } = req.body;
-                                return processSendMessage(req, res, chatId, message, (req as any).file, deps);
+                                return processSendMessage(req, res, chatId, message, (req as any).file);
                             } else if (isImport) {
                                 console.log("🚀 [MASTER-INTERCEPTOR] Ejecutando lógica de importación...");
-                                return processImportExcel(req, res, deps);
+                                return processImportExcel(req, res);
                             } else {
                                 console.log("🚀 [MASTER-INTERCEPTOR] Ejecutando lógica de envío masivo (bypass total)...");
-                                return processBulkTemplate(req, res, deps);
+                                return processBulkTemplate(req, res);
                             }
                         });
                     } else {
                         return bodyParser.json()(req, res, () => {
                             if (isSend) {
                                 const { chatId, message } = req.body;
-                                return processSendMessage(req, res, chatId || '', message || '', null, deps);
+                                return processSendMessage(req, res, chatId || '', message || '', null);
                             } else if (isImport) {
                                 return next();
                             } else {
-                                return processBulkTemplate(req, res, deps);
+                                return processBulkTemplate(req, res);
                             }
                         });
                     }
@@ -424,7 +412,12 @@ const main = async () => {
         // 9. Register Other Routes
         const openaiMainDynamic = await getOpenAI();
         const openaiVision = await getOpenAIVision();
-        mountBackoffice(app, { provider: adapterProvider, groupProvider, openaiMain: openaiMainDynamic, upload, webChatManager, openaiVision, aiManager: aiManagerInstance, safeToAsk, AssistantResponseProcessor, transcribeAudioFile, withRetry });
+        
+        registerBackofficeRoutes(app);
+        registerDashboardRoutes(app);
+        registerStaticRoutes(app, { __dirname });
+        registerWebchatRoutes(app);
+
         registerExternalApiRoutes(app, { adapterProvider });
         registerRailwayRoutes(app, { RailwayApi });
 

@@ -11,10 +11,10 @@
     "dev": "pnpm run lint && nodemon ./src/app.ts",
     "dev:tunnel": "node dev-tunnel.js",
     "build": "esbuild src/app.ts --bundle --platform=node --format=esm --packages=external --outdir=dist",
-    "vaciar_base_backoffice": "tsx src/backoffice/vaciar_base_backoffice.ts",
-    "meta_webhook_register": "tsx src/backoffice/meta_webhook_register.ts",
-    "tailwind:build": "tailwindcss -c src/backoffice/tailwind.config.js -i src/backoffice/style/tailwind.input.css -o src/backoffice/style/tailwind.css --minify",
-    "tailwind:watch": "tailwindcss -c src/backoffice/tailwind.config.js -i src/backoffice/style/tailwind.input.css -o src/backoffice/style/tailwind.css --watch"
+    "vaciar_base_backoffice": "tsx src/backend/backoffice/vaciar_base_backoffice.ts",
+    "meta_webhook_register": "tsx src/backend/backoffice/meta_webhook_register.ts",
+    "tailwind:build": "tailwindcss -c src/frontend/tailwind.config.js -i src/frontend/style/tailwind.input.css -o src/frontend/style/tailwind.css --minify",
+    "tailwind:watch": "tailwindcss -c src/frontend/tailwind.config.js -i src/frontend/style/tailwind.input.css -o src/frontend/style/tailwind.css --watch"
   },
   "keywords": [],
   "dependencies": {

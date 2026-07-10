@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acceso - {{BOT_NAME}}</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <script>(function(){var v='?v=2';document.querySelectorAll('link[rel*="icon"]').forEach(function(e){e.href=e.href.split('?')[0]+v;});}());</script>
+    <!-- Evitar flash de tema incorrecto -->
+    <script>document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'light');</script>
+    <link rel="stylesheet" href="/style/vendor/fontawesome/css/all.min.css">
+    <link rel="stylesheet" href="/style/tailwind.css">
+    <style>
+        /* Previene auto-zoom en iOS en todos los inputs de la app */
+        @media (max-width: 1024px) {
+            input[type="text"], input[type="email"], input[type="number"], 
+            input[type="password"], input[type="search"], input[type="tel"], 
+            input[type="url"], textarea, select {
+                font-size: 16px !important;
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center overflow-hidden font-body">
+
+    <!-- Fondo degradado fijo -->
+    <div class="bg-page"></div>
+
+    <!-- Neural background -->
+    <canvas id="neural-bg" aria-hidden="true"
+        class="fixed inset-0 w-full h-full pointer-events-none"
+        style="z-index:0; opacity:0.28;"></canvas>
+
+    <!-- Card central -->
+    <div class="relative w-full max-w-sm mx-4 glass-strong p-8 text-center animate-pop-in" style="z-index:10;">
+
+        <!-- Badge -->
+        <div class="flex justify-center mb-5">
+            <div class="section-badge">
+                <span class="w-1.5 h-1.5 rounded-full bg-accent-light animate-pulse-dot"></span>
+                Panel Administrativo
+            </div>
+        </div>
+
+        <!-- Título -->
+        <h1 class="text-2xl font-heading font-bold text-gradient-accent mb-1">{{BOT_NAME}}</h1>
+        <p class="text-sm text-secondary-content mb-7">Iniciá sesión para continuar</p>
+
+        <!-- Formulario -->
+        <div class="flex flex-col gap-4 text-left mb-5">
+            <div>
+                <label class="block text-xs font-heading font-semibold text-muted-content uppercase tracking-wider mb-1.5 ml-1">
+                    Usuario
+                </label>
+                <input type="text" id="user" placeholder="Ingresá tu usuario" autofocus
+                    class="input-field">
+            </div>
+            <div>
+                <label class="block text-xs font-heading font-semibold text-muted-content uppercase tracking-wider mb-1.5 ml-1">
+                    Contraseña
+                </label>
+                <input type="password" id="pass" placeholder="••••••••"
+                    class="input-field">
+            </div>
+        </div>
+
+        <!-- Botón -->
+        <button onclick="login()" class="btn-primary w-full justify-center py-3 text-base">
+            <i class="fas fa-arrow-right-to-bracket text-sm"></i>
+            Entrar al sistema
+        </button>
+
+        <!-- Error (innerText lo controla login.js) -->
+        <div id="error" style="display:none;"
+            class="mt-4 text-sm text-red-400 font-body text-center"></div>
+    </div>
+
+    <!-- Pie decorativo -->
+    <div class="fixed bottom-6 left-0 right-0 flex justify-center" style="z-index:10;">
+        <p class="text-xs font-body tracking-widest" style="color:rgba(255,255,255,0.15);">
+            PANEL PRIVADO · ACCESO RESTRINGIDO
+        </p>
+    </div>
+
+    <script src="/js/crm/crm-common.js"></script>
+    <script src="/js/core/neural-bg.js"></script>
+    <script src="/js/auth/login.js"></script>
+</body>
+</html>
