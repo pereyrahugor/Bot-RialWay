@@ -1,4 +1,4 @@
-/* global io, metaAppId, FB, toggleLeadsPanel, toggleTicketsPanel, toggleMetaPanel, showToast, _csdSync, _csdRebuild, navigate */
+/* global io, metaAppId, FB, toggleLeadsPanel, toggleTicketsPanel, toggleMetaPanel, showToast, _csdSync, _csdRebuild, navigate, Swal */
 
 function _tagStyle(hex) {
     const color = hex || '#6366f1';
@@ -471,9 +471,21 @@ function renderChatList(listToRender = chats) {
         const showIconOverlay = currentPlatform === 'all' && chat.type !== 'whatsapp';
         const iconOverlayHtml = showIconOverlay ? `<div class="platform-icon-overlay">${platformIcon}</div>` : '';
 
-        const tagsHtml = (chat.tags || []).map(t =>
-            `<span class="tag-pill" data-tag-color="${t.color || '#6366f1'}" style="${_tagStyle(t.color)}">${t.name}</span>`
-        ).join('');
+        let tagsHtml = '';
+        if (chat.tags && chat.tags.length > 0) {
+            const MAX_TAGS = 2;
+            const visibleTags = chat.tags.slice(0, MAX_TAGS);
+            const hiddenCount = chat.tags.length - MAX_TAGS;
+
+            tagsHtml = `<div class="chat-tags-list" style="display:flex; flex-wrap:nowrap; overflow:hidden; gap:3px; min-width:0; margin-top:3px;">` + visibleTags.map(t =>
+                `<span class="tag-pill" data-tag-color="${t.color || '#6366f1'}" style="${_tagStyle(t.color)}; font-size: 0.6rem; padding: 2px 6px; line-height: 1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:70px;">${t.name}</span>`
+            ).join('');
+
+            if (hiddenCount > 0) {
+                tagsHtml += `<span class="tag-pill" style="background:var(--bg-secondary); color:var(--text-muted); font-size: 0.6rem; padding: 2px 6px; line-height: 1.1; border: 1px solid var(--border-color); white-space:nowrap; flex-shrink:0; font-weight: 600;">+${hiddenCount}</span>`;
+            }
+            tagsHtml += `</div>`;
+        }
 
         const timeStr = formatLastMessageTime(chat.last_message_at);
         const unreadCount = chat.unread_count || 0;
@@ -503,9 +515,9 @@ function renderChatList(listToRender = chats) {
                         <div style="display:flex; flex-direction:column; min-width:0; flex:1; overflow:hidden;">
                             <div style="display:flex; align-items:center; gap:4px; overflow:hidden;">
                                 <span class="chat-name" style="flex-shrink:0; max-width:120px;">${(chat.name && chat.name !== '[-]') ? chat.name : chat.id.split('@')[0]}</span>
-                                <div class="chat-tags-list" style="display:flex; flex-wrap:nowrap; overflow:hidden; gap:3px; min-width:0;">${tagsHtml}</div>
                             </div>
                             <span style="font-size:0.7rem; opacity:0.5; color:var(--text-muted); font-weight:normal; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${chat.id.split('@')[0]}</span>
+                            ${tagsHtml}
                             ${crmStatusHtml}
                         </div>
                         <div style="display:flex; flex-direction:column; align-items:flex-end; gap:2px; flex-shrink:0;">
@@ -591,6 +603,12 @@ async function selectChat(id) {
         console.error(`❌ Chat ${id} no encontrado en local ni en el servidor.`);
         return;
     }
+
+    const chatHeader = document.getElementById('chat-header');
+    if (chatHeader) chatHeader.style.display = 'flex';
+    
+    const inputArea = document.getElementById('input-area');
+    if (inputArea) inputArea.style.display = 'flex';
 
     if (_notificationsActive && chat) {
         markChatAsRead(id);
@@ -2995,6 +3013,67 @@ window.deleteActiveTicket = deleteActiveTicket;
 window.toggleIntervention = toggleIntervention;
 
 // --- Sincronización Manual de Contactos (Baileys) ---
+async function confirmClearContacts() {
+    const result = await Swal.fire({
+        title: '¿Vaciar contactos?',
+        text: 'Estás a punto de eliminar todos los contactos y chats. Esta acción no se puede deshacer.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Confirmar',
+        cancelButtonText: 'Cancelar',
+        scrollbarPadding: false,
+        heightAuto: false
+    });
+
+    if (result.isConfirmed) {
+        Swal.fire({
+            title: 'Vaciando...',
+            text: 'Eliminando contactos y chats, por favor espera.',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            },
+            scrollbarPadding: false,
+            heightAuto: false
+        });
+
+        try {
+            const res = await fetch(`/api/backoffice/chats/vaciar?token=${token}`, { method: 'DELETE' });
+            const data = await res.json();
+            
+            if (data.success) {
+                await Swal.fire({
+                    title: '¡Vaciado Completo!',
+                    text: 'Se han eliminado todos los chats y contactos.',
+                    icon: 'success',
+                    scrollbarPadding: false,
+                    heightAuto: false
+                });
+                window.location.reload();
+            } else {
+                Swal.fire({
+                    title: 'Error',
+                    text: data.error || 'Ocurrió un error al vaciar los contactos.',
+                    icon: 'error',
+                    scrollbarPadding: false,
+                    heightAuto: false
+                });
+            }
+        } catch (e) {
+            Swal.fire({
+                title: 'Error',
+                text: 'Hubo un problema de conexión.',
+                icon: 'error',
+                scrollbarPadding: false,
+                heightAuto: false
+            });
+        }
+    }
+}
+window.confirmClearContacts = confirmClearContacts;
+
 async function startContactSync() {
     const modal = document.getElementById('sync-modal');
     const loading = document.getElementById('sync-loading');

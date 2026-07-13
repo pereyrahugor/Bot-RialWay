@@ -40,7 +40,7 @@ export const registerStaticRoutes = (app: any, { __dirname }: { __dirname: strin
 
                 if (htmlPath) {
                     let htmlContent = fs.readFileSync(htmlPath, 'utf8');
-                    const botName = process.env.ASSISTANT_NAME || process.env.RAILWAY_PROJECT_NAME || "Neurolinks";
+                    const botName = process.env.ASSISTANT_NAME || process.env.RAILWAY_SERVICE_NAME || "Neurolinks";
 
                     console.log(`[Static] 🟢 Sirviendo ${filename} para ${route}. botName=${botName}`);
 
@@ -89,7 +89,7 @@ export const registerStaticRoutes = (app: any, { __dirname }: { __dirname: strin
                     const systemConfigVisibleJs = systemConfigVisible ? 'true' : 'false';
 
                     // Reemplazo universal de placeholders
-                    const projectName = process.env.RAILWAY_PROJECT_NAME || "Neurolinks";
+                    const projectName = process.env.RAILWAY_SERVICE_NAME || "Neurolinks";
                     const projectId = process.env.RAILWAY_PROJECT_ID || "";
                     htmlContent = htmlContent.replace(/{{BOT_NAME}}/g, botName);
                     htmlContent = htmlContent.replace(/{{ASSISTANT_NAME}}/g, botName);

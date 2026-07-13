@@ -15,6 +15,9 @@ window.backofficeView = {
                         <span id="unread-total-badge" style="display:none; background:#ef4444; color:white; font-size:0.75rem; font-weight:700; font-family:'Montserrat',sans-serif; padding:2px 8px; border-radius:12px;">0</span>
                     </div>
                     <div class="sidebar-header-actions">
+                        <button class="btn-icon-wa" title="Vaciar Contactos" onclick="confirmClearContacts()" id="btn-clear-contacts">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
                         <button class="btn-icon-wa" title="Sincronizar Contactos" onclick="startContactSync()" id="btn-sync-baileys">
                             <i class="fas fa-sync-alt"></i>
                         </button>
@@ -76,7 +79,7 @@ window.backofficeView = {
 
             <!-- Area de chat -->
             <div id="main-content" style="position:relative;">
-                <div id="chat-header">
+                <div id="chat-header" style="display: none;">
                     <button class="mobile-back-btn" onclick="document.body.classList.remove('mobile-chat-active')" aria-label="Volver">
                         <i class="fas fa-arrow-left"></i>
                     </button>
@@ -88,7 +91,7 @@ window.backofficeView = {
                             <div id="active-chat-tags"></div>
                         </div>
                     </div>
-                    <div class="switch-container">
+                    <div class="switch-container" id="header-switch-container">
                         <div class="header-actions-group">
                             <!-- Blacklist toggle: solo visible cuando la integración está activa -->
                             <button class="btn-icon" id="blacklist-toggle-btn"
@@ -204,7 +207,7 @@ window.backofficeView = {
                     </div>
                 </div>
 
-                <div id="input-area">
+                <div id="input-area" style="display: none;">
                     <button class="btn-icon input-action-btn" id="attach-btn" title="Adjuntar archivo" disabled onclick="document.getElementById('file-input').click()">
                         <i class="fas fa-plus"></i>
                     </button>

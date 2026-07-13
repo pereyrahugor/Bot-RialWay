@@ -1,6 +1,6 @@
 import path from 'path';
 import fs from 'fs';
-import { execSync } from 'child_process';
+import { execSync, exec } from 'child_process';
 import url from 'url';
 import bodyParser from 'body-parser';
 import axios from 'axios';
@@ -775,6 +775,26 @@ export const registerBackofficeRoutes = (app: any) => {
         const projectId = resolveProjectId(req);
         const chats = await depsHistoryHandler.listChats(limit, offset, search, tag, assignedTo, platform, projectId);
         res.json(chats);
+    });
+
+    app.delete('/api/backoffice/chats/vaciar', backofficeAuth, async (req: any, res: any) => {
+        const projectId = resolveProjectId(req);
+        if (!projectId) return res.status(400).json({ success: false, error: 'Se requiere ID de proyecto' });
+        
+        try {
+            const command = `npx tsx src/backend/backoffice/vaciar_base_backoffice.ts ${projectId} --force`;
+            console.log(`[VACIAR] Ejecutando: ${command}`);
+            exec(command, (error: any, stdout: any, stderr: any) => {
+                if (error) {
+                    console.error(`[VACIAR] Error:`, error);
+                    return res.status(500).json({ success: false, error: error.message });
+                }
+                console.log(`[VACIAR] Éxito: ${stdout}`);
+                res.json({ success: true });
+            });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
     });
 
     // --- NUEVO: SUMARIO DE NOTIFICACIONES ---

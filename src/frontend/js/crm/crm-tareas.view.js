@@ -36,14 +36,11 @@ window.crmTareasView = {
                             <i class="fas fa-ellipsis-vertical"></i>
                         </button>
                         <ul class="header-dropdown" id="tareas-more-dropdown">
-                            <li onclick="_closeTareasMenu(); navigate('/crm')">
-                                <i class="fas fa-columns"></i> Volver a CRM
-                            </li>
                             <li onclick="_closeTareasMenu(); openClosedLeadsModal()">
                                 <i class="fas fa-box-archive"></i> Leads Cerrados
                             </li>
                             <li onclick="_closeTareasMenu(); toggleCRMConfigModal()">
-                                <i class="fas fa-sliders"></i> Configurar
+                                <i class="fas fa-sliders"></i> Campos
                             </li>
                         </ul>
                     </div>

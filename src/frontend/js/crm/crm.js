@@ -147,6 +147,11 @@ async function saveCRMState() {
 async function syncCRM() {
     showToast('Sincronizando datos...', 'info');
     try {
+        if (typeof window.Skeleton !== 'undefined') {
+            const containers = document.querySelectorAll('.kanban-cards');
+            containers.forEach(c => c.innerHTML = window.Skeleton.cards(3));
+        }
+
         const [resLeads, resTickets] = await Promise.all([
             fetch(`/api/backoffice/leads?token=${activeToken}&limit=300`),
             fetch(`/api/backoffice/tickets?token=${activeToken}&estado=all_active`) // Traer todos los tickets activos para el tablero
@@ -218,8 +223,13 @@ function renderBoard() {
             </div>
             <div class="kanban-cards" id="cards-${col.id}"></div>
         `;
-        board.appendChild(columnEl);
-        if (typeof window.observeKanbanColumn === 'function') window.observeKanbanColumn(columnEl, col.id);
+        const wrapperEl = document.createElement('div');
+        wrapperEl.className = 'kanban-column-wrapper animate-fade';
+        wrapperEl.dataset.id = col.id;
+        wrapperEl.appendChild(columnEl);
+
+        board.appendChild(wrapperEl);
+        if (typeof window.observeKanbanColumn === 'function') window.observeKanbanColumn(wrapperEl, col.id);
     });
 
     distributeCards();
@@ -365,12 +375,15 @@ function initDragAndDrop() {
     if (boardInner && !Sortable.get(boardInner)) {
         new Sortable(boardInner, {
             animation: 200,
-            draggable: '.kanban-column',
+            draggable: '.kanban-column-wrapper',
             handle: '.column-header',
-            ghostClass: 'sortable-ghost',
+            ghostClass: 'kanban-column-ghost',
+            dragClass: 'kanban-drag-clone',
+            forceFallback: true,
+            fallbackClass: 'kanban-drag-clone',
             onEnd: () => {
                 const newOrder = [];
-                document.querySelectorAll('.kanban-column').forEach(col => {
+                document.querySelectorAll('.kanban-column-wrapper .kanban-column').forEach(col => {
                     const colId = col.dataset.id;
                     const existingCol = columns.find(c => c.id === colId);
                     if (existingCol) newOrder.push(existingCol);
@@ -929,82 +942,7 @@ function renderAssigneeSelect() {
 }
 
 // --- Configuración Dinámica del CRM ---
-window.toggleCRMConfigModal = () => {
-    const modal = document.getElementById('crm-config-modal');
-    modal.classList.toggle('active');
-    if (modal.classList.contains('active')) {
-        renderCRMConfigFields();
-    }
-};
-
-// fetchCRMConfig ahora está en crm-common.js
-
-window.saveCRMConfig = async () => {
-    try {
-        const res = await fetch(`/api/backoffice/save-setting?token=${activeToken}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                key: 'CRM_FIELDS_CONFIG',
-                value: JSON.stringify(window.crmConfig)
-            })
-        });
-        if (res.ok) {
-            showToast('Configuración guardada', 'success');
-            window.toggleCRMConfigModal();
-            window.applyCRMConfig();
-            if (typeof distributeCards === 'function') {
-                distributeCards();
-            }
-        }
-    } catch (e) {
-        console.error(e);
-    }
-}
-
-// applyCRMConfig ahora está en crm-common.js
-
-function renderCRMConfigFields() {
-    const list = document.getElementById('crm-fields-list');
-    if (!list) return;
-
-    list.innerHTML = '';
-    window.crmConfig.sort((a, b) => a.order - b.order).forEach((field, index) => {
-        const item = document.createElement('div');
-        item.className = 'sortable-item';
-        item.dataset.id = field.id;
-        item.dataset.index = index;
-        
-        item.innerHTML = `
-            <i class="fas fa-grip-lines sort-handle"></i>
-            <div style="flex:1; display:flex; align-items:center; gap:10px;">
-                <input type="checkbox" ${field.visible ? 'checked' : ''} onchange="updateFieldVisibility('${field.id}', this.checked)">
-                <span style="font-size:0.9rem; font-weight:600;">${field.label}</span>
-            </div>
-        `;
-
-        list.appendChild(item);
-    });
-
-    if (typeof Sortable !== 'undefined' && !Sortable.get(list)) {
-        new Sortable(list, {
-            animation: 150,
-            handle: '.sort-handle',
-            onEnd: () => {
-                const newOrder = Array.from(list.children).map(child => child.dataset.id);
-                newOrder.forEach((id, index) => {
-                    const field = window.crmConfig.find(f => f.id === id);
-                    if (field) field.order = index;
-                });
-            }
-        });
-    }
-}
-
-window.updateFieldVisibility = (id, visible) => {
-    const field = window.crmConfig.find(f => f.id === id);
-    if (field) field.visible = visible;
-};
+// fetchCRMConfig y render/save fields modal config ahora están en crm-common.js
 
 // --- Tasks Dashboard Logic ---
 window.toggleTasksDashboard = () => {
