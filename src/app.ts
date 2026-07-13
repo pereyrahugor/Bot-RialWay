@@ -1,33 +1,23 @@
 import "dotenv/config";
 import fs from "fs";
 import path from "path";
-import { spawn } from "child_process";
 import { fileURLToPath } from "url";
-
-import OpenAI from "openai";
-import { BaileysProvider } from "builderbot-provider-sherpa";
 import { createBot, createProvider, createFlow, MemoryDB } from "@builderbot/bot";
 import { httpInject } from "@builderbot-plugins/openai-assistants";
 import { SupabaseBaileysProvider } from "./backend/providers/SupabaseBaileysProvider";
 import { MetaCloudProvider } from "./backend/providers/MetaCloudProvider";
-import { setAdapterProvider, setGroupProvider, getAdapterProvider, getGroupProvider } from "./backend/providers/instances";
-
-import { restoreSessionFromDb, startSessionSync, deleteSessionFromDb, isSessionInDb, deleteAllProjectSessionsFromDb } from "./backend/providers/sessionSync";
+import { setAdapterProvider, setGroupProvider, getGroupProvider } from "./backend/providers/instances";
+import { isSessionInDb, deleteAllProjectSessionsFromDb } from "./backend/providers/sessionSync";
 import { ErrorReporter } from "./backend/bot/errorReporter";
 import { updateMain } from "./backend/apis/google/updateMain";
 import { HistoryHandler } from "./backend/db/historyHandler";
 import { registerProcessCallback, handleQueue, userQueues, userLocks } from "./backend/bot/queueManager";
-// --- Managers & Routes ---
 import { registerBackofficeRoutes, processSendMessage, processBulkTemplate, processImportExcel } from "./backend/backoffice/routes/backoffice.routes";
 import { registerDashboardRoutes } from "./backend/backoffice/routes/dashboard.routes";
 import { registerStaticRoutes } from "./backend/backoffice/routes/static.routes";
 import { registerWebchatRoutes } from "./backend/backoffice/webchat/routes/webchat.routes";
 import { registerRailwayRoutes } from "./backend/apis/railway/railway.routes";
 import { upload } from "./backend/middleware/upload";
-import { safeToAsk } from "./backend/apis/openai/openaiHelper";
-import { AssistantResponseProcessor } from "./backend/apis/openai/AssistantResponseProcessor";
-import { transcribeAudioFile } from "./backend/apis/openai/audioTranscriptior";
-import { withRetry } from "./backend/utils/retryHelper";
 import { initSocketIO } from "./backend/sockets/socket.manager";
 import { registerProviderEvents, hasActiveSession } from "./backend/providers/provider.manager";
 import { startHumanInactivityWorker } from "./backend/workers/humanInactivity.worker";
@@ -40,8 +30,6 @@ import { RailwayApi } from "./backend/apis/railway/Railway";
 import { smartBodyParser, compatibilityLayer, rootRedirect } from "./backend/middleware/global";
 import { backofficeAuth } from "./backend/backoffice/middleware/auth";
 import bodyParser from 'body-parser';
-
-// --- Flows ---
 import { welcomeFlowTxt } from "./backend/bot/flows/welcomeFlowTxt";
 import { welcomeFlowVoice } from "./backend/bot/flows/welcomeFlowVoice";
 import { welcomeFlowImg } from "./backend/bot/flows/welcomeFlowImg";

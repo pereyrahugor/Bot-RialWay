@@ -261,7 +261,7 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
         
         let leadContext = '';
         if (chatData) {
-            if (cleanSlug === 'ganemos' || cleanSlug === 'ganemos-net') {
+            if (cleanSlug === 'ganemos' || cleanSlug === 'ganemos-net' || cleanSlug === 'cas-epc' || cleanSlug === 'casepc') {
                 leadContext = `\n\nDATOS DEL CLIENTE EN CRM (Úsalos para personalizar tu respuesta):
 - Nombre: ${chatData.name || 'No identificado'}
 - Usuario / DNI: ${chatData.cuit_dni || 'No registrado'}
