@@ -1,4 +1,4 @@
-import { Builder, By, until, WebDriver } from 'selenium-webdriver';
+import { Builder, By, until, WebDriver, Key } from 'selenium-webdriver';
 import chrome from 'selenium-webdriver/chrome.js';
 import { LoginAdminSelenium } from './loginAdmin-Selenium.js';
 import * as fs from 'fs';
@@ -25,7 +25,9 @@ export async function rechargeUserSelenium(
     if (!localDriver) {
         console.log("[Cas-EPC] No se proveyó WebDriver. Iniciando nueva instancia...");
         const options = new chrome.Options();
-        options.addArguments('--headless=new');
+        if (process.env.SELENIUM_HEADLESS !== 'false') {
+            options.addArguments('--headless=new');
+        }
         options.addArguments('--no-sandbox');
         options.addArguments('--disable-dev-shm-usage');
         options.addArguments('--disable-gpu');
@@ -56,13 +58,44 @@ export async function rechargeUserSelenium(
     }
 
     try {
-        // 1. Asegurarse de estar en la URL: https://admin.epcbet.net/users/all
-        const usersListUrl = "https://admin.epcbet.net/users/all";
+        // 1. Asegurarse de estar en la URL: https://admin.epcbet.net/index.php
+        const usersListUrl = "https://admin.epcbet.net/index.php";
         const currentUrl = await localDriver.getCurrentUrl();
-        if (!currentUrl.includes('/users/all')) {
+        if (!currentUrl.includes('/index.php')) {
             console.log(`[Cas-EPC] Navegando a ${usersListUrl}...`);
             await localDriver.get(usersListUrl);
-            await localDriver.wait(until.urlContains('/users/all'), 10000);
+            await localDriver.wait(until.urlContains('/index.php'), 10000);
+        }
+
+        // Detectar y cambiar contexto al iframe si está presente en la página
+        const iframes = await localDriver.findElements(By.tagName("iframe"));
+        console.log(`[Cas-EPC] Cantidad de iframes en la página: ${iframes.length}`);
+        if (iframes.length > 0) {
+            console.log("[Cas-EPC] Cambiando contexto al primer iframe (index 0)...");
+            await localDriver.switchTo().frame(0);
+        }
+
+        // Esperar a que la página cargue y estabilice su grid inicial antes de buscar
+        console.log("[Cas-EPC] Esperando a que el grid de usuarios se estabilice...");
+        await new Promise(resolve => setTimeout(resolve, 3500));
+
+        // Hacer click en el botón "Mostrar" para forzar la recarga/actualización de la base de datos de usuarios
+        try {
+            console.log("[Cas-EPC] Ampliando el rango de fechas en 'from-date'...");
+            const fromDateInput = await localDriver.findElement(By.id("from-date"));
+            await localDriver.executeScript("arguments[0].value = '01.07.2026';", fromDateInput);
+            console.log("[Cas-EPC] Rango de fecha cambiado a '01.07.2026'.");
+        } catch (e: any) {
+            console.log("[Cas-EPC] No se pudo cambiar el input 'from-date':", e.message);
+        }
+
+        try {
+            console.log("[Cas-EPC] Haciendo click en Mostrar para actualizar la lista...");
+            const mostrarBtn = await localDriver.findElement(By.xpath("//button[contains(text(), 'Mostrar')]"));
+            await mostrarBtn.click();
+            await new Promise(resolve => setTimeout(resolve, 4500)); // Esperar a que la recarga de datos termine
+        } catch (e) {
+            console.log("[Cas-EPC] No se encontró el botón Mostrar o falló el click, continuando...");
         }
 
         // 2. Ingresar usuario en el campo de búsqueda
@@ -72,13 +105,19 @@ export async function rechargeUserSelenium(
             until.elementLocated(By.xpath(searchInputXPath)),
             10000
         );
+        await localDriver.wait(until.elementIsVisible(searchInput), 5000);
         await searchInput.clear();
         await searchInput.sendKeys(username);
 
         // 3. Clic en el botón Buscar
         console.log("[Cas-EPC] Haciendo click en el botón Buscar...");
-        const searchBtn = await localDriver.findElement(By.xpath("//button[contains(text(), 'Buscar')] | //input[@value='Buscar'] | //button[@type='submit']"));
-        await searchBtn.click();
+        try {
+            const searchBtn = await localDriver.findElement(By.xpath("//button[contains(text(), 'Buscar')] | //input[@value='Buscar'] | //button[@type='submit']"));
+            await localDriver.executeScript("arguments[0].click();", searchBtn);
+        } catch (e) {
+            console.log("[Cas-EPC] Botón Buscar falló, intentando enviar ENTER...");
+            await searchInput.sendKeys(Key.ENTER);
+        }
 
         // Esperar a que carguen los resultados
         console.log("[Cas-EPC] Esperando a que el usuario aparezca en la lista...");

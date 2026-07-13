@@ -26,7 +26,9 @@ export async function createUserSelenium(
     console.log(`[Cas-EPC] Iniciando creación de usuario para baseName: ${baseName} | recharge: ${recharge}`);
 
     const options = new chrome.Options();
-    options.addArguments('--headless=new');
+    if (process.env.SELENIUM_HEADLESS !== 'false') {
+        options.addArguments('--headless=new');
+    }
     options.addArguments('--no-sandbox');
     options.addArguments('--disable-dev-shm-usage');
     options.addArguments('--disable-gpu');
@@ -40,8 +42,8 @@ export async function createUserSelenium(
     try {
         // 1. Iniciar sesión usando LoginAdminSelenium
         const authenticator = new LoginAdminSelenium(driver);
-        const adminUser = process.env.CASEPC_USER || 'testercrm2';
-        const adminPass = process.env.CASEPC_PASS || 'asghs56VGS$AS';
+        const adminUser = process.env.CASEPC_USER;
+        const adminPass = process.env.CASEPC_PASS;
 
         const loginSuccess = await authenticator.login(adminUser, adminPass);
         if (!loginSuccess) {
@@ -50,23 +52,32 @@ export async function createUserSelenium(
             return null;
         }
 
-        // 2. Asegurarse de estar en la URL: https://admin.epcbet.net/users/all
-        const usersListUrl = "https://admin.epcbet.net/users/all";
+        // 2. Asegurarse de estar en la URL: https://admin.epcbet.net/index.php
+        const usersListUrl = "https://admin.epcbet.net/index.php";
         const currentUrl = await driver.getCurrentUrl();
-        if (!currentUrl.includes('/users/all')) {
+        if (!currentUrl.includes('/index.php')) {
             console.log(`[Cas-EPC] Navegando a ${usersListUrl}...`);
             await driver.get(usersListUrl);
-            await driver.wait(until.urlContains('/users/all'), 10000);
+            await driver.wait(until.urlContains('/index.php'), 10000);
+        }
+
+        // Detectar y cambiar contexto al iframe si está presente en la página
+        const iframes = await driver.findElements(By.tagName("iframe"));
+        console.log(`[Cas-EPC] Cantidad de iframes en la página: ${iframes.length}`);
+        if (iframes.length > 0) {
+            console.log("[Cas-EPC] Cambiando contexto al primer iframe (index 0)...");
+            await driver.switchTo().frame(0);
         }
 
         // 3. Buscar el botón de crear y hacer click
-        const createButtonXPath = "/html/body/div[6]/div[2]/div/div[2]/div[1]/div[2]/a[1]";
+        const createButtonXPath = "//a[contains(@class, 'btn-create-terminal')] | /html/body/div[6]/div[2]/div/div[2]/div[1]/div[2]/a[1]";
         console.log("[Cas-EPC] Buscando y haciendo click en el botón de creación...");
         const createBtn = await driver.wait(
             until.elementLocated(By.xpath(createButtonXPath)),
             10000
         );
         await driver.executeScript("arguments[0].click();", createBtn);
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Esperar a que la animación de apertura del modal se complete
 
         // 4. Esperar a que el formulario de creación aparezca
         const userInputXPath = "/html/body/div[8]/div/div/form/div[2]/div[1]/div[2]/input";
@@ -85,7 +96,7 @@ export async function createUserSelenium(
         const nickInputXPath = "/html/body/div[8]/div/div/form/div[2]/div[2]/div[2]/input";
         const passwordInputXPath = "/html/body/div[8]/div/div/form/div[2]/div[3]/div[2]/input";
         const zeroInputXPath = "/html/body/div[8]/div/div/form/div[2]/div[5]/div[2]/input";
-        const submitBtnXPath = "//form//button[@type='submit'] | //form//button | /html/body/div[8]/div/div/form/div[3]/button";
+        const submitBtnXPath = "//form//button[contains(text(), 'Crear')] | //button[text()='Crear'] | //form//button[@type='submit']";
 
         // Cargar Nombre de Usuario (div 1)
         await userInput.sendKeys(usernameGenerated);
@@ -110,7 +121,11 @@ export async function createUserSelenium(
         await zeroInput.sendKeys("0");
 
         // 7. Hacer click en el botón de confirmación/crear
-        const submitBtn = await driver.findElement(By.xpath(submitBtnXPath));
+        const submitBtn = await driver.wait(
+            until.elementLocated(By.xpath(submitBtnXPath)),
+            10000
+        );
+        await new Promise(resolve => setTimeout(resolve, 1500)); // Esperar a que la animación de la interfaz se complete
         await submitBtn.click();
 
         // 7.1 Opcional: Hacer click en el botón del modal de confirmación emergente si existiese
@@ -130,8 +145,32 @@ export async function createUserSelenium(
         console.log("[Cas-EPC] Enviando formulario de creación final...");
         
         const result: any = await driver.wait(async (d) => {
-            const currentUrl = await d.getCurrentUrl();
-            if (currentUrl.includes('/users/all')) {
+            try {
+                // 1. Verificar si hay un mensaje de éxito ("Exito" o "Éxito") en la pantalla
+                const pageSource = await d.getPageSource();
+                if (pageSource.includes("Exito") || pageSource.includes("Éxito") || pageSource.includes("exito")) {
+                    console.log("[Cas-EPC] ¡Mensaje de éxito detectado en el modal!");
+                    
+                    // Intentar cerrar el modal haciendo click en el botón 'X'
+                    const closeBtnXPath = "//button[contains(@class, 'close')] | //a[contains(@class, 'close')] | //*[contains(@class, 'close-icon')] | //button[@data-dismiss='modal']";
+                    try {
+                        const closeBtn = await d.findElement(By.xpath(closeBtnXPath));
+                        await d.executeScript("arguments[0].click();", closeBtn);
+                        console.log("[Cas-EPC] Botón de cerrar modal clickeado.");
+                    } catch (e) {
+                        console.log("[Cas-EPC] No se pudo hacer click en el botón de cerrar modal.");
+                    }
+                    return { success: true };
+                }
+
+                // 2. Verificar si el modal ya se cerró por sí solo (fallback)
+                const modal = await d.findElement(By.xpath("/html/body/div[8]"));
+                const isDisplayed = await modal.isDisplayed();
+                if (!isDisplayed) {
+                    return { success: true };
+                }
+            } catch (e) {
+                // Si el modal ya no existe o da error de stale, es que se cerró
                 return { success: true };
             }
             
@@ -142,7 +181,7 @@ export async function createUserSelenium(
                     try {
                         if (await el.isDisplayed()) {
                             const text = await el.getText();
-                            if (text && text.trim() !== '') {
+                            if (text && text.trim() !== '' && !text.includes("Exito") && !text.includes("Éxito")) {
                                 return { success: false, error: text };
                             }
                         }
