@@ -1,4 +1,4 @@
-/* global Swal */
+/* global Swal, Sortable */
 // Interceptor de Fetch global para codificar automáticamente el token en query strings
 (function() {
     const originalFetch = window.fetch;
@@ -526,6 +526,80 @@ window.applyCRMConfig = () => {
     });
 };
 
+window.toggleCRMConfigModal = () => {
+    const modal = document.getElementById('crm-config-modal');
+    modal.classList.toggle('active');
+    if (modal.classList.contains('active')) {
+        window.renderCRMConfigFields();
+    }
+};
+
+window.saveCRMConfig = async () => {
+    const activeToken = localStorage.getItem('backoffice_token');
+    try {
+        const res = await fetch(`/api/backoffice/save-setting?token=${activeToken}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                key: 'CRM_FIELDS_CONFIG',
+                value: JSON.stringify(window.crmConfig)
+            })
+        });
+        if (res.ok) {
+            if (typeof window.showToast === 'function') window.showToast('Configuración guardada', 'success');
+            window.toggleCRMConfigModal();
+            window.applyCRMConfig();
+            if (typeof window.distributeCards === 'function') {
+                window.distributeCards();
+            }
+        }
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+window.renderCRMConfigFields = () => {
+    const list = document.getElementById('crm-fields-list');
+    if (!list) return;
+
+    list.innerHTML = '';
+    window.crmConfig.sort((a, b) => a.order - b.order).forEach((field, index) => {
+        const item = document.createElement('div');
+        item.className = 'sortable-item';
+        item.dataset.id = field.id;
+        item.dataset.index = index;
+        
+        item.innerHTML = `
+            <i class="fas fa-grip-lines sort-handle"></i>
+            <div style="flex:1; display:flex; align-items:center; gap:10px;">
+                <input type="checkbox" ${field.visible ? 'checked' : ''} onchange="window.updateFieldVisibility('${field.id}', this.checked)">
+                <span style="font-size:0.9rem; font-weight:600;">${field.label}</span>
+            </div>
+        `;
+
+        list.appendChild(item);
+    });
+
+    if (typeof Sortable !== 'undefined' && !Sortable.get(list)) {
+        new Sortable(list, {
+            animation: 150,
+            handle: '.sort-handle',
+            onEnd: () => {
+                const newOrder = Array.from(list.children).map(child => child.dataset.id);
+                newOrder.forEach((id, index) => {
+                    const field = window.crmConfig.find(f => f.id === id);
+                    if (field) field.order = index;
+                });
+            }
+        });
+    }
+}
+
+window.updateFieldVisibility = (id, visible) => {
+    const field = window.crmConfig.find(f => f.id === id);
+    if (field) field.visible = visible;
+};
+
 // ── Sidebar toggle ────────────────────────────────────────────────
 function _clearFlyoutStyles() {
     document.querySelectorAll('#navbar .nav-dropdown-menu').forEach(m => {
@@ -656,9 +730,9 @@ window.observeKanbanColumn = (colEl, colId) => {
 window.resetColumnWidth = (colId, e) => {
     if (e) e.stopPropagation();
     localStorage.removeItem('col_width_' + colId);
-    const col = document.querySelector(`.kanban-column[data-id="${colId}"]`);
+    const col = document.querySelector(`.kanban-column-wrapper[data-id="${colId}"]`);
     if (col) {
-        col.style.width = '425px';
+        col.style.width = '445px';
     }
     if (typeof window.showToast === 'function') window.showToast('Tamaño de columna restaurado', 'success');
 };

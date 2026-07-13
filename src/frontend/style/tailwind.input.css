@@ -475,7 +475,7 @@
   .nav-toggler {
     width: 30px;
     height: 30px;
-    border: none;
+    border: 1px solid rgba(255, 255, 255, 0.13);
     border-radius: 8px;
     background: #0078D4;
     color: white;
@@ -866,7 +866,7 @@
     border-radius: 8px;
     background: #0078D4;
     color: white;
-    border: none;
+    border: 1px solid rgba(255, 255, 255, 0.13);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -1100,7 +1100,7 @@
       width: 36px;
       height: 36px;
       border-radius: 50%;
-      border: none;
+      border: 1px solid rgba(255, 255, 255, 0.13);
       background: transparent;
       color: #555;
       font-size: 15px;
@@ -2420,7 +2420,7 @@
   }
 
   [data-theme="light"] .prompt-panel-content .CodeMirror {
-    border-color: rgba(37, 99, 235, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.13);
   }
 
   /* Footer */
@@ -2672,7 +2672,7 @@
   .kanban-scroll-area {
     @apply overflow-x-auto overflow-y-hidden py-5;
     padding-left: 2.5rem;
-    padding-right: 2.5rem;
+    padding-right: 0; /* Padding handled by board-inner::after to prevent collapse */
     flex: 1;
     min-height: 0;
     width: 100%;
@@ -2686,21 +2686,62 @@
   }
 
   .kanban-board-inner {
-    @apply flex gap-5 h-full;
+    @apply flex gap-2 h-full;
     align-items: stretch;
     max-height: 700px;
+    min-width: 100%;
+    width: fit-content;
+    padding-right: 2.5rem;
+  }
+
+  .kanban-column-wrapper {
+    @apply flex rounded-3xl transition-colors duration-300;
+    flex: 0 0 auto;
+    width: 445px;
+    min-width: 300px;
+    max-width: 920px;
+    max-height: 80%;
+    background: hsl(0deg 0% 100% / 7%);
+    padding: 10px;
+    resize: horizontal;
+    overflow: hidden;
+  }
+
+  [data-theme="light"] .kanban-column-wrapper {
+    background: hsl(0deg 0% 0% / 7%);
+  }
+
+  /* Ghost looks exactly like the empty wrapper */
+  .kanban-column-ghost {
+    background: hsl(0deg 0% 100% / 7%) !important;
+    opacity: 1 !important;
+  }
+  [data-theme="light"] .kanban-column-ghost {
+    background: hsl(0deg 0% 0% / 7%) !important;
+  }
+  .kanban-column-ghost .kanban-column {
+    opacity: 0 !important;
+  }
+
+  /* Drag clone removes the wrapper background so you only drag the inner column */
+  .kanban-drag-clone {
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  .kanban-drag-clone .kanban-column {
+    opacity: 1 !important;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    transform: rotate(2deg);
   }
 
   .kanban-column {
     @apply flex flex-col rounded-2xl transition-colors duration-300;
-    flex: 0 0 auto;
-    width: 425px;
-    min-width: 280px;
-    max-width: 900px;
-    max-height: 80%;
+    flex: 1 1 auto;
+    width: 100%;
+    height: 100%;
     background: hsl(212deg 62.02% 14.35% / 80%);
     border: 1px solid rgba(255, 255, 255, 0.13);
-    resize: horizontal;
     overflow: hidden;
     padding-bottom: 12px;
   }
@@ -3204,7 +3245,7 @@
     font-family: inherit;
     color: rgba(255, 255, 255, 0.75);
     background: transparent;
-    border: none;
+    border: 1px solid rgba(255, 255, 255, 0.13);
     cursor: pointer;
     transition: background 0.15s, color 0.15s;
   }
@@ -3804,7 +3845,7 @@
     font-weight: 600;
     color: rgba(255, 255, 255, 0.7);
     background: transparent;
-    border: none;
+    border: 1px solid rgba(255, 255, 255, 0.13);
     cursor: pointer;
     text-align: left;
     white-space: nowrap;
@@ -3848,7 +3889,7 @@
     flex-shrink: 0;
     padding: 7px 9px;
     background: transparent;
-    border: none;
+    border: 1px solid rgba(255, 255, 255, 0.13);
     border-left: 1px solid rgba(255, 255, 255, 0.07);
     cursor: pointer;
     color: rgba(255, 255, 255, 0.4);
@@ -4457,7 +4498,7 @@
 
   .msg-file-action-btn {
     background: none;
-    border: none;
+    border: 1px solid rgba(255, 255, 255, 0.13);
     cursor: pointer;
     color: var(--text-muted);
     font-size: 0.8rem;
@@ -4499,7 +4540,7 @@
     width: 30px;
     height: 30px;
     border-radius: 50%;
-    border: none;
+    border: 1px solid rgba(255, 255, 255, 0.13);
     cursor: pointer;
     flex-shrink: 0;
     display: flex;
@@ -5038,7 +5079,7 @@
     border-radius: 10px;
     background: linear-gradient(135deg, #25D366, #1da851);
     color: #fff;
-    border: none;
+    border: 1px solid rgba(255, 255, 255, 0.13);
     cursor: pointer;
     display: grid;
     place-content: center;
@@ -5122,7 +5163,7 @@
     font-weight: 600;
     color: rgba(255, 255, 255, 0.8);
     background: transparent;
-    border: none;
+    border: 1px solid rgba(255, 255, 255, 0.13);
     cursor: pointer;
     white-space: nowrap;
     transition: background 0.15s, color 0.15s;
@@ -5157,7 +5198,7 @@
     justify-content: center;
     padding: 6px 8px;
     background: transparent;
-    border: none;
+    border: 1px solid rgba(255, 255, 255, 0.13);
     border-left: 1px solid rgba(255, 255, 255, 0.08);
     cursor: pointer;
     color: rgba(255, 255, 255, 0.5);
@@ -5557,7 +5598,7 @@
   .meta-panel-toggle {
     @apply flex items-center justify-center;
     background: transparent;
-    border: none;
+    border: 1px solid rgba(255, 255, 255, 0.13);
     cursor: pointer;
     width: 32px;
     height: 32px;
@@ -5648,7 +5689,7 @@
     right: 10px;
     z-index: 10;
     background: rgba(0, 0, 0, 0.08);
-    border: none;
+    border: 1px solid rgba(255, 255, 255, 0.13);
     border-radius: 50%;
     width: 30px;
     height: 30px;
@@ -6111,7 +6152,7 @@
   padding: 3px;
   transition: opacity 0.15s;
   background: transparent;
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.13);
   color: inherit;
 }
 
@@ -6202,7 +6243,7 @@
     justify-content: center;
     padding: 9px 16px;
     border-radius: 10px;
-    border: none;
+    border: 1px solid rgba(255, 255, 255, 0.13);
     cursor: pointer;
     font-size: 0.83rem;
     font-weight: 600;
@@ -6282,7 +6323,7 @@
 
 .qm-close-btn {
   background: none;
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.13);
   color: rgba(255, 255, 255, 0.5);
   cursor: pointer;
   font-size: 0.8rem;
@@ -6354,7 +6395,7 @@
 .qm-save-btn {
   background: linear-gradient(135deg, #0078D4, #0099FF);
   color: #fff;
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.13);
   padding: 6px 12px;
   font-size: 0.78rem;
   font-weight: 600;
@@ -6474,7 +6515,7 @@
 
 .qm-delete-btn {
   background: none;
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.13);
   color: rgba(239, 68, 68, 0.6);
   cursor: pointer;
   font-size: 0.72rem;
@@ -6534,4 +6575,31 @@
 
 [data-theme="dark"] .swal2-html-container {
   color: #94a3b8 !important;
+}
+/* Skeleton Loading */
+.skeleton {
+  @apply animate-pulse;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+}
+[data-theme="light"] .skeleton {
+  background: rgba(0, 0, 0, 0.08);
+}
+.skeleton-text {
+  @apply skeleton;
+  height: 14px;
+  margin-bottom: 6px;
+  border-radius: 4px;
+}
+.skeleton-title {
+  @apply skeleton;
+  height: 20px;
+  width: 60%;
+  margin-bottom: 12px;
+}
+.skeleton-avatar {
+  @apply skeleton;
+  height: 40px;
+  width: 40px;
+  border-radius: 50%;
 }

@@ -10,6 +10,8 @@
     "lint": "eslint src --no-ignore",
     "dev": "pnpm run lint && nodemon ./src/app.ts",
     "dev:tunnel": "node dev-tunnel.js",
+    "serve": "pnpm tailwind:build && pnpm build && pnpm run dev",
+    "serve:tunnel": "pnpm tailwind:build && pnpm build && pnpm run dev:tunnel",
     "build": "esbuild src/app.ts --bundle --platform=node --format=esm --packages=external --outdir=dist",
     "vaciar_base_backoffice": "tsx src/backend/backoffice/vaciar_base_backoffice.ts",
     "meta_webhook_register": "tsx src/backend/backoffice/meta_webhook_register.ts",

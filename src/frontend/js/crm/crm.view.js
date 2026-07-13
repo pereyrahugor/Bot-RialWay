@@ -28,7 +28,7 @@ window.crmView = {
                                 <i class="fas fa-box-archive"></i> Leads Cerrados
                             </li>
                             <li onclick="_closeCRMMenu(); toggleCRMConfigModal()">
-                                <i class="fas fa-sliders"></i> Configurar Campos
+                                <i class="fas fa-sliders"></i> Campos
                             </li>
                         </ul>
                     </div>
