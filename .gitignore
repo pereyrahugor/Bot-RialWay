@@ -44,3 +44,5 @@ envs/.env*
 env's/.env*
 !env's/.env
 
+src/backend/scratch/
+
