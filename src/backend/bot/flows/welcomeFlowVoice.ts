@@ -1,7 +1,7 @@
 import { addKeyword, EVENTS } from "@builderbot/bot";
 import { BaileysProvider } from "@builderbot/provider-baileys";
 import { MemoryDB } from "@builderbot/bot";
-import { reset } from "~/bot/timeOut";
+import { reset, stop } from "~/bot/timeOut";
 import { userQueues, userLocks, handleQueue } from "~/bot/queueManager"; 
 import { transcribeAudioFile } from "~/apis/openai/audioTranscriptior";
 import path from "path";
@@ -110,6 +110,7 @@ export const welcomeFlowVoice = addKeyword<any, any>(EVENTS.VOICE_NOTE)
 
         if (!botEnabledForChat) {
             console.log(`[welcomeFlowVoice] Bot desactivado para el chat ${chatId} o globalmente. Omitiendo transcripción y respuesta del bot.`);
+            stop(ctx);
             return;
         }
 
@@ -127,6 +128,7 @@ export const welcomeFlowVoice = addKeyword<any, any>(EVENTS.VOICE_NOTE)
 
         if (!transcription) {
             console.warn(`[welcomeFlowVoice] ⚠️ No se pudo transcribir el audio de ${chatId}. Omitiendo respuesta del bot.`);
+            stop(ctx);
             return;
         }
 

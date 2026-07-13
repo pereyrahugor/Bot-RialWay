@@ -46,10 +46,21 @@ async function sendTextToGroup(providerToSend: any, jid: string, text: string) {
 
 // Función auxiliar para reenviar media
 async function sendMediaToGroup(provider: any, state: any, targetGroup: string, data: any, skipDelete: boolean = false) {
-    // Detectar variaciones de "si" (si, sí, sii, si., Si, YES, etc - aunque el json suele ser español)
-    // Usamos regex flexible que busca "s" seguido de "i" o "í"
-    const fotoOVideoRaw = data["Foto o video"] || '';
-    const debeEnviar = /s[ií]+/i.test(fotoOVideoRaw);
+    const lastImage = state.get('lastImage');
+    const lastVideo = state.get('lastVideo');
+    const fotoOVideoRaw = data["Foto o video"] || data["foto o video"] || '';
+    
+    let debeEnviar = false;
+    if (fotoOVideoRaw === '') {
+        // Si no se incluyó la clave en el JSON de resumen, pero hay archivos de media en el state,
+        // asumimos por defecto que sí debemos enviarlos para evitar pérdida de información.
+        if (lastImage || lastVideo) {
+            console.log(`[idleFlow] 📂 Se detectó media en el estado sin clave 'Foto o video' en el resumen. Activando envío automático.`);
+            debeEnviar = true;
+        }
+    } else {
+        debeEnviar = /s[ií]+/i.test(fotoOVideoRaw);
+    }
 
     if (debeEnviar) {
         const lastImage = state.get('lastImage');

@@ -1,6 +1,7 @@
 import fs, { createReadStream } from "fs";
 import OpenAI from "openai";
 import { getOpenAI } from "./openaiHelper";
+import { SystemLogger } from "../../utils/logger";
 
 /**
  * Transcribe an audio file using the OpenAI Whisper model.
@@ -45,6 +46,15 @@ export const transcribeAudioFile = async (filePath: string): Promise<string | nu
     return transcription.text || null;
   } catch (error: any) {
     console.error("❌ Error en la transcripción:", error?.response?.data || error.message || error);
+    try {
+      await SystemLogger.error('OPENAI', `Error transcribiendo archivo de audio: ${error.message || error}`, null, {
+        filePath,
+        finalPath,
+        errorDetails: error?.response?.data || error
+      });
+    } catch (logErr) {
+      console.error("❌ Falló el guardado del log del error de transcripción:", logErr);
+    }
     // Intentar restaurar si falló
     if (finalPath !== filePath && fs.existsSync(finalPath)) {
          fs.renameSync(finalPath, filePath);

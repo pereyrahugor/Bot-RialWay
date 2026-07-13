@@ -238,6 +238,7 @@ export class AiManager {
                 if (!isGlobalBotEnabled) {
                     console.log(`[AiManager] 🛑 Bot DESACTIVADO GLOBALMENTE para el proyecto ${dynamicProjectId}.`);
                 }
+                stop(ctx);
                 // No necesitamos sincronizar con Threads de OpenAI en Chat Completions
                 return state;
             }
