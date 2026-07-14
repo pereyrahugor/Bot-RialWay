@@ -35,7 +35,7 @@ export const startHumanInactivityWorker = (timeoutMinutes = 15) => {
                 // 3. Excluir chats en lista negra (marcados como sin_bot o bloqueado_crm)
                 const { data: blEntry, error: blError } = await supabase
                     .from('blacklist')
-                    .select('id')
+                    .select('chat_id')
                     .eq('chat_id', chat.id)
                     .eq('project_id', projectId)
                     .or('sin_bot.eq.true,bloqueado_crm.eq.true')
