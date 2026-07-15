@@ -20,6 +20,7 @@ export async function createMercadoPagoPreference(
             .from("mercadopago_acount_user")
             .select("access_token")
             .eq("project_id", projectId || "default")
+            .eq("is_active", true)
             .maybeSingle();
         accessToken = acc?.access_token || "";
     } catch (dbErr) {

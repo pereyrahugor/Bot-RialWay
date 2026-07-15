@@ -2890,6 +2890,7 @@ export const registerBackofficeRoutes = (app: any) => {
                 .from('mercadopago_acount_user')
                 .select('*')
                 .eq('project_id', projectId)
+                .eq('is_active', true)
                 .maybeSingle();
 
             let token = acc?.access_token || "";
@@ -2942,17 +2943,64 @@ export const registerBackofficeRoutes = (app: any) => {
         }
     });
 
-    app.get('/api/backoffice/mercadopago/auth-url', backofficeAuth, (req: any, res: any) => {
+    // --- NUEVAS RUTAS PARA MULTIPLE CUENTAS MERCADO PAGO ---
+    app.get('/api/backoffice/mercadopago/accounts', backofficeAuth, async (req: any, res: any) => {
         try {
             const projectId = resolveProjectId(req) || 'default';
-            const appId = process.env.MP_APP_ID;
+            const { data: accounts, error } = await supabase
+                .from('mercadopago_acount_user')
+                .select('user_id, nickname, email, is_active, updated_at')
+                .eq('project_id', projectId)
+                .order('updated_at', { ascending: false });
+
+            if (error) throw error;
+            res.json({ success: true, accounts: accounts || [] });
+        } catch (error: any) {
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
+    app.post('/api/backoffice/mercadopago/accounts/activate', backofficeAuth, async (req: any, res: any) => {
+        try {
+            const projectId = resolveProjectId(req) || 'default';
+            const { userId } = req.body;
+            if (!userId) {
+                return res.status(400).json({ success: false, error: 'userId faltante en la petición' });
+            }
+
+            // Desactivar todas las cuentas de este proyecto
+            const { error: deactivateErr } = await supabase
+                .from('mercadopago_acount_user')
+                .update({ is_active: false })
+                .eq('project_id', projectId);
+
+            if (deactivateErr) throw deactivateErr;
+
+            // Activar la cuenta seleccionada
+            const { error: activateErr } = await supabase
+                .from('mercadopago_acount_user')
+                .update({ is_active: true })
+                .eq('project_id', projectId)
+                .eq('user_id', String(userId));
+
+            if (activateErr) throw activateErr;
+
+            res.json({ success: true, message: 'Cuenta de Mercado Pago activada con éxito.' });
+        } catch (error: any) {
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
+    app.get('/api/backoffice/mercadopago/auth-url', backofficeAuth, async (req: any, res: any) => {
+        try {
+            const projectId = resolveProjectId(req) || 'default';
+            const appId = await depsHistoryHandler.getSetting('MP_APP_ID', projectId) || process.env.MP_APP_ID;
             if (!appId) {
-                return res.status(500).json({ success: false, error: 'Configuración MP_APP_ID faltante en el servidor.' });
+                return res.status(500).json({ success: false, error: 'Configuración MP_APP_ID faltante en el servidor o base de datos.' });
             }
             
-            const publicDomain = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PROJECT_URL || "";
-            const cleanDomain = publicDomain.startsWith("http") ? publicDomain : publicDomain ? `https://${publicDomain}` : "";
-            const redirectUri = encodeURIComponent(`${cleanDomain}/api/backoffice/mercadopago/callback`);
+            const supabaseUrl = process.env.SUPABASE_URL || '';
+            const redirectUri = encodeURIComponent(`${supabaseUrl}/functions/v1/clientes-mercadopago-webhook`);
             
             const authUrl = `https://auth.mercadopago.com.ar/authorization?client_id=${appId}&response_type=code&platform_id=mp&redirect_uri=${redirectUri}&state=${projectId}`;
             
@@ -2970,17 +3018,16 @@ export const registerBackofficeRoutes = (app: any) => {
         
         try {
             const projectId = (state && state !== 'default') ? state : 'default';
-            const appId = process.env.MP_APP_ID;
-            const appSecret = process.env.MP_PASS; // client_secret
+            const appId = await depsHistoryHandler.getSetting('MP_APP_ID', projectId) || process.env.MP_APP_ID;
+            const appSecret = await depsHistoryHandler.getSetting('MP_PASS', projectId) || process.env.MP_PASS; // client_secret
             
             if (!appId || !appSecret) {
-                console.error('[MercadoPago Callback] Faltan credenciales de aplicación en .env');
+                console.error('[MercadoPago Callback] Faltan credenciales de aplicación en env o DB');
                 return res.status(500).send('Error interno: Configuración de la aplicación faltante.');
             }
             
-            const publicDomain = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PROJECT_URL || "";
-            const cleanDomain = publicDomain.startsWith("http") ? publicDomain : publicDomain ? `https://${publicDomain}` : "";
-            const redirectUri = `${cleanDomain}/api/backoffice/mercadopago/callback`;
+            const supabaseUrl = process.env.SUPABASE_URL || '';
+            const redirectUri = `${supabaseUrl}/functions/v1/clientes-mercadopago-webhook`;
             
             // Exchange code for token
             const tokenRes = await axios.post('https://api.mercadopago.com/oauth/token', 
@@ -3015,7 +3062,17 @@ export const registerBackofficeRoutes = (app: any) => {
                 console.warn('[MercadoPago Callback] Error obteniendo info de usuario:', err.message);
             }
             
-            // Guardar en la tabla mercadopago_acount_user
+            // Determinar si esta debe ser la cuenta activa por defecto
+            const { data: existingAccounts } = await supabase
+                .from('mercadopago_acount_user')
+                .select('user_id, is_active')
+                .eq('project_id', projectId);
+
+            const hasActiveAccount = (existingAccounts || []).some((acc: any) => acc.is_active);
+            const isFirst = (existingAccounts || []).length === 0;
+            const makeActive = isFirst || !hasActiveAccount;
+
+            // Guardar en la tabla mercadopago_acount_user (Soporta múltiples cuentas por proyecto)
             await supabase.from('mercadopago_acount_user').upsert({
                 project_id: projectId,
                 access_token,
@@ -3023,18 +3080,21 @@ export const registerBackofficeRoutes = (app: any) => {
                 user_id: String(user_id),
                 nickname: nickname || null,
                 email: email || null,
+                is_active: makeActive,
                 updated_at: new Date().toISOString()
-            }, { onConflict: 'project_id' });
+            }, { onConflict: 'project_id,user_id' });
 
             // Guardar en la tabla mercadopago_user_routoing para enrutamiento
             await supabase.from('mercadopago_user_routoing').upsert({
                 user_id: String(user_id),
                 project_id: projectId,
-                project_url: cleanDomain || '',
+                project_url: process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : '',
                 updated_at: new Date().toISOString()
             }, { onConflict: 'user_id' });
             
             // Redirigir de vuelta a la vista de Mercado Pago en el backoffice
+            const publicDomain = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PROJECT_URL || "";
+            const cleanDomain = publicDomain.startsWith("http") ? publicDomain : publicDomain ? `https://${publicDomain}` : "";
             const origin = cleanDomain || '';
             res.writeHead(302, { Location: `${origin}/mercado-pago` });
             res.end();
@@ -3227,6 +3287,7 @@ export const registerBackofficeRoutes = (app: any) => {
                     .from('mercadopago_acount_user')
                     .select('access_token')
                     .eq('project_id', projectId)
+                    .eq('is_active', true)
                     .maybeSingle();
                 accessToken = acc?.access_token || "";
             }

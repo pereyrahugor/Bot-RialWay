@@ -300,14 +300,16 @@ export class HistoryHandler {
             {
                 name: 'mercadopago_acount_user',
                 sql: `CREATE TABLE IF NOT EXISTS mercadopago_acount_user (
-                    project_id TEXT PRIMARY KEY,
+                    project_id TEXT,
+                    user_id TEXT,
                     access_token TEXT,
                     public_key TEXT,
-                    user_id TEXT,
                     nickname TEXT,
                     email TEXT,
+                    is_active BOOLEAN DEFAULT false,
                     created_at TIMESTAMPTZ DEFAULT NOW(),
-                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                    updated_at TIMESTAMPTZ DEFAULT NOW(),
+                    PRIMARY KEY (project_id, user_id)
                 );
                 GRANT ALL ON TABLE mercadopago_acount_user TO service_role;
                 GRANT ALL ON TABLE mercadopago_acount_user TO authenticated;
@@ -504,6 +506,33 @@ export class HistoryHandler {
                         if (jidErr && jidErr.code === '42703') {
                             console.log(`🔧 Agregando columna jid a waba_report_groups...`);
                             await supabase.rpc('exec_sql', { query: `ALTER TABLE waba_report_groups ADD COLUMN IF NOT EXISTS jid TEXT;` });
+                        }
+                    }
+
+                    // Migración para mercadopago_acount_user (Múltiples cuentas por proyecto)
+                    if (table.name === 'mercadopago_acount_user') {
+                        const { error: isActiveErr } = await supabase.from('mercadopago_acount_user').select('is_active').limit(1);
+                        if (isActiveErr && isActiveErr.code === '42703') {
+                            console.log(`🔧 Migrando tabla mercadopago_acount_user para soportar múltiples cuentas...`);
+                            const migrationSql = `
+                                ALTER TABLE mercadopago_acount_user ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT false;
+                                DO $$ 
+                                BEGIN 
+                                  IF EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name='mercadopago_acount_user_pkey') THEN
+                                    ALTER TABLE mercadopago_acount_user DROP CONSTRAINT mercadopago_acount_user_pkey; 
+                                  END IF;
+                                END $$;
+                                DO $$
+                                BEGIN
+                                  IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name='mp_account_user_project_user_pkey') THEN
+                                    -- Asegurar clave primaria compuesta
+                                    ALTER TABLE mercadopago_acount_user ADD CONSTRAINT mp_account_user_project_user_pkey PRIMARY KEY (project_id, user_id);
+                                  END IF;
+                                EXCEPTION WHEN OTHERS THEN
+                                  NULL;
+                                END $$;
+                            `;
+                            await supabase.rpc('exec_sql', { query: migrationSql });
                         }
                     }
 
