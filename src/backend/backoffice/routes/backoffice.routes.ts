@@ -3061,7 +3061,11 @@ export const registerBackofficeRoutes = (app: any) => {
             const supabaseUrl = process.env.SUPABASE_URL || '';
             const redirectUri = encodeURIComponent(`${supabaseUrl}/functions/v1/clientes-mercadopago-webhook`);
             
-            const authUrl = `https://auth.mercadopago.com.ar/authorization?client_id=${appId}&response_type=code&platform_id=mp&redirect_uri=${redirectUri}&state=${projectId}`;
+            // Codificar el state como base64 conteniendo el projectId y el initiatorDomain (fullUrl)
+            const stateObj = { projectId, initiatorDomain: fullUrl };
+            const stateBase64 = Buffer.from(JSON.stringify(stateObj)).toString('base64');
+            
+            const authUrl = `https://auth.mercadopago.com.ar/authorization?client_id=${appId}&response_type=code&platform_id=mp&redirect_uri=${redirectUri}&state=${stateBase64}`;
             
             res.json({ success: true, url: authUrl });
         } catch (error: any) {
