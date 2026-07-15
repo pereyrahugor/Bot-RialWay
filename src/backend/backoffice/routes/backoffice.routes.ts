@@ -2958,6 +2958,81 @@ export const registerBackofficeRoutes = (app: any) => {
         }
     });
 
+    app.post('/api/backoffice/mercadopago/accounts/delete', backofficeAuth, async (req: any, res: any) => {
+        try {
+            const projectId = resolveProjectId(req) || 'default';
+            const { userId } = req.body;
+            if (!userId) {
+                return res.status(400).json({ success: false, error: 'userId faltante en la petición' });
+            }
+
+            // 1. Obtener la cuenta para ver si es la activa
+            const { data: targetAccount } = await supabase
+                .from('mercadopago_acount_user')
+                .select('is_active, access_token')
+                .eq('project_id', projectId)
+                .eq('user_id', String(userId))
+                .maybeSingle();
+
+            if (!targetAccount) {
+                return res.status(404).json({ success: false, error: 'Cuenta no encontrada' });
+            }
+
+            const wasActive = targetAccount.is_active;
+
+            // 2. Revocar token en Mercado Pago (Opcional - Mejor esfuerzo)
+            try {
+                const appId = await depsHistoryHandler.getSetting('MP_APP_ID', projectId) || process.env.MP_APP_ID;
+                const appSecret = await depsHistoryHandler.getSetting('MP_PASS', projectId) || process.env.MP_PASS;
+                if (appId && appSecret && targetAccount.access_token) {
+                    await axios.post('https://api.mercadopago.com/oauth/token/revoke', {
+                        client_id: appId,
+                        client_secret: appSecret,
+                        token: targetAccount.access_token
+                    });
+                    console.log(`[MP Revoke] Token de usuario ${userId} revocado con éxito en Mercado Pago.`);
+                }
+            } catch (revokeErr: any) {
+                console.warn('[MP Revoke] No se pudo revocar el token en Mercado Pago:', revokeErr.response?.data || revokeErr.message);
+            }
+
+            // 3. Eliminar de las tablas de base de datos
+            await supabase.from('mercadopago_user_routoing').delete().eq('user_id', String(userId));
+            const { error: deleteErr } = await supabase
+                .from('mercadopago_acount_user')
+                .delete()
+                .eq('project_id', projectId)
+                .eq('user_id', String(userId));
+
+            if (deleteErr) throw deleteErr;
+
+            // 4. Si la cuenta que eliminamos era la activa, buscar otra cuenta vinculada para activarla
+            if (wasActive) {
+                const { data: otherAccounts } = await supabase
+                    .from('mercadopago_acount_user')
+                    .select('user_id')
+                    .eq('project_id', projectId)
+                    .order('updated_at', { ascending: false });
+
+                if (otherAccounts && otherAccounts.length > 0) {
+                    const nextActiveUserId = otherAccounts[0].user_id;
+                    await supabase
+                        .from('mercadopago_acount_user')
+                        .update({ is_active: true })
+                        .eq('project_id', projectId)
+                        .eq('user_id', nextActiveUserId);
+                    console.log(`[MP Delete] Cuenta activa eliminada. Activando cuenta ${nextActiveUserId} automáticamente.`);
+                }
+            }
+
+            res.json({ success: true, message: 'Cuenta de Mercado Pago eliminada con éxito.' });
+        } catch (error: any) {
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
+
+
     app.get('/api/backoffice/mercadopago/auth-url', backofficeAuth, async (req: any, res: any) => {
         try {
             const projectId = resolveProjectId(req) || 'default';

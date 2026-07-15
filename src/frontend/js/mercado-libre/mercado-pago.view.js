@@ -55,25 +55,14 @@ window.mercadoPagoView = (() => {
                             </span>
                         </div>
 
-                        <div style="background: var(--bg-header); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; display: flex; flex-direction: column; gap: 10px; font-size: 0.9rem; margin-bottom: 1.5rem; text-align: left;">
-                            <div style="display: flex; justify-content: space-between;"><strong style="color: var(--text-muted);">Usuario:</strong> <span id="mp-nickname" style="font-weight: 600; color: var(--text-main);">Cargando...</span></div>
-                            <div style="display: flex; justify-content: space-between;"><strong style="color: var(--text-muted);">Email:</strong> <span id="mp-email" style="font-weight: 600; color: var(--text-main);">Cargando...</span></div>
-                            <div style="display: flex; justify-content: space-between;"><strong style="color: var(--text-muted);">User ID:</strong> <span id="mp-userid" style="font-family: monospace; color: var(--text-muted);">Cargando...</span></div>
+                        <h4 style="margin: 0 0 12px; color: var(--text-main); font-size: 0.95rem; font-weight: 700; text-align: left;">Cuentas Vinculadas</h4>
+                        
+                        <div id="mp-accounts-list" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 1.5rem;">
+                            <!-- Se renderizará dinámicamente -->
                         </div>
 
-                        <!-- Override Form container (solo visible si está con token default del server) -->
-                        <div id="mp-override-container" style="display: none; border-top: 1px solid var(--border); padding-top: 1.5rem; margin-top: 1.5rem; text-align: left;">
-                            <h4 style="margin: 0 0 8px; color: var(--text-main); font-size: 0.9rem; font-weight: 700;">Vincular Cuenta de Cliente Personalizada</h4>
-                            <p style="margin: 0 0 1.25rem; font-size: 0.8rem; color: var(--text-muted); line-height: 1.4;">
-                                Puedes anular la configuración por defecto vinculando un usuario de Mercado Pago propio para este proyecto.
-                            </p>
-                            <button id="mp-override-connect-btn" class="btn-primary" style="width:100%; padding:11px; display:flex; align-items:center; justify-content:center; gap:8px; font-size:0.88rem; font-weight:600; border-radius:10px; background: #009ee3; color: white; border: none; cursor: pointer;">
-                                <i class="fas fa-plug"></i> Vincular otra cuenta de usuario
-                            </button>
-                        </div>
-
-                        <button id="mp-disconnect-btn" style="width:100%; padding:11px 20px; display:flex; align-items:center; justify-content:center; gap:8px; font-size:0.88rem; font-weight:600; border-radius:12px; background: transparent; color: #ef4444; border: 1px solid #ef4444; cursor: pointer; transition: all 0.2s; margin-top: 10px;">
-                            <i class="fas fa-trash-can"></i> Desvincular Cuenta
+                        <button id="mp-add-account-btn" class="btn-primary" style="width:100%; padding:11px; display:flex; align-items:center; justify-content:center; gap:8px; font-size:0.88rem; font-weight:600; border-radius:10px; background: #009ee3; color: white; border: none; cursor: pointer;">
+                            <i class="fas fa-plus"></i> Vincular otra cuenta
                         </button>
                     </div>
 
@@ -118,6 +107,62 @@ window.mercadoPagoView = (() => {
         </main>`;
     }
 
+    function attachAccountActionListeners() {
+        document.querySelectorAll('.btn-activate-account').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const userId = btn.getAttribute('data-id');
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
+                try {
+                    const res = await fetch(`/api/backoffice/mercadopago/accounts/activate?token=${_token}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ userId })
+                    });
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        showToast('Cuenta activada con éxito.', 'success');
+                        await checkStatus();
+                    } else {
+                        showToast(data.error || 'No se pudo activar la cuenta.', 'error');
+                        await checkStatus();
+                    }
+                } catch (err) {
+                    showToast('Error al activar la cuenta.', 'error');
+                    await checkStatus();
+                }
+            });
+        });
+
+        document.querySelectorAll('.btn-delete-account').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const userId = btn.getAttribute('data-id');
+                if (!await window.swalConfirm('¿Eliminar cuenta vinculada?', '¿Estás seguro de que deseas desvincular esta cuenta de Mercado Pago? El bot dejará de recibir pagos para esta cuenta.')) return;
+                
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
+                try {
+                    const res = await fetch(`/api/backoffice/mercadopago/accounts/delete?token=${_token}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ userId })
+                    });
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        showToast('Cuenta eliminada con éxito.', 'success');
+                        await checkStatus();
+                    } else {
+                        showToast(data.error || 'No se pudo eliminar la cuenta.', 'error');
+                        await checkStatus();
+                    }
+                } catch (err) {
+                    showToast('Error al eliminar la cuenta.', 'error');
+                    await checkStatus();
+                }
+            });
+        });
+    }
+
     async function checkStatus() {
         const loading = document.getElementById('mp-loading');
         const disconnectedSec = document.getElementById('mp-disconnected-section');
@@ -143,32 +188,41 @@ window.mercadoPagoView = (() => {
                 connectedSec.style.display = 'block';
                 generatorSec.style.display = 'block';
                 
-                document.getElementById('mp-nickname').textContent = data.nickname || 'Desconocido';
-                document.getElementById('mp-email').textContent = data.email || 'Desconocido';
-                document.getElementById('mp-userid').textContent = data.id || 'Desconocido';
-                
-                const badgeText = document.getElementById('mp-status-badge-text');
-                const badgeContainer = document.getElementById('mp-badge-container');
-                const overrideContainer = document.getElementById('mp-override-container');
-                const disconnectBtn = document.getElementById('mp-disconnect-btn');
+                // Cargar todas las cuentas vinculadas
+                const accountsRes = await fetch(`/api/backoffice/mercadopago/accounts?token=${token}`);
+                const accountsData = await accountsRes.json();
+                const accounts = accountsData.accounts || [];
 
-                if (badgeText && badgeContainer) {
-                    if (data.isFromEnv) {
-                        badgeText.innerHTML = '<i class="fas fa-server"></i> Conectado por Defecto (Servidor)';
-                        badgeText.style.color = '#009ee3';
-                        badgeContainer.style.background = 'rgba(0, 158, 227, 0.05)';
-                        badgeContainer.style.borderColor = 'rgba(0, 158, 227, 0.2)';
-                        
-                        if (overrideContainer) overrideContainer.style.display = 'block';
-                        if (disconnectBtn) disconnectBtn.style.display = 'none';
+                const listContainer = document.getElementById('mp-accounts-list');
+                if (listContainer) {
+                    listContainer.innerHTML = '';
+                    if (accounts.length === 0) {
+                        listContainer.innerHTML = '<p style="color: var(--text-muted); font-size: 0.9rem; text-align: center; margin: 10px 0;">No hay cuentas vinculadas.</p>';
                     } else {
-                        badgeText.innerHTML = '<i class="fas fa-check-circle"></i> Cuenta Vinculada (Cliente)';
-                        badgeText.style.color = '#10b981';
-                        badgeContainer.style.background = 'rgba(16, 185, 129, 0.05)';
-                        badgeContainer.style.borderColor = 'rgba(16, 185, 129, 0.2)';
-                        
-                        if (overrideContainer) overrideContainer.style.display = 'none';
-                        if (disconnectBtn) disconnectBtn.style.display = 'block';
+                        accounts.forEach(acc => {
+                            const accEl = document.createElement('div');
+                            accEl.style.cssText = 'background: var(--bg-header); border: 1px solid var(--border); border-radius: 12px; padding: 12px; display: flex; justify-content: space-between; align-items: center;';
+                            accEl.innerHTML = `
+                                <div style="text-align: left;">
+                                    <div style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">${acc.nickname || 'Desconocido'}</div>
+                                    <div style="color: var(--text-muted); font-size: 0.8rem; margin-top: 2px;">${acc.email || 'Sin email'}</div>
+                                    <div style="color: var(--text-muted); font-size: 0.75rem; font-family: monospace;">ID: ${acc.user_id}</div>
+                                </div>
+                                <div style="display: flex; gap: 8px; align-items: center;">
+                                    ${acc.is_active 
+                                        ? `<span style="background: rgba(16, 185, 129, 0.1); color: #10b981; font-size: 0.75rem; font-weight: 700; padding: 4px 8px; border-radius: 6px; text-transform: uppercase;">Activo</span>`
+                                        : `<button class="btn-activate-account" data-id="${acc.user_id}" style="padding: 4px 8px; font-size: 0.75rem; border-radius: 6px; background: #009ee3; color: white; border: none; cursor: pointer; font-weight: 600; transition: background 0.2s;">Activar</button>`
+                                    }
+                                    <button class="btn-delete-account" data-id="${acc.user_id}" title="Eliminar cuenta" style="background: transparent; color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); padding: 6px 8px; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
+                                        <i class="fas fa-trash-can"></i>
+                                    </button>
+                                </div>
+                            `;
+                            listContainer.appendChild(accEl);
+                        });
+
+                        // Agregar listeners
+                        attachAccountActionListeners();
                     }
                 }
             } else {
@@ -221,42 +275,11 @@ window.mercadoPagoView = (() => {
             });
         }
 
-        // Override connect handler
-        const overrideConnectBtn = document.getElementById('mp-override-connect-btn');
-        if (overrideConnectBtn) {
-            overrideConnectBtn.addEventListener('click', async () => {
-                await startOAuthFlow(overrideConnectBtn);
-            });
-        }
-
-        // Disconnect handler
-        const disconnectBtn = document.getElementById('mp-disconnect-btn');
-        if (disconnectBtn) {
-            disconnectBtn.addEventListener('click', async () => {
-                if (!await window.swalConfirm('¿Desvincular Mercado Pago?', '¿Estás seguro de que deseas desvincular Mercado Pago?')) return;
-
-                disconnectBtn.disabled = true;
-                disconnectBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Desvinculando...';
-
-                try {
-                    const res = await fetch(`/api/backoffice/mercadopago/disconnect?token=${_token}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' }
-                    });
-                    const data = await res.json();
-                    if (res.ok && data.success) {
-                        showToast('Mercado Pago desvinculado.', 'success');
-                        await checkStatus();
-                    } else {
-                        showToast(data.error || 'No se pudo desvincular.', 'error');
-                    }
-                } catch (err) {
-                    console.error(err);
-                    showToast('Error al desvincular.', 'error');
-                } finally {
-                    disconnectBtn.disabled = false;
-                    disconnectBtn.innerHTML = '<i class="fas fa-trash-can"></i> Desvincular Cuenta';
-                }
+        // Add account handler (vincular cuenta adicional)
+        const addAccountBtn = document.getElementById('mp-add-account-btn');
+        if (addAccountBtn) {
+            addAccountBtn.addEventListener('click', async () => {
+                await startOAuthFlow(addAccountBtn);
             });
         }
 
