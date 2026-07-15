@@ -1,6 +1,7 @@
 /* global showToast */
 window.mercadoPagoView = (() => {
     let _token = '';
+    let _projectId = '';
 
     function getHTML() {
         return `
@@ -114,7 +115,7 @@ window.mercadoPagoView = (() => {
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
                 try {
-                    const res = await fetch(`/api/backoffice/mercadopago/accounts/activate?token=${_token}`, {
+                    const res = await fetch(`/api/backoffice/mercadopago/accounts/activate?token=${_token}&projectId=${_projectId}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ userId })
@@ -142,7 +143,7 @@ window.mercadoPagoView = (() => {
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
                 try {
-                    const res = await fetch(`/api/backoffice/mercadopago/accounts/delete?token=${_token}`, {
+                    const res = await fetch(`/api/backoffice/mercadopago/accounts/delete?token=${_token}&projectId=${_projectId}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ userId })
@@ -178,7 +179,7 @@ window.mercadoPagoView = (() => {
 
         try {
             const token = localStorage.getItem('backoffice_token');
-            const res = await fetch(`/api/backoffice/mercadopago/status?token=${token}`);
+            const res = await fetch(`/api/backoffice/mercadopago/status?token=${token}&projectId=${_projectId}`);
             const data = await res.json();
 
             if (!loading) return; // Safety check
@@ -189,7 +190,7 @@ window.mercadoPagoView = (() => {
                 generatorSec.style.display = 'block';
                 
                 // Cargar todas las cuentas vinculadas
-                const accountsRes = await fetch(`/api/backoffice/mercadopago/accounts?token=${token}`);
+                const accountsRes = await fetch(`/api/backoffice/mercadopago/accounts?token=${token}&projectId=${_projectId}`);
                 const accountsData = await accountsRes.json();
                 const accounts = accountsData.accounts || [];
 
@@ -243,7 +244,7 @@ window.mercadoPagoView = (() => {
         btnElement.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Redirigiendo...';
 
         try {
-            const res = await fetch(`/api/backoffice/mercadopago/auth-url?token=${_token}`);
+            const res = await fetch(`/api/backoffice/mercadopago/auth-url?token=${_token}&projectId=${_projectId}`);
             const data = await res.json();
             
             if (res.ok && data.success && data.url) {
@@ -264,6 +265,9 @@ window.mercadoPagoView = (() => {
     async function init() {
         const token = localStorage.getItem('backoffice_token');
         _token = token;
+
+        const urlParams = new URLSearchParams(window.location.search);
+        _projectId = urlParams.get('projectId') || '';
 
         await checkStatus();
 
@@ -302,7 +306,7 @@ window.mercadoPagoView = (() => {
                 generateBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Generando...';
 
                 try {
-                    const res = await fetch(`/api/backoffice/mercadopago/create-link?token=${_token}`, {
+                    const res = await fetch(`/api/backoffice/mercadopago/create-link?token=${_token}&projectId=${_projectId}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ title, amount })
