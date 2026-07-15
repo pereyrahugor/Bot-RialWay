@@ -3038,8 +3038,8 @@ export const registerBackofficeRoutes = (app: any) => {
             const projectId = resolveProjectId(req) || 'default';
             
             // Detectar dominio público y guardarlo dinámicamente en settings
-            const host = req.get('host') || '';
-            const protocol = req.protocol || 'https';
+            const host = req.headers.host || '';
+            const protocol = req.headers['x-forwarded-proto'] || 'https';
             let domain = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PROJECT_URL || `${protocol}://${host}`;
             
             if (domain.startsWith('http')) {
