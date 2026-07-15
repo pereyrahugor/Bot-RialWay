@@ -3036,6 +3036,23 @@ export const registerBackofficeRoutes = (app: any) => {
     app.get('/api/backoffice/mercadopago/auth-url', backofficeAuth, async (req: any, res: any) => {
         try {
             const projectId = resolveProjectId(req) || 'default';
+            
+            // Detectar dominio público y guardarlo dinámicamente en settings
+            const host = req.get('host') || '';
+            const protocol = req.protocol || 'https';
+            let domain = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PROJECT_URL || `${protocol}://${host}`;
+            
+            if (domain.startsWith('http')) {
+                const urlObj = new URL(domain);
+                await depsHistoryHandler.saveSetting('RAILWAY_PUBLIC_DOMAIN', urlObj.host, projectId);
+            } else {
+                await depsHistoryHandler.saveSetting('RAILWAY_PUBLIC_DOMAIN', domain, projectId);
+            }
+            
+            let fullUrl = domain.startsWith('http') ? domain : `https://${domain}`;
+            if (fullUrl.endsWith('/')) fullUrl = fullUrl.slice(0, -1);
+            await depsHistoryHandler.saveSetting('PROJECT_URL', fullUrl, projectId);
+
             const appId = await depsHistoryHandler.getSetting('MP_APP_ID', projectId) || process.env.MP_APP_ID;
             if (!appId) {
                 return res.status(500).json({ success: false, error: 'Configuración MP_APP_ID faltante en el servidor o base de datos.' });
