@@ -3081,8 +3081,8 @@ export const registerBackofficeRoutes = (app: any) => {
             const appSecret = await depsHistoryHandler.getSetting('MP_PASS', projectId) || process.env.MP_PASS; // client_secret
             
             if (!appId || !appSecret) {
-                console.error('[MercadoPago Callback] Faltan credenciales de aplicación en env o DB');
-                return res.status(500).send('Error interno: Configuración de la aplicación faltante.');
+                console.error('[MercadoPago Callback] Faltan credenciales de aplicación en env o DB:', { appId, appSecret, projectId });
+                return res.status(500).send(`Error interno: Configuración de la aplicación faltante. (Project: ${projectId}, AppID: ${appId ? 'Presente' : 'Faltante'}, Secret: ${appSecret ? 'Presente' : 'Faltante'})`);
             }
             
             const supabaseUrl = process.env.SUPABASE_URL || '';
