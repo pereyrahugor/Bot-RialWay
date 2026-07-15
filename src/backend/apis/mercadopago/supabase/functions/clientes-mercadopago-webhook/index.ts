@@ -87,8 +87,15 @@ serve(async (req) => {
       
       const userId = payload?.user_id || urlParams.get("user_id")
       const paymentId = payload?.data?.id || payload?.id || urlParams.get("id")
+      const action = payload?.action || urlParams.get("action")
 
-      console.log(`[MP Unified] Webhook recibido para user_id: ${userId}, payment_id: ${paymentId}`)
+      console.log(`[MP Unified] Webhook recibido. user_id: ${userId}, payment_id: ${paymentId}, action: ${action}`)
+
+      // Retornar 200 inmediatamente para eventos de vinculación/desvinculación de aplicación
+      if (action === "application.authorized" || action === "application.deauthorized" || payload?.type === "mp-connect") {
+        console.log(`[MP Unified] Evento de autorización detectado (${action || payload?.type}). Retornando 200 OK.`);
+        return new Response("OK", { status: 200 })
+      }
 
       if (!userId) {
         return new Response("Missing user_id parameter", { status: 400 })
