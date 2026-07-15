@@ -2860,7 +2860,7 @@ export class HistoryHandler {
             const slug = await this.getConfig('CLIENT_SLUG', targetProjectId);
             const cleanSlug = String(slug || '').trim().toLowerCase();
             
-            if (cleanSlug === 'ganemos' || cleanSlug === 'ganemos-net') {
+            if (cleanSlug === 'ganemos' || cleanSlug === 'ganemos-net' || cleanSlug === 'cas-epc' || cleanSlug === 'casepc') {
                 value = JSON.stringify([
                     { id: 'crm-ticket-title', label: 'Titulo del Ticket', visible: true, order: 0 },
                     { id: 'crm-name', label: 'Nombre del Contacto', visible: true, order: 1 },

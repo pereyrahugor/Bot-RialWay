@@ -102,6 +102,7 @@ export const ganemosModule = {
             },
             "recharge": {
               "type": "boolean",
+              "default": false,
               "description": "Indica si se debe realizar una recarga de créditos inmediatamente después de crear la cuenta."
             },
             "monto": {
@@ -109,7 +110,7 @@ export const ganemosModule = {
               "description": "Monto de créditos a recargar si la opción recharge es verdadera (ej. 1000)."
             }
           },
-          "required": ["nombre", "recharge"]
+          "required": ["nombre"]
         }
       }
     },
