@@ -9,45 +9,62 @@ serve(async (req) => {
   // 1. Manejar OAuth Redirect (GET con params code y state)
   if (method === "GET") {
     const code = url.searchParams.get("code")
-    const state = url.searchParams.get("state") // Contiene el projectId
+    const state = url.searchParams.get("state")
 
     if (code && state) {
-      console.log(`[MP Unified] Procesando redirección OAuth para projectId: ${state}`)
+      console.log(`[MP Unified] Procesando redirección OAuth con state: ${state}`)
       
-      const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? ""
-      const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-      const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
       try {
-        const { data: routeData } = await supabase
-          .from("mercadopago_user_routoing")
-          .select("project_url")
-          .eq("project_id", state)
-          .limit(1)
-
+        let projectId = ""
         let redirectTarget = ""
-        if (routeData && routeData.length > 0 && routeData[0].project_url) {
-          redirectTarget = routeData[0].project_url
-        } else {
-          const { data: settingsData } = await supabase
-            .from("settings")
-            .select("value")
-            .eq("project_id", state)
-            .eq("key", "RAILWAY_PUBLIC_DOMAIN")
-            .maybeSingle()
 
-          if (settingsData?.value) {
-            redirectTarget = settingsData.value.startsWith("http") 
-              ? settingsData.value 
-              : `https://${settingsData.value}`
+        // Intentar decodificar el state como JSON codificado en base64
+        try {
+          const decoded = atob(state)
+          const parsed = JSON.parse(decoded)
+          projectId = parsed.projectId
+          redirectTarget = parsed.initiatorDomain
+          console.log(`[MP Unified] Decodificado state dinámico -> projectId: ${projectId}, target: ${redirectTarget}`)
+        } catch (e) {
+          // Fallback por si el state es un projectId simple (legacy)
+          projectId = state
+          console.log(`[MP Unified] State es legacy projectId: ${projectId}`)
+        }
+
+        if (!redirectTarget) {
+          const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? ""
+          const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+          const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+          const { data: routeData } = await supabase
+            .from("mercadopago_user_routoing")
+            .select("project_url")
+            .eq("project_id", projectId)
+            .limit(1)
+
+          if (routeData && routeData.length > 0 && routeData[0].project_url) {
+            redirectTarget = routeData[0].project_url
+          } else {
+            const { data: settingsData } = await supabase
+              .from("settings")
+              .select("value")
+              .eq("project_id", projectId)
+              .eq("key", "RAILWAY_PUBLIC_DOMAIN")
+              .maybeSingle()
+
+            if (settingsData?.value) {
+              redirectTarget = settingsData.value.startsWith("http") 
+                ? settingsData.value 
+                : `https://${settingsData.value}`
+            }
           }
         }
 
         if (!redirectTarget) {
-          return new Response(`Could not resolve redirect URL for project: ${state}`, { status: 404 })
+          return new Response(`Could not resolve redirect URL for project: ${projectId}`, { status: 404 })
         }
 
-        const targetUrl = `${redirectTarget}/api/backoffice/mercadopago/callback?code=${code}&state=${state}`
+        const targetUrl = `${redirectTarget}/api/backoffice/mercadopago/callback?code=${code}&state=${projectId}`
         return Response.redirect(targetUrl, 302)
 
       } catch (err: any) {
