@@ -2893,51 +2893,18 @@ export const registerBackofficeRoutes = (app: any) => {
                 .eq('is_active', true)
                 .maybeSingle();
 
-            let token = acc?.access_token || "";
-            let isFromEnv = false;
-            if (!token) {
-                token = process.env.MP_TOKEN_TEST || process.env.MP_ACCESS_TOKEN || "";
-                if (token) {
-                    isFromEnv = true;
-                }
-            }
-            if (!token) {
+            if (!acc) {
                 return res.json({ success: true, connected: false });
             }
-            try {
-                // Si viene de BD, ya tenemos los datos guardados para ahorrar llamadas
-                if (acc && !isFromEnv) {
-                    return res.json({
-                        success: true,
-                        connected: true,
-                        nickname: acc.nickname || 'Desconocido',
-                        email: acc.email || 'Desconocido',
-                        id: acc.user_id || 'Desconocido',
-                        isFromEnv: false
-                    });
-                }
 
-                // Si viene de env, validamos contra la API de Mercado Pago
-                const mpRes = await axios.get('https://api.mercadopago.com/users/me', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                return res.json({
-                    success: true,
-                    connected: true,
-                    nickname: mpRes.data.nickname,
-                    email: mpRes.data.email,
-                    id: mpRes.data.id,
-                    isFromEnv
-                });
-            } catch (err: any) {
-                console.warn('[MercadoPago Status] Error validando token:', err.response?.data || err.message);
-                return res.json({
-                    success: true,
-                    connected: false,
-                    error: err.response?.data?.message || 'Token de acceso inválido o expirado.',
-                    isFromEnv
-                });
-            }
+            return res.json({
+                success: true,
+                connected: true,
+                nickname: acc.nickname || 'Desconocido',
+                email: acc.email || 'Desconocido',
+                id: acc.user_id || 'Desconocido',
+                isFromEnv: false
+            });
         } catch (error: any) {
             res.status(500).json({ success: false, error: error.message });
         }

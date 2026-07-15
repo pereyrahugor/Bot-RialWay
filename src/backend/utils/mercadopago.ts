@@ -28,10 +28,7 @@ export async function createMercadoPagoPreference(
     }
 
     if (!accessToken) {
-        accessToken = process.env.MP_TOKEN_TEST || process.env.MP_ACCESS_TOKEN || "";
-    }
-    if (!accessToken) {
-        throw new Error("Mercado Pago no está configurado. Token de acceso faltante.");
+        throw new Error("No hay ninguna cuenta de Mercado Pago vinculada y activa para este proyecto. Por favor vincula tu cuenta desde el panel.");
     }
 
     const client = new MercadoPagoConfig({ accessToken });
