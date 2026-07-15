@@ -48,7 +48,6 @@ export const startHumanInactivityWorker = (timeoutMinutes = 15) => {
 
                 if (blEntry) {
                     // Chat en lista negra, debe permanecer en intervención humana
-                    console.log(`[WORKER] ⛔ Manteniendo en atención humana a ${chat.id} (marcado en lista negra)`);
                     continue;
                 }
 
