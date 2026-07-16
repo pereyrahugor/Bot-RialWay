@@ -3125,13 +3125,14 @@ export const registerBackofficeRoutes = (app: any) => {
                 console.warn('[MercadoPago Callback] Error obteniendo info de usuario:', err.message);
             }
             
-            // Determinar si esta debe ser la cuenta activa por defecto
+            // Determinar si esta debe ser la cuenta activa por defecto o si ya estaba vinculada
             const { data: existingAccounts } = await supabase
                 .from('mercadopago_acount_user')
                 .select('user_id, is_active')
                 .eq('project_id', projectId);
 
             const hasActiveAccount = (existingAccounts || []).some((acc: any) => acc.is_active);
+            const isAlreadyLinked = (existingAccounts || []).some((acc: any) => String(acc.user_id) === String(user_id));
             const isFirst = (existingAccounts || []).length === 0;
             const makeActive = isFirst || !hasActiveAccount;
 
@@ -3176,7 +3177,11 @@ export const registerBackofficeRoutes = (app: any) => {
                     <script>
                         try {
                             if (window.opener) {
-                                window.opener.postMessage({ type: 'mp-linked', projectId: '${projectId}' }, '*');
+                                window.opener.postMessage({ 
+                                    type: '${isAlreadyLinked ? 'mp-linked-existing' : 'mp-linked'}', 
+                                    projectId: '${projectId}',
+                                    nickname: '${nickname}'
+                                }, '*');
                                 window.close();
                             } else {
                                 window.location.href = '${targetUrl}';

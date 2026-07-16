@@ -9,6 +9,11 @@ window.mercadoPagoView = (() => {
             if (!_projectId || event.data.projectId === _projectId) {
                 await checkStatus();
             }
+        } else if (event.data && event.data.type === 'mp-linked-existing') {
+            showToast(`La cuenta "${event.data.nickname}" ya estaba vinculada a este proyecto.`, 'info');
+            if (!_projectId || event.data.projectId === _projectId) {
+                await checkStatus();
+            }
         }
     });
 
@@ -316,7 +321,13 @@ window.mercadoPagoView = (() => {
         const addAccountBtn = document.getElementById('mp-add-account-btn');
         if (addAccountBtn) {
             addAccountBtn.addEventListener('click', async () => {
-                await startOAuthFlow(addAccountBtn);
+                const proceed = await window.swalConfirm(
+                    'Vincular otra cuenta',
+                    'Para vincular una cuenta de Mercado Pago diferente, debes cerrar sesión en mercadopago.com en este navegador o usar una ventana de incógnito. Si continúas, se intentará vincular la cuenta que tengas abierta. ¿Deseas continuar?'
+                );
+                if (proceed) {
+                    await startOAuthFlow(addAccountBtn);
+                }
             });
         }
 
