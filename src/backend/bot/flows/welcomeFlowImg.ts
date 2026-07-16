@@ -111,7 +111,19 @@ const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
       await state.update({ lastImage: localPath });
       const buffer = fs.default.readFileSync(localPath);
       
-      // Cargar modelo dinámico de la base de datos
+      const botPhoneNumber = provider?.globalVendorArgs?.phone_number_id || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
+      const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || HistoryHandler.PROJECT_IDENTIFIER;
+
+      // 1. Intentar validar la imagen como comprobante de Mercado Pago
+      const { verifyReceiptFlow } = await import("../../utils/receiptVerifierMP");
+      const processed = await verifyReceiptFlow(buffer, flowDynamic, dynamicProjectId, userId);
+      
+      if (processed) {
+          // Si el comprobante se procesó con éxito, terminamos el flujo aquí.
+          return;
+      }
+
+      // Cargar modelo dinámico de la base de datos para análisis convencional
       let visionModel = await HistoryHandler.getConfig('OPENAI_MODEL') || "gpt-4o-mini";
       // Si el modelo es de razonamiento (o1, o3, etc.), hacemos fallback a gpt-4o-mini porque no soportan entrada de visión en la llamada estándar
       if (visionModel.startsWith('o1') || visionModel.startsWith('o3')) {
@@ -143,9 +155,6 @@ const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
 
       // Guardar el análisis en la base de datos para que el asistente tenga el historial en siguientes turnos
       try {
-        const botPhoneNumber = provider?.globalVendorArgs?.phone_number_id || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
-        const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || HistoryHandler.PROJECT_IDENTIFIER;
-        
         await HistoryHandler.saveMessage(
           userId,
           'user',

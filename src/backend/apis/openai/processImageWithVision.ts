@@ -5,7 +5,12 @@ import { getOpenAIBaseUrl } from "./openaiHelper";
 
 const IMGUR_CLIENT_ID = "dbe415c6bbb950d";
 
-export async function processImageWithVision(buffer: Buffer, flowDynamic: any, projectId?: string): Promise<string> {
+export async function processImageWithVision(
+  buffer: Buffer, 
+  flowDynamic: any, 
+  projectId?: string, 
+  assistantKey: string = 'ASSISTANT_ID_IMG'
+): Promise<string> {
   const { HistoryHandler } = await import("../../db/historyHandler");
   
   // 1. Obtener la clave de imagen de la base de datos (u obtener el fallback principal si no hay)
@@ -17,10 +22,10 @@ export async function processImageWithVision(buffer: Buffer, flowDynamic: any, p
     return "";
   }
 
-  // 2. Obtener el Assistant ID de la base de datos
-  const assistantId = await HistoryHandler.getSetting('ASSISTANT_ID_IMG', projectId) || await HistoryHandler.getConfig('ASSISTANT_ID_IMG');
+  // 2. Obtener el Assistant ID de la base de datos según la clave
+  const assistantId = await HistoryHandler.getSetting(assistantKey, projectId) || await HistoryHandler.getConfig(assistantKey);
   if (!assistantId) {
-    await flowDynamic("No se encontró el ASSISTANT_ID_IMG en la base de datos.");
+    await flowDynamic(`No se encontró el ${assistantKey} en la base de datos.`);
     return "";
   }
 

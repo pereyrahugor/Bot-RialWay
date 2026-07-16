@@ -72,10 +72,23 @@ export const welcomeFlowDoc = addKeyword<BaileysProvider, MemoryDB>(EVENTS.DOCUM
                 await flowDynamic("No se pudo convertir el PDF a imágenes.");
                 return;
             }
+            let receiptProcessed = false;
+            const { verifyReceiptFlow } = await import("../../utils/receiptVerifierMP");
+            
             for (const imgPath of imagenes) {
                 const imgBuffer = fs.readFileSync(imgPath);
-                // Procesar la imagen con la lógica de Vision+OpenAI+Imgur
-                await processImageWithVision(imgBuffer, flowDynamic, dynamicProjectId);
+                const processed = await verifyReceiptFlow(imgBuffer, flowDynamic, dynamicProjectId, ctx.from);
+                if (processed) {
+                    receiptProcessed = true;
+                    break;
+                }
+            }
+
+            if (!receiptProcessed) {
+                for (const imgPath of imagenes) {
+                    const imgBuffer = fs.readFileSync(imgPath);
+                    await processImageWithVision(imgBuffer, flowDynamic, dynamicProjectId);
+                }
             }
             imagenesGeneradas.push(...imagenes);
         } catch (err: any) {

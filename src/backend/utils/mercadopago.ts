@@ -1,5 +1,6 @@
 import { MercadoPagoConfig, Preference } from "mercadopago";
 import { HistoryHandler, supabase } from "../db/historyHandler";
+import axios from "axios";
 
 /**
  * Crea una preferencia de pago en Mercado Pago y retorna el link de pago (initPoint).
@@ -64,4 +65,36 @@ export async function createMercadoPagoPreference(
         initPoint: response.init_point || response.sandbox_init_point || "",
         preferenceId: response.id || ""
     };
+}
+
+/**
+ * Consulta la API de Mercado Pago para verificar la existencia e información de un cobro.
+ * @param paymentId ID de la operación/comprobante de Mercado Pago.
+ * @param projectId ID del proyecto activo.
+ */
+export async function verifyMercadoPagoPayment(paymentId: string, projectId: string): Promise<any> {
+    let accessToken = "";
+    try {
+        const { data: acc } = await supabase
+            .from("mercadopago_acount_user")
+            .select("access_token")
+            .eq("project_id", projectId)
+            .eq("is_active", true)
+            .maybeSingle();
+        accessToken = acc?.access_token || "";
+    } catch (dbErr) {
+        console.error("[MercadoPago Verify] Error fetching token from DB:", dbErr);
+    }
+
+    if (!accessToken) {
+        throw new Error("No se encontró ninguna cuenta de Mercado Pago activa para este proyecto.");
+    }
+
+    const response = await axios.get(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+        headers: {
+            Authorization: `Bearer ${accessToken}`
+        }
+    });
+
+    return response.data;
 }
