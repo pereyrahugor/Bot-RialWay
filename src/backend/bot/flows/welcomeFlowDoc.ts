@@ -33,6 +33,8 @@ export const welcomeFlowDoc = addKeyword<BaileysProvider, MemoryDB>(EVENTS.DOCUM
         let localPath = null;
         let outputDir = null;
         const imagenesGeneradas = [];
+        const botPhoneNumber = provider?.globalVendorArgs?.phone_number_id || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
+        const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || HistoryHandler.PROJECT_IDENTIFIER;
         try {
             let tipo = "desconocido";
             const mimetype = ctx?.media?.mimetype || ctx?.message?.documentMessage?.mimetype;
@@ -73,7 +75,7 @@ export const welcomeFlowDoc = addKeyword<BaileysProvider, MemoryDB>(EVENTS.DOCUM
             for (const imgPath of imagenes) {
                 const imgBuffer = fs.readFileSync(imgPath);
                 // Procesar la imagen con la lógica de Vision+OpenAI+Imgur
-                await processImageWithVision(imgBuffer, flowDynamic);
+                await processImageWithVision(imgBuffer, flowDynamic, dynamicProjectId);
             }
             imagenesGeneradas.push(...imagenes);
         } catch (err: any) {

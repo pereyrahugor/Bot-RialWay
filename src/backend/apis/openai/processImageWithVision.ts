@@ -3,19 +3,33 @@ import { OpenAI } from "openai";
 import fs from "fs";
 import { getOpenAIBaseUrl } from "./openaiHelper";
 
-const baseURL = getOpenAIBaseUrl();
-const openai = process.env.OPENAI_API_KEY_IMG ? new OpenAI({ 
-    apiKey: process.env.OPENAI_API_KEY_IMG,
-    ...(baseURL ? { baseURL } : {})
-}) : null;
 const IMGUR_CLIENT_ID = "dbe415c6bbb950d";
 
-export async function processImageWithVision(buffer: Buffer, flowDynamic: any): Promise<string> {
-  if (!openai) {
+export async function processImageWithVision(buffer: Buffer, flowDynamic: any, projectId?: string): Promise<string> {
+  const { HistoryHandler } = await import("../../db/historyHandler");
+  
+  // 1. Obtener la clave de imagen de la base de datos (u obtener el fallback principal si no hay)
+  const openaiKey = await HistoryHandler.getSetting('OPENAI_API_KEY_IMG', projectId) || await HistoryHandler.getConfig('OPENAI_API_KEY_IMG') || await HistoryHandler.getConfig('OPENAI_API_KEY');
+  
+  if (!openaiKey || openaiKey.includes('*****') || openaiKey.trim() === '') {
     console.warn("⚠️ OPENAI_API_KEY_IMG no detectada. Procesamiento de imágenes desactivado.");
     await flowDynamic("Lo siento, el análisis de imágenes no está configurado en este momento.");
     return "";
   }
+
+  // 2. Obtener el Assistant ID de la base de datos
+  const assistantId = await HistoryHandler.getSetting('ASSISTANT_ID_IMG', projectId) || await HistoryHandler.getConfig('ASSISTANT_ID_IMG');
+  if (!assistantId) {
+    await flowDynamic("No se encontró el ASSISTANT_ID_IMG en la base de datos.");
+    return "";
+  }
+
+  const baseURL = getOpenAIBaseUrl();
+  const openai = new OpenAI({ 
+      apiKey: openaiKey,
+      ...(baseURL ? { baseURL } : {})
+  });
+
   // Subir imagen a Imgur
   const imgurRes = await axios.post(
     "https://api.imgur.com/3/image",
@@ -30,12 +44,6 @@ export async function processImageWithVision(buffer: Buffer, flowDynamic: any): 
     }
   );
   const imgUrl = imgurRes.data.data.link;
-
-  const assistantId = process.env.ASSISTANT_ID_IMG;
-  if (!assistantId) {
-    await flowDynamic("No se encontró el ASSISTANT_ID_IMG en las variables de entorno.");
-    return "";
-  }
 
   // Crear un thread solo con la imagen
   const thread = await openai.beta.threads.create({
