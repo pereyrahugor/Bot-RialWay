@@ -3,6 +3,15 @@ window.mercadoPagoView = (() => {
     let _token = '';
     let _projectId = '';
 
+    window.addEventListener('message', async (event) => {
+        if (event.data && event.data.type === 'mp-linked') {
+            showToast('¡Cuenta vinculada con éxito!', 'success');
+            if (!_projectId || event.data.projectId === _projectId) {
+                await checkStatus();
+            }
+        }
+    });
+
     function getHTML() {
         return `
         <main class="crm-main-container animate-fade" style="z-index:10; padding:0;">
@@ -248,7 +257,25 @@ window.mercadoPagoView = (() => {
             const data = await res.json();
             
             if (res.ok && data.success && data.url) {
-                window.location.href = data.url;
+                // Configurar dimensiones de la ventana emergente (popup)
+                const width = 600;
+                const height = 700;
+                const left = (window.screen.width - width) / 2;
+                const top = (window.screen.height - height) / 2;
+
+                const popup = window.open(
+                    data.url, 
+                    'MercadoPagoAuth', 
+                    `width=${width},height=${height},left=${left},top=${top},status=no,resizable=yes`
+                );
+
+                if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+                    showToast('El bloqueador de popups impidió abrir la ventana. Redirigiendo...', 'warning');
+                    window.location.href = data.url;
+                } else {
+                    btnElement.disabled = false;
+                    btnElement.innerHTML = originalHtml;
+                }
             } else {
                 showToast(data.error || 'No se pudo obtener la URL de vinculación.', 'error');
                 btnElement.disabled = false;

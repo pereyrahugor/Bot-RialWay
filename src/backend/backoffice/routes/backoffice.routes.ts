@@ -3155,12 +3155,39 @@ export const registerBackofficeRoutes = (app: any) => {
                 updated_at: new Date().toISOString()
             }, { onConflict: 'user_id' });
             
-            // Redirigir de vuelta a la vista de Mercado Pago en el backoffice
+            // Retornar página HTML para cerrar el popup y notificar a la ventana principal, o redirigir si no hay opener
             const publicDomain = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PROJECT_URL || "";
             const cleanDomain = publicDomain.startsWith("http") ? publicDomain : publicDomain ? `https://${publicDomain}` : "";
             const origin = cleanDomain || '';
-            res.writeHead(302, { Location: `${origin}/mercado-pago?projectId=${projectId}` });
-            res.end();
+            const targetUrl = `${origin}/mercado-pago?projectId=${projectId}`;
+
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+            res.end(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Vinculación Exitosa</title>
+                </head>
+                <body>
+                    <div style="text-align: center; margin-top: 50px; font-family: sans-serif;">
+                        <h2>Vinculando cuenta...</h2>
+                        <p>Esta ventana se cerrará automáticamente.</p>
+                    </div>
+                    <script>
+                        try {
+                            if (window.opener) {
+                                window.opener.postMessage({ type: 'mp-linked', projectId: '${projectId}' }, '*');
+                                window.close();
+                            } else {
+                                window.location.href = '${targetUrl}';
+                            }
+                        } catch (e) {
+                            window.location.href = '${targetUrl}';
+                        }
+                    </script>
+                </body>
+                </html>
+            `);
         } catch (error: any) {
             console.error('[MercadoPago Callback] Error en el intercambio de token:', error.response?.data || error.message);
             res.status(500).send(`Error al vincular cuenta: ${error.response?.data?.message || error.message}`);
