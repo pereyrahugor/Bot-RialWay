@@ -29,6 +29,13 @@ export async function processImageWithVision(
     return "";
   }
 
+  // 3. Obtener el prompt (instrucciones) específico para sobreescribir si está en la base de datos
+  let promptOverride: string | undefined = undefined;
+  if (assistantKey === 'ASSISTANT_ID_MP_OCR') {
+    promptOverride = await HistoryHandler.getSetting('ASSISTANT_PROMPT_MP_OCR', projectId) 
+      || await HistoryHandler.getConfig('ASSISTANT_PROMPT_MP_OCR');
+  }
+
   const baseURL = getOpenAIBaseUrl();
   const openai = new OpenAI({ 
       apiKey: openaiKey,
@@ -65,6 +72,7 @@ export async function processImageWithVision(
   // Ejecutar el asistente sobre el thread
   const run = await openai.beta.threads.runs.create(thread.id, {
     assistant_id: assistantId,
+    ...(promptOverride ? { instructions: promptOverride } : {})
   });
 
   // Esperar a que termine el procesamiento
