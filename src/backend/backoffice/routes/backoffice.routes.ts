@@ -3159,7 +3159,7 @@ export const registerBackofficeRoutes = (app: any) => {
             const publicDomain = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PROJECT_URL || "";
             const cleanDomain = publicDomain.startsWith("http") ? publicDomain : publicDomain ? `https://${publicDomain}` : "";
             const origin = cleanDomain || '';
-            res.writeHead(302, { Location: `${origin}/mercado-pago` });
+            res.writeHead(302, { Location: `${origin}/mercado-pago?projectId=${projectId}` });
             res.end();
         } catch (error: any) {
             console.error('[MercadoPago Callback] Error en el intercambio de token:', error.response?.data || error.message);

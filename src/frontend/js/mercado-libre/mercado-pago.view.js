@@ -267,7 +267,13 @@ window.mercadoPagoView = (() => {
         _token = token;
 
         const urlParams = new URLSearchParams(window.location.search);
-        _projectId = urlParams.get('projectId') || '';
+        const paramProjectId = urlParams.get('projectId');
+        if (paramProjectId) {
+            localStorage.setItem('mp_current_project_id', paramProjectId);
+            _projectId = paramProjectId;
+        } else {
+            _projectId = localStorage.getItem('mp_current_project_id') || '';
+        }
 
         await checkStatus();
 
