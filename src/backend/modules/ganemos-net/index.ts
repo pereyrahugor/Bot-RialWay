@@ -19,25 +19,12 @@ export const ganemosModule = {
     // ----------------------------------------------------
     CREAR_JUGADOR: async (args: any, context: any) => {
       const nombre = args.nombre || args.baseName || args.username || 'jugador';
-      const recharge = args.recharge === true || args.recharge === 'true';
-      const monto = Number(args.monto || args.amount || 0);
 
-      console.log(`[ganemosModule] 👤 Invocando CREAR_JUGADOR para: "${nombre}" | recharge: ${recharge} | monto: ${monto}`);
+      console.log(`[ganemosModule] 👤 Invocando CREAR_JUGADOR para: "${nombre}"`);
       
-      const res = await createUserSelenium(nombre, recharge);
+      const res = await createUserSelenium(nombre, false);
       if (res) {
-          if (recharge && monto > 0 && res.driver) {
-              console.log(`[ganemosModule] 🔗 Reutilizando driver para recarga automática de $${monto} a ${res.username}...`);
-              const rechargeRes = await rechargeUserSelenium(res.username, monto, res.driver);
-              if (rechargeRes) {
-                  return `✅ Usuario ${res.username} creado con éxito y recargado con $${monto}. Contraseña por defecto: "${res.password}".`;
-              } else {
-                  return `⚠️ Usuario ${res.username} creado con éxito (Contraseña: "${res.password}"), pero falló la recarga automática inicial de $${monto}.`;
-              }
-          } else {
-              // Si no se requirió recarga o monto es 0, el driver ya fue cerrado por createUserSelenium
-              return `✅ Usuario ${res.username} creado con éxito. Contraseña por defecto: "${res.password}".`;
-          }
+          return `✅ Usuario ${res.username} creado con éxito. Contraseña por defecto: "${res.password}".`;
       }
       return `❌ No se pudo completar la creación del usuario.`;
     },
@@ -92,22 +79,13 @@ export const ganemosModule = {
       "type": "function",
       "function": {
         "name": "CREAR_JUGADOR",
-        "description": "Crea una nueva cuenta de jugador en la plataforma Ganemos-net, con la opción de realizar una carga inicial automática.",
+        "description": "Crea una nueva cuenta de jugador en la plataforma Ganemos-net.",
         "parameters": {
           "type": "object",
           "properties": {
             "nombre": {
               "type": "string",
               "description": "Nombre de pila o base del cliente para generar su usuario (ej. lucas)."
-            },
-            "recharge": {
-              "type": "boolean",
-              "default": false,
-              "description": "Indica si se debe realizar una recarga de créditos inmediatamente después de crear la cuenta."
-            },
-            "monto": {
-              "type": "number",
-              "description": "Monto de créditos a recargar si la opción recharge es verdadera (ej. 1000)."
             }
           },
           "required": ["nombre"]
