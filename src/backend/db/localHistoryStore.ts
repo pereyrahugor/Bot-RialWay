@@ -161,7 +161,7 @@ export class LocalHistoryStore {
 
     static async updateContactDetails(
         chatId: string,
-        details: Partial<LocalChat>,
+        details: Partial<LocalChat> & { ticket_title?: string },
         projectId: string
     ): Promise<boolean> {
         const chats = this.getChats(projectId);
@@ -217,6 +217,9 @@ export class LocalHistoryStore {
                 if (originalCrmStatus) {
                     tickets[activeTicketIdx].estado = originalCrmStatus;
                 }
+                if (details.ticket_title !== undefined) {
+                    tickets[activeTicketIdx].titulo = details.ticket_title;
+                }
                 tickets[activeTicketIdx].updated_at = new Date().toISOString();
                 this.saveTicketsList(projectId, tickets);
             } else if (details.is_lead === true || originalIsLead === true) {
@@ -226,7 +229,7 @@ export class LocalHistoryStore {
                     id: crypto.randomUUID(),
                     project_id: projectId,
                     chat_id: chatId,
-                    titulo: `Lead: ${chats[idx].name || chatId}`,
+                    titulo: details.ticket_title || `Lead: ${chats[idx].name || chatId}`,
                     descripcion: details.notes || 'Lead detectado automáticamente',
                     estado: initialStatus,
                     prioridad: 'Media',

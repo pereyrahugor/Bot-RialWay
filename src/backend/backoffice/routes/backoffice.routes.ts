@@ -1621,13 +1621,14 @@ export const registerBackofficeRoutes = (app: any) => {
     app.put('/api/backoffice/chat/:id/contact', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         try {
             const { id } = req.params;
-            const { name, email, notes, source, cuit_dni, tax_status, address, offered_product, crm_status, crm_due_date } = req.body;
+            const { name, email, notes, source, cuit_dni, tax_status, address, offered_product, crm_status, crm_due_date, ticket_title } = req.body;
             const projectId = resolveProjectId(req);
             const result = await depsHistoryHandler.updateContactDetails(id, { 
                 name, email, notes, source, 
                 cuit_dni, tax_status, address, offered_product,
                 crm_status, crm_due_date,
-                is_lead: true 
+                is_lead: true,
+                ticket_title
             }, projectId);
             res.json(result);
         } catch (err: any) {

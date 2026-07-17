@@ -1224,7 +1224,8 @@ export class HistoryHandler {
         offered_product?: string,
         crm_status?: string,
         crm_due_date?: string | null,
-        metadata?: any
+        metadata?: any,
+        ticket_title?: string
     }, forcedProjectId?: string) {
         const chatId = this.normalizeId(rawChatId);
         let currentProjectId = forcedProjectId;
@@ -1344,6 +1345,9 @@ export class HistoryHandler {
                 if (originalCrmStatus) {
                     ticketUpdatePayload.estado = originalCrmStatus;
                 }
+                if (details.ticket_title !== undefined) {
+                    ticketUpdatePayload.titulo = details.ticket_title;
+                }
 
                 const { error: updateTicketErr } = await supabase
                     .from('tickets')
@@ -1383,7 +1387,7 @@ export class HistoryHandler {
                     .insert({
                         project_id: currentProjectId,
                         chat_id: chatId,
-                        titulo: `Lead: ${name}`,
+                        titulo: details.ticket_title || `Lead: ${name}`,
                         descripcion: details.notes || 'Lead detectado automáticamente',
                         estado: initialStatus,
                         tipo: 'Nuevo Lead',
