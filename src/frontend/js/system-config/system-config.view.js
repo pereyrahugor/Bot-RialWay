@@ -102,6 +102,15 @@ window.systemConfigView = {
                             <input type="text" name="VECTOR_STORE_ID" id="VECTOR_STORE_ID">
                         </div>
                         <div class="variable-group">
+                            <h3>MERCADOPAGO_OCR_ENABLED</h3>
+                            <p class="description">Habilitar analisis OCR de comprobantes de Mercado Pago.</p>
+                            <input type="hidden" name="MERCADOPAGO_OCR_ENABLED" id="MERCADOPAGO_OCR_ENABLED" value="false">
+                            <label class="switch mt-1">
+                                <input type="checkbox" onchange="_cfgToggle('MERCADOPAGO_OCR_ENABLED',this.checked)">
+                                <span class="slider"><i class="fas fa-times"></i><i class="fas fa-check"></i></span>
+                            </label>
+                        </div>
+                        <div class="variable-group">
                             <h3>EXTRA_SYSTEM_PROMPT</h3>
                             <p class="description">Reglas globales adicionales para todos los asistentes.</p>
                             <textarea name="EXTRA_SYSTEM_PROMPT" id="EXTRA_SYSTEM_PROMPT" rows="4"></textarea>

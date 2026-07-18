@@ -73,14 +73,20 @@ export const welcomeFlowDoc = addKeyword<BaileysProvider, MemoryDB>(EVENTS.DOCUM
                 return;
             }
             let receiptProcessed = false;
-            const { verifyReceiptFlow } = await import("../../utils/receiptVerifierMP");
             
-            for (const imgPath of imagenes) {
-                const imgBuffer = fs.readFileSync(imgPath);
-                const processed = await verifyReceiptFlow(imgBuffer, flowDynamic, dynamicProjectId, ctx.from);
-                if (processed) {
-                    receiptProcessed = true;
-                    break;
+            const isOcrEnabled = await HistoryHandler.getSetting('MERCADOPAGO_OCR_ENABLED', dynamicProjectId)
+                || await HistoryHandler.getConfig('MERCADOPAGO_OCR_ENABLED');
+
+            if (isOcrEnabled === 'true') {
+                const { verifyReceiptFlow } = await import("../../utils/receiptVerifierMP");
+                
+                for (const imgPath of imagenes) {
+                    const imgBuffer = fs.readFileSync(imgPath);
+                    const processed = await verifyReceiptFlow(imgBuffer, flowDynamic, dynamicProjectId, ctx.from);
+                    if (processed) {
+                        receiptProcessed = true;
+                        break;
+                    }
                 }
             }
 

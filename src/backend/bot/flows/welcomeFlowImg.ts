@@ -114,13 +114,18 @@ const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
       const botPhoneNumber = provider?.globalVendorArgs?.phone_number_id || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
       const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || HistoryHandler.PROJECT_IDENTIFIER;
 
-      // 1. Intentar validar la imagen como comprobante de Mercado Pago
-      const { verifyReceiptFlow } = await import("../../utils/receiptVerifierMP");
-      const processed = await verifyReceiptFlow(buffer, flowDynamic, dynamicProjectId, userId);
-      
-      if (processed) {
-          // Si el comprobante se procesó con éxito, terminamos el flujo aquí.
-          return;
+      // 1. Intentar validar la imagen como comprobante de Mercado Pago (si está habilitado)
+      const isOcrEnabled = await HistoryHandler.getSetting('MERCADOPAGO_OCR_ENABLED', dynamicProjectId)
+          || await HistoryHandler.getConfig('MERCADOPAGO_OCR_ENABLED');
+
+      if (isOcrEnabled === 'true') {
+          const { verifyReceiptFlow } = await import("../../utils/receiptVerifierMP");
+          const processed = await verifyReceiptFlow(buffer, flowDynamic, dynamicProjectId, userId);
+          
+          if (processed) {
+              // Si el comprobante se procesó con éxito, terminamos el flujo aquí.
+              return;
+          }
       }
 
       // Cargar modelo dinámico de la base de datos para análisis convencional

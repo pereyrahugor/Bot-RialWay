@@ -9,7 +9,8 @@ export async function processImageWithVision(
   buffer: Buffer, 
   flowDynamic: any, 
   projectId?: string, 
-  assistantKey: string = 'ASSISTANT_ID_IMG'
+  assistantKey: string = 'ASSISTANT_ID_IMG',
+  silent: boolean = false
 ): Promise<string> {
   const { HistoryHandler } = await import("../../db/historyHandler");
   
@@ -18,14 +19,18 @@ export async function processImageWithVision(
   
   if (!openaiKey || openaiKey.includes('*****') || openaiKey.trim() === '') {
     console.warn("⚠️ OPENAI_API_KEY_IMG no detectada. Procesamiento de imágenes desactivado.");
-    await flowDynamic("Lo siento, el análisis de imágenes no está configurado en este momento.");
+    if (!silent) {
+      await flowDynamic("Lo siento, el análisis de imágenes no está configurado en este momento.");
+    }
     return "";
   }
 
   // 2. Obtener el Assistant ID de la base de datos según la clave
   const assistantId = await HistoryHandler.getSetting(assistantKey, projectId) || await HistoryHandler.getConfig(assistantKey);
   if (!assistantId) {
-    await flowDynamic(`No se encontró el ${assistantKey} en la base de datos.`);
+    if (!silent) {
+      await flowDynamic(`No se encontró el ${assistantKey} en la base de datos.`);
+    }
     return "";
   }
 
@@ -83,7 +88,9 @@ export async function processImageWithVision(
   } while (runStatus.status !== "completed" && runStatus.status !== "failed");
 
   if (runStatus.status === "failed") {
-    await flowDynamic("El asistente falló al procesar la imagen.");
+    if (!silent) {
+      await flowDynamic("El asistente falló al procesar la imagen.");
+    }
     return "";
   }
 
@@ -99,6 +106,8 @@ export async function processImageWithVision(
       result = (textBlock as any).text.value;
     }
   }
-  await flowDynamic(result);
+  if (!silent) {
+    await flowDynamic(result);
+  }
   return result;
 }

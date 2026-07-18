@@ -17,7 +17,7 @@ export async function verifyReceiptFlow(
     try {
         // 1. Ejecutar el asistente general para descripción
         console.log(`[ReceiptVerifierMP] Ejecutando análisis general del asistente de visión para usuario: ${userId}...`);
-        const description = await processImageWithVision(imgBuffer, flowDynamic, projectId, 'ASSISTANT_ID_IMG');
+        const description = await processImageWithVision(imgBuffer, flowDynamic, projectId, 'ASSISTANT_ID_IMG', true);
         
         if (!description) {
             console.log("[ReceiptVerifierMP] El análisis general no retornó descripción.");
@@ -36,7 +36,7 @@ export async function verifyReceiptFlow(
         console.log("[ReceiptVerifierMP] Se detectó un comprobante de Mercado Pago en logs. Iniciando extracción OCR...");
 
         // 3. Ejecutar el asistente OCR especializado para obtener JSON
-        const ocrResult = await processImageWithVision(imgBuffer, flowDynamic, projectId, 'ASSISTANT_ID_MP_OCR');
+        const ocrResult = await processImageWithVision(imgBuffer, flowDynamic, projectId, 'ASSISTANT_ID_MP_OCR', true);
         if (!ocrResult) {
             console.warn("[ReceiptVerifierMP] No se obtuvo respuesta del OCR especializado.");
             return false;
