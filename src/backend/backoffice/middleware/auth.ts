@@ -143,7 +143,7 @@ export const backofficeAuth = async (req: any, res: any, next: () => void) => {
         return next();
     }
     
-    console.warn(`[AUTH] Intento fallido. Token: ${token}. Esperado: ${adminPass || 'neuroadmin25'}`);
+    console.warn(`[AUTH] Intento fallido para backoffice. project_id=${projectId}, token_present=${Boolean(token)}, admin_pass_configured=${Boolean(adminPass)}`);
     
     // Si res.status o res.json no existen (middleware antes de compatibilidad), los manejamos manualmente
     if (typeof res.status === 'function') {
@@ -188,7 +188,7 @@ export const systemConfigAuth = async (req: any, res: any, next: () => void) => 
         return next();
     }
 
-    console.warn(`[AUTH-CONFIG] Intento fallido. Token: ${token}`);
+    console.warn(`[AUTH-CONFIG] Intento fallido para system config. token_present=${Boolean(token)}, admin_pass_configured=${Boolean(adminPass)}`);
     
     if (typeof res.status === 'function') {
         return res.status(401).json({ success: false, error: "Unauthorized (System Config)" });
