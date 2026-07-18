@@ -15,6 +15,9 @@ let allLeads = [];
 let allTickets = [];
 let crmData = {};
 let botTags = [];
+let isSyncingCRM = false;
+let queuedSyncCRM = false;
+let socketSyncTimer = null;
 
 let kanbanBoard = null;
 let columns = [
@@ -144,14 +147,18 @@ async function saveCRMState() {
     } catch (e) { console.error('Error guardando estado:', e); }
 }
 
-async function syncCRM() {
-    showToast('Sincronizando datos...', 'info');
-    try {
-        if (typeof window.Skeleton !== 'undefined') {
-            const containers = document.querySelectorAll('.kanban-cards');
-            containers.forEach(c => c.innerHTML = window.Skeleton.cards(3));
-        }
+async function syncCRM(options = {}) {
+    const { silent = false } = options;
 
+    if (isSyncingCRM) {
+        queuedSyncCRM = true;
+        return;
+    }
+
+    isSyncingCRM = true;
+    if (!silent) showToast('Sincronizando datos...', 'info');
+
+    try {
         const [resLeads, resTickets] = await Promise.all([
             fetch(`/api/backoffice/leads?token=${activeToken}&limit=300`),
             fetch(`/api/backoffice/tickets?token=${activeToken}&estado=all_active`) // Traer todos los tickets activos para el tablero
@@ -163,7 +170,7 @@ async function syncCRM() {
         const ticketsRaw = await resTickets.json();
         const ticketsData = Array.isArray(ticketsRaw) ? ticketsRaw : [];
         
-        // El CRM solo muestra los tickets que son Nuevo Lead y que NO estén cerrados
+        // El CRM solo muestra los tickets que son Nuevo Lead y que NO esten cerrados
         allTickets = ticketsData.filter(t => t.tipo === 'Nuevo Lead' && t.estado !== 'Cerrado');
         console.log(`[CRM] Tickets activos: ${allTickets.length}`);
 
@@ -177,10 +184,16 @@ async function syncCRM() {
 
         renderBoard();
         await loadTasksDashboard();
-        showToast('CRM Actualizado');
+        if (!silent) showToast('CRM Actualizado');
     } catch (e) {
         console.error(e);
-        showToast('Error al sincronizar datos', 'error');
+        if (!silent) showToast('Error al sincronizar datos', 'error');
+    } finally {
+        isSyncingCRM = false;
+        if (queuedSyncCRM) {
+            queuedSyncCRM = false;
+            syncCRM({ silent: true });
+        }
     }
 }
 window.syncCRM = syncCRM; // Exportar globalmente
@@ -224,7 +237,7 @@ function renderBoard() {
             <div class="kanban-cards" id="cards-${col.id}"></div>
         `;
         const wrapperEl = document.createElement('div');
-        wrapperEl.className = 'kanban-column-wrapper animate-fade';
+        wrapperEl.className = 'kanban-column-wrapper';
         wrapperEl.dataset.id = col.id;
         wrapperEl.appendChild(columnEl);
 
@@ -1015,14 +1028,19 @@ function _initKanbanScrollBehavior() {
     }, { passive: false });
 }
 
+function scheduleSocketSyncCRM() {
+    if (socketSyncTimer) clearTimeout(socketSyncTimer);
+    socketSyncTimer = setTimeout(() => syncCRM({ silent: true }), 250);
+}
+
 function onContactUpdated(payload) {
-    console.log('📡 [Socket CRM] Contacto actualizado:', payload.chatId);
-    syncCRM();
+    console.log('[Socket CRM] Contacto actualizado:', payload.chatId);
+    scheduleSocketSyncCRM();
 }
 
 function onTicketUpdated(payload) {
-    console.log('📡 [Socket CRM] Ticket actualizado o nuevo');
-    syncCRM();
+    console.log('[Socket CRM] Ticket actualizado o nuevo');
+    scheduleSocketSyncCRM();
 }
 
 function onNewMessage(payload) {
@@ -1039,6 +1057,10 @@ window.destroyCRM = function() {
     if (window._crmAlertInterval) {
         clearInterval(window._crmAlertInterval);
         window._crmAlertInterval = null;
+    }
+    if (socketSyncTimer) {
+        clearTimeout(socketSyncTimer);
+        socketSyncTimer = null;
     }
 };
 })();

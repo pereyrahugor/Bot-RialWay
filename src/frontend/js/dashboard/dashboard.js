@@ -7,14 +7,14 @@ let _dashInterval = null;
 
 async function _loadDashboardData() {
     try {
-        if (typeof window.Skeleton !== 'undefined') {
+        const hasRenderedStats = !document.getElementById('last-update')?.classList.contains('hidden');
+        if (!hasRenderedStats && typeof window.Skeleton !== 'undefined') {
             const kpiIds = ['kpi-conversion', 'kpi-msgs', 'kpi-bot', 'kpi-resp'];
             kpiIds.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.innerHTML = `<div class="skeleton-title" style="width: 60%; height: 32px; margin: 0; border-radius: 6px;"></div>`;
             });
         }
-
         const url = _dashToken ? `/api/dashboard/stats?token=${_dashToken}` : `/api/dashboard/stats`;
         const res = await fetch(url);
         const data = await res.json();

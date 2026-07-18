@@ -15,6 +15,9 @@ let allLeads = [];
 let allTickets = [];
 let crmData = {};
 let botTags = [];
+let isSyncingCRM = false;
+let queuedSyncCRM = false;
+let socketSyncTimer = null;
 let standardColumns = [
     { id: 'UNASSIGNED', title: 'Leads Nuevos', fixed: true },
     { id: 'contactado', title: 'Contactado' },
@@ -122,20 +125,21 @@ async function loadCRMState() {
     }
 }
 
-async function syncCRM() {
-    showToast('Sincronizando datos...', 'info');
-    try {
-        // Renderizamos las columnas vacías primero para poder inyectar los skeletons
-        renderBoard();
-        
-        if (typeof window.Skeleton !== 'undefined') {
-            const containers = document.querySelectorAll('.kanban-cards');
-            containers.forEach(c => c.innerHTML = window.Skeleton.cards(3));
-        }
+async function syncCRM(options = {}) {
+    const { silent = false } = options;
 
+    if (isSyncingCRM) {
+        queuedSyncCRM = true;
+        return;
+    }
+
+    isSyncingCRM = true;
+    if (!silent) showToast('Sincronizando datos...', 'info');
+
+    try {
         const [resLeads, resTickets] = await Promise.all([
             fetch(`/api/backoffice/leads?token=${activeToken}&limit=300`),
-            fetch(`/api/backoffice/tickets?token=${activeToken}&estado=all_active`) // Traer todos los activos (Abierto, contactado, propuesta, etc.)
+            fetch(`/api/backoffice/tickets?token=${activeToken}&estado=all_active`)
         ]);
 
         const leadsData = await resLeads.json();
@@ -144,7 +148,6 @@ async function syncCRM() {
         const ticketsRaw = await resTickets.json();
         const ticketsData = Array.isArray(ticketsRaw) ? ticketsRaw : [];
         
-        // Excluir cerrados y filtrar solo Nuevo Lead
         allTickets = ticketsData.filter(t => t.tipo === 'Nuevo Lead' && t.estado !== 'Cerrado');
         console.log(`[CRM Tareas] Tickets activos: ${allTickets.length}`);
 
@@ -157,10 +160,16 @@ async function syncCRM() {
         }
 
         renderBoard();
-        showToast('Tareas Actualizadas', 'success');
+        if (!silent) showToast('Tareas Actualizadas', 'success');
     } catch (e) {
         console.error(e);
-        showToast('Error al sincronizar datos', 'error');
+        if (!silent) showToast('Error al sincronizar datos', 'error');
+    } finally {
+        isSyncingCRM = false;
+        if (queuedSyncCRM) {
+            queuedSyncCRM = false;
+            syncCRM({ silent: true });
+        }
     }
 }
 
@@ -178,7 +187,7 @@ function renderBoard() {
     ];
     cols.forEach(col => {
         const colEl = document.createElement('div');
-        colEl.className = 'kanban-column animate-fade';
+        colEl.className = 'kanban-column';
         colEl.dataset.id = col.id;
         colEl.innerHTML = `
             <div class="column-header">
@@ -196,7 +205,7 @@ function renderBoard() {
             <div class="kanban-cards" id="cards-${col.id}"></div>
         `;
         const wrapperEl = document.createElement('div');
-        wrapperEl.className = 'kanban-column-wrapper animate-fade';
+        wrapperEl.className = 'kanban-column-wrapper';
         wrapperEl.dataset.id = col.id;
         wrapperEl.appendChild(colEl);
 
@@ -208,6 +217,7 @@ function renderBoard() {
 }
 
 function distributeCards() {
+    document.querySelectorAll('.kanban-cards').forEach(c => c.innerHTML = '');
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -823,14 +833,19 @@ function formatDate(dateStr) {
 }
 
 
+function scheduleSocketSyncCRM() {
+    if (socketSyncTimer) clearTimeout(socketSyncTimer);
+    socketSyncTimer = setTimeout(() => syncCRM({ silent: true }), 250);
+}
+
 function onTareasContactUpdated(payload) {
-    console.log('📡 [Socket Tareas] Contacto actualizado:', payload.chatId);
-    syncCRM();
+    console.log('[Socket Tareas] Contacto actualizado:', payload.chatId);
+    scheduleSocketSyncCRM();
 }
 
 function onTareasTicketUpdated(payload) {
-    console.log('📡 [Socket Tareas] Ticket actualizado');
-    syncCRM();
+    console.log('[Socket Tareas] Ticket actualizado');
+    scheduleSocketSyncCRM();
 }
 
 window.destroyCRMTareas = function() {
@@ -842,6 +857,10 @@ window.destroyCRMTareas = function() {
     if (window._crmTareasAlertInterval) {
         clearInterval(window._crmTareasAlertInterval);
         window._crmTareasAlertInterval = null;
+    }
+    if (socketSyncTimer) {
+        clearTimeout(socketSyncTimer);
+        socketSyncTimer = null;
     }
 };
 

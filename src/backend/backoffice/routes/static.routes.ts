@@ -40,7 +40,7 @@ export const registerStaticRoutes = (app: any, { __dirname }: { __dirname: strin
 
                 if (htmlPath) {
                     let htmlContent = fs.readFileSync(htmlPath, 'utf8');
-                    const botName = process.env.ASSISTANT_NAME || process.env.RAILWAY_SERVICE_NAME || "Neurolinks";
+                    const botName = process.env.RAILWAY_SERVICE_NAME || process.env.BOT_NAME || process.env.ASSISTANT_NAME || "Neurolinks";
 
                     console.log(`[Static] 🟢 Sirviendo ${filename} para ${route}. botName=${botName}`);
 
