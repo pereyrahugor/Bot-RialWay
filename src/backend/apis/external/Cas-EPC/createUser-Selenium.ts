@@ -32,6 +32,7 @@ export async function createUserSelenium(
     options.addArguments('--no-sandbox');
     options.addArguments('--disable-dev-shm-usage');
     options.addArguments('--disable-gpu');
+    options.addArguments('--window-size=1920,1080');
 
     console.log("🔌 Iniciando instancia de Chrome...");
     const driver: WebDriver = await new Builder()
@@ -126,19 +127,19 @@ export async function createUserSelenium(
             10000
         );
         await new Promise(resolve => setTimeout(resolve, 1500)); // Esperar a que la animación de la interfaz se complete
-        await submitBtn.click();
+        await driver.executeScript("arguments[0].click();", submitBtn);
 
         // 7.1 Opcional: Hacer click en el botón del modal de confirmación emergente si existiese
         try {
-            const confirmBtnXPath = "/html/body/div[2]/div/div/div/div/div[2]/button[1]";
+            const confirmBtnXPath = "//button[contains(@class, 'confirm') or contains(@class, 'swal2-confirm') or contains(text(), 'Aceptar') or contains(text(), 'Sí') or contains(text(), 'Confirmar') or contains(text(), 'Si')] | /html/body/div[2]/div/div/div/div/div[2]/button[1]";
             const confirmBtn = await driver.wait(
                 until.elementLocated(By.xpath(confirmBtnXPath)),
                 3000
             );
-            await confirmBtn.click();
-            console.log("[Cas-EPC] Confirmación emergente clickeada.");
+            await driver.executeScript("arguments[0].click();", confirmBtn);
+            console.log("[Cas-EPC] Confirmación emergente clickeada con éxito.");
         } catch (e) {
-            console.log("[Cas-EPC] Sin ventana emergente de confirmación requerida.");
+            console.log("[Cas-EPC] Sin ventana emergente de confirmación requerida o no se pudo hacer click.");
         }
 
         // 8. Esperar a que se procese la creación (generalmente redirige de vuelta a /users/all)
