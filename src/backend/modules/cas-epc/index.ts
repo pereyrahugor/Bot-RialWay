@@ -24,6 +24,17 @@ export const casEpcModule = {
       
       const res = await createUserSelenium(nombre, false);
       if (res) {
+          const chatId = context?.ctx?.from;
+          const projectId = context?.projectId;
+          if (chatId) {
+              try {
+                  const { HistoryHandler } = await import("../../db/historyHandler.js");
+                  await HistoryHandler.updateContactDetails(chatId, { cuit_dni: res.username }, projectId);
+                  console.log(`[casEpcModule] 💾 Guardado usuario ${res.username} en chats.cuit_dni para ${chatId}`);
+              } catch (dbErr: any) {
+                  console.error(`[casEpcModule] ❌ Error guardando usuario de jugador en BD:`, dbErr.message);
+              }
+          }
           return `✅ Usuario ${res.username} creado con éxito. Contraseña por defecto: "${res.password}".`;
       }
       return `❌ No se pudo completar la creación del usuario.`;
