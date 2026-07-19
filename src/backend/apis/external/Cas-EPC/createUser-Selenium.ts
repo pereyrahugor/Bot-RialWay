@@ -164,7 +164,14 @@ export async function createUserSelenium(
                     return { success: true };
                 }
 
-                // 2. Verificar si el modal ya se cerró por sí solo (fallback)
+                // 2. Verificar si el usuario ya aparece listado en la tabla (fuera del modal)
+                const cells = await d.findElements(By.xpath(`//table//td[contains(text(), '${usernameGenerated}')]`));
+                if (cells.length > 0) {
+                    console.log(`[Cas-EPC] ¡Usuario ${usernameGenerated} detectado en la tabla de resultados!`);
+                    return { success: true };
+                }
+
+                // 3. Verificar si el modal ya se cerró por sí solo (fallback)
                 const modal = await d.findElement(By.xpath("/html/body/div[8]"));
                 const isDisplayed = await modal.isDisplayed();
                 if (!isDisplayed) {
