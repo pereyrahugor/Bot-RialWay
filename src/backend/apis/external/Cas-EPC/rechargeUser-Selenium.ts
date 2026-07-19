@@ -142,8 +142,11 @@ export async function rechargeUserSelenium(
         console.log("[Cas-EPC] Enviando depósito y esperando confirmación...");
         await new Promise(resolve => setTimeout(resolve, 3000));
 
-        // Buscar cartel de error en pantalla si lo hubiera
-        const errorElements = await localDriver.findElements(By.xpath("//*[contains(text(), 'Error') or contains(text(), 'error') or contains(text(), 'insuficiente') or contains(text(), 'inválido')]"));
+        // Buscar cartel de error en pantalla si lo hubiera (restringido a contenedores de alertas/modales para evitar falsos positivos con textos estáticos de la página)
+        const errorElements = await localDriver.findElements(By.xpath(
+            "//*[contains(@class, 'swal') or contains(@class, 'modal') or contains(@class, 'alert') or contains(@class, 'toast') or contains(@class, 'popup') or contains(@class, 'notification') or contains(@class, 'dialog')]" +
+            "//*[contains(text(), 'Error') or contains(text(), 'error') or contains(text(), 'insuficiente') or contains(text(), 'inválido') or contains(text(), 'no tiene')]"
+        ));
         if (errorElements.length > 0) {
             for (const el of errorElements) {
                 try {

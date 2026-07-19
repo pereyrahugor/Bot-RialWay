@@ -120,8 +120,11 @@ export async function createUserSelenium(
                 return { success: true };
             }
             
-            // Buscar cartel de error en pantalla
-            const errorElements = await d.findElements(By.xpath("//*[contains(text(), 'Error') or contains(text(), 'error') or contains(text(), 'ya existe') or contains(text(), 'inválido')]"));
+            // Buscar cartel de error en pantalla (restringido a contenedores de alertas/modales para evitar falsos positivos con textos estáticos de la página)
+            const errorElements = await d.findElements(By.xpath(
+                "//*[contains(@class, 'swal') or contains(@class, 'modal') or contains(@class, 'alert') or contains(@class, 'toast') or contains(@class, 'popup') or contains(@class, 'notification') or contains(@class, 'dialog')]" +
+                "//*[contains(text(), 'Error') or contains(text(), 'error') or contains(text(), 'ya existe') or contains(text(), 'inválido')]"
+            ));
             if (errorElements.length > 0) {
                 for (const el of errorElements) {
                     try {
