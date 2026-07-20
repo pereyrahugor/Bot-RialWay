@@ -40,7 +40,28 @@ export const registerStaticRoutes = (app: any, { __dirname }: { __dirname: strin
 
                 if (htmlPath) {
                     let htmlContent = fs.readFileSync(htmlPath, 'utf8');
-                    const botName = process.env.RAILWAY_SERVICE_NAME || process.env.BOT_NAME || process.env.ASSISTANT_NAME || "Neurolinks";
+                    const resolveDisplayName = async (): Promise<string> => {
+                        const railwayProjectId = HistoryHandler.PROJECT_IDENTIFIER || process.env.RAILWAY_PROJECT_ID || process.env.PROJECT_ID || '';
+
+                        if (railwayProjectId) {
+                            try {
+                                const { data, error } = await HistoryHandler.getSupabase()
+                                    .from('proyectos_railway')
+                                    .select('nombre_personalizado')
+                                    .eq('railway_project_id', railwayProjectId)
+                                    .maybeSingle();
+
+                                if (!error && data?.nombre_personalizado) {
+                                    return data.nombre_personalizado;
+                                }
+                            } catch (error: any) {
+                                console.warn('[Static] No se pudo obtener nombre_personalizado:', error?.message || error);
+                            }
+                        }
+
+                        return process.env.RAILWAY_SERVICE_NAME || process.env.ASSISTANT_NAME || process.env.BOT_NAME || "Neurolinks";
+                    };
+                    const botName = await resolveDisplayName();
 
                     console.log(`[Static] 🟢 Sirviendo ${filename} para ${route}. botName=${botName}`);
 
@@ -89,8 +110,8 @@ export const registerStaticRoutes = (app: any, { __dirname }: { __dirname: strin
                     const systemConfigVisibleJs = systemConfigVisible ? 'true' : 'false';
 
                     // Reemplazo universal de placeholders
-                    const projectName = process.env.RAILWAY_SERVICE_NAME || "Neurolinks";
-                    const projectId = process.env.RAILWAY_PROJECT_ID || "";
+                    const projectName = botName;
+                    const projectId = HistoryHandler.PROJECT_IDENTIFIER || process.env.RAILWAY_PROJECT_ID || "";
                     htmlContent = htmlContent.replace(/{{BOT_NAME}}/g, botName);
                     htmlContent = htmlContent.replace(/{{ASSISTANT_NAME}}/g, botName);
                     htmlContent = htmlContent.replace(/{{PROJECT_NAME}}/g, projectName);

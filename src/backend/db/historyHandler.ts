@@ -1258,6 +1258,7 @@ export class HistoryHandler {
             return { success };
         }
         if (details.name === '[-]') details.name = undefined;
+        const { ticket_title: ticketTitle, ...chatDetails } = details as any;
 
         try {
             // Resolver el project_id real buscando el chat en base de datos si no fue provisto
@@ -1277,13 +1278,15 @@ export class HistoryHandler {
             // Invalidar cache
             this.invalidateChatCache(chatId, currentProjectId);
 
-            const { error } = await supabase
-                .from('chats')
-                .update(details)
-                .eq('id', chatId)
-                .eq('project_id', currentProjectId);
+            if (Object.keys(chatDetails).length > 0) {
+                const { error } = await supabase
+                    .from('chats')
+                    .update(chatDetails)
+                    .eq('id', chatId)
+                    .eq('project_id', currentProjectId);
 
-            if (error) throw error;
+                if (error) throw error;
+            }
 
             // --- SINCRONIZACIÓN DUAL DE INSTANCIAS (LID <-> Teléfono) ---
             try {
@@ -1313,7 +1316,7 @@ export class HistoryHandler {
                 }
 
                 if (companionId && companionId !== chatId) {
-                    const syncDetails = { ...details };
+                    const syncDetails = { ...chatDetails };
                     delete syncDetails.metadata; // Preservar metadatos individuales
                     if (Object.keys(syncDetails).length > 0) {
                         this.invalidateChatCache(companionId, currentProjectId);
@@ -1345,8 +1348,8 @@ export class HistoryHandler {
                 if (originalCrmStatus) {
                     ticketUpdatePayload.estado = originalCrmStatus;
                 }
-                if (details.ticket_title !== undefined) {
-                    ticketUpdatePayload.titulo = details.ticket_title;
+                if (ticketTitle !== undefined) {
+                    ticketUpdatePayload.titulo = ticketTitle;
                 }
 
                 const { error: updateTicketErr } = await supabase
@@ -1387,7 +1390,7 @@ export class HistoryHandler {
                     .insert({
                         project_id: currentProjectId,
                         chat_id: chatId,
-                        titulo: details.ticket_title || `Lead: ${name}`,
+                        titulo: ticketTitle || `Lead: ${name}`,
                         descripcion: details.notes || 'Lead detectado automáticamente',
                         estado: initialStatus,
                         tipo: 'Nuevo Lead',
@@ -1407,7 +1410,7 @@ export class HistoryHandler {
             historyEvents.emit('contact_updated', {
                 chatId,
                 project_id: currentProjectId,
-                details
+                details: chatDetails
             });
 
             return { success: true };
