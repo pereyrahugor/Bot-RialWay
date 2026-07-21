@@ -456,7 +456,28 @@ const main = async () => {
                 res.status(500).json({ error: globalErr.message });
             }
         });
-        app.get("/api/assistant-name", (_req: any, res: any) => res.json({ name: process.env.ASSISTANT_NAME || "Bot" }));
+        app.get("/api/assistant-name", async (_req: any, res: any) => {
+            let name = process.env.RAILWAY_SERVICE_NAME || process.env.ASSISTANT_NAME || process.env.BOT_NAME || "Bot";
+            const railwayProjectId = HistoryHandler.PROJECT_IDENTIFIER || process.env.RAILWAY_PROJECT_ID || process.env.PROJECT_ID || '';
+
+            if (railwayProjectId) {
+                try {
+                    const { data, error } = await HistoryHandler.getSupabase()
+                        .from('proyectos_railway')
+                        .select('nombre_personalizado')
+                        .eq('railway_project_id', railwayProjectId)
+                        .maybeSingle();
+
+                    if (!error && data?.nombre_personalizado) {
+                        name = data.nombre_personalizado;
+                    }
+                } catch (error: any) {
+                    console.warn('[API] No se pudo obtener nombre_personalizado:', error?.message || error);
+                }
+            }
+
+            res.json({ name });
+        });
         app.get("/api/dashboard-status", async (_req: any, res: any) => res.json(await hasActiveSession(adapterProvider, groupProvider)));
 
         // API Session Control
@@ -546,4 +567,3 @@ export const processUserMessage = async (ctx: any, items: any) => {
     return await aiManagerInstance.processUserMessage(ctx, items);
 };
 // Trigger nodemon reload after implementing custom client lead context in openai helper system prompt
-

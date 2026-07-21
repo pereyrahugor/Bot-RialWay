@@ -178,7 +178,8 @@ export class LocalHistoryStore {
                 details.crm_status = null;
             }
 
-            chats[idx] = { ...chats[idx], ...details };
+            const { ticket_title: ticketTitle, ...chatDetails } = details as any;
+            chats[idx] = { ...chats[idx], ...chatDetails };
             this.saveChats(projectId, chats);
 
             // --- SINCRONIZACIÓN DUAL DE INSTANCIAS (LID <-> Teléfono) LOCAL ---
@@ -197,7 +198,7 @@ export class LocalHistoryStore {
                 if (companionId && companionId !== chatId) {
                     const compIdx = chats.findIndex(c => c.id === companionId);
                     if (compIdx !== -1) {
-                        const syncDetails = { ...details };
+                        const syncDetails = { ...chatDetails };
                         delete syncDetails.metadata; // Preservar metadatos separados
                         chats[compIdx] = { ...chats[compIdx], ...syncDetails };
                         this.saveChats(projectId, chats);
@@ -217,8 +218,8 @@ export class LocalHistoryStore {
                 if (originalCrmStatus) {
                     tickets[activeTicketIdx].estado = originalCrmStatus;
                 }
-                if (details.ticket_title !== undefined) {
-                    tickets[activeTicketIdx].titulo = details.ticket_title;
+                if (ticketTitle !== undefined) {
+                    tickets[activeTicketIdx].titulo = ticketTitle;
                 }
                 tickets[activeTicketIdx].updated_at = new Date().toISOString();
                 this.saveTicketsList(projectId, tickets);
@@ -229,7 +230,7 @@ export class LocalHistoryStore {
                     id: crypto.randomUUID(),
                     project_id: projectId,
                     chat_id: chatId,
-                    titulo: details.ticket_title || `Lead: ${chats[idx].name || chatId}`,
+                    titulo: ticketTitle || `Lead: ${chats[idx].name || chatId}`,
                     descripcion: details.notes || 'Lead detectado automáticamente',
                     estado: initialStatus,
                     prioridad: 'Media',
