@@ -3296,28 +3296,59 @@ export class HistoryHandler {
     static async getProjectIdByRecipient(recipientId: string | null): Promise<string | null> {
         if (!recipientId || !supabase) return null;
 
+        const cleanRecipient = recipientId.trim();
+        const digitsOnly = cleanRecipient.replace(/\D/g, '');
+
         try {
-            // 1. Intentar buscar por phone_number_id en meta_onboarding
+            // 1. Buscar por phone_number_id o waba_id en meta_onboarding
             const { data: metaData } = await supabase
                 .from('meta_onboarding')
                 .select('project_id')
-                .eq('phone_number_id', recipientId)
+                .or(`phone_number_id.eq.${cleanRecipient},waba_id.eq.${cleanRecipient}`)
                 .maybeSingle();
 
-            if (metaData) return metaData.project_id;
+            if (metaData?.project_id) return metaData.project_id;
 
-            // 2. Fallback: buscar en settings por un valor que coincida (ej: WABA_NUMBER)
+            // 2. Buscar por phone_number_id o waba_id en routing_table
+            const { data: routeData } = await supabase
+                .from('routing_table')
+                .select('project_id')
+                .or(`phone_number_id.eq.${cleanRecipient},waba_id.eq.${cleanRecipient}`)
+                .maybeSingle();
+
+            if (routeData?.project_id) return routeData.project_id;
+
+            // 3. Buscar por coincidencia con display_phone_number en meta_onboarding (limpiando caracteres)
+            if (digitsOnly.length >= 7) {
+                const { data: allOnboarding } = await supabase
+                    .from('meta_onboarding')
+                    .select('project_id, onboarding_data');
+
+                if (allOnboarding && allOnboarding.length > 0) {
+                    for (const row of allOnboarding) {
+                        const displayNum = row.onboarding_data?.display_phone_number;
+                        if (displayNum) {
+                            const cleanDisplay = String(displayNum).replace(/\D/g, '');
+                            if (cleanDisplay && (cleanDisplay.includes(digitsOnly) || digitsOnly.includes(cleanDisplay))) {
+                                return row.project_id;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 4. Fallback: buscar en settings por un valor que coincida (ej: WABA_NUMBER o PHONE_NUMBER_ID)
             const { data: settingsData } = await supabase
                 .from('settings')
                 .select('project_id')
-                .eq('value', recipientId)
+                .eq('value', cleanRecipient)
                 .maybeSingle();
 
-            if (settingsData) return settingsData.project_id;
+            if (settingsData?.project_id) return settingsData.project_id;
 
             return null;
-        } catch (err) {
-            console.error('[HistoryHandler] Error en getProjectIdByRecipient:', err);
+        } catch (err: any) {
+            console.error('[HistoryHandler] Error en getProjectIdByRecipient:', err?.message || err);
             return null;
         }
     }
