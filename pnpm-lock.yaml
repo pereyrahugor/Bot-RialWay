@@ -153,8 +153,8 @@ importers:
         specifier: ^1.0.37
         version: 1.0.39
       whaileys:
-        specifier: ^6.4.10
-        version: 6.4.16(@adiwajshing/keyed-db@0.2.4)(jimp@1.6.1)(qrcode-terminal@0.12.0)(sharp@0.32.6)
+        specifier: 6.5.0
+        version: 6.5.0(@adiwajshing/keyed-db@0.2.4)(jimp@1.6.1)(qrcode-terminal@0.12.0)(sharp@0.32.6)
       whisper-node:
         specifier: ^1.1.1
         version: 1.1.1
@@ -3978,8 +3978,8 @@ packages:
   webidl-conversions@3.0.1:
     resolution: {integrity: sha512-2JAn3z8AR6rjK8Sm8orRC0h/bcl/DqL7tRPdGZ4I1CjdF+EaMLmYxBHyXuKL849eucPFhvBoxMsflfOb8kxaeQ==}
 
-  whaileys@6.4.16:
-    resolution: {integrity: sha512-WQ2ROqo82CwNjtW9NH6cTH9NljQlGJS9HBpq2pIbUlC1g+/3hfvurvTa8eqHMmKIRxNiWGKnFFu3IzTiVViSuw==}
+  whaileys@6.5.0:
+    resolution: {integrity: sha512-NOzYvSmY5bvSUGVpcei2zIE1vbyGPmNoM8ov7XciW1Cc2vGktVUVkE9+vAaNKjM1vPVWr872sx8/FifbgchBPg==}
     peerDependencies:
       '@adiwajshing/keyed-db': ^0.2.4
       jimp: ^0.16.1
@@ -8228,7 +8228,7 @@ snapshots:
 
   webidl-conversions@3.0.1: {}
 
-  whaileys@6.4.16(@adiwajshing/keyed-db@0.2.4)(jimp@1.6.1)(qrcode-terminal@0.12.0)(sharp@0.32.6):
+  whaileys@6.5.0(@adiwajshing/keyed-db@0.2.4)(jimp@1.6.1)(qrcode-terminal@0.12.0)(sharp@0.32.6):
     dependencies:
       '@hapi/boom': 9.1.4
       axios: 0.24.0

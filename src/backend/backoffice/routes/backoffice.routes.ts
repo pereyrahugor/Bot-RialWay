@@ -719,6 +719,30 @@ export const registerBackofficeRoutes = (app: any) => {
         return res.status(401).json({ success: false, error: "Credenciales inválidas" });
     });
 
+    app.get('/api/backoffice/me', backofficeAuth, async (req: any, res: any) => {
+        try {
+            const projectId = resolveProjectId(req) || HistoryHandlerClass.PROJECT_IDENTIFIER;
+            let nombre = 'Usuario';
+            
+            if (req.auth && req.auth.isSubUser && req.auth.userId) {
+                const user = await depsHistoryHandler.getUserById(req.auth.userId);
+                if (user) {
+                    nombre = user.full_name || user.username || 'Usuario';
+                }
+            } else {
+                const { data } = await supabase.from('clientes').select('nombre').eq('id', projectId).maybeSingle();
+                if (data && data.nombre) {
+                    nombre = data.nombre;
+                } else {
+                    nombre = process.env.RAILWAY_SERVICE_NAME || process.env.PROJECT_NAME || 'Admin';
+                }
+            }
+            res.json({ success: true, nombre });
+        } catch (e) {
+            res.json({ success: true, nombre: 'Usuario' });
+        }
+    });
+
     // --- USER MANAGEMENT ---
     
     app.get('/api/backoffice/users', backofficeAuth, async (req: any, res: any) => {
@@ -3041,7 +3065,7 @@ export const registerBackofficeRoutes = (app: any) => {
             // Detectar dominio público y guardarlo dinámicamente en settings
             const host = req.headers.host || '';
             const protocol = req.headers['x-forwarded-proto'] || 'https';
-            let domain = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PROJECT_URL || `${protocol}://${host}`;
+            const domain = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PROJECT_URL || `${protocol}://${host}`;
             
             if (domain.startsWith('http')) {
                 const urlObj = new URL(domain);
