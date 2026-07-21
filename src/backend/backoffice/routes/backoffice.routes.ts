@@ -59,7 +59,7 @@ historyEvents.on('setting_changed', async ({ key, value, projectId }: { key: str
             const assistantsKeys = ['ASSISTANT_ID', 'ASSISTANT_2', 'ASSISTANT_3', 'ASSISTANT_4', 'ASSISTANT_5'];
             for (const envKey of assistantsKeys) {
                 const assistantId = await HistoryHandlerClass.getConfig(envKey, projectId);
-                if (assistantId && assistantId.trim() !== '') {
+                if (assistantId && assistantId.trim() !== '' && !assistantId.includes('+') && /^asst_[a-zA-Z0-9_-]+$/.test(assistantId.trim())) {
                     console.log(`🔄 [OpenAI] Sincronizando herramientas para Asistente (${envKey}: ${assistantId}) en proyecto ${projectId}...`);
                     await syncAssistantTools(assistantId);
                 }
