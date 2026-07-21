@@ -59,32 +59,26 @@ async function main() {
         // 2. Determinar la URL del bot para el ruteo de webhooks
         let projectUrl = "https://bot-rialway-monoagente-production-1287.up.railway.app"; // Fallback por defecto
         
-        console.log("📡 Consultando la base de datos para obtener la URL pública de este proyecto...");
-        const { data: settingUrl } = await supabase
+        console.log("📡 Consultando la base de datos para obtener la URL estática de Railway para este proyecto...");
+        const { data: allDomains } = await supabase
             .from("settings")
-            .select("value")
+            .select("key, value")
             .eq("project_id", projectId)
-            .eq("key", "PROJECT_URL")
-            .maybeSingle();
+            .in("key", ["RAILWAY_STATIC_URL", "RAILWAY_PUBLIC_DOMAIN", "PROJECT_URL"]);
 
-        if (settingUrl?.value && settingUrl.value !== "PENDING") {
-            projectUrl = settingUrl.value;
-            console.log(`   👉 PROJECT_URL detectado: ${projectUrl}`);
+        // Priorizar siempre el dominio estático nativo de Railway (*.up.railway.app) ya que no depende de DNS personalizados
+        const staticRailwayDomain = allDomains?.find(d => d.value && d.value.includes('.up.railway.app'));
+
+        if (staticRailwayDomain?.value) {
+            const domain = staticRailwayDomain.value;
+            projectUrl = domain.startsWith("http") ? domain : `https://${domain}`;
+            console.log(`   👉 Dominio Estático Railway detectado (*.up.railway.app): ${projectUrl}`);
+        } else if (allDomains && allDomains.length > 0 && allDomains[0].value) {
+            const domain = allDomains[0].value;
+            projectUrl = domain.startsWith("http") ? domain : `https://${domain}`;
+            console.log(`   👉 Dominio secundario detectado: ${projectUrl}`);
         } else {
-            const { data: domainUrl } = await supabase
-                .from("settings")
-                .select("value")
-                .eq("project_id", projectId)
-                .eq("key", "RAILWAY_PUBLIC_DOMAIN")
-                .maybeSingle();
-
-            if (domainUrl?.value && domainUrl.value !== "PENDING") {
-                const domain = domainUrl.value;
-                projectUrl = domain.startsWith("http") ? domain : `https://${domain}`;
-                console.log(`   👉 RAILWAY_PUBLIC_DOMAIN detectado: ${projectUrl}`);
-            } else {
-                console.log(`   ⚠️ Sin URL en settings. Usando URL fallback: ${projectUrl}`);
-            }
+            console.log(`   ⚠️ Sin URL en settings. Usando URL fallback: ${projectUrl}`);
         }
 
         // Limpiar slash final para mantener consistencia
