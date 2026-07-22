@@ -2696,7 +2696,10 @@ export class HistoryHandler {
                 const value = payload.new?.value;
                 if (!key) return;
                 this.invalidateSettingCache(key);
-                console.log(`📡 [Realtime] Setting cambiado: ${key} = ${value}`);
+                const displayVal = (key.toUpperCase().includes('KEY') || key.toUpperCase().includes('TOKEN') || key.toUpperCase().includes('SECRET') || key.toUpperCase().includes('PASS') || key.toUpperCase().includes('PWD'))
+                    ? 'OK'
+                    : value;
+                console.log(`📡 [Realtime] Setting cambiado: ${key} = ${displayVal}`);
                 historyEvents.emit('setting_changed', { key, value, projectId });
             })
             .subscribe((status: string) => {
