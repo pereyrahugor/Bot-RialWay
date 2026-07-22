@@ -3145,12 +3145,15 @@ export class HistoryHandler {
                 data.forEach(setting => {
                     if (setting.value && setting.value !== 'PENDING') {
                         const isFixed = HistoryHandler.FIXED_KEYS.includes(setting.key);
-                        if (isFixed && process.env[setting.key] && process.env[setting.key] !== '') {
-                            if (process.env[setting.key] !== setting.value) {
+                        const envVal = process.env[setting.key];
+                        const isEnvInvalid = !envVal || envVal.trim() === '' || envVal.trim() === 'PENDING';
+                        
+                        if (isFixed && !isEnvInvalid) {
+                            if (envVal !== setting.value) {
                                 // console.log(`ℹ️ [HistoryHandler] Manteniendo valor de entorno estático para la llave fija '${setting.key}' (ignorando valor DB: ${setting.value.substring(0, 5)}...)`);
                             }
                         } else {
-                            if (process.env[setting.key] !== setting.value) {
+                            if (envVal !== setting.value) {
                                 // console.log(`🔄 [HistoryHandler] Sobreescribiendo '${setting.key}' con valor de Base de Datos (prioridad DB).`);
                             }
                             process.env[setting.key] = setting.value;
