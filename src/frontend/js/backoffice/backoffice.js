@@ -636,10 +636,12 @@ async function selectChat(id) {
     const crmBtn = document.getElementById('open-crm-btn');
     const ticketBtn = document.getElementById('open-ticket-btn');
     const quickMsgBtn = document.getElementById('quick-msg-btn');
+    const metaTemplatesBtn = document.getElementById('meta-templates-btn');
     if (tagsBtn) tagsBtn.disabled = false;
     if (crmBtn) crmBtn.disabled = false;
     if (ticketBtn) ticketBtn.disabled = false;
     if (quickMsgBtn) quickMsgBtn.disabled = false;
+    if (metaTemplatesBtn) metaTemplatesBtn.disabled = false;
 
     renderActiveChatTags();
     populateCRMFields(chat);
@@ -702,6 +704,8 @@ function updateInputState(botEnabled) {
     if (emojiBtn) emojiBtn.disabled = isBotEnabled;
     const quickMsgBtn = document.getElementById('quick-msg-btn');
     if (quickMsgBtn) quickMsgBtn.disabled = false; // Siempre habilitado si hay un chat seleccionado
+    const metaTemplatesBtn = document.getElementById('meta-templates-btn');
+    if (metaTemplatesBtn) metaTemplatesBtn.disabled = false; // Siempre habilitado si hay un chat seleccionado
     const micBtn = document.getElementById('mic-btn');
     if (micBtn && !_isRecording) micBtn.disabled = isBotEnabled;
 
@@ -3777,4 +3781,401 @@ window.backofficeController = {
     loadNotificationsStatus,
     refreshChatsList: () => renderChatList()
 };
+
+// --- PLANTILLAS DE META (META TEMPLATES) ---
+
+window._cachedMetaTemplates = null;
+window._selectedMetaTemplate = null;
+window._metaTemplateFormValues = {};
+
+window.toggleMetaTemplatesPopover = function (e) {
+    if (e) e.stopPropagation();
+    const popover = document.getElementById('meta-templates-popover');
+    const qmPopover = document.getElementById('quick-messages-popover');
+    if (qmPopover) qmPopover.style.display = 'none';
+
+    if (!popover) return;
+    const isShowing = popover.style.display !== 'none';
+    if (isShowing) {
+        popover.style.display = 'none';
+    } else {
+        popover.style.display = 'flex';
+        window.backToMetaTemplatesList();
+        window.loadMetaTemplates();
+    }
+};
+
+window.backToMetaTemplatesList = function () {
+    const stepList = document.getElementById('mt-step-list');
+    const stepConfig = document.getElementById('mt-step-configure');
+    if (stepList) stepList.style.display = 'block';
+    if (stepConfig) stepConfig.style.display = 'none';
+    window._selectedMetaTemplate = null;
+    window._metaTemplateFormValues = {};
+};
+
+window.loadMetaTemplates = async function (forceRefresh = false) {
+    const listEl = document.getElementById('mt-list');
+    if (!listEl) return;
+
+    if (window._cachedMetaTemplates && !forceRefresh) {
+        window.renderMetaTemplatesList(window._cachedMetaTemplates);
+        return;
+    }
+
+    listEl.innerHTML = '<div class="qm-empty"><i class="fas fa-spinner fa-spin" style="margin-right:6px;"></i> Cargando plantillas...</div>';
+
+    try {
+        const activeChat = chats.find(c => c.id === activeChatId);
+        const pId = activeChat?.project_id || '';
+        const res = await fetch(`/api/backoffice/whatsapp/templates?token=${token}&projectId=${pId}`);
+        const data = await res.json();
+
+        if (!data.success || !Array.isArray(data.templates)) {
+            listEl.innerHTML = `<div class="qm-empty">${data.error || 'No se pudieron cargar las plantillas de Meta.'}</div>`;
+            return;
+        }
+
+        window._cachedMetaTemplates = data.templates;
+        window.renderMetaTemplatesList(data.templates);
+    } catch (err) {
+        console.error('Error cargando plantillas de Meta:', err);
+        listEl.innerHTML = '<div class="qm-empty">Error de conexión al cargar plantillas.</div>';
+    }
+};
+
+window.renderMetaTemplatesList = function (templatesToRender) {
+    const listEl = document.getElementById('mt-list');
+    if (!listEl) return;
+
+    if (!Array.isArray(templatesToRender) || templatesToRender.length === 0) {
+        listEl.innerHTML = '<div class="qm-empty">No hay plantillas de Meta disponibles.</div>';
+        return;
+    }
+
+    listEl.innerHTML = templatesToRender.map(t => {
+        const bodyComp = t.components?.find(c => c.type === 'BODY');
+        const previewText = bodyComp?.text || '';
+        const category = t.category || 'UTILITY';
+
+        let catColor = '#6366f1';
+        if (category === 'MARKETING') catColor = '#ec4899';
+        else if (category === 'AUTHENTICATION') catColor = '#f59e0b';
+
+        return `
+            <div class="qm-item" onclick="window.selectMetaTemplateForChat('${t.name}')">
+                <div class="qm-item-info">
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:2px;">
+                        <span class="qm-item-title" style="font-weight:700;">${t.name}</span>
+                        <span style="font-size:0.62rem; background:${catColor}20; color:${catColor}; border:1px solid ${catColor}40; padding:1px 5px; border-radius:4px; font-weight:700;">${category}</span>
+                    </div>
+                    <div class="qm-item-body">${previewText}</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+};
+
+window.filterMetaTemplates = function (query) {
+    if (!window._cachedMetaTemplates) return;
+    const q = (query || '').toLowerCase().trim();
+    if (!q) {
+        window.renderMetaTemplatesList(window._cachedMetaTemplates);
+        return;
+    }
+    const filtered = window._cachedMetaTemplates.filter(t => 
+        (t.name || '').toLowerCase().includes(q) || 
+        (t.category || '').toLowerCase().includes(q) ||
+        t.components?.some(c => (c.text || '').toLowerCase().includes(q))
+    );
+    window.renderMetaTemplatesList(filtered);
+};
+
+window.selectMetaTemplateForChat = function (templateName) {
+    if (!window._cachedMetaTemplates) return;
+    const template = window._cachedMetaTemplates.find(t => t.name === templateName);
+    if (!template) return;
+
+    window._selectedMetaTemplate = template;
+    window._metaTemplateFormValues = {};
+
+    const stepList = document.getElementById('mt-step-list');
+    const stepConfig = document.getElementById('mt-step-configure');
+    const titleEl = document.getElementById('mt-selected-name');
+    
+    if (stepList) stepList.style.display = 'none';
+    if (stepConfig) stepConfig.style.display = 'flex';
+    if (titleEl) titleEl.innerText = template.name;
+
+    const activeChat = chats.find(c => c.id === activeChatId);
+    const chatName = (activeChat?.name && activeChat.name !== '[-]') ? activeChat.name : (activeChat?.contact_name || '');
+    const chatPhone = activeChat?.id ? activeChat.id.split('@')[0] : '';
+    
+    const bodyComp = template.components?.find(c => c.type === 'BODY');
+    const isNamed = (template.parameter_format || '').toLowerCase() === 'named';
+    const bodyNamedParams = bodyComp?.example?.body_text_named_params || [];
+    
+    const varNames = [];
+    if (isNamed && bodyNamedParams.length > 0) {
+        bodyNamedParams.forEach(p => varNames.push(p.param_name));
+    }
+    if (varNames.length === 0 && bodyComp?.text) {
+        const varRegex = /\{\{([^}]+)\}\}/g;
+        let match;
+        while ((match = varRegex.exec(bodyComp.text)) !== null) {
+            const vName = match[1].trim();
+            if (!varNames.includes(vName)) varNames.push(vName);
+        }
+    }
+
+    varNames.forEach((varName, idx) => {
+        const lower = varName.toLowerCase();
+        let autoVal = '';
+        if (['nombre', 'name', 'nombre_cliente', 'nombrecliente'].includes(lower) || (!isNamed && idx === 0)) {
+            autoVal = chatName;
+        } else if (['telefono', 'phone', 'celular', 'tel', 'movil'].includes(lower)) {
+            autoVal = chatPhone;
+        } else if (['email', 'correo'].includes(lower) && activeChat?.crm_email) {
+            autoVal = activeChat.crm_email;
+        } else if (['cuit', 'cuil', 'dni'].includes(lower) && activeChat?.crm_cuit) {
+            autoVal = activeChat.crm_cuit;
+        } else if (['direccion', 'domicilio', 'address'].includes(lower) && activeChat?.crm_address) {
+            autoVal = activeChat.crm_address;
+        }
+        window._metaTemplateFormValues[varName] = autoVal;
+    });
+
+    const headerComp = template.components?.find(c => c.type === 'HEADER');
+    if (headerComp && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComp.format)) {
+        const exampleUrl = headerComp.example?.header_handle?.[0] || '';
+        window._metaTemplateFormValues['_header_media_url'] = exampleUrl;
+    }
+
+    const buttonsComp = template.components?.find(c => c.type === 'BUTTONS');
+    if (buttonsComp && Array.isArray(buttonsComp.buttons)) {
+        buttonsComp.buttons.forEach((btn, idx) => {
+            if (btn.type === 'URL' && btn.url && btn.url.includes('{{1}}')) {
+                window._metaTemplateFormValues[`_button_${idx+1}_url_suffix`] = '';
+            }
+        });
+    }
+
+    window.renderMetaTemplateForm();
+};
+
+window.renderMetaTemplateForm = function () {
+    const template = window._selectedMetaTemplate;
+    if (!template) return;
+
+    const previewEl = document.getElementById('mt-template-preview');
+    const formEl = document.getElementById('mt-variables-form');
+    if (!previewEl || !formEl) return;
+
+    const bodyComp = template.components?.find(c => c.type === 'BODY');
+    const headerComp = template.components?.find(c => c.type === 'HEADER');
+    const isNamed = (template.parameter_format || '').toLowerCase() === 'named';
+
+    let rawText = bodyComp?.text || '';
+    let renderedText = rawText;
+
+    const varRegex = /\{\{([^}]+)\}\}/g;
+    renderedText = renderedText.replace(varRegex, (match, p1) => {
+        const vName = p1.trim();
+        const val = window._metaTemplateFormValues[vName];
+        if (val && val.trim() !== '') {
+            return `<strong style="color:#0099FF;">${val}</strong>`;
+        }
+        return `<span style="color:#ef4444; font-style:italic;">{${vName}}</span>`;
+    });
+
+    let headerHtml = '';
+    if (headerComp) {
+        if (headerComp.format === 'TEXT' && headerComp.text) {
+            headerHtml = `<div style="font-weight:700; margin-bottom:4px; font-size:0.82rem;">${headerComp.text}</div>`;
+        } else if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComp.format)) {
+            headerHtml = `<div style="background:rgba(0,153,255,0.1); border:1px dashed #0099FF; border-radius:6px; padding:6px; font-size:0.75rem; text-align:center; margin-bottom:6px; color:#0099FF; font-weight:600;">
+                <i class="fas fa-file-invoice" style="margin-right:4px;"></i> Cabecera Multimedia (${headerComp.format})
+            </div>`;
+        }
+    }
+
+    previewEl.innerHTML = `
+        <div style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:10px; font-size:0.8rem; line-height:1.4; color:var(--text-main);">
+            ${headerHtml}
+            <div>${renderedText.replace(/\n/g, '<br/>')}</div>
+        </div>
+    `;
+
+    let formHtml = '';
+
+    if (headerComp && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComp.format)) {
+        const mediaVal = window._metaTemplateFormValues['_header_media_url'] || '';
+        formHtml += `
+            <div style="display:flex; flex-direction:column; gap:3px;">
+                <label style="font-size:0.72rem; font-weight:600; color:var(--text-muted);">
+                    <i class="fas fa-link" style="margin-right:4px;"></i> URL Cabecera (${headerComp.format}):
+                </label>
+                <input type="text" value="${mediaVal}" placeholder="URL pública..." 
+                    oninput="window._metaTemplateFormValues['_header_media_url']=this.value; window.renderMetaTemplateForm();" 
+                    style="width:100%; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:5px 8px; font-size:0.75rem; color:inherit; outline:none;" />
+            </div>
+        `;
+    }
+
+    const keys = Object.keys(window._metaTemplateFormValues).filter(k => !k.startsWith('_'));
+    if (keys.length > 0) {
+        formHtml += `<div style="font-size:0.72rem; font-weight:700; color:var(--text-muted); margin-top:4px;">Variables del Mensaje:</div>`;
+        keys.forEach(key => {
+            const val = window._metaTemplateFormValues[key] || '';
+            const labelText = isNamed ? `Variable {{${key}}}` : `Parámetro {{${key}}}`;
+            formHtml += `
+                <div style="display:flex; flex-direction:column; gap:3px;">
+                    <label style="font-size:0.72rem; font-weight:600; color:var(--text-muted);">${labelText}:</label>
+                    <input type="text" value="${val}" placeholder="Valor para ${key}..." 
+                        oninput="window._metaTemplateFormValues['${key}']=this.value; window.renderMetaTemplateForm();" 
+                        style="width:100%; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:5px 8px; font-size:0.75rem; color:inherit; outline:none;" />
+                </div>
+            `;
+        });
+    }
+
+    const btnKeys = Object.keys(window._metaTemplateFormValues).filter(k => k.startsWith('_button_'));
+    if (btnKeys.length > 0) {
+        formHtml += `<div style="font-size:0.72rem; font-weight:700; color:var(--text-muted); margin-top:4px;">Botones con URL dinámica:</div>`;
+        btnKeys.forEach(btnKey => {
+            const val = window._metaTemplateFormValues[btnKey] || '';
+            const btnNum = btnKey.split('_')[2];
+            formHtml += `
+                <div style="display:flex; flex-direction:column; gap:3px;">
+                    <label style="font-size:0.72rem; font-weight:600; color:var(--text-muted);">Sufijo URL Botón ${btnNum}:</label>
+                    <input type="text" value="${val}" placeholder="Ej: codigo123..." 
+                        oninput="window._metaTemplateFormValues['${btnKey}']=this.value;" 
+                        style="width:100%; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:5px 8px; font-size:0.75rem; color:inherit; outline:none;" />
+                </div>
+            `;
+        });
+    }
+
+    formEl.innerHTML = formHtml;
+};
+
+window.sendMetaTemplateToActiveChat = async function () {
+    const template = window._selectedMetaTemplate;
+    if (!template || !activeChatId) return;
+
+    const activeChat = chats.find(c => c.id === activeChatId);
+    const targetPhone = activeChatId.split('@')[0];
+
+    const sendBtn = document.getElementById('mt-send-btn');
+    if (sendBtn) {
+        sendBtn.disabled = true;
+        sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:4px;"></i> Enviando...';
+    }
+
+    try {
+        const isNamed = (template.parameter_format || '').toLowerCase() === 'named';
+        const bodyComp = template.components?.find(c => c.type === 'BODY');
+        const headerComp = template.components?.find(c => c.type === 'HEADER');
+        const components = [];
+
+        let mediaHeaderObj = null;
+        if (headerComp && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComp.format)) {
+            const lowFormat = headerComp.format.toLowerCase();
+            const mediaUrl = window._metaTemplateFormValues['_header_media_url'] || headerComp.example?.header_handle?.[0];
+
+            if (mediaUrl) {
+                components.push({
+                    type: 'HEADER',
+                    parameters: [{
+                        type: lowFormat,
+                        [lowFormat]: { link: mediaUrl }
+                    }]
+                });
+                mediaHeaderObj = { url: mediaUrl, type: lowFormat };
+            }
+        }
+
+        const varKeys = Object.keys(window._metaTemplateFormValues).filter(k => !k.startsWith('_'));
+        if (varKeys.length > 0) {
+            const bodyParams = [];
+            varKeys.forEach(vKey => {
+                const val = (window._metaTemplateFormValues[vKey] || '').trim() || '-';
+                if (isNamed) {
+                    bodyParams.push({ type: 'text', parameter_name: vKey, text: val });
+                } else {
+                    bodyParams.push({ type: 'text', text: val });
+                }
+            });
+            components.push({ type: 'BODY', parameters: bodyParams });
+        }
+
+        const btnKeys = Object.keys(window._metaTemplateFormValues).filter(k => k.startsWith('_button_'));
+        btnKeys.forEach(bKey => {
+            const idx = parseInt(bKey.split('_')[2]) - 1;
+            const val = (window._metaTemplateFormValues[bKey] || '').trim();
+            if (val) {
+                components.push({
+                    type: 'button',
+                    sub_type: 'url',
+                    index: String(idx),
+                    parameters: [{ type: 'text', text: val }]
+                });
+            }
+        });
+
+        let renderedText = bodyComp?.text || '';
+        renderedText = renderedText.replace(/\{\{([^}]+)\}\}/g, (m, p1) => {
+            const vKey = p1.trim();
+            return window._metaTemplateFormValues[vKey] || m;
+        });
+        const historyText = `[Plantilla Meta: ${template.name}]\n${renderedText}`;
+
+        const res = await fetch(`/api/backoffice/whatsapp/send-single-template?token=${token}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                chatId: activeChatId,
+                phone: targetPhone,
+                templateName: template.name,
+                languageCode: template.language || 'es',
+                components,
+                renderedText: historyText,
+                mediaHeader: mediaHeaderObj,
+                projectId: activeChat?.project_id || ''
+            })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+            if (window.swalAlert) {
+                window.swalAlert('¡Enviado!', `La plantilla '${template.name}' se envió con éxito.`, 'success');
+            }
+            const popover = document.getElementById('meta-templates-popover');
+            if (popover) popover.style.display = 'none';
+            window.backToMetaTemplatesList();
+            fetchMessages(activeChatId, true);
+        } else {
+            throw new Error(data.error || 'Error al enviar la plantilla.');
+        }
+    } catch (err) {
+        console.error('Error enviando plantilla Meta:', err);
+        if (window.swalAlert) {
+            window.swalAlert('Error', err.message || 'No se pudo enviar la plantilla.', 'error');
+        }
+    } finally {
+        if (sendBtn) {
+            sendBtn.disabled = false;
+            sendBtn.innerHTML = '<i class="fas fa-paper-plane" style="margin-right: 4px;"></i> Enviar Plantilla';
+        }
+    }
+};
+
+document.addEventListener('click', (e) => {
+    const popover = document.getElementById('meta-templates-popover');
+    const mtBtn = document.getElementById('meta-templates-btn');
+    if (popover && popover.style.display !== 'none' && !popover.contains(e.target) && mtBtn && !mtBtn.contains(e.target)) {
+        popover.style.display = 'none';
+    }
+});
 

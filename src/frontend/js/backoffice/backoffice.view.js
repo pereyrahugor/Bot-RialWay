@@ -190,6 +190,44 @@ window.backofficeView = {
                     </div>
                 </div>
 
+                <!-- Popover de Plantillas de Meta -->
+                <div id="meta-templates-popover" class="quick-messages-popover meta-templates-popover" style="display: none;">
+                    <div class="qm-header">
+                        <h4><i class="fab fa-whatsapp" style="color: #25d366; margin-right: 6px;"></i> Plantillas de Meta</h4>
+                        <button class="qm-close-btn" onclick="window.toggleMetaTemplatesPopover(event)"><i class="fas fa-times"></i></button>
+                    </div>
+                    
+                    <!-- Paso 1: Lista y buscador -->
+                    <div id="mt-step-list" class="mt-step-container">
+                        <div class="mt-search-box" style="padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.08);">
+                            <input type="text" id="mt-search-input" placeholder="Buscar plantilla..." oninput="window.filterMetaTemplates(this.value)" style="width:100%; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:6px 10px; font-size:0.78rem; color:inherit; outline:none;" />
+                        </div>
+                        <div id="mt-list" class="qm-list-container" style="max-height: 300px; padding: 8px 10px;">
+                            <div class="qm-empty">Cargando plantillas de Meta...</div>
+                        </div>
+                    </div>
+
+                    <!-- Paso 2: Vista previa y autocompletado de variables -->
+                    <div id="mt-step-configure" class="mt-step-container" style="display: none; flex-direction: column;">
+                        <div class="mt-config-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.08);">
+                            <button class="qm-close-btn" onclick="window.backToMetaTemplatesList()" title="Volver a la lista" style="font-size: 0.75rem; padding: 3px 8px;">
+                                <i class="fas fa-arrow-left"></i> Volver
+                            </button>
+                            <span id="mt-selected-name" style="font-weight: 700; font-size: 0.8rem; color: var(--text-main); text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 200px;"></span>
+                        </div>
+                        <div class="mt-scroll-body" style="padding: 10px; overflow-y: auto; max-height: 320px; display: flex; flex-direction: column; gap: 10px;">
+                            <div class="mt-preview-box" id="mt-template-preview"></div>
+                            <div class="mt-form-box" id="mt-variables-form"></div>
+                        </div>
+                        <div class="mt-actions-footer" style="padding: 8px 10px; border-top: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: flex-end; gap: 8px;">
+                            <button class="qm-close-btn" onclick="window.backToMetaTemplatesList()" style="padding: 4px 10px;">Cancelar</button>
+                            <button class="qm-save-btn" id="mt-send-btn" onclick="window.sendMetaTemplateToActiveChat()">
+                                <i class="fas fa-paper-plane" style="margin-right: 4px;"></i> Enviar Plantilla
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- File preview overlay -->
                 <div id="file-preview-overlay" style="display:none; position:absolute; inset:0; z-index:50; background:#111; flex-direction:column;">
                     <div id="file-preview-header" style="display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-bottom:1px solid rgba(255,255,255,0.1);">
@@ -218,6 +256,11 @@ window.backofficeView = {
                         </button>
                         <button class="btn-icon input-action-btn" id="quick-msg-btn" title="Mensajes Rápidos" disabled onclick="window.toggleQuickMessages(event)">
                             <i class="fas fa-bolt"></i>
+                        </button>
+                        <button class="btn-icon input-action-btn" id="meta-templates-btn" title="Plantillas de Meta" disabled onclick="window.toggleMetaTemplatesPopover(event)">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block; vertical-align:middle; width:18px; height:18px;">
+                                <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm-1 7V3.5L18.5 9H13zm-1.5 4.5l-2.5 4.5h2l-1 4 4.5-5.5h-2.5l1.5-3h-2z"/>
+                            </svg>
                         </button>
                         <textarea id="message-input" placeholder="Escribe un mensaje" disabled
                             rows="1"

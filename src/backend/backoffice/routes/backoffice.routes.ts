@@ -2219,6 +2219,69 @@ export const registerBackofficeRoutes = (app: any) => {
         return processBulkTemplate(req, res);
     });
 
+    app.post('/api/backoffice/whatsapp/send-single-template', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
+        const projectId = resolveProjectId(req);
+        await syncMetaProvider(projectId);
+        const { chatId, phone, templateName, languageCode, components, renderedText, mediaHeader } = req.body;
+
+        try {
+            if (!templateName || (!chatId && !phone)) {
+                return res.status(400).json({ success: false, error: 'Faltan parámetros requeridos (templateName, chatId o phone).' });
+            }
+
+            const rawTarget = phone || chatId || '';
+            const targetPhone = String(rawTarget).split('@')[0].replace(/\D/g, '');
+            if (!targetPhone) {
+                return res.status(400).json({ success: false, error: 'Número de teléfono de destino no válido.' });
+            }
+            const targetJid = String(rawTarget).includes('@') ? rawTarget : `${targetPhone}@s.whatsapp.net`;
+
+            const provider = (adapterProvider.constructor.name === 'MetaCloudProvider') ? adapterProvider : groupProvider;
+            if (!provider || typeof provider.sendTemplate !== 'function') {
+                return res.status(400).json({ success: false, error: 'El proveedor WhatsApp configurado no soporta plantillas de Meta.' });
+            }
+
+            const templates = await provider.getTemplates();
+            const template = templates?.find((t: any) => t.name === templateName);
+            if (!template) {
+                return res.status(404).json({ success: false, error: `La plantilla '${templateName}' no existe o no fue encontrada.` });
+            }
+
+            const lang = languageCode || template.language || 'es';
+            console.log(`📡 [SINGLE-TEMPLATE] Enviando plantilla '${templateName}' (${lang}) a ${targetPhone}...`);
+
+            const resApi = await provider.sendTemplate(targetPhone, templateName, lang, components || []);
+
+            if (resApi?.messages?.[0]?.id) {
+                const msgId = resApi.messages[0].id;
+
+                try {
+                    const { trackSentMessage } = await import('../../providers/provider.manager');
+                    trackSentMessage(msgId);
+                } catch (_) { /* ignore */ }
+
+                if (mediaHeader && mediaHeader.url) {
+                    const mediaType = mediaHeader.type || 'document';
+                    await depsHistoryHandler.saveMessage(targetJid, 'assistant', mediaHeader.url, mediaType, undefined, undefined, `${msgId}_media`, 'whatsapp', projectId);
+                }
+
+                const textToSave = renderedText || `[Plantilla Meta: ${templateName}]`;
+                await depsHistoryHandler.saveMessage(targetJid, 'assistant', textToSave, 'text', undefined, undefined, msgId, 'whatsapp', projectId);
+                await depsHistoryHandler.updateLastHumanMessage(targetJid, projectId);
+                await depsHistoryHandler.toggleBot(targetJid, false, projectId);
+
+                return res.json({ success: true, messageId: msgId });
+            } else {
+                console.error('❌ [SINGLE-TEMPLATE] Meta no devolvió un ID de mensaje:', resApi);
+                return res.status(400).json({ success: false, error: 'Meta no devolvió un ID de mensaje válido.', details: resApi });
+            }
+        } catch (error: any) {
+            const errDetail = error?.response?.data || error?.message || error;
+            console.error('❌ [SINGLE-TEMPLATE] Error enviando plantilla:', JSON.stringify(errDetail, null, 2));
+            return res.status(500).json({ success: false, error: error?.response?.data?.error?.message || error.message || 'Error al enviar la plantilla' });
+        }
+    });
+
     app.post('/api/backoffice/whatsapp/send-quick-template', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         const projectId = resolveProjectId(req);
         await syncMetaProvider(projectId);
