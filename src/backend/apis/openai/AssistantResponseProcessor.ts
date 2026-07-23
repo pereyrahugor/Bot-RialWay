@@ -326,10 +326,10 @@ export class AssistantResponseProcessor {
 
         // 5) Detectar rutas de archivos directas en el texto (ej: /app/temp/...)
         // Esto sucede cuando una herramienta devuelve la ruta y el asistente la repite
-        const filePathRegex = /([/A-Za-z0-9._\-\s:\\]+\.pdf)/gi;
+        const filePathRegex = /(?:[a-zA-Z]:[\\/]|\.\/|\.\.\/|\/|temp\/|uploads\/)[a-zA-Z0-9._\-/\\]+(?:\s[a-zA-Z0-9._\-/\\]+)*\.pdf/gi;
         let fileMatch;
         while ((fileMatch = filePathRegex.exec(sanitizedTextResponse)) !== null) {
-            const p = fileMatch[1].trim();
+            const p = fileMatch[0].trim();
             // Solo agregar si existe en disco y no está ya en la lista
             if (fs.existsSync(p) && !pdfPaths.includes(p)) {
                 pdfPaths.push(p);
@@ -432,6 +432,22 @@ export class AssistantResponseProcessor {
                     await new Promise(r => setTimeout(r, 1000));
                 } catch (err: any) {
                     console.error('[AssistantResponseProcessor] Error enviando PDF:', err);
+                }
+            }
+
+            // Limpieza de archivos temporales descargados o guardados en directorios temporales
+            for (const pdfPath of pdfPaths) {
+                if (pdfPath.includes('temp/drive') || pdfPath.includes('temp\\drive') || pdfPath.includes('tmp/')) {
+                    setTimeout(() => {
+                        try {
+                            if (fs.existsSync(pdfPath)) {
+                                fs.unlinkSync(pdfPath);
+                                console.log(`[AssistantResponseProcessor] Archivo temporal eliminado: ${pdfPath}`);
+                            }
+                        } catch (e: any) {
+                            console.error(`[AssistantResponseProcessor] Error al eliminar archivo temporal ${pdfPath}:`, e.message);
+                        }
+                    }, 10000);
                 }
             }
         }

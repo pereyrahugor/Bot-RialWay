@@ -33,6 +33,7 @@ export const startFileCleanupWorker = (daysThreshold = 5) => {
     const runCleanup = () => {
         cleanDirectory('tmp');
         cleanDirectory('uploads');
+        cleanDirectory('temp/drive');
     };
 
     runCleanup();
