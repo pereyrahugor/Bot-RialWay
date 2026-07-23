@@ -19,7 +19,6 @@ const ROUTES = {
     '/mercado-pago':             '/js/mercado-libre/mercado-pago.view.js',
     '/lista-negra':              '/js/lista-negra/lista-negra.view.js',
     '/reportes':                 '/js/reportes/reportes.view.js',
-    '/tickets':                  '/js/tickets/tickets.view.js',
     '/usuarios':                 '/js/usuarios/usuarios.view.js',
 };
 
@@ -177,10 +176,6 @@ async function mountView(path) {
             localStorage.setItem('last_visited_conversaciones', Date.now().toString());
             const el = document.getElementById('dot-conversaciones');
             if (el) el.style.display = 'none';
-        } else if (cleanPath === '/tickets') {
-            localStorage.setItem('last_visited_tickets', Date.now().toString());
-            const el = document.getElementById('dot-tickets');
-            if (el) el.style.display = 'none';
         } else if (cleanPath === '/reportes') {
             localStorage.setItem('last_visited_reportes', Date.now().toString());
             const el = document.getElementById('dot-reportes');
@@ -197,9 +192,8 @@ async function mountView(path) {
 
         // Limpiar puntos padres localmente si todos sus hijos estan limpios
         const showConversaciones = document.getElementById('dot-conversaciones')?.style.display === 'inline-block';
-        const showTickets = document.getElementById('dot-tickets')?.style.display === 'inline-block';
         const showReportes = document.getElementById('dot-reportes')?.style.display === 'inline-block';
-        if (!showConversaciones && !showTickets && !showReportes) {
+        if (!showConversaciones && !showReportes) {
             const el = document.getElementById('dot-messaging');
             if (el) el.style.display = 'none';
         }
@@ -262,12 +256,13 @@ async function updateNotificationDots() {
         const dotConversaciones = document.getElementById('dot-conversaciones');
         if (dotConversaciones) dotConversaciones.style.display = showConversaciones ? 'inline-block' : 'none';
 
-        // --- Tickets ---
+        // --- Tickets (Ahora en Support Widget) ---
+        // El widget maneja sus propias notificaciones si está instanciado, pero podemos notificarle
         const lastTicketsVisit = parseInt(localStorage.getItem('last_visited_tickets') || '0');
         const latestTicketTime = data.latest_ticket_time ? new Date(data.latest_ticket_time).getTime() : 0;
-        const showTickets = latestTicketTime > lastTicketsVisit && currentPath !== '/tickets';
-        const dotTickets = document.getElementById('dot-tickets');
-        if (dotTickets) dotTickets.style.display = showTickets ? 'inline-block' : 'none';
+        const showTickets = latestTicketTime > lastTicketsVisit;
+        const dotTickets = document.getElementById('sw-badge');
+        if (dotTickets) dotTickets.style.display = showTickets ? 'block' : 'none';
 
         // --- Reportes ---
         const lastReportesVisit = parseInt(localStorage.getItem('last_visited_reportes') || '0');
@@ -291,7 +286,7 @@ async function updateNotificationDots() {
         if (dotTareas) dotTareas.style.display = showTareas ? 'inline-block' : 'none';
 
         // --- Mensajeria (Padre) ---
-        const showMessaging = showConversaciones || showTickets || showReportes;
+        const showMessaging = showConversaciones || showReportes;
         const dotMessaging = document.getElementById('dot-messaging');
         if (dotMessaging) dotMessaging.style.display = showMessaging ? 'inline-block' : 'none';
 
@@ -309,6 +304,13 @@ window.updateNotificationDots = updateNotificationDots;
 // Iniciar en DOMContentLoaded
 document.addEventListener('DOMContentLoaded', () => {
     mountView(window.location.pathname);
+    
+    // Cargar Support Widget Globalmente
+    loadViewScript('/js/tickets/support.widget.js').then(() => {
+        if (window.supportWidget) {
+            window.supportWidget.init();
+        }
+    });
 
     // Escuchar cambios de settings en tiempo real
     const _appSocket = io();
