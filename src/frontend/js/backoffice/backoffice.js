@@ -601,6 +601,7 @@ async function checkPlatformVisibility() {
 
 async function selectChat(id) {
     activeChatId = id;
+    activeTicketId = null;
     if (window.innerWidth <= 768) document.body.classList.add('mobile-chat-active');
 
     let chat = chats.find(c => c.id === id);
@@ -1136,7 +1137,9 @@ function openFilePreview(file) {
         const defaultName = `${desc}_pegado_${Date.now()}.${ext}`;
         try {
             targetFile = new File([targetFile], defaultName, { type: targetFile.type });
-        } catch (_) { }
+        } catch (_) {
+            // File constructor fallback is best-effort for pasted files.
+        }
     }
     selectedFile = targetFile;
 
@@ -1588,7 +1591,7 @@ function populateCRMFields(chat) {
 
     // Nuevos campos sincronizados con CRM
     const ticketTitleEl = document.getElementById('crm-ticket-title');
-    if (ticketTitleEl) ticketTitleEl.value = chat.ticket_title || '';
+    if (ticketTitleEl && !activeTicketId) ticketTitleEl.value = '';
 
     const phoneEl = document.getElementById('crm-phone-side');
     if (phoneEl) phoneEl.value = chat.id ? chat.id.split('@')[0] : '';
