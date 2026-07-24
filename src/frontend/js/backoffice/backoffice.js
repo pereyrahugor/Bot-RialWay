@@ -169,8 +169,24 @@ socket.on('new_message', (msg) => {
         renderChatList();
         saveChatsToCache(chats);
     } else {
-        // Chat nuevo: refrescar del servidor
-        fetchChats(true);
+        // Chat nuevo: obtener datos del chat individual y añadirlo a la lista local sin destruir el estado de paginación ni scroll
+        fetch(`/api/backoffice/chats/${encodeURIComponent(cid)}?token=${token}`)
+            .then(res => res.ok ? res.json() : null)
+            .then(newChat => {
+                if (newChat && newChat.id) {
+                    const exists = chats.some(c => normChatId(c.id) === normChatId(newChat.id));
+                    if (!exists) {
+                        if (_notificationsActive && msg.role === 'user' && normChatId(cid) !== normChatId(activeChatId)) {
+                            newChat.unread_count = Math.max(1, newChat.unread_count || 1);
+                        }
+                        chats.unshift(newChat);
+                        sortChats();
+                        renderChatList();
+                        saveChatsToCache(chats);
+                    }
+                }
+            })
+            .catch(err => console.error('Error cargando chat nuevo:', err));
     }
 });
 
@@ -431,9 +447,12 @@ function renderChatList(listToRender = chats) {
     const list = document.getElementById('chat-list');
     if (!list) return;
 
+    const prevScrollTop = list.scrollTop;
+
     let filteredList = listToRender;
     if (_notificationsActive && _showOnlyUnreadChats) {
-        filteredList = listToRender.filter(c => (c.unread_count || 0) > 0);
+        // Mantener chats no leídos O el chat activo actual que se está atendiendo
+        filteredList = listToRender.filter(c => (c.unread_count || 0) > 0 || c.id === activeChatId);
     }
 
     // Calcular unread total de la lista master (chats)
@@ -455,6 +474,7 @@ function renderChatList(listToRender = chats) {
         list.innerHTML = `<div style="padding: 20px; text-align: center; color: var(--text-muted); font-size: 0.9rem;">
             ${_showOnlyUnreadChats ? 'No hay chats con mensajes sin leer' : 'No se encontraron chats'}
         </div>`;
+        list.scrollTop = prevScrollTop;
         return;
     }
 
@@ -530,6 +550,7 @@ function renderChatList(listToRender = chats) {
         `;
     }).join('');
 
+    list.scrollTop = prevScrollTop;
 }
 
 
