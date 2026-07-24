@@ -6299,6 +6299,49 @@
   border-color: rgba(0, 0, 0, 0.08);
 }
 
+/* Drag and Drop overlay for chat */
+.chat-drop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed #0099FF;
+  border-radius: 12px;
+  margin: 12px;
+  pointer-events: none;
+  animation: qmFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-theme="light"] .chat-drop-overlay {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: #0078D4;
+}
+
+.drop-overlay-content {
+  text-align: center;
+  color: #fff;
+}
+
+[data-theme="light"] .drop-overlay-content {
+  color: #1f2937;
+}
+
+.drop-overlay-icon {
+  font-size: 3rem;
+  color: #0099FF;
+  margin-bottom: 12px;
+  display: block;
+}
+
+[data-theme="light"] .drop-overlay-icon {
+  color: #0078D4;
+}
+
 @keyframes qmFadeIn {
   from {
     opacity: 0;

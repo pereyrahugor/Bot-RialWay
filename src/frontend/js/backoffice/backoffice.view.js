@@ -79,6 +79,14 @@ window.backofficeView = {
 
             <!-- Area de chat -->
             <div id="main-content" style="position:relative;">
+                <!-- Drag and drop overlay -->
+                <div id="chat-drop-overlay" class="chat-drop-overlay" style="display:none;">
+                    <div class="drop-overlay-content">
+                        <i class="fas fa-cloud-arrow-up drop-overlay-icon"></i>
+                        <h3 style="font-size:1.1rem; font-weight:700; margin-bottom:4px;">Soltá el archivo aquí para enviar</h3>
+                        <p style="font-size:0.82rem; opacity:0.75;">Imágenes, videos y documentos</p>
+                    </div>
+                </div>
                 <div id="chat-header" style="display: none;">
                     <button class="mobile-back-btn" onclick="document.body.classList.remove('mobile-chat-active')" aria-label="Volver">
                         <i class="fas fa-arrow-left"></i>

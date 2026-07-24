@@ -1107,30 +1107,42 @@ function handleFileSelect(input) {
 }
 
 function openFilePreview(file) {
+    if (!file) return;
+    let targetFile = file;
+    if (!targetFile.name || targetFile.name.trim() === '') {
+        const ext = targetFile.type ? targetFile.type.split('/')[1] || 'png' : 'png';
+        const desc = targetFile.type && targetFile.type.startsWith('image/') ? 'imagen' : (targetFile.type && targetFile.type.startsWith('video/') ? 'video' : 'archivo');
+        const defaultName = `${desc}_pegado_${Date.now()}.${ext}`;
+        try {
+            targetFile = new File([targetFile], defaultName, { type: targetFile.type });
+        } catch (_) { }
+    }
+    selectedFile = targetFile;
+
     const overlay = document.getElementById('file-preview-overlay');
     if (!overlay) return;
     const body = document.getElementById('file-preview-body');
     const name = document.getElementById('file-preview-name');
     if (!body || !name) return;
 
-    name.textContent = file.name;
+    name.textContent = targetFile.name || 'Archivo adjunto';
     body.innerHTML = '';
 
-    const mime = file.type || '';
+    const mime = targetFile.type || '';
     if (mime.startsWith('image/')) {
         const img = document.createElement('img');
         img.style.cssText = 'max-width:100%;max-height:100%;object-fit:contain;border-radius:4px;';
-        img.src = URL.createObjectURL(file);
+        img.src = URL.createObjectURL(targetFile);
         body.appendChild(img);
     } else if (mime.startsWith('video/')) {
         const vid = document.createElement('video');
         vid.controls = true;
         vid.style.cssText = 'max-width:100%;max-height:100%;border-radius:4px;';
-        vid.src = URL.createObjectURL(file);
+        vid.src = URL.createObjectURL(targetFile);
         body.appendChild(vid);
     } else {
-        const ext = file.name.split('.').pop()?.toUpperCase() || 'FILE';
-        const sizeKb = Math.round(file.size / 1024);
+        const ext = (targetFile.name || '').split('.').pop()?.toUpperCase() || 'FILE';
+        const sizeKb = Math.round((targetFile.size || 0) / 1024);
         const sizeStr = sizeKb >= 1024 ? `${(sizeKb / 1024).toFixed(1)} MB` : `${sizeKb} kB`;
         body.innerHTML = `
             <div style="display:flex;flex-direction:column;align-items:center;gap:16px;padding:32px;background:rgba(255,255,255,0.05);border-radius:12px;min-width:220px;">
@@ -1145,9 +1157,78 @@ function openFilePreview(file) {
     }
 
     overlay.style.display = 'flex';
-    document.getElementById('file-preview-caption').value = '';
-    document.getElementById('file-preview-caption').focus();
+    const captionInput = document.getElementById('file-preview-caption');
+    if (captionInput) {
+        captionInput.value = '';
+        captionInput.focus();
+    }
 }
+
+// --- COPIAR/PEGAR (Ctrl+V) Y ARRASTRAR/SOLTAR (Drag & Drop) DE ARCHIVOS EN CHAT ---
+let _chatDragCounter = 0;
+
+document.addEventListener('paste', (e) => {
+    if (!activeChatId) return;
+    const input = document.getElementById('message-input');
+    if (!input || input.disabled) return;
+
+    if (e.clipboardData && e.clipboardData.files && e.clipboardData.files.length > 0) {
+        const file = e.clipboardData.files[0];
+        if (file && file.size > 0) {
+            e.preventDefault();
+            openFilePreview(file);
+        }
+    }
+});
+
+window.addEventListener('dragenter', (e) => {
+    if (!activeChatId) return;
+    const input = document.getElementById('message-input');
+    if (!input || input.disabled) return;
+
+    if (e.dataTransfer && e.dataTransfer.types && Array.from(e.dataTransfer.types).includes('Files')) {
+        _chatDragCounter++;
+        const overlay = document.getElementById('chat-drop-overlay');
+        if (overlay) overlay.style.display = 'flex';
+    }
+});
+
+window.addEventListener('dragover', (e) => {
+    if (!activeChatId) return;
+    const input = document.getElementById('message-input');
+    if (!input || input.disabled) return;
+
+    if (e.dataTransfer && e.dataTransfer.types && Array.from(e.dataTransfer.types).includes('Files')) {
+        e.preventDefault();
+    }
+});
+
+window.addEventListener('dragleave', (e) => {
+    if (!activeChatId) return;
+    _chatDragCounter = Math.max(0, _chatDragCounter - 1);
+    if (_chatDragCounter === 0) {
+        const overlay = document.getElementById('chat-drop-overlay');
+        if (overlay) overlay.style.display = 'none';
+    }
+});
+
+window.addEventListener('drop', (e) => {
+    if (!activeChatId) return;
+    _chatDragCounter = 0;
+    const overlay = document.getElementById('chat-drop-overlay');
+    if (overlay) overlay.style.display = 'none';
+
+    const input = document.getElementById('message-input');
+    if (!input || input.disabled) return;
+
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        e.preventDefault();
+        const file = e.dataTransfer.files[0];
+        if (file && file.size > 0) {
+            openFilePreview(file);
+        }
+    }
+});
 
 function closeFilePreview() {
     const overlay = document.getElementById('file-preview-overlay');
