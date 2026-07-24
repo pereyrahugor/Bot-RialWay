@@ -1762,6 +1762,30 @@ export const registerBackofficeRoutes = (app: any) => {
         }
     });
 
+    app.post('/api/backoffice/crm/bulk-delete-leads', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
+        try {
+            const { ticketIds } = req.body;
+            const projectId = resolveProjectId(req);
+
+            if (!Array.isArray(ticketIds) || ticketIds.length === 0) {
+                return sendJson(res, 400, { success: false, error: 'ticketIds array is required' });
+            }
+
+            let deletedCount = 0;
+            for (const ticketId of ticketIds) {
+                const resDel = await depsHistoryHandler.deleteTicket(ticketId, projectId);
+                if (resDel && resDel.success) {
+                    deletedCount++;
+                }
+            }
+
+            res.json({ success: true, deletedCount });
+        } catch (err: any) {
+            console.error('[Bulk Delete Leads Error]:', err);
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
     // --- CRM CONFIG & DASHBOARD ---
 
     app.get('/api/backoffice/crm/config', backofficeAuth, async (req: any, res: any) => {

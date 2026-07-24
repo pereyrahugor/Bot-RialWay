@@ -47,6 +47,7 @@ async function _initCRMPage() {
 
     // Cargar etiquetas (para todos)
     await fetchTags();
+    updateFilterTagOptions();
 
     // Cargamos primero el estado (columnas) y la configuración de campos
     await Promise.all([
@@ -81,6 +82,9 @@ async function _initCRMPage() {
     window.closeColumnModal = closeColumnModal;
     window.deleteCurrentColumn = deleteCurrentColumn;
     window.saveColumnName = saveColumnName;
+    window.applyCRMFilters = applyCRMFilters;
+    window.clearCRMFilters = clearCRMFilters;
+    window.confirmBulkDeleteLeads = confirmBulkDeleteLeads;
 
     // Inicializar o re-inicializar sockets
     if (typeof io !== 'undefined') {
@@ -112,6 +116,9 @@ window.editColumn = editColumn;
 window.closeColumnModal = closeColumnModal;
 window.deleteCurrentColumn = deleteCurrentColumn;
 window.saveColumnName = saveColumnName;
+window.applyCRMFilters = applyCRMFilters;
+window.clearCRMFilters = clearCRMFilters;
+window.confirmBulkDeleteLeads = confirmBulkDeleteLeads;
 
 async function loadCRMState() {
     // Intentar cargar el orden de las columnas desde el servidor
@@ -250,11 +257,64 @@ function renderBoard() {
     _initKanbanScrollBehavior();
 }
 
+function getFilteredTickets() {
+    const activeTag = document.getElementById('crm-filter-tag')?.value || '';
+    const dateFromVal = document.getElementById('crm-filter-date-from')?.value || '';
+    const dateToVal = document.getElementById('crm-filter-date-to')?.value || '';
+
+    const dateFrom = dateFromVal ? new Date(dateFromVal + 'T00:00:00') : null;
+    const dateTo = dateToVal ? new Date(dateToVal + 'T23:59:59') : null;
+
+    return allTickets.filter(ticket => {
+        const lead = allLeads.find(l => l.id === ticket.chat_id);
+
+        // 1. Filtro por Etiqueta
+        if (activeTag) {
+            const leadTags = (lead?.tags || []).map(t => typeof t === 'string' ? t : t.id);
+            if (!leadTags.includes(activeTag)) return false;
+        }
+
+        // 2. Filtro por Fecha (Fecha de creación del ticket o última interacción del lead)
+        if (dateFrom || dateTo) {
+            const dateStr = ticket.created_at || lead?.last_message_at || lead?.created_at;
+            if (!dateStr) return false;
+            const ticketDate = new Date(dateStr);
+            if (dateFrom && ticketDate < dateFrom) return false;
+            if (dateTo && ticketDate > dateTo) return false;
+        }
+
+        return true;
+    });
+}
+
+function updateFilteredBadge(filteredCount, totalCount) {
+    const badge = document.getElementById('crm-filtered-count-badge');
+    if (!badge) return;
+    const activeTag = document.getElementById('crm-filter-tag')?.value;
+    const dateFrom = document.getElementById('crm-filter-date-from')?.value;
+    const dateTo = document.getElementById('crm-filter-date-to')?.value;
+
+    const hasFilter = activeTag || dateFrom || dateTo;
+    if (hasFilter) {
+        badge.innerHTML = `<i class="fas fa-filter"></i> Mostrando <strong>${filteredCount}</strong> de ${totalCount} leads`;
+        badge.style.background = 'rgba(239, 68, 68, 0.15)';
+        badge.style.color = '#f87171';
+        badge.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+    } else {
+        badge.innerHTML = `<i class="fas fa-users"></i> Mostrando ${totalCount} leads`;
+        badge.style.background = 'rgba(99, 102, 241, 0.15)';
+        badge.style.color = '#818cf8';
+        badge.style.borderColor = 'rgba(99, 102, 241, 0.3)';
+    }
+}
+
 function distributeCards() {
     const containers = document.querySelectorAll('.kanban-cards');
     containers.forEach(c => c.innerHTML = '');
 
-    allTickets.forEach(ticket => {
+    const filteredTickets = getFilteredTickets();
+
+    filteredTickets.forEach(ticket => {
         const lead = allLeads.find(l => l.id === ticket.chat_id);
         const metadata = crmData[ticket.id] || {};
         // Priorizar el posicionamiento del crm_status de la DB como fuente de verdad, caer al metadata/UNASSIGNED
@@ -268,6 +328,7 @@ function distributeCards() {
 
     updateCounters();
     checkAlertsVisual();
+    updateFilteredBadge(filteredTickets.length, allTickets.length);
 }
 
 function createCardElement(ticket, lead, metadata) {
@@ -480,13 +541,121 @@ function openCardModal(ticketId) {
     document.getElementById('card-modal').classList.add('active');
 }
 
-// --- Tag Management CRM ---
+// --- Tag Management CRM & Filtros ---
 async function fetchTags() {
     try {
         const res = await fetch(`/api/backoffice/tags?token=${activeToken}`);
         botTags = await res.json();
+        updateFilterTagOptions();
     } catch (e) {
         console.error('[fetchTags] Error:', e);
+    }
+}
+
+function updateFilterTagOptions() {
+    const select = document.getElementById('crm-filter-tag');
+    if (!select) return;
+    const currentVal = select.value;
+    select.innerHTML = '<option value="">Todas las etiquetas</option>' + 
+        (botTags || []).map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+    select.value = currentVal;
+}
+
+function applyCRMFilters() {
+    distributeCards();
+}
+
+function clearCRMFilters() {
+    const tagSel = document.getElementById('crm-filter-tag');
+    const dateFromInp = document.getElementById('crm-filter-date-from');
+    const dateToInp = document.getElementById('crm-filter-date-to');
+
+    if (tagSel) tagSel.value = '';
+    if (dateFromInp) dateFromInp.value = '';
+    if (dateToInp) dateToInp.value = '';
+
+    distributeCards();
+}
+
+async function confirmBulkDeleteLeads() {
+    const filteredTickets = getFilteredTickets();
+
+    if (filteredTickets.length === 0) {
+        if (typeof window.swalAlert === 'function') {
+            window.swalAlert('Atención', 'No hay ningún lead que coincida con los filtros seleccionados para eliminar.', 'warning');
+        } else {
+            alert('No hay ningún lead que coincida con los filtros seleccionados.');
+        }
+        return;
+    }
+
+    const activeTagId = document.getElementById('crm-filter-tag')?.value;
+    const dateFrom = document.getElementById('crm-filter-date-from')?.value;
+    const dateTo = document.getElementById('crm-filter-date-to')?.value;
+
+    const tagObj = (botTags || []).find(t => t.id === activeTagId);
+    const tagName = tagObj ? tagObj.name : (activeTagId ? activeTagId : 'Todas');
+
+    const filterSummary = [];
+    if (activeTagId) filterSummary.push(`<strong>Etiqueta:</strong> ${tagName}`);
+    if (dateFrom) filterSummary.push(`<strong>Desde:</strong> ${dateFrom}`);
+    if (dateTo) filterSummary.push(`<strong>Hasta:</strong> ${dateTo}`);
+
+    const filterText = filterSummary.length > 0
+        ? filterSummary.join('<br>')
+        : '<em>Ningún filtro aplicado (Se seleccionaron TODOS los leads)</em>';
+
+    if (typeof Swal !== 'undefined') {
+        const res = await Swal.fire({
+            title: '⚠️ ¿Eliminación Masiva de Leads?',
+            html: `
+                <div style="text-align:left; font-size:0.9rem; line-height:1.5;">
+                    <p style="margin-bottom:12px; color:#ef4444; font-weight:700; font-size:1rem;">
+                        Estás a punto de eliminar permanentemente ${filteredTickets.length} lead(s) del CRM.
+                    </p>
+                    <div style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); padding:12px; border-radius:8px; margin-bottom:15px;">
+                        <span style="font-weight:600; text-transform:uppercase; font-size:0.75rem; color:#94a3b8; display:block; margin-bottom:6px;">Filtros aplicados:</span>
+                        ${filterText}
+                    </div>
+                    <p style="font-size:0.82rem; color:#cbd5e1;">
+                        Esta acción desmarcará estos contactos como leads y eliminará sus tarjetas del CRM. <strong>Esta acción no se puede deshacer.</strong>
+                    </p>
+                </div>
+            `,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#ef4444',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: `<i class="fas fa-trash-alt"></i> Sí, eliminar ${filteredTickets.length} leads`,
+            cancelButtonText: 'Cancelar'
+        });
+
+        if (!res.isConfirmed) return;
+    } else {
+        if (!confirm(`¿Eliminar masivamente ${filteredTickets.length} leads? Esta acción no se puede deshacer.`)) return;
+    }
+
+    showToast(`Eliminando ${filteredTickets.length} leads...`, 'info');
+
+    try {
+        const ticketIds = filteredTickets.map(t => t.id);
+
+        const response = await fetch(`/api/backoffice/crm/bulk-delete-leads?token=${activeToken}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ticketIds })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            showToast(`Se eliminaron ${data.deletedCount || filteredTickets.length} leads correctamente`, 'success');
+            await syncCRM();
+        } else {
+            throw new Error(data.error || 'Error al eliminar');
+        }
+    } catch (e) {
+        console.error('[bulkDeleteLeads] Error:', e);
+        showToast('Error al eliminar leads: ' + e.message, 'error');
     }
 }
 
