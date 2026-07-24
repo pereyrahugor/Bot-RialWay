@@ -2967,6 +2967,29 @@
     @apply text-[10px] px-2.5 py-0.5 rounded-full text-white font-heading font-bold uppercase;
   }
 
+  
+  .card-tag-count {
+    @apply inline-flex items-center gap-1.5 text-xs font-heading font-semibold px-3 py-1.5 rounded-xl select-none;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  .card-tag-count i {
+    @apply text-[11px];
+    color: rgba(255, 255, 255, 0.65);
+  }
+
+  [data-theme="light"] .card-tag-count {
+    background: rgba(0, 0, 0, 0.06);
+    color: rgba(0, 0, 0, 0.65);
+    border-color: rgba(0, 0, 0, 0.1);
+  }
+
+  [data-theme="light"] .card-tag-count i {
+    color: rgba(0, 0, 0, 0.55);
+  }
+
   .card-title {
     @apply font-heading font-bold text-sm text-primary-content mb-1;
   }

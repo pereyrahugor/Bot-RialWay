@@ -344,9 +344,7 @@ function createCardElement(ticket, lead, metadata) {
         else window.location.href = '/backoffice';
     };
     
-    const tags = (lead?.tags || []).map(t => 
-        `<span class="card-tag" style="background:${t.color}">${t.name}</span>`
-    ).join('');
+    const tagCount = Array.isArray(lead?.tags) ? lead.tags.filter(Boolean).length : 0;
 
     const phone = ticket.chat_id ? ticket.chat_id.split('@')[0] : 'Desconocido';
     const email = lead?.email || '';
@@ -393,8 +391,7 @@ function createCardElement(ticket, lead, metadata) {
 
     card.innerHTML = `
         ${priorityIndicatorHtml}
-        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-            <div class="card-tags">${tags}</div>
+        <div style="display:flex; justify-content:flex-end; align-items:flex-start;">
             <div style="font-size:0.6rem; font-family:monospace; opacity:0.5; background:var(--bg-header); padding:2px 6px; border-radius:4px; margin-top:8px; margin-right:8px;">
                 REF: ${ticket.id.slice(-8).toUpperCase()}
             </div>
@@ -405,7 +402,8 @@ function createCardElement(ticket, lead, metadata) {
         ${detailsHtml}
         <div class="card-footer">
             ${alertHtml}
-            <div style="display:flex; gap:8px;">
+            <div style="display:flex; gap:8px; align-items:center;">
+                <span class="card-tag-count" title="${tagCount} etiquetas" onclick="event.stopPropagation()"><i class="fas fa-tags"></i> ${tagCount}</span>
                 <button class="btn-card-action" title="Cerrar Lead" onclick="event.stopPropagation(); confirmCloseTicket('${ticket.id}')">
                     <i class="fas fa-check"></i>
                 </button>
@@ -846,11 +844,15 @@ function _setupCRMFormHandlers() {
 
         try {
             await saveCRMMetadata();
-            await fetch(`/api/backoffice/crm/ticket/${currentEditId}?token=${activeToken}`, {
+            const ticketRes = await fetch(`/api/backoffice/crm/ticket/${currentEditId}?token=${activeToken}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ titulo: ticketTitle, priority: leadData.priority, notas: mainNotes, contact: leadData })
             });
+            const ticketJson = await ticketRes.json().catch(() => ({}));
+            if (!ticketRes.ok || ticketJson.success === false) {
+                throw new Error(ticketJson.error || `Error ${ticketRes.status} al guardar el ticket`);
+            }
 
             if (chatId) {
                 const assignee = document.getElementById('edit-lead-assignee').value;
