@@ -4,6 +4,7 @@ window.supportWidget = (() => {
     let _token = '';
     let _isOpen = false;
     let _activeTab = 'home'; // 'home' | 'messages'
+    let _isMinimized = false;
     let _chats = [];
     let _activeTicket = null;
     let _activeTicketsCache = [];
@@ -82,44 +83,12 @@ window.supportWidget = (() => {
                 right: 24px;
                 z-index: 99999;
                 font-family: inherit;
-            }
-            #sw-button {
-                width: 56px;
-                height: 56px;
-                border-radius: 50%;
-                background-color: #0099FF;
-                color: white;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-                cursor: pointer;
-                transition: transform 0.2s, background-color 0.2s, color 0.2s;
-                border: none;
-                outline: none;
-            }
-            html[data-theme="dark"] #sw-button {
-                background-color: #ffffff;
-                color: #0099FF;
-            }
-            #sw-button:hover { transform: scale(0.95); }
-            #sw-button i { font-size: 1.5rem; transition: transform 0.3s; }
-            #sw-button.sw-open i { transform: rotate(180deg); }
-            
-            #sw-badge {
-                position: absolute;
-                top: -2px;
-                right: -2px;
-                width: 14px;
-                height: 14px;
-                background-color: #ef4444;
-                border-radius: 50%;
-                display: none;
+                pointer-events: none;
             }
 
             #sw-popover {
                 position: absolute;
-                bottom: 76px;
+                bottom: 0;
                 right: 0;
                 width: 380px;
                 height: 600px;
@@ -134,8 +103,73 @@ window.supportWidget = (() => {
                 opacity: 0;
                 pointer-events: none;
                 transform: translateY(20px);
-                transition: opacity 0.3s, transform 0.3s;
+                transition: opacity 0.3s, transform 0.3s, width 0.2s, height 0.2s;
                 border: 1px solid rgba(0,0,0,0.08);
+            }
+            #sw-popover.sw-minimized {
+                width: 280px;
+                height: 56px;
+                border-radius: 12px;
+                cursor: pointer;
+            }
+            .sw-window-content {
+                display: flex;
+                flex: 1;
+                min-height: 0;
+                flex-direction: column;
+            }
+            #sw-popover.sw-minimized .sw-window-content {
+                display: none;
+            }
+            .sw-widget-controls {
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                z-index: 20;
+                display: flex;
+                gap: 6px;
+            }
+            .sw-widget-action {
+                width: 28px;
+                height: 28px;
+                border: none;
+                border-radius: 8px;
+                background: rgba(15, 23, 42, 0.62);
+                color: #ffffff;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                transition: background 0.2s, transform 0.2s;
+            }
+            .sw-widget-action:hover {
+                background: rgba(15, 23, 42, 0.82);
+                transform: translateY(-1px);
+            }
+            html[data-theme="dark"] .sw-widget-action {
+                background: rgba(148, 163, 184, 0.28);
+                color: #f8fafc;
+            }
+            html[data-theme="dark"] .sw-widget-action:hover {
+                background: rgba(148, 163, 184, 0.42);
+            }
+            #sw-minimized-bar {
+                display: none;
+                height: 100%;
+                align-items: center;
+                gap: 10px;
+                padding: 0 84px 0 16px;
+                color: #1e293b;
+                font-weight: 600;
+            }
+            #sw-minimized-bar i:first-child {
+                color: #0099FF;
+            }
+            #sw-popover.sw-minimized #sw-minimized-bar {
+                display: flex;
+            }
+            html[data-theme="dark"] #sw-minimized-bar {
+                color: #f8fafc;
             }
             html[data-theme="dark"] #sw-popover {
                 background: #0A192F;
@@ -193,7 +227,7 @@ window.supportWidget = (() => {
             /* HOME TAB */
             .sw-home-header {
                 background: #0099FF;
-                padding: 30px 20px;
+                padding: 30px 88px 30px 20px;
                 color: white;
                 position: relative;
             }
@@ -258,7 +292,7 @@ window.supportWidget = (() => {
 
             /* MESSAGES TAB */
             .sw-msg-header {
-                padding: 16px 20px;
+                padding: 16px 88px 16px 20px;
                 border-bottom: 1px solid rgba(0,0,0,0.08);
                 display: flex;
                 align-items: center;
@@ -453,12 +487,20 @@ window.supportWidget = (() => {
         </style>
 
         <div id="sw-root">
-            <button id="sw-button" onclick="supportWidget.toggleOpen()">
-                <i class="fas fa-comment"></i>
-                <div id="sw-badge"></div>
-            </button>
-
             <div id="sw-popover">
+                <div class="sw-widget-controls">
+                    <button class="sw-widget-action" id="sw-minimize-btn" onclick="supportWidget.toggleMinimized(event)" title="Minimizar">
+                        <i class="fas fa-minus" id="sw-minimize-icon"></i>
+                    </button>
+                    <button class="sw-widget-action" onclick="supportWidget.closeWidget(event)" title="Cerrar">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div id="sw-minimized-bar" onclick="supportWidget.toggleMinimized(event)">
+                    <i class="fas fa-headset"></i>
+                    <span>Soporte</span>
+                </div>
+                <div class="sw-window-content">
                 <!-- TAB: HOME -->
                 <div id="sw-tab-home" class="sw-tab-content sw-active">
                     <div class="sw-home-header">
@@ -469,7 +511,7 @@ window.supportWidget = (() => {
                     
                     <div class="sw-topics">
                         <div class="sw-topic-title">Temas Populares</div>
-                        <a href="/docs" target="_blank" class="sw-topic-item" onclick="event.preventDefault(); document.getElementById('sw-button').click(); navigate('/docs');">
+                        <a href="/docs" target="_blank" class="sw-topic-item" onclick="event.preventDefault(); supportWidget.toggleOpen(); navigate('/docs');">
                             <div class="sw-topic-text">
                                 <strong>Preguntas Frecuentes</strong>
                                 <span>Respuestas a dudas comunes y tutoriales</span>
@@ -525,6 +567,7 @@ window.supportWidget = (() => {
                         </div>
                     </div>
                 </div>
+                </div>
             </div>
         </div>
         `;
@@ -543,21 +586,56 @@ window.supportWidget = (() => {
     }
 
     function toggleOpen() {
+        if (_isOpen && _isMinimized) {
+            _setMinimized(false);
+            _syncSidebarTrigger();
+            return;
+        }
+
         _isOpen = !_isOpen;
-        const btn = document.getElementById('sw-button');
         const popover = document.getElementById('sw-popover');
         
         if (_isOpen) {
-            btn.classList.add('sw-open');
-            btn.innerHTML = '<i class="fas fa-chevron-down"></i>';
+            _setMinimized(false);
             popover.classList.add('sw-show');
             _fetchAll();
         } else {
-            btn.classList.remove('sw-open');
-            btn.innerHTML = '<i class="fas fa-comment"></i><div id="sw-badge"></div>';
+            _setMinimized(false);
             popover.classList.remove('sw-show');
             _updateBadge(); // restore badge if needed
         }
+        _syncSidebarTrigger();
+    }
+
+    function closeWidget(e) {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        _isOpen = false;
+        const popover = document.getElementById('sw-popover');
+        if (popover) popover.classList.remove('sw-show');
+        _updateBadge();
+        _syncSidebarTrigger();
+    }
+
+    function toggleMinimized(e) {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        if (!_isOpen) return;
+        _setMinimized(!_isMinimized);
+    }
+
+    function _setMinimized(minimized) {
+        _isMinimized = minimized;
+        const popover = document.getElementById('sw-popover');
+        const icon = document.getElementById('sw-minimize-icon');
+        const btn = document.getElementById('sw-minimize-btn');
+        if (popover) popover.classList.toggle('sw-minimized', _isMinimized);
+        if (icon) icon.className = _isMinimized ? 'fas fa-chevron-up' : 'fas fa-minus';
+        if (btn) btn.title = _isMinimized ? 'Expandir' : 'Minimizar';
     }
 
     function switchTab(tabId) {
@@ -715,7 +793,7 @@ window.supportWidget = (() => {
 
     function _updateBadge() {
         const badge = document.getElementById('sw-badge');
-        if (!badge) return;
+        const sidebarBadge = document.getElementById('dot-support-widget');
         const hasUnread = _activeTicketsCache.some(t => {
             let chatsAdj = _parseJson(t.chats_adjuntos, []);
             if (chatsAdj.length > 0 && t.estado !== 'Cerrado') {
@@ -723,7 +801,14 @@ window.supportWidget = (() => {
             }
             return false;
         });
-        badge.style.display = (hasUnread && !_isOpen) ? 'block' : 'none';
+        const display = (hasUnread && !_isOpen) ? 'inline-block' : 'none';
+        if (badge) badge.style.display = display === 'none' ? 'none' : 'block';
+        if (sidebarBadge) sidebarBadge.style.display = display;
+    }
+
+    function _syncSidebarTrigger() {
+        const item = document.getElementById('nav-support-btn');
+        if (item) item.classList.toggle('active', _isOpen);
     }
 
     function openChat(ticketId) {
@@ -897,6 +982,8 @@ window.supportWidget = (() => {
         openChat,
         closeChat,
         sendMessage,
-        handleHomeAction
+        handleHomeAction,
+        closeWidget,
+        toggleMinimized
     };
 })();

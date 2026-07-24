@@ -44,6 +44,21 @@ function loadViewScript(src) {
 }
 window.loadViewScript = loadViewScript;
 
+window.openSupportWidget = async function(e) {
+    if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+    if (typeof window.closeMessagingFlyout === 'function') window.closeMessagingFlyout();
+    if (typeof window.closeIntegracionesFlyout === 'function') window.closeIntegracionesFlyout();
+    if (typeof window.closeAjustesFlyout === 'function') window.closeAjustesFlyout();
+    await loadViewScript('/js/tickets/support.widget.js');
+    if (window.supportWidget) {
+        window.supportWidget.init();
+        window.supportWidget.toggleOpen();
+    }
+};
+
 function getViewName(scriptPath) {
     // '/js/views/crm-tareas.view.js' -> 'crmTareasView'
     const base = scriptPath.split('/').pop().replace('.view.js', '');
