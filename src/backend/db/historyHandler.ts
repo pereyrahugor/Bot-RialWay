@@ -1641,18 +1641,33 @@ export class HistoryHandler {
         }
         for (let _attempt = 0; _attempt < 2; _attempt++) {
             try {
-                // Campos mínimos para la lista (se incluyen campos CRM para autocompletado de Excel)
-                let selectString = 'id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, crm_status, crm_due_date, notes, email, source, is_lead, cuit_dni, tax_status, address, offered_product, unread_count, chat_tags(tag_id, tags(*))';
+                let matchingChatIds: string[] | null = null;
                 if (tagId) {
-                    selectString = 'id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, crm_status, crm_due_date, notes, email, source, is_lead, cuit_dni, tax_status, address, offered_product, unread_count, chat_tags!inner(tag_id, tags(*))';
+                    const { data: taggedEntries, error: tagErr } = await supabase
+                        .from('chat_tags')
+                        .select('chat_id')
+                        .eq('project_id', currentProjectId)
+                        .eq('tag_id', tagId);
+
+                    if (tagErr) throw tagErr;
+                    matchingChatIds = (taggedEntries || []).map((te: any) => te.chat_id);
+                    if (matchingChatIds.length === 0) {
+                        return [];
+                    }
                 }
+
+                const selectString = 'id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, crm_status, crm_due_date, notes, email, source, is_lead, cuit_dni, tax_status, address, offered_product, unread_count, chat_tags(tag_id, tags(*))';
 
                 let query = supabase
                     .from('chats')
                     .select(selectString);
 
-                // Filtrar estrictamente por el ID único de este bot en Railway
+                // Filtrar strictly por el ID único de este bot en Railway
                 query = query.eq('project_id', currentProjectId);
+
+                if (matchingChatIds !== null) {
+                    query = query.in('id', matchingChatIds);
+                }
 
                 if (platform === 'leads') {
                     // Filtramos por chats que tengan algún estado CRM o estén marcados como leads
@@ -1670,10 +1685,6 @@ export class HistoryHandler {
                 if (search) {
                     // Filtro optimizado: solo por nombre o ID (evitamos ILIKE en 'notes' que es pesado)
                     query = query.or(`name.ilike.%${search}%,id.ilike.%${search}%`);
-                }
-
-                if (tagId) {
-                    query = query.eq('chat_tags.tag_id', tagId);
                 }
 
                 const { data, error } = await query
