@@ -35,6 +35,37 @@ window.crmView = {
                 </div>
             </div>
 
+            <!-- Toolbar de Filtros CRM y Eliminación Masiva -->
+            <div class="crm-filter-bar animate-fade">
+                <div class="crm-filter-group-wrap" style="display:flex; flex-wrap:wrap; align-items:center; gap:14px; flex:1;">
+                    <div class="crm-filter-group">
+                        <span class="crm-filter-label"><i class="fas fa-tag" style="color:#6366f1;"></i> Etiqueta:</span>
+                        <select id="crm-filter-tag" class="crm-filter-input" onchange="window.applyCRMFilters()">
+                            <option value="">Todas las etiquetas</option>
+                        </select>
+                    </div>
+                    <div class="crm-filter-group">
+                        <span class="crm-filter-label"><i class="fas fa-calendar-alt" style="color:#0099FF;"></i> Desde:</span>
+                        <input type="date" id="crm-filter-date-from" class="crm-filter-input" onchange="window.applyCRMFilters()">
+                    </div>
+                    <div class="crm-filter-group">
+                        <span class="crm-filter-label"><i class="fas fa-calendar-alt" style="color:#0099FF;"></i> Hasta:</span>
+                        <input type="date" id="crm-filter-date-to" class="crm-filter-input" onchange="window.applyCRMFilters()">
+                    </div>
+                    <button class="btn btn-secondary" onclick="window.clearCRMFilters()" title="Limpiar filtros" style="padding:5px 12px; font-size:0.8rem;">
+                        <i class="fas fa-undo"></i> Limpiar
+                    </button>
+                    <span id="crm-filtered-count-badge" class="crm-filtered-badge">
+                        Mostrando todos los leads
+                    </span>
+                </div>
+                <div class="crm-filter-actions" style="display:flex; align-items:center;">
+                    <button class="btn btn-danger" onclick="window.confirmBulkDeleteLeads()" style="padding:6px 14px; font-size:0.82rem; font-weight:600; display:flex; align-items:center; gap:6px;">
+                        <i class="fas fa-trash-alt"></i> Eliminación Masiva
+                    </button>
+                </div>
+            </div>
+
             <div id="kanban-board" class="kanban-scroll-area">
                 <div class="kanban-board-inner" id="kanban-board-inner"></div>
             </div>
