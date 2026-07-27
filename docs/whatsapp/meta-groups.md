@@ -24,7 +24,7 @@ La creación de grupos en la API de Meta es un **flujo asíncrono e invite-only*
 
 ### Solicitud de Creación
 * **Método:** `POST`
-* **URL:** `https://graph.facebook.com/v22.0/<BUSINESS_PHONE_NUMBER_ID>/groups`
+* **URL:** `https://graph.facebook.com/v25.0/<BUSINESS_PHONE_NUMBER_ID>/groups`
 * **Cabeceras:**
   * `Authorization: Bearer <ACCESS_TOKEN>`
   * `Content-Type: application/json`
@@ -64,7 +64,7 @@ Para que los usuarios puedan unirse al grupo creado, Meta requiere que se les en
 
 ### Solicitud de Envío de Invitación
 * **Método:** `POST`
-* **URL:** `https://graph.facebook.com/v22.0/<BUSINESS_PHONE_NUMBER_ID>/messages`
+* **URL:** `https://graph.facebook.com/v25.0/<BUSINESS_PHONE_NUMBER_ID>/messages`
 * **Cabeceras:**
   * `Authorization: Bearer <ACCESS_TOKEN>`
   * `Content-Type: application/json`
@@ -106,7 +106,7 @@ Una vez que los usuarios se han unido al grupo, la empresa puede enviar mensajes
 
 ### Solicitud de Mensaje de Grupo
 * **Método:** `POST`
-* **URL:** `https://graph.facebook.com/v22.0/<BUSINESS_PHONE_NUMBER_ID>/messages`
+* **URL:** `https://graph.facebook.com/v25.0/<BUSINESS_PHONE_NUMBER_ID>/messages`
 * **Cabeceras:**
   * `Authorization: Bearer <ACCESS_TOKEN>`
   * `Content-Type: application/json`

@@ -372,7 +372,7 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
                     let toolResult = "";
                     if (funcName === "query_database") {
                         const { tabla, dato } = args as any;
-                        // Usar el projectId dinámico para validar las tablas permitidas del cliente actual.
+                        // Usar el projectId dinámico para validar las tablas permitidas de los clientes.
                         const dbTablesStr = await HistoryHandler.getConfig('DB_TABLES', projectId) || "";
                         const allowedTables = dbTablesStr.split(',').map(t => t.trim());
 

@@ -89,14 +89,14 @@ const NOT_FOUND_TTL = 1000 * 60 * 10; // 10 minutos
 async function triggerMetaSync(accessToken: string, phoneId: string) {
     console.log(`📡 [SMB-SYNC] Iniciando sincronización automática para ${phoneId}...`);
     // 1. Sincronizar Contactos
-    await axios.post(`https://graph.facebook.com/v22.0/${phoneId}/smb_app_data`, 
+    await axios.post(`https://graph.facebook.com/v25.0/${phoneId}/smb_app_data`, 
         { messaging_product: 'whatsapp', sync_type: 'smb_app_state_sync' },
         { headers: { 'Authorization': `Bearer ${accessToken}` } }
     );
     console.log(`✅ [SMB-SYNC] Solicitud de Contactos enviada.`);
 
     // 2. Sincronizar Historial
-    await axios.post(`https://graph.facebook.com/v22.0/${phoneId}/smb_app_data`, 
+    await axios.post(`https://graph.facebook.com/v25.0/${phoneId}/smb_app_data`, 
         { messaging_product: 'whatsapp', sync_type: 'history' },
         { headers: { 'Authorization': `Bearer ${accessToken}` } }
     );
@@ -2515,7 +2515,7 @@ export const registerBackofficeRoutes = (app: any) => {
         if (!code) return res.send('<h2>❌ Error: No se recibió el código de Meta</h2>');
 
         try {
-            console.log(`📡 [CALLBACK] Intercambiando código Meta por token (v22.0)...`);
+            console.log(`📡 [CALLBACK] Intercambiando código Meta por token (v25.0)...`);
             
             const appId = await depsHistoryHandler.getConfig('META_APP_ID', projectId) || process.env.META_APP_ID || '1493670789148486';
             const appSecret = await depsHistoryHandler.getConfig('META_APP_SECRET', projectId) || process.env.META_APP_SECRET || '362b2ec20c00bdf51336fd165ad47160';
@@ -2524,7 +2524,7 @@ export const registerBackofficeRoutes = (app: any) => {
                 throw new Error("Faltan META_APP_ID o META_APP_SECRET en el servidor.");
             }
 
-            const tokenResponse = await axios.get(`https://graph.facebook.com/v22.0/oauth/access_token`, {
+            const tokenResponse = await axios.get(`https://graph.facebook.com/v25.0/oauth/access_token`, {
                 params: { client_id: appId, client_secret: appSecret, code: code }
             });
 
@@ -2675,14 +2675,14 @@ export const registerBackofficeRoutes = (app: any) => {
             // Registrar y suscribir WhatsApp si se encontró
             const tokenToUse = mainToken || accessToken;
             if (finalPhoneId) {
-                await axios.post(`https://graph.facebook.com/v22.0/${finalPhoneId}/register`, 
+                await axios.post(`https://graph.facebook.com/v25.0/${finalPhoneId}/register`, 
                     { messaging_product: 'whatsapp', pin: '' }, 
                     { headers: { 'Authorization': `Bearer ${tokenToUse}` } }
                 ).catch(() => {});
             }
 
             if (finalWabaId) {
-                await axios.post(`https://graph.facebook.com/v22.0/${finalWabaId}/subscribed_apps`, 
+                await axios.post(`https://graph.facebook.com/v25.0/${finalWabaId}/subscribed_apps`, 
                     {}, 
                     { headers: { 'Authorization': `Bearer ${tokenToUse}` } }
                 ).catch(() => {});
@@ -2691,7 +2691,7 @@ export const registerBackofficeRoutes = (app: any) => {
                 // enviados manualmente desde la app de WhatsApp (Atención Humana)
                 try {
                     console.log('📡 [CALLBACK] Suscribiendo a smb_message_echoes para sincronización de mensajes manuales...');
-                    await axios.post(`https://graph.facebook.com/v22.0/${finalWabaId}/subscribed_apps`, 
+                    await axios.post(`https://graph.facebook.com/v25.0/${finalWabaId}/subscribed_apps`, 
                         { override_callback_uri: undefined }, 
                         { 
                             headers: { 'Authorization': `Bearer ${tokenToUse}` },
@@ -2848,7 +2848,7 @@ export const registerBackofficeRoutes = (app: any) => {
                     try {
                         if (phoneId && phoneId !== 'PENDING') {
                             console.log(`📡 [UNLINK-META] Ejecutando deregister para Phone ID: ${phoneId}...`);
-                            await axios.post(`https://graph.facebook.com/v22.0/${phoneId}/deregister`, 
+                            await axios.post(`https://graph.facebook.com/v25.0/${phoneId}/deregister`, 
                                 {}, 
                                 { headers: { 'Authorization': `Bearer ${token}` } }
                             );
@@ -2861,7 +2861,7 @@ export const registerBackofficeRoutes = (app: any) => {
                     try {
                         if (wabaId && wabaId !== 'PENDING') {
                             console.log(`📡 [UNLINK-META] Eliminando suscripción de app para WABA ID: ${wabaId}...`);
-                            await axios.delete(`https://graph.facebook.com/v22.0/${wabaId}/subscribed_apps`, 
+                            await axios.delete(`https://graph.facebook.com/v25.0/${wabaId}/subscribed_apps`, 
                                 { headers: { 'Authorization': `Bearer ${token}` } }
                             );
                             console.log(`✅ [UNLINK-META] App unsubscribed de WABA exitosamente.`);
@@ -4436,7 +4436,7 @@ Hemos recibido tu pago con éxito.
                         toFormat = '549' + cleanNumber.slice(2);
                     }
                 }
-                const url = `https://graph.facebook.com/v22.0/${whatsappNumberId}/messages`;
+                const url = `https://graph.facebook.com/v25.0/${whatsappNumberId}/messages`;
                 console.log(`[MetaGroupsAPI] Enviando mensaje de invitación a +${toFormat}...`);
                 try {
                     const resMsg = await axios.post(url, {
@@ -4466,7 +4466,7 @@ Hemos recibido tu pago con éxito.
                 }
 
                 console.log(`[MetaGroupsAPI] Intentando crear grupo Meta WABA '${groupName}'...`);
-                const createUrl = `https://graph.facebook.com/v22.0/${whatsappNumberId}/groups`;
+                const createUrl = `https://graph.facebook.com/v25.0/${whatsappNumberId}/groups`;
                 
                 let groupId: string;
                 try {
@@ -4488,7 +4488,7 @@ Hemos recibido tu pago con éxito.
 
                 // Obtener enlace de invitación
                 console.log(`[MetaGroupsAPI] Solicitando enlace de invitación para el grupo ${groupId}...`);
-                const inviteUrl = `https://graph.facebook.com/v22.0/${groupId}/invite_link`;
+                const inviteUrl = `https://graph.facebook.com/v25.0/${groupId}/invite_link`;
                 let inviteLink: string;
                 try {
                     const resInvite = await axios.post(inviteUrl, {
@@ -4540,7 +4540,7 @@ Hemos recibido tu pago con éxito.
                         // 1. Actualizar el subject si cambió
                         if (existingGroup.name !== name) {
                             console.log(`[MetaGroupsAPI] Actualizando subject del grupo Meta ${groupJid} a: ${name}`);
-                            const updateUrl = `https://graph.facebook.com/v22.0/${groupJid}`;
+                            const updateUrl = `https://graph.facebook.com/v25.0/${groupJid}`;
                             await axios.post(updateUrl, {
                                 messaging_product: 'whatsapp',
                                 subject: name
@@ -4558,7 +4558,7 @@ Hemos recibido tu pago con éxito.
                         const newContacts = contacts.filter((c: any) => c.phone && !oldPhones.includes(c.phone));
                         if (newContacts.length > 0) {
                             console.log(`[MetaGroupsAPI] Se detectaron ${newContacts.length} contactos nuevos. Obteniendo enlace de invitación...`);
-                            const inviteUrl = `https://graph.facebook.com/v22.0/${groupJid}/invite_link`;
+                            const inviteUrl = `https://graph.facebook.com/v25.0/${groupJid}/invite_link`;
                             const resInvite = await axios.post(inviteUrl, {
                                 messaging_product: 'whatsapp'
                             }, {
@@ -4706,7 +4706,7 @@ Hemos recibido tu pago con éxito.
                     if (metaConfig?.whatsappToken) {
                         console.log(`[MetaGroupsAPI] Revocando enlace de invitación para el grupo Meta ${existingGroup.jid}...`);
                         try {
-                            await axios.delete(`https://graph.facebook.com/v22.0/${existingGroup.jid}/invite_link`, {
+                            await axios.delete(`https://graph.facebook.com/v25.0/${existingGroup.jid}/invite_link`, {
                                 headers: { 'Authorization': `Bearer ${metaConfig.whatsappToken}` }
                             });
                             console.log(`[MetaGroupsAPI] Enlace de invitación revocado con éxito.`);
