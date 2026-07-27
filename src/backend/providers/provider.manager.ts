@@ -420,8 +420,8 @@ export const hasActiveSession = async (adapterProvider: any, groupProvider: any 
                 const phoneId = metaOnboarding.whatsappNumberId;
                 const token = metaOnboarding.whatsappToken;
 
-                // 1. Consultar nodo del número de teléfono usando v22.0
-                const phoneRes = await axios.get(`https://graph.facebook.com/v22.0/${phoneId}`, {
+                // 1. Consultar nodo del número de teléfono usando v25.0
+                const phoneRes = await axios.get(`https://graph.facebook.com/v25.0/${phoneId}`, {
                     headers: { 'Authorization': `Bearer ${token}` },
                     params: {
                         fields: "id,display_phone_number,verified_name,quality_rating,status,code_verification_status,messaging_limit_tier"
@@ -432,7 +432,7 @@ export const hasActiveSession = async (adapterProvider: any, groupProvider: any 
                 let accountReviewStatus = null;
                 if (metaOnboarding.whatsappBusinessId) {
                     try {
-                        const wabaRes = await axios.get(`https://graph.facebook.com/v22.0/${metaOnboarding.whatsappBusinessId}`, {
+                        const wabaRes = await axios.get(`https://graph.facebook.com/v25.0/${metaOnboarding.whatsappBusinessId}`, {
                             headers: { 'Authorization': `Bearer ${token}` },
                             params: {
                                 fields: "id,account_review_status"

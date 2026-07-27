@@ -56,7 +56,7 @@ export async function discoverMetaIds(
 
         // 0. Identificar quién es el usuario vinculado
         try {
-            const me = await axios.get(`https://graph.facebook.com/v22.0/me?fields=name,id,email`, {
+            const me = await axios.get(`https://graph.facebook.com/v25.0/me?fields=name,id,email`, {
                 headers: { 'Authorization': `Bearer ${accessToken}` }
             });
             logDiag('User Identification', `Usuario detectado: ${me.data.name}`, 'success', { name: me.data.name, id: me.data.id });
@@ -69,7 +69,7 @@ export async function discoverMetaIds(
 
         // 1. Intentar obtener los Negocios (Business Managers)
         try {
-            const businessesResponse = await axios.get(`https://graph.facebook.com/v22.0/me/businesses`, {
+            const businessesResponse = await axios.get(`https://graph.facebook.com/v25.0/me/businesses`, {
                 headers: { 'Authorization': `Bearer ${accessToken}` }
             });
             businesses = businessesResponse.data?.data || [];
@@ -82,7 +82,7 @@ export async function discoverMetaIds(
         for (const business of businesses) {
             try {
                 const tokenToUseForBiz = mainToken || accessToken;
-                const accountsResponse = await axios.get(`https://graph.facebook.com/v22.0/${business.id}/owned_whatsapp_business_accounts`, {
+                const accountsResponse = await axios.get(`https://graph.facebook.com/v25.0/${business.id}/owned_whatsapp_business_accounts`, {
                     headers: { 'Authorization': `Bearer ${tokenToUseForBiz}` }
                 });
                 const owned = accountsResponse.data?.data || [];
@@ -93,7 +93,7 @@ export async function discoverMetaIds(
                     break;
                 }
                 
-                const clientResponse = await axios.get(`https://graph.facebook.com/v22.0/${business.id}/client_whatsapp_business_accounts`, {
+                const clientResponse = await axios.get(`https://graph.facebook.com/v25.0/${business.id}/client_whatsapp_business_accounts`, {
                     headers: { 'Authorization': `Bearer ${tokenToUseForBiz}` }
                 });
                 const client = clientResponse.data?.data || [];
@@ -111,7 +111,7 @@ export async function discoverMetaIds(
         // 2. Fallback: Intentar obtener WABAs directamente asociadas al usuario vía 'me/whatsapp_business_accounts'
         if (!wabaId) {
             try {
-                const directResponse = await axios.get(`https://graph.facebook.com/v22.0/me/whatsapp_business_accounts`, {
+                const directResponse = await axios.get(`https://graph.facebook.com/v25.0/me/whatsapp_business_accounts`, {
                     headers: { 'Authorization': `Bearer ${accessToken}` }
                 });
                 
@@ -130,7 +130,7 @@ export async function discoverMetaIds(
         // 3. Fallback: Intentar directamente en el usuario/sistema si no se obtuvo WABA (campos genéricos)
         if (!wabaId) {
             try {
-                const directResponse = await axios.get(`https://graph.facebook.com/v22.0/me?fields=id,name,whatsapp_business_accounts,owned_whatsapp_business_accounts,client_whatsapp_business_accounts`, {
+                const directResponse = await axios.get(`https://graph.facebook.com/v25.0/me?fields=id,name,whatsapp_business_accounts,owned_whatsapp_business_accounts,client_whatsapp_business_accounts`, {
                     headers: { 'Authorization': `Bearer ${accessToken}` }
                 });
                 
@@ -156,7 +156,7 @@ export async function discoverMetaIds(
                 const finalAppId = appId || process.env.META_APP_ID || '1493670789148486';
                 const finalAppSecret = appSecret || process.env.META_APP_SECRET || '362b2ec20c00bdf51336fd165ad47160';
                 const appToken = `${finalAppId}|${finalAppSecret}`;
-                const debugResponse = await axios.get(`https://graph.facebook.com/v22.0/debug_token`, {
+                const debugResponse = await axios.get(`https://graph.facebook.com/v25.0/debug_token`, {
                     params: {
                         input_token: accessToken,
                         access_token: appToken
@@ -190,7 +190,7 @@ export async function discoverMetaIds(
 
                 if (businessId) {
                     const tokenToUseForBiz = mainToken || accessToken;
-                    const bizWabas = await axios.get(`https://graph.facebook.com/v22.0/${businessId}/whatsapp_business_accounts`, {
+                    const bizWabas = await axios.get(`https://graph.facebook.com/v25.0/${businessId}/whatsapp_business_accounts`, {
                         headers: { 'Authorization': `Bearer ${tokenToUseForBiz}` }
                     });
                     if (bizWabas.data?.data && bizWabas.data.data.length > 0) {
@@ -208,13 +208,13 @@ export async function discoverMetaIds(
         // 5. SUPER FALLBACK: Si tenemos un mainToken (Super User), buscar WABAs en TODO el portafolio
         if (!wabaId && mainToken) {
             try {
-                const mainBizRes = await axios.get(`https://graph.facebook.com/v22.0/me/businesses`, {
+                const mainBizRes = await axios.get(`https://graph.facebook.com/v25.0/me/businesses`, {
                     headers: { 'Authorization': `Bearer ${mainToken}` }
                 });
                 
                 if (mainBizRes.data?.data) {
                     for (const biz of mainBizRes.data.data) {
-                        const clientWabas = await axios.get(`https://graph.facebook.com/v22.0/${biz.id}/client_whatsapp_business_accounts`, {
+                        const clientWabas = await axios.get(`https://graph.facebook.com/v25.0/${biz.id}/client_whatsapp_business_accounts`, {
                             headers: { 'Authorization': `Bearer ${mainToken}` }
                         });
                         
@@ -224,7 +224,7 @@ export async function discoverMetaIds(
                             break;
                         }
 
-                        const bizWabas = await axios.get(`https://graph.facebook.com/v22.0/${biz.id}/whatsapp_business_accounts`, {
+                        const bizWabas = await axios.get(`https://graph.facebook.com/v25.0/${biz.id}/whatsapp_business_accounts`, {
                             headers: { 'Authorization': `Bearer ${mainToken}` }
                         });
                         if (bizWabas.data?.data?.[0]) {
@@ -248,7 +248,7 @@ export async function discoverMetaIds(
         let verifiedName = "";
         const tokenToUse = mainToken || accessToken;
         try {
-            const phoneResponse = await axios.get(`https://graph.facebook.com/v22.0/${wabaId}/phone_numbers`, {
+            const phoneResponse = await axios.get(`https://graph.facebook.com/v25.0/${wabaId}/phone_numbers`, {
                 headers: { 'Authorization': `Bearer ${tokenToUse}` }
             });
             const phoneData = phoneResponse.data.data?.[0];
@@ -325,7 +325,7 @@ export async function addPhoneNumberToWaba(accessToken: string, wabaId: string, 
 
         console.log(`📡 [MetaDiscovery] Añadiendo número ${cc}${number} a WABA ${wabaId}...`);
         
-        const response = await axios.post(`https://graph.facebook.com/v22.0/${wabaId}/phone_numbers`, {
+        const response = await axios.post(`https://graph.facebook.com/v25.0/${wabaId}/phone_numbers`, {
             cc,
             phone_number: number,
             verified_name: verifiedName
@@ -344,7 +344,7 @@ export async function addPhoneNumberToWaba(accessToken: string, wabaId: string, 
 export async function requestPhoneNumberOtp(accessToken: string, phoneId: string, method: 'SMS' | 'VOICE' = 'SMS') {
     try {
         console.log(`📡 [MetaDiscovery] Solicitando OTP (${method}) para Phone ID ${phoneId}...`);
-        const response = await axios.post(`https://graph.facebook.com/v22.0/${phoneId}/request_code`, {
+        const response = await axios.post(`https://graph.facebook.com/v25.0/${phoneId}/request_code`, {
             code_method: method,
             language: 'es_ES'
         }, { headers: { 'Authorization': `Bearer ${accessToken}` } });
@@ -362,13 +362,13 @@ export async function requestPhoneNumberOtp(accessToken: string, phoneId: string
 export async function verifyPhoneNumberOtp(accessToken: string, phoneId: string, code: string) {
     try {
         console.log(`📡 [MetaDiscovery] Verificando OTP para Phone ID ${phoneId}...`);
-        const response = await axios.post(`https://graph.facebook.com/v22.0/${phoneId}/verify_code`, {
+        const response = await axios.post(`https://graph.facebook.com/v25.0/${phoneId}/verify_code`, {
             code: code
         }, { headers: { 'Authorization': `Bearer ${accessToken}` } });
 
         // Si la verificación es exitosa, registramos el número en la plataforma de WhatsApp
         if (response.data.success) {
-            await axios.post(`https://graph.facebook.com/v22.0/${phoneId}/register`, {
+            await axios.post(`https://graph.facebook.com/v25.0/${phoneId}/register`, {
                 messaging_product: 'whatsapp',
                 pin: '123456' // PIN de seguridad por defecto
             }, { headers: { 'Authorization': `Bearer ${accessToken}` } });
@@ -387,7 +387,7 @@ export async function verifyPhoneNumberOtp(accessToken: string, phoneId: string,
  */
 export async function getWabaStatus(wabaId: string, accessToken: string) {
     try {
-        const response = await axios.get(`https://graph.facebook.com/v22.0/${wabaId}`, {
+        const response = await axios.get(`https://graph.facebook.com/v25.0/${wabaId}`, {
             params: {
                 fields: 'id,name,account_review_status,timezone_id,message_template_namespace',
                 access_token: accessToken
@@ -405,7 +405,7 @@ export async function getWabaStatus(wabaId: string, accessToken: string) {
  */
 export async function getPhoneLimit(phoneId: string, accessToken: string) {
     try {
-        const response = await axios.get(`https://graph.facebook.com/v22.0/${phoneId}`, {
+        const response = await axios.get(`https://graph.facebook.com/v25.0/${phoneId}`, {
             params: {
                 fields: 'id,messaging_limit_tier,display_phone_number,quality_rating',
                 access_token: accessToken

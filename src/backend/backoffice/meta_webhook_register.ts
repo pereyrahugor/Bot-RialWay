@@ -103,7 +103,7 @@ async function main() {
 
         // 4. Registrar la suscripción a la WABA en la API de Meta Graph
         console.log(`\n📡 [META] Suscribiendo la aplicación a los webhooks de la WABA ${wabaId} en Meta...`);
-        const response = await axios.post(`https://graph.facebook.com/v22.0/${wabaId}/subscribed_apps`, 
+        const response = await axios.post(`https://graph.facebook.com/v25.0/${wabaId}/subscribed_apps`, 
             {}, 
             { 
                 headers: { 'Authorization': `Bearer ${token}` },

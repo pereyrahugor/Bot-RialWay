@@ -82,7 +82,7 @@ class MetaCloudProvider extends ProviderClass {
         if (!mediaUrl && mediaId && access_token) {
             try {
                 console.log(`📡 [MetaCloudProvider] Obteniendo URL de descarga para media ID: ${mediaId}`);
-                const apiVersion = process.env.META_API_VERSION || 'v22.0';
+                const apiVersion = process.env.META_API_VERSION || 'v25.0';
                 const res = await axios.get(`https://graph.facebook.com/${apiVersion}/${mediaId}`, {
                     headers: { 'Authorization': `Bearer ${access_token}` }
                 });
@@ -207,7 +207,7 @@ class MetaCloudProvider extends ProviderClass {
         }
 
         try {
-            const url = `https://graph.facebook.com/v22.0/${waba_id}/message_templates?fields=id,name,status,components,language,category,parameter_format`;
+            const url = `https://graph.facebook.com/v25.0/${waba_id}/message_templates?fields=id,name,status,components,language,category,parameter_format`;
             const response = await axios.get(url, {
                 headers: { 'Authorization': `Bearer ${access_token}` }
             });
@@ -229,7 +229,7 @@ class MetaCloudProvider extends ProviderClass {
             return null;
         }
 
-        const url = `https://graph.facebook.com/v22.0/${waba_id}/message_templates`;
+        const url = `https://graph.facebook.com/v25.0/${waba_id}/message_templates`;
 
         // Detectar variables en el texto: soporta {{1}}, {{nombre}}, etc.
         const varRegex = /\{\{(\w+)\}\}/g;
@@ -349,7 +349,7 @@ class MetaCloudProvider extends ProviderClass {
             return null;
         }
 
-        const url = `https://graph.facebook.com/v22.0/${phone_number_id}/messages`;
+        const url = `https://graph.facebook.com/v25.0/${phone_number_id}/messages`;
 
         // Limpiar número: solo dígitos y remover el '9' si corresponde
         const cleanNumber = this.formatNumberForMeta(number);
@@ -397,7 +397,7 @@ class MetaCloudProvider extends ProviderClass {
         // 1. Intentar obtener de la Biblioteca Oficial de Meta (Paginado)
         try {
             console.log('📡 [MetaCloudProvider] Consultando Biblioteca Global de Meta (Full Fetch)...');
-            let nextUrl: string | null = `https://graph.facebook.com/v22.0/message_template_library?fields=id,name,components,language,category,status&limit=100`;
+            let nextUrl: string | null = `https://graph.facebook.com/v25.0/message_template_library?fields=id,name,components,language,category,status&limit=100`;
 
             while (nextUrl && allTemplates.length < 2000) { // Limitamos a 2000 para evitar loops infinitos
                 const response: any = await axios.get(nextUrl, {
@@ -423,7 +423,7 @@ class MetaCloudProvider extends ProviderClass {
         try {
             const MASTER_WABA_ID = '146603058535041';
             console.log(`📡 [MetaCloudProvider] Consultando Biblioteca Maestra RialWay (${MASTER_WABA_ID})...`);
-            const urlMaster = `https://graph.facebook.com/v22.0/${MASTER_WABA_ID}/message_templates?fields=id,name,components,language,category,status&limit=100`;
+            const urlMaster = `https://graph.facebook.com/v25.0/${MASTER_WABA_ID}/message_templates?fields=id,name,components,language,category,status&limit=100`;
 
             const responseMaster = await axios.get(urlMaster, {
                 headers: { 'Authorization': `Bearer ${access_token}` }
@@ -551,7 +551,7 @@ class MetaCloudProvider extends ProviderClass {
             console.error(`⚠️ [MetaCloudProvider] Error durante transcodificación, usando archivo original:`, transcodeErr.message);
         }
 
-        const apiVersion = process.env.META_API_VERSION || 'v22.0';
+        const apiVersion = process.env.META_API_VERSION || 'v25.0';
         const url = `https://graph.facebook.com/${apiVersion}/${phone_number_id}/media`;
         let tempOgg: string | null = null;
         try {
@@ -648,7 +648,7 @@ class MetaCloudProvider extends ProviderClass {
             return;
         }
 
-        const apiVersion = process.env.META_API_VERSION || 'v22.0';
+        const apiVersion = process.env.META_API_VERSION || 'v25.0';
         const url = `https://graph.facebook.com/${apiVersion}/${phone_number_id}/messages`;
 
         const isGroup = number.includes('@g.us') || 
@@ -821,7 +821,7 @@ class MetaCloudProvider extends ProviderClass {
             return null;
         }
 
-        const url = `https://graph.facebook.com/v22.0/${phone_number_id}/smb_app_data`;
+        const url = `https://graph.facebook.com/v25.0/${phone_number_id}/smb_app_data`;
         const body = { sync_type: syncType };
 
         try {
