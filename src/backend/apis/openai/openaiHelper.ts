@@ -14,13 +14,13 @@ export function getOpenAIBaseUrl(): string | undefined {
     if (!envBaseURL) {
         return "https://proxy.duskcodes.com.ar/v1";
     }
-    
+
     let clean = envBaseURL.trim();
     // Eliminar comillas simples o dobles envolventes si existen
     if ((clean.startsWith("'") && clean.endsWith("'")) || (clean.startsWith('"') && clean.endsWith('"'))) {
         clean = clean.slice(1, -1).trim();
     }
-    
+
     return clean.toLowerCase() === 'direct' ? undefined : clean;
 }
 
@@ -37,7 +37,7 @@ export async function getOpenAI(): Promise<OpenAI | null> {
     if (key !== _lastKey) {
         console.log(`📡 [OpenAI] Inicializando nueva instancia con Hot-update Key: ${key.slice(0, 8)}...`);
         const baseURL = getOpenAIBaseUrl();
-        _openai = new OpenAI({ 
+        _openai = new OpenAI({
             apiKey: key,
             ...(baseURL ? { baseURL } : {})
         });
@@ -52,11 +52,11 @@ export async function getOpenAI(): Promise<OpenAI | null> {
 export async function getOpenAIVision(): Promise<OpenAI | null> {
     const { HistoryHandler } = await import("../../db/historyHandler");
     const key = await HistoryHandler.getConfig('OPENAI_API_KEY_IMG');
-    
+
     if (!key) return await getOpenAI(); // Fallback al principal
     if (key !== _lastVisionKey) {
         const baseURL = getOpenAIBaseUrl();
-        _openaiVision = new OpenAI({ 
+        _openaiVision = new OpenAI({
             apiKey: key,
             ...(baseURL ? { baseURL } : {})
         });
@@ -94,14 +94,14 @@ export async function syncAssistantTools(assistantId: string, projectId: string 
         if (!toolsJson) {
             console.log("[openaiHelper] No se detectó OPENAI_TOOLS_DEFINITION. Verificando DB_TABLES para autogeneración...");
             const dbTablesStr = await HistoryHandler.getSetting('DB_TABLES', targetProjectId);
-            
+
             if (dbTablesStr && dbTablesStr.trim() !== "") {
                 try {
                     const { autoUpdateBotAbilities } = await import("./toolGenerator");
                     const tableNames = dbTablesStr.split(',').map(t => t.trim());
                     console.log(`[openaiHelper] 🤖 Intentando autogenerar tools para tablas: ${dbTablesStr}`);
                     await autoUpdateBotAbilities(tableNames);
-                    
+
                     // Re-intentar obtener la definición recién generada
                     toolsJson = await HistoryHandler.getSetting('OPENAI_TOOLS_DEFINITION', targetProjectId);
                 } catch (genError: any) {
@@ -144,11 +144,11 @@ export async function syncAssistantTools(assistantId: string, projectId: string 
             filteredTools = tools.filter((tool: any) => {
                 const funcName = tool.function?.name || tool.name;
                 if (!funcName) return true; // Si no tiene nombre por alguna razón, dejarla
-                
+
                 // Buscamos la palabra exacta del nombre de la herramienta en el prompt
                 const regex = new RegExp(`\\b${funcName}\\b`, 'i');
                 const isMentioned = regex.test(prompt);
-                
+
                 if (!isMentioned) {
                     console.log(`🔍 [openaiHelper] Excluyendo herramienta '${funcName}' para el asistente ${assistantIndex} (No mencionada en el prompt).`);
                 }
@@ -179,18 +179,18 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
 
     try {
         const { HistoryHandler } = await import("../../db/historyHandler");
-        
+
         // 1. Cargar Historial (Contexto)
         // Si el mensaje es una petición de resumen, traemos mucho más contexto (50 mensajes)
         const isSummaryRequest = /GET_RESUMEN/i.test(message);
         const historyLimit = isSummaryRequest ? 50 : 15;
         const history = await HistoryHandler.getMessages(userId, historyLimit, 0, projectId);
         console.log(`[openaiHelper] 📜 Historial recuperado para ${userId}: ${history.length} mensajes (Limit: ${historyLimit}) | Project: ${projectId}`);
-        
+
         // Cargar datos del chat para obtener el último resultado de BD
         const chatData = await HistoryHandler.getChat(userId, projectId ?? undefined);
         const lastDbResult = chatData?.last_db_result;
-        
+
         // 2. Preparar el prompt del sistema
         // Intentar obtener un prompt específico para este asistente usando su nombre lógico (asistente1, asistente2...)
         let promptKey = 'ASSISTANT_PROMPT';
@@ -200,7 +200,7 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
         }
 
         let systemPrompt = await HistoryHandler.getSetting(promptKey, projectId);
-        
+
         // Fallback: si no hay por nombre lógico, intentar por Assistant ID (legacy)
         if (!systemPrompt) {
             systemPrompt = await HistoryHandler.getSetting(`ASSISTANT_PROMPT_${assistantId}`, projectId);
@@ -211,7 +211,7 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
             const dbPrompt = await HistoryHandler.getSetting('ASSISTANT_PROMPT', projectId);
             systemPrompt = dbPrompt || await HistoryHandler.getConfig('ASSISTANT_PROMPT') || "Eres un asistente servicial.";
         }
-        
+
         // Filtrar mensajes válidos y formatear para OpenAI
         const formattedHistory = history
             .filter(m => m.role === 'user' || m.role === 'assistant')
@@ -233,8 +233,8 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
         // 2.5 Refuerzo para Resúmenes: Si es un resumen, inyectar una instrucción clara ANTES del comando
         if (isSummaryRequest) {
             console.log(`[openaiHelper] 📋 Solicitud de Resumen detectada. Historial disponible: ${formattedHistory.length} mensajes.`);
-            messages.push({ 
-                role: "system", 
+            messages.push({
+                role: "system",
                 content: `INSTRUCCIÓN CRÍTICA DE RESUMEN:
                 - Se te ha pasado un historial de ${formattedHistory.length} mensajes arriba.
                 - Tu tarea ÚNICA es generar un resumen estructurado basado en esos mensajes.
@@ -242,7 +242,7 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
                 - NUNCA respondas con frases de error como 'No tengo suficiente información' o similares.
                 - Sigue la ESTRUCTURA definida en tu prompt (ej: 'Tipo: ...', 'Nombre: ...').
                 - Si el prompt pide JSON, responde JSON. Si pide texto plano, responde texto plano.
-                - Responde únicamente con la información solicitada en el bloque GET_RESUMEN.` 
+                - Responde únicamente con la información solicitada en el bloque GET_RESUMEN.`
             });
         }
 
@@ -254,11 +254,11 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
         // Inyectar fecha y hora actual en el system prompt o como mensaje adicional
         const currentDatetimeArg = getArgentinaDatetimeString();
         const contactNameInfo = chatData?.name ? `\nNombre de Contacto: ${chatData.name}` : '';
-        
+
         // Obtener CLIENT_SLUG para formatear contexto personalizado de cliente
         const slug = await HistoryHandler.getConfig('CLIENT_SLUG', projectId);
         const cleanSlug = String(slug || '').trim().toLowerCase();
-        
+
         let leadContext = '';
         if (chatData) {
             if (cleanSlug === 'ganemos' || cleanSlug === 'ganemos-net' || cleanSlug === 'cas-epc' || cleanSlug === 'casepc') {
@@ -290,7 +290,7 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
         }
 
         messages[0].content += `\n\nFecha/Hora Actual (Argentina): ${currentDatetimeArg}\nID de Usuario: ${userId}${contactNameInfo}\nProject ID: ${projectId}${leadContext}`;
-        
+
         // Inyectar el último resultado de base de datos si existe en la base de datos
         if (lastDbResult) {
             messages[0].content += `\n\n[ÚLTIMO RESULTADO DE BASE DE DATOS CACHEADO]:\n${lastDbResult}\n(Usa esta información de máquinas/preguntas anteriores si el usuario se refiere a ella o te pregunta al respecto, para responder de inmediato sin necesidad de volver a ejecutar la consulta query_database a menos que sea estrictamente necesario)`;
@@ -309,7 +309,7 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
                         if (!processed.type && (processed.name || processed.parameters || processed.description)) {
                             processed = { type: "function", function: processed };
                         }
-                        
+
                         // 2. Corregir esquema de parámetros si es inválido
                         if (processed.function && processed.function.parameters) {
                             if (!processed.function.parameters.type || processed.function.parameters.type === 'None') {
@@ -366,13 +366,14 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
                 for (const toolCall of responseMessage.tool_calls) {
                     const funcName = toolCall.function.name;
                     const args = JSON.parse(toolCall.function.arguments || "{}");
-                    
+
                     console.log(`[ChatCompletion] Tool Call: ${funcName}`, args);
-                    
+
                     let toolResult = "";
                     if (funcName === "query_database") {
                         const { tabla, dato } = args as any;
-                        const dbTablesStr = await HistoryHandler.getConfig('DB_TABLES') || "";
+                        // Usar el projectId dinámico para validar las tablas permitidas del cliente actual.
+                        const dbTablesStr = await HistoryHandler.getConfig('DB_TABLES', projectId) || "";
                         const allowedTables = dbTablesStr.split(',').map(t => t.trim());
 
                         if (!allowedTables.includes(tabla)) {
@@ -381,7 +382,7 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
                             const safeDato = dato.replace(/'/g, "''");
                             const sql = `SELECT * FROM "${tabla}" WHERE "${tabla}"::text ~* '${safeDato}' LIMIT 25;`;
                             toolResult = await executeDbQuery(sql);
-                            
+
                             // Persistir el resultado para que esté disponible en futuros turnos del contexto
                             await HistoryHandler.updateLastDbResult(userId, toolResult, projectId ?? undefined);
                         }
@@ -396,7 +397,7 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
                             };
                             console.log(`[ChatCompletion] Enrutando tool call '${funcName}' al router de cliente...`);
                             const routerRes = await executeClientTool(funcName, args, context);
-                            
+
                             // Si retorna un string, lo envolvemos en un objeto resultado; si es objeto, lo pasamos directo
                             toolResult = typeof routerRes === 'string' ? JSON.stringify({ result: routerRes }) : JSON.stringify(routerRes);
                         } catch (err: any) {
@@ -424,7 +425,7 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
 
     } catch (error: any) {
         const errorCode = error.status || error.code || 'OAI_ERR';
-        
+
         let humanMessage = `Error [${errorCode}]: OpenAI no pudo generar una respuesta para el mensaje de [${userId}]. Detalle: ${error.message}`;
         if (errorCode === 429) {
             humanMessage = `Error [429]: Saldo insuficiente o límite de cuota excedido en OpenAI. El bot no le contestó a [${userId}].`;
@@ -435,7 +436,7 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
             stack: error.stack,
             status: error.status
         });
-        
+
         console.error("[openaiHelper] ❌ Error en Chat Completions:", error.message);
         throw error;
     }
@@ -459,7 +460,7 @@ export const safeToAsk = async (
     agentName?: string
 ) => {
     const SAFE_TIMEOUT = 120000;
-    
+
     return Promise.race([
         (async () => {
             let attempt = 0;
@@ -469,7 +470,7 @@ export const safeToAsk = async (
                 } catch (err: any) {
                     attempt++;
                     console.error(`[openaiHelper] Intento ${attempt} fallido:`, err.message);
-                    
+
                     const status = err.status || err.code;
                     // Si es un error de clave inválida o permisos, abortar de inmediato sin reintentar
                     if (status === 401 || status === 403) {
