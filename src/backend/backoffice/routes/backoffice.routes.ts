@@ -4800,9 +4800,17 @@ export const processImportExcel = async (req: any, res: any) => {
                 name = String(row.name || row.Name || row.nombre || row.Nombre || '').trim();
             }
 
-            // NORMALIZACIÓN: Quitar espacios, signos (+), guiones, paréntesis y cualquier caracter no numérico
-            const phone = rawPhone.replace(/\D/g, '');
+            // NORMALIZACIÓN Y FORMATO INTERNACIONAL: Quitar caracteres no numéricos y formatear (ej: 2914464733 -> 5492914464733)
+            let phone = rawPhone.replace(/\D/g, '');
             if (!phone) continue;
+
+            if (phone.length === 10) {
+                phone = `549${phone}`;
+            } else if (phone.length === 11 && phone.startsWith('9')) {
+                phone = `54${phone}`;
+            } else if (phone.length === 12 && phone.startsWith('54') && !phone.startsWith('549')) {
+                phone = `549${phone.slice(2)}`;
+            }
 
             // Deduplicación en memoria para el archivo importado
             const existing = uniqueChatsMap.get(phone);
