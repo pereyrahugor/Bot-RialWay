@@ -4770,35 +4770,66 @@ export const processImportExcel = async (req: any, res: any) => {
             return res.status(400).json({ success: false, error: 'El archivo está vacío' });
         }
 
-        const chatsToSync = [];
+        const uniqueChatsMap = new Map<string, any>();
         const tagsToProcess = new Map<string, string[]>(); // phone -> [tagNames]
         const allUniqueTags = new Set<string>();
 
         for (const row of data) {
-            const phone = String(row.phone || row.Phone || '').replace(/\D/g, '');
+            let rawPhone = '';
+            let name = '';
+            let tagsStr = '';
+
+            for (const key of Object.keys(row)) {
+                const cleanKey = key.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                const val = String(row[key] ?? '').trim();
+
+                if (!rawPhone && (cleanKey.includes('phone') || cleanKey.includes('telefono') || cleanKey.includes('celular') || cleanKey.includes('mobile') || cleanKey.includes('numero') || cleanKey.includes('jid'))) {
+                    rawPhone = val;
+                } else if (!name && (cleanKey.includes('name') || cleanKey.includes('nombre') || cleanKey.includes('cliente'))) {
+                    name = val;
+                } else if (!tagsStr && (cleanKey.includes('tag') || cleanKey.includes('etiqueta'))) {
+                    tagsStr = val;
+                }
+            }
+
+            // Fallback directo por nombres de propiedad comunes
+            if (!rawPhone) {
+                rawPhone = String(row.phone || row.Phone || row.telefono || row.Telefono || row.celular || row.Celular || row.contacto || row.Contacto || '').trim();
+            }
+            if (!name) {
+                name = String(row.name || row.Name || row.nombre || row.Nombre || '').trim();
+            }
+
+            // NORMALIZACIÓN: Quitar espacios, signos (+), guiones, paréntesis y cualquier caracter no numérico
+            const phone = rawPhone.replace(/\D/g, '');
             if (!phone) continue;
 
-            const name = row.name || row.Name || '';
-            const tagsStr = row.tags || row.Tags || '';
-
-            chatsToSync.push({
-                id: phone,
-                name: name || null,
-                type: 'whatsapp',
-                bot_enabled: true,
-                assigned_agent: 'asistente1'
-            });
+            // Deduplicación en memoria para el archivo importado
+            const existing = uniqueChatsMap.get(phone);
+            if (!existing || (!existing.name && name)) {
+                uniqueChatsMap.set(phone, {
+                    id: phone,
+                    name: name || null,
+                    type: 'whatsapp',
+                    bot_enabled: true,
+                    assigned_agent: 'asistente1'
+                });
+            }
 
             if (tagsStr) {
                 const tagList = tagsStr.split(',').map((t: string) => t.trim()).filter((t: string) => t.length > 0);
                 if (tagList.length > 0) {
-                    tagsToProcess.set(phone, tagList);
-                    tagList.forEach((t: string) => allUniqueTags.add(t));
+                    const currentTags = tagsToProcess.get(phone) || [];
+                    const mergedTags = Array.from(new Set([...currentTags, ...tagList]));
+                    tagsToProcess.set(phone, mergedTags);
+                    mergedTags.forEach((t: string) => allUniqueTags.add(t));
                 }
             }
         }
 
-        // 1. Upsert de Chats
+        const chatsToSync = Array.from(uniqueChatsMap.values());
+
+        // 1. Upsert de Chats (Normalizados)
         await depsHistoryHandler.syncChats(chatsToSync);
 
         // 2. Procesar Etiquetas

@@ -305,11 +305,16 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
             );
 
             // Si fue una intervención manual desde la app de WhatsApp (y no es grupo),
-            // activar automáticamente el modo "Atención Humana"
+            // activar automáticamente el modo "Atención Humana" a menos que la opción esté desactivada para el proyecto
             if (isManual && !isGroup) {
-                console.log(`${prefix} 🛑 Activando modo Atención Humana para ${chatId} (operador escribió desde la app) para proyecto ${dynamicProjectId}`);
-                await HistoryHandler.toggleBot(chatId, false, dynamicProjectId);
-                await HistoryHandler.updateLastHumanMessage(chatId, dynamicProjectId);
+                const disableAutoHuman = await HistoryHandler.getConfig('DISABLE_AUTO_HUMAN_ON_APP_MESSAGE', dynamicProjectId);
+                if (disableAutoHuman === 'true' || disableAutoHuman === '1') {
+                    console.log(`${prefix} ℹ️ Intervención desde App WhatsApp detectada para ${chatId}, pero DISABLE_AUTO_HUMAN_ON_APP_MESSAGE está activo (No se desactiva el bot).`);
+                } else {
+                    console.log(`${prefix} 🛑 Activando modo Atención Humana para ${chatId} (operador escribió desde la app) para proyecto ${dynamicProjectId}`);
+                    await HistoryHandler.toggleBot(chatId, false, dynamicProjectId);
+                    await HistoryHandler.updateLastHumanMessage(chatId, dynamicProjectId);
+                }
             }
         } catch (err) {
             console.error(`❌ ${prefix} Error guardando mensaje saliente manual:`, err);

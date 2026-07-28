@@ -3441,17 +3441,28 @@ export class HistoryHandler {
         try {
             if (chats.length === 0) return { success: true, data: [] };
 
-            const chatsToUpsert = chats.map(c => ({
-                id: c.id,
-                project_id: targetProjectId,
-                name: c.name || null,
-                type: c.type || 'whatsapp',
-                last_message_at: c.last_message_at || new Date().toISOString(),
-                metadata: c.metadata || {},
-                is_lead: c.is_lead || false,
-                bot_enabled: c.bot_enabled !== undefined ? c.bot_enabled : true,
-                assigned_agent: c.assigned_agent || 'asistente1'
-            }));
+            // Deduplicar en memoria por cleanId para evitar "ON CONFLICT DO UPDATE command cannot affect row a second time" en Postgres
+            const chatsMap = new Map<string, any>();
+            for (const c of chats) {
+                const rawId = String(c.id || c.phone || '').trim();
+                const cleanId = rawId.replace(/\D/g, '') || rawId;
+                if (!cleanId || cleanId.trim() === '') continue;
+
+                const existing = chatsMap.get(cleanId);
+                chatsMap.set(cleanId, {
+                    id: cleanId,
+                    project_id: targetProjectId,
+                    name: c.name || (existing ? existing.name : null),
+                    type: c.type || 'whatsapp',
+                    last_message_at: c.last_message_at || new Date().toISOString(),
+                    metadata: c.metadata || (existing ? existing.metadata : {}),
+                    is_lead: c.is_lead !== undefined ? c.is_lead : (existing ? existing.is_lead : false),
+                    bot_enabled: c.bot_enabled !== undefined ? c.bot_enabled : (existing ? existing.bot_enabled : true),
+                    assigned_agent: c.assigned_agent || (existing ? existing.assigned_agent : 'asistente1')
+                });
+            }
+
+            const chatsToUpsert = Array.from(chatsMap.values());
 
             const { data, error } = await supabase
                 .from('chats')
