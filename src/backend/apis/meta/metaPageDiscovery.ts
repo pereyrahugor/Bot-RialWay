@@ -8,7 +8,7 @@ export async function discoverAndLinkMetaPages(userAccessToken: string) {
         console.log('📡 [MetaPageDiscovery] Buscando páginas vinculadas...');
 
         // 1. Obtener lista de páginas del usuario (incluyendo cuentas de Instagram vinculadas)
-        const pagesResponse = await axios.get(`https://graph.facebook.com/v22.0/me/accounts`, {
+        const pagesResponse = await axios.get(`https://graph.facebook.com/v25.0/me/accounts`, {
             params: { 
                 access_token: userAccessToken, 
                 fields: 'id,name,access_token,instagram_business_account' 
@@ -35,7 +35,7 @@ export async function discoverAndLinkMetaPages(userAccessToken: string) {
         // 2. Suscribir la APP a los Webhooks de la Página
         console.log(`📡 [MetaPageDiscovery] Suscribiendo App a la página ${pageId} e Instagram...`);
         try {
-            await axios.post(`https://graph.facebook.com/v22.0/${pageId}/subscribed_apps`, 
+            await axios.post(`https://graph.facebook.com/v25.0/${pageId}/subscribed_apps`, 
                 { 
                     subscribed_fields: [
                         'messages', 

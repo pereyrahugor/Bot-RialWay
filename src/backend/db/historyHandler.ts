@@ -2607,7 +2607,7 @@ export class HistoryHandler {
                     const axios = (await import('axios')).default;
                     // Suscribir a messages + smb_message_echoes para capturar mensajes
                     // enviados manualmente desde la app de WhatsApp (Atención Humana)
-                    await axios.post(`https://graph.facebook.com/v22.0/${wabaId}/subscribed_apps`,
+                    await axios.post(`https://graph.facebook.com/v25.0/${wabaId}/subscribed_apps`,
                         {},
                         {
                             headers: { 'Authorization': `Bearer ${tokenToSave}` },

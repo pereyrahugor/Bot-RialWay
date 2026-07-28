@@ -584,7 +584,7 @@ window.backofficeView = {
                     .then(res => res.json())
                     .then(data => {
                         if (data && data.appId && data.appId !== 'AQUI_TU_ID_DE_APP' && typeof FB !== 'undefined') {
-                            FB.init({ appId: data.appId, cookie: true, xfbml: true, version: 'v22.0' });
+                            FB.init({ appId: data.appId, cookie: true, xfbml: true, version: 'v25.0' });
                         }
                     });
             };
