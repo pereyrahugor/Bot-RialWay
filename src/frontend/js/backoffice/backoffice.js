@@ -4068,17 +4068,15 @@ window.selectMetaTemplateForChat = function (templateName) {
     window.renderMetaTemplateForm();
 };
 
-window.renderMetaTemplateForm = function () {
+window.updateMetaTemplatePreview = function () {
     const template = window._selectedMetaTemplate;
     if (!template) return;
 
     const previewEl = document.getElementById('mt-template-preview');
-    const formEl = document.getElementById('mt-variables-form');
-    if (!previewEl || !formEl) return;
+    if (!previewEl) return;
 
     const bodyComp = template.components?.find(c => c.type === 'BODY');
     const headerComp = template.components?.find(c => c.type === 'HEADER');
-    const isNamed = (template.parameter_format || '').toLowerCase() === 'named';
 
     let rawText = bodyComp?.text || '';
     let renderedText = rawText;
@@ -4110,6 +4108,19 @@ window.renderMetaTemplateForm = function () {
             <div>${renderedText.replace(/\n/g, '<br/>')}</div>
         </div>
     `;
+};
+
+window.renderMetaTemplateForm = function () {
+    const template = window._selectedMetaTemplate;
+    if (!template) return;
+
+    const formEl = document.getElementById('mt-variables-form');
+    if (!formEl) return;
+
+    window.updateMetaTemplatePreview();
+
+    const headerComp = template.components?.find(c => c.type === 'HEADER');
+    const isNamed = (template.parameter_format || '').toLowerCase() === 'named';
 
     let formHtml = '';
 
@@ -4121,7 +4132,7 @@ window.renderMetaTemplateForm = function () {
                     <i class="fas fa-link" style="margin-right:4px;"></i> URL Cabecera (${headerComp.format}):
                 </label>
                 <input type="text" value="${mediaVal}" placeholder="URL pública..." 
-                    oninput="window._metaTemplateFormValues['_header_media_url']=this.value; window.renderMetaTemplateForm();" 
+                    oninput="window._metaTemplateFormValues['_header_media_url']=this.value; window.updateMetaTemplatePreview();" 
                     style="width:100%; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:5px 8px; font-size:0.75rem; color:inherit; outline:none;" />
             </div>
         `;
@@ -4137,7 +4148,7 @@ window.renderMetaTemplateForm = function () {
                 <div style="display:flex; flex-direction:column; gap:3px;">
                     <label style="font-size:0.72rem; font-weight:600; color:var(--text-muted);">${labelText}:</label>
                     <input type="text" value="${val}" placeholder="Valor para ${key}..." 
-                        oninput="window._metaTemplateFormValues['${key}']=this.value; window.renderMetaTemplateForm();" 
+                        oninput="window._metaTemplateFormValues['${key}']=this.value; window.updateMetaTemplatePreview();" 
                         style="width:100%; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:5px 8px; font-size:0.75rem; color:inherit; outline:none;" />
                 </div>
             `;
@@ -4154,7 +4165,7 @@ window.renderMetaTemplateForm = function () {
                 <div style="display:flex; flex-direction:column; gap:3px;">
                     <label style="font-size:0.72rem; font-weight:600; color:var(--text-muted);">Sufijo URL Botón ${btnNum}:</label>
                     <input type="text" value="${val}" placeholder="Ej: codigo123..." 
-                        oninput="window._metaTemplateFormValues['${btnKey}']=this.value;" 
+                        oninput="window._metaTemplateFormValues['${btnKey}']=this.value; window.updateMetaTemplatePreview();" 
                         style="width:100%; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:5px 8px; font-size:0.75rem; color:inherit; outline:none;" />
                 </div>
             `;
