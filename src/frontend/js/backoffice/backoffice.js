@@ -659,11 +659,13 @@ async function selectChat(id) {
     const ticketBtn = document.getElementById('open-ticket-btn');
     const quickMsgBtn = document.getElementById('quick-msg-btn');
     const metaTemplatesBtn = document.getElementById('meta-templates-btn');
+    const deleteChatBtn = document.getElementById('delete-chat-btn');
     if (tagsBtn) tagsBtn.disabled = false;
     if (crmBtn) crmBtn.disabled = false;
     if (ticketBtn) ticketBtn.disabled = false;
     if (quickMsgBtn) quickMsgBtn.disabled = false;
     if (metaTemplatesBtn) metaTemplatesBtn.disabled = false;
+    if (deleteChatBtn) deleteChatBtn.disabled = false;
 
     renderActiveChatTags();
     populateCRMFields(chat);
@@ -3320,7 +3322,7 @@ window.downloadImportTemplate = downloadImportTemplate;
 window.startImportExcel = startImportExcel;
 
 // --- Modal Agregar Contacto Individual ---
-function openIndividualContactModal() {
+async function openIndividualContactModal() {
     const importModal = document.getElementById('import-modal');
     if (importModal) importModal.style.display = 'none';
 
@@ -3333,13 +3335,17 @@ function openIndividualContactModal() {
     const previewEl = document.getElementById('ind-phone-preview');
     if (previewEl) previewEl.style.display = 'none';
 
+    if (!Array.isArray(_boBotTags) || _boBotTags.length === 0) {
+        await fetchBotTags();
+    }
+
     // Poblar etiquetas existentes
     const tagsContainer = document.getElementById('ind-tags-container');
     if (tagsContainer) {
-        if (!Array.isArray(botTags) || botTags.length === 0) {
+        if (!Array.isArray(_boBotTags) || _boBotTags.length === 0) {
             tagsContainer.innerHTML = '<span style="font-size:0.75rem; color:var(--text-muted);">No hay etiquetas registradas.</span>';
         } else {
-            tagsContainer.innerHTML = botTags.map(tag => {
+            tagsContainer.innerHTML = _boBotTags.map(tag => {
                 const color = tag.color || '#6366f1';
                 return `
                     <label style="display:inline-flex; align-items:center; gap:5px; background:${color}20; border:1px solid ${color}40; color:${color}; padding:3px 8px; border-radius:14px; font-size:0.75rem; cursor:pointer; font-weight:600;">
@@ -3451,6 +3457,68 @@ window.closeIndividualContactModal = closeIndividualContactModal;
 window.normalizePhoneNumberClient = normalizePhoneNumberClient;
 window.previewNormalizedPhone = previewNormalizedPhone;
 window.saveIndividualContact = saveIndividualContact;
+
+// --- Eliminar Chat Activo ---
+async function deleteActiveChat() {
+    if (!activeChatId) {
+        window.swalAlert('Atención', 'No hay ningún chat seleccionado.', 'warning');
+        return;
+    }
+
+    const activeChat = chats.find(c => c.id === activeChatId);
+    const displayName = activeChat?.name || activeChatId;
+    const pId = activeChat?.project_id || '';
+
+    const confirm = await window.swalConfirm(
+        '¿Eliminar conversación?',
+        `¿Estás seguro de que deseas eliminar permanentemente el chat con "${displayName}" (${activeChatId})?\n\nEsta acción borrará el historial de este contacto únicamente para este proyecto.`,
+        'warning'
+    );
+
+    if (!confirm) return;
+
+    const btn = document.getElementById('delete-chat-btn');
+    if (btn) btn.disabled = true;
+
+    try {
+        const res = await fetch(`/api/backoffice/chats/${encodeURIComponent(activeChatId)}?token=${token}&projectId=${pId}`, {
+            method: 'DELETE'
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+            throw new Error(data.error || 'Error al eliminar la conversación');
+        }
+
+        window.swalAlert('¡Chat Eliminado!', `La conversación con "${displayName}" fue eliminada del proyecto.`, 'success');
+
+        // Limpiar estado activo
+        activeChatId = null;
+
+        // Ocultar cabecera de chat y limpiar mensajes
+        const chatHeader = document.getElementById('chat-header');
+        if (chatHeader) chatHeader.style.display = 'none';
+
+        const messagesContainer = document.getElementById('messages-container');
+        if (messagesContainer) messagesContainer.innerHTML = '';
+
+        // Deshabilitar botones de cabecera
+        if (btn) btn.disabled = true;
+        const tagsBtn = document.getElementById('open-tags-btn');
+        if (tagsBtn) tagsBtn.disabled = true;
+        const crmBtn = document.getElementById('open-crm-btn');
+        if (crmBtn) crmBtn.disabled = true;
+
+        // Refrescar la lista de chats
+        await fetchChats(true);
+    } catch (err) {
+        console.error('[deleteActiveChat] Error:', err);
+        window.swalAlert('Error', err.message || 'No se pudo eliminar la conversación', 'error');
+        if (btn) btn.disabled = false;
+    }
+}
+
+window.deleteActiveChat = deleteActiveChat;
 
 window.startContactSync = startContactSync;
 window.closeSyncModal = closeSyncModal;

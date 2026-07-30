@@ -115,6 +115,9 @@ window.backofficeView = {
                             <button class="btn-icon" id="open-crm-btn" onclick="toggleCRMPanel()" title="Ficha del Cliente" disabled>
                                 <i class="fas fa-user-pen"></i>
                             </button>
+                            <button class="btn-icon" id="delete-chat-btn" onclick="deleteActiveChat()" title="Eliminar Chat de este Proyecto" style="color:#ef4444;" disabled>
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
                             <div id="crm-jump-container" style="display: none !important;">
                                 <select id="crm-lead-jump" style="display:none;"></select>
                                 <div class="crm-jump-split">

@@ -989,6 +989,10 @@ export const registerBackofficeRoutes = (app: any) => {
         return processCreateIndividualContact(req, res);
     });
 
+    app.delete('/api/backoffice/chats/:chatId', backofficeAuth, (req: any, res: any) => {
+        return processDeleteChat(req, res);
+    });
+
 
     // --- QUICK MESSAGES ---
 
@@ -4960,5 +4964,67 @@ export const processCreateIndividualContact = async (req: any, res: any) => {
     } catch (err: any) {
         console.error('[create-individual] Error:', err);
         return res.status(500).json({ success: false, error: err.message || 'Error interno al crear contacto.' });
+    }
+};
+
+export const processDeleteChat = async (req: any, res: any) => {
+    try {
+        const { chatId } = req.params;
+        const targetProjectId = req.query.projectId || resolveProjectId(req) || (HistoryHandlerClass as any).PROJECT_ID || 'default';
+
+        if (!chatId) {
+            return res.status(400).json({ success: false, error: 'Se requiere el ID del chat a eliminar.' });
+        }
+
+        const supabase = HistoryHandlerClass.getSupabase();
+        if (!supabase) {
+            return res.status(500).json({ success: false, error: 'Base de datos no disponible.' });
+        }
+
+        console.log(`🗑️ [DeleteChat] Solicitando eliminación del chat ${chatId} exclusivamente para el proyecto ${targetProjectId}...`);
+
+        // 1. Eliminar mensajes pertenecientes únicamente a este chat y proyecto
+        const { error: msgErr } = await supabase
+            .from('messages')
+            .delete()
+            .eq('chat_id', chatId)
+            .eq('project_id', targetProjectId);
+
+        if (msgErr) {
+            console.error('[DeleteChat] Error eliminando mensajes del proyecto:', msgErr.message);
+        }
+
+        // 2. Eliminar tickets asociados a este chat y proyecto
+        try {
+            await supabase
+                .from('tickets')
+                .delete()
+                .eq('chat_id', chatId)
+                .eq('project_id', targetProjectId);
+        } catch (tErr) { /* ignore */ }
+
+        // 3. Eliminar chat únicamente para ESTE project_id (aislamiento estricto por proyecto)
+        const { error: chatErr } = await supabase
+            .from('chats')
+            .delete()
+            .eq('id', chatId)
+            .eq('project_id', targetProjectId);
+
+        if (chatErr) {
+            console.error('[DeleteChat] Error eliminando registro de chat:', chatErr);
+            return res.status(500).json({ success: false, error: chatErr.message });
+        }
+
+        console.log(`✅ [DeleteChat] Chat ${chatId} borrado con éxito del proyecto ${targetProjectId}.`);
+
+        return res.json({
+            success: true,
+            chatId,
+            projectId: targetProjectId,
+            message: `El chat ha sido eliminado exitosamente de este proyecto.`
+        });
+    } catch (err: any) {
+        console.error('[DeleteChat] Error:', err);
+        return res.status(500).json({ success: false, error: err.message || 'Error interno al eliminar chat' });
     }
 };
