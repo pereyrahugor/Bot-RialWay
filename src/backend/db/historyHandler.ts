@@ -177,7 +177,7 @@ export class HistoryHandler {
                     tag_id uuid REFERENCES tags(id) ON DELETE CASCADE,
                     project_id TEXT,
                     PRIMARY KEY (chat_id, tag_id, project_id),
-                    FOREIGN KEY (chat_id, project_id) REFERENCES chats(id, project_id)
+                    FOREIGN KEY (chat_id, project_id) REFERENCES chats(id, project_id) ON UPDATE CASCADE ON DELETE CASCADE
                 );
                 GRANT ALL ON TABLE chat_tags TO service_role;
                 GRANT ALL ON TABLE chat_tags TO authenticated;
@@ -194,7 +194,7 @@ export class HistoryHandler {
                     type TEXT DEFAULT 'text',
                     external_id TEXT UNIQUE,
                     created_at TIMESTAMPTZ DEFAULT NOW(),
-                    FOREIGN KEY (chat_id, project_id) REFERENCES chats(id, project_id)
+                    FOREIGN KEY (chat_id, project_id) REFERENCES chats(id, project_id) ON UPDATE CASCADE ON DELETE CASCADE
                 );
                 GRANT ALL ON TABLE messages TO service_role;
                 GRANT ALL ON TABLE messages TO authenticated;
@@ -213,7 +213,7 @@ export class HistoryHandler {
                     prioridad TEXT DEFAULT 'Media',
                     created_at TIMESTAMPTZ DEFAULT NOW(),
                     updated_at TIMESTAMPTZ DEFAULT NOW(),
-                    FOREIGN KEY (chat_id, project_id) REFERENCES chats(id, project_id)
+                    FOREIGN KEY (chat_id, project_id) REFERENCES chats(id, project_id) ON UPDATE CASCADE ON DELETE CASCADE
                 );
                 GRANT ALL ON TABLE tickets TO service_role;
                 GRANT ALL ON TABLE tickets TO authenticated;
