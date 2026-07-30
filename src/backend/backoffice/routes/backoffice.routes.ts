@@ -2284,7 +2284,109 @@ export const registerBackofficeRoutes = (app: any) => {
             const lang = languageCode || template.language || 'es';
             console.log(`📡 [SINGLE-TEMPLATE] Enviando plantilla '${templateName}' (${lang}) a ${targetPhone}...`);
 
-            const resApi = await provider.sendTemplate(targetPhone, templateName, lang, components || []);
+            // Procesar componentes (en especial cabeceras multimedia) para subir directamente a Meta
+            const finalComponents: any[] = JSON.parse(JSON.stringify(components || []));
+
+            for (const comp of finalComponents) {
+                if (comp.type === 'HEADER' && Array.isArray(comp.parameters)) {
+                    for (const param of comp.parameters) {
+                        const formatType = param.type; // 'image' | 'video' | 'document'
+                        if (formatType && param[formatType]) {
+                            const mediaObj = param[formatType];
+                            const rawLink = mediaObj.link || mediaObj.url;
+
+                            if (rawLink && typeof rawLink === 'string') {
+                                try {
+                                    console.log(`📥 [SINGLE-TEMPLATE] Procesando multimedia de cabecera: ${rawLink.substring(0, 60)}...`);
+                                    const isMetaUrl = rawLink.includes('fbcdn') || rawLink.includes('fbsbx') || rawLink.includes('facebook.com') || rawLink.includes('lookaside.fbsbx.com') || rawLink.includes('whatsapp.net') || rawLink.includes('whatsapp.com');
+                                    const isDrive = rawLink.includes('drive.google.com');
+
+                                    let downloadUrl = rawLink;
+                                    if (isDrive) {
+                                        const driveIdMatch = rawLink.match(/\/d\/([^/]+)/) || rawLink.match(/id=([^&]+)/);
+                                        if (driveIdMatch && driveIdMatch[1]) {
+                                            downloadUrl = `https://drive.google.com/uc?export=download&id=${driveIdMatch[1]}`;
+                                        }
+                                    }
+
+                                    const accessToken = provider.config?.access_token || '';
+                                    const downloadHeaders: any = {
+                                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                                        'Accept': '*/*'
+                                    };
+                                    if (isMetaUrl && accessToken) {
+                                        downloadHeaders['Authorization'] = `Bearer ${accessToken}`;
+                                    }
+
+                                    const response = await axios.get(downloadUrl, {
+                                        responseType: 'arraybuffer',
+                                        timeout: 30000,
+                                        headers: downloadHeaders
+                                    });
+
+                                    const contentType = String(response.headers['content-type'] || '');
+                                    let ext = 'bin';
+                                    if (contentType.includes('video')) ext = 'mp4';
+                                    else if (contentType.includes('image')) ext = 'jpg';
+                                    else if (contentType.includes('pdf')) ext = 'pdf';
+                                    else {
+                                        ext = formatType === 'image' ? 'jpg' : formatType === 'video' ? 'mp4' : 'pdf';
+                                    }
+
+                                    const uploadsDir = path.join(process.cwd(), 'uploads');
+                                    if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
+                                    const filename = `single-template-${Date.now()}-${Math.floor(Math.random()*1000)}.${ext}`;
+                                    const downloadedPath = path.join(uploadsDir, filename);
+                                    fs.writeFileSync(downloadedPath, response.data);
+
+                                    // 1. Intentar subir directamente a Meta Cloud API para obtener media_id
+                                    let uploadedMediaId: string | null = null;
+                                    if (typeof (provider as any).uploadMedia === 'function') {
+                                        uploadedMediaId = await (provider as any).uploadMedia(downloadedPath);
+                                    }
+
+                                    if (uploadedMediaId) {
+                                        delete param[formatType].link;
+                                        param[formatType].id = uploadedMediaId;
+                                        console.log(`✅ [SINGLE-TEMPLATE] Multimedia de cabecera subido exitosamente a Meta. Media ID: ${uploadedMediaId}`);
+                                    } else {
+                                        // 2. Fallback: Servir desde nuestro propio dominio público
+                                        let baseUrl = process.env.PROJECT_URL;
+                                        if (!baseUrl) {
+                                            const host = req.headers.host || '';
+                                            if (!host.includes('localhost')) {
+                                                baseUrl = `https://${host}`;
+                                            } else {
+                                                baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : `http://${host}`;
+                                            }
+                                        }
+                                        if (!baseUrl.startsWith('http')) baseUrl = `https://${baseUrl}`;
+                                        param[formatType].link = `${baseUrl.replace(/\/$/, '')}/uploads/${filename}`;
+                                        console.log(`✅ [SINGLE-TEMPLATE] Multimedia servido localmente en: ${param[formatType].link}`);
+                                    }
+                                } catch (downloadErr: any) {
+                                    console.error(`❌ [SINGLE-TEMPLATE] Error procesando multimedia de cabecera:`, downloadErr.message);
+                                    // Fallback: Si el link falló y la plantilla original de Meta define header_handle
+                                    const headerCompDef = template.components?.find((c: any) => c.type === 'HEADER');
+                                    const rawHandle = headerCompDef?.example?.header_handle?.[0];
+                                    if (rawHandle) {
+                                        delete param[formatType].link;
+                                        if (rawHandle.startsWith('http://') || rawHandle.startsWith('https://')) {
+                                            param[formatType].link = rawHandle;
+                                        } else {
+                                            param[formatType].handle = rawHandle;
+                                        }
+                                        console.log(`⚠️ [SINGLE-TEMPLATE] Usando handle/link de ejemplo original de la plantilla: ${rawHandle}`);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            const resApi = await provider.sendTemplate(targetPhone, templateName, lang, finalComponents);
 
             if (resApi?.messages?.[0]?.id) {
                 const msgId = resApi.messages[0].id;
@@ -2387,10 +2489,11 @@ export const registerBackofficeRoutes = (app: any) => {
 
                 // Construir componentes (como multimedia por defecto)
                 const components: any[] = [];
+                let mediaLink = "";
                 const headerComp = template.components?.find((c: any) => c.type === 'HEADER');
                 if (headerComp && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComp.format)) {
                     const lowFormat = headerComp.format.toLowerCase();
-                    let mediaLink = headerComp.example?.header_handle?.[0] || '';
+                    mediaLink = headerComp.example?.header_handle?.[0] || '';
                     let headerParamPayload: any = null;
 
                     if (mediaLink) {
