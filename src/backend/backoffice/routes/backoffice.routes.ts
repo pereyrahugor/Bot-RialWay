@@ -2181,9 +2181,38 @@ export const registerBackofficeRoutes = (app: any) => {
 
             // --- CONTACTOS REALES ---
             const { startDate, endDate, tagIds } = req.query;
-            let chats = await depsHistoryHandler.listChats(5000, 0, undefined, undefined, undefined, undefined, projectId); 
+            const tagIdArray = tagIds ? String(tagIds).split(',').filter(Boolean) : [];
+
+            let chats: any[] = [];
+            if (tagIdArray.length === 1) {
+                chats = await depsHistoryHandler.listChats(10000, 0, undefined, tagIdArray[0], undefined, undefined, projectId);
+            } else if (tagIdArray.length > 1) {
+                const supabase = depsHistoryHandler.getSupabase();
+                const { data: taggedEntries } = await supabase
+                    .from('chat_tags')
+                    .select('chat_id')
+                    .eq('project_id', projectId)
+                    .in('tag_id', tagIdArray);
+
+                const matchingIds = Array.from(new Set((taggedEntries || []).map((te: any) => te.chat_id)));
+                if (matchingIds.length > 0) {
+                    const { data: rawChats } = await supabase
+                        .from('chats')
+                        .select('id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, crm_status, crm_due_date, notes, email, source, is_lead, cuit_dni, tax_status, address, offered_product, unread_count, chat_tags(tag_id, tags(*))')
+                        .eq('project_id', projectId)
+                        .in('id', matchingIds);
+
+                    chats = (rawChats || []).map((chat: any) => ({
+                        ...chat,
+                        tags: chat.chat_tags ? chat.chat_tags.map((ct: any) => ct.tags).filter((t: any) => t !== null) : []
+                    }));
+                }
+            } else {
+                chats = await depsHistoryHandler.listChats(10000, 0, undefined, undefined, undefined, undefined, projectId);
+            }
+
             if (chats && chats.length > 0) {
-                // Filtrar por fecha
+                // Filtrar por fecha si fue provisto
                 if (startDate || endDate) {
                     chats = chats.filter((c: any) => {
                         if (!c.last_message_at) return false;
@@ -2192,18 +2221,6 @@ export const registerBackofficeRoutes = (app: any) => {
                         if (endDate && msgDate > new Date(`${endDate}T23:59:59.999Z`)) return false;
                         return true;
                     });
-                }
-
-                // Filtrar por etiquetas
-                if (tagIds) {
-                    const tagIdArray = tagIds.split(',').filter(Boolean);
-                    if (tagIdArray.length > 0) {
-                        chats = chats.filter((c: any) => {
-                            if (!c.tags || c.tags.length === 0) return false;
-                            // Chequear si el chat tiene al menos una de las etiquetas
-                            return c.tags.some((t: any) => tagIdArray.includes(t.id));
-                        });
-                    }
                 }
 
                 const autoCompletable = [
@@ -2429,7 +2446,36 @@ export const registerBackofficeRoutes = (app: any) => {
             }
 
             // 1. Obtener contactos reales filtrados
-            let chatsList = await depsHistoryHandler.listChats(5000, 0, undefined, undefined, undefined, undefined, projectId); 
+            const tagIdArray = Array.isArray(tagIds) ? tagIds : (typeof tagIds === 'string' ? tagIds.split(',').filter(Boolean) : []);
+            let chatsList: any[] = [];
+
+            if (tagIdArray.length === 1) {
+                chatsList = await depsHistoryHandler.listChats(10000, 0, undefined, tagIdArray[0], undefined, undefined, projectId);
+            } else if (tagIdArray.length > 1) {
+                const supabase = depsHistoryHandler.getSupabase();
+                const { data: taggedEntries } = await supabase
+                    .from('chat_tags')
+                    .select('chat_id')
+                    .eq('project_id', projectId)
+                    .in('tag_id', tagIdArray);
+
+                const matchingIds = Array.from(new Set((taggedEntries || []).map((te: any) => te.chat_id)));
+                if (matchingIds.length > 0) {
+                    const { data: rawChats } = await supabase
+                        .from('chats')
+                        .select('id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, crm_status, crm_due_date, notes, email, source, is_lead, cuit_dni, tax_status, address, offered_product, unread_count, chat_tags(tag_id, tags(*))')
+                        .eq('project_id', projectId)
+                        .in('id', matchingIds);
+
+                    chatsList = (rawChats || []).map((chat: any) => ({
+                        ...chat,
+                        tags: chat.chat_tags ? chat.chat_tags.map((ct: any) => ct.tags).filter((t: any) => t !== null) : []
+                    }));
+                }
+            } else {
+                chatsList = await depsHistoryHandler.listChats(10000, 0, undefined, undefined, undefined, undefined, projectId);
+            }
+
             if (chatsList && chatsList.length > 0) {
                 // Filtrar por fecha
                 if (startDate || endDate) {
@@ -2440,17 +2486,6 @@ export const registerBackofficeRoutes = (app: any) => {
                         if (endDate && msgDate > new Date(`${endDate}T23:59:59.999Z`)) return false;
                         return true;
                     });
-                }
-
-                // Filtrar por etiquetas
-                if (tagIds) {
-                    const tagIdArray = Array.isArray(tagIds) ? tagIds : typeof tagIds === 'string' ? tagIds.split(',').filter(Boolean) : [];
-                    if (tagIdArray.length > 0) {
-                        chatsList = chatsList.filter((c: any) => {
-                            if (!c.tags || c.tags.length === 0) return false;
-                            return c.tags.some((t: any) => tagIdArray.includes(t.id));
-                        });
-                    }
                 }
             } else {
                 chatsList = [];
