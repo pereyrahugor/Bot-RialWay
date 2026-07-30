@@ -505,6 +505,12 @@ window.backofficeView = {
                     <button class="btn-close-modal" onclick="toggleImportModal()"><i class="fas fa-times"></i></button>
                 </div>
                 <div class="modal-body" style="padding:25px;">
+                    <div style="margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.08);">
+                        <button class="btn-primary w-full justify-center" onclick="window.openIndividualContactModal()" style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);">
+                            <i class="fas fa-user-plus mr-2"></i> Agregar Contacto Individual
+                        </button>
+                    </div>
+
                     <p class="text-sm text-secondary-content mb-5">Carga multiples contactos usando una plantilla Excel.</p>
                     <div class="import-template-section">
                         <h4 class="text-sm font-heading font-semibold text-primary-content mb-3">1. Descarga la plantilla</h4>
@@ -524,6 +530,45 @@ window.backofficeView = {
                             <div id="import-progress-bar" class="import-progress-bar" style="width:0%"></div>
                         </div>
                         <p id="import-status-text" class="import-status-text">Procesando...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Agregar Contacto Individual -->
+        <div id="individual-contact-modal" class="modal-overlay" style="display:none; z-index:9999;">
+            <div class="modal-content animate-pop-in" style="max-width:460px;">
+                <div class="modal-header">
+                    <h3><i class="fas fa-user-plus text-indigo-400 mr-2"></i> Agregar Contacto Individual</h3>
+                    <button class="btn-close-modal" onclick="window.closeIndividualContactModal()"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="modal-body" style="padding:22px; display:flex; flex-direction:column; gap:14px;">
+                    <div>
+                        <label class="text-xs font-semibold text-secondary-content mb-1 block">
+                            <i class="fas fa-phone mr-1"></i> Número de Teléfono (con o sin prefijo):
+                        </label>
+                        <input type="text" id="ind-phone-input" class="crm-input" placeholder="Ej: 2914464733 o 5491122334455" oninput="window.previewNormalizedPhone(this.value)" />
+                        <div id="ind-phone-preview" style="font-size:0.75rem; margin-top:5px; color:#10b981; display:none; background:rgba(16,185,129,0.1); padding:4px 8px; border-radius:6px; border:1px solid rgba(16,185,129,0.2);"></div>
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-secondary-content mb-1 block">
+                            <i class="fas fa-user mr-1"></i> Nombre Completo:
+                        </label>
+                        <input type="text" id="ind-name-input" class="crm-input" placeholder="Ej: Juan Pérez" />
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-secondary-content mb-1 block">
+                            <i class="fas fa-tags mr-1"></i> Asignar Etiquetas Existentes:
+                        </label>
+                        <div id="ind-tags-container" style="max-height:130px; overflow-y:auto; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:10px; display:flex; flex-wrap:wrap; gap:8px;">
+                            <span style="font-size:0.75rem; color:var(--text-muted);">Cargando etiquetas...</span>
+                        </div>
+                    </div>
+                    <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:8px;">
+                        <button class="btn-secondary" onclick="window.closeIndividualContactModal()" style="padding:8px 16px;">Cancelar</button>
+                        <button class="btn-primary" id="btn-save-ind-contact" onclick="window.saveIndividualContact()" style="padding:8px 18px; background:linear-gradient(135deg, #10b981 0%, #059669 100%);">
+                            <i class="fas fa-save mr-1"></i> Guardar Contacto
+                        </button>
                     </div>
                 </div>
             </div>

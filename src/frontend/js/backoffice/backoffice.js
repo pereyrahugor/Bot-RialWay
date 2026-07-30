@@ -3319,6 +3319,139 @@ window.toggleImportModal = toggleImportModal;
 window.downloadImportTemplate = downloadImportTemplate;
 window.startImportExcel = startImportExcel;
 
+// --- Modal Agregar Contacto Individual ---
+function openIndividualContactModal() {
+    const importModal = document.getElementById('import-modal');
+    if (importModal) importModal.style.display = 'none';
+
+    const indModal = document.getElementById('individual-contact-modal');
+    if (!indModal) return;
+
+    indModal.style.display = 'flex';
+    document.getElementById('ind-phone-input').value = '';
+    document.getElementById('ind-name-input').value = '';
+    const previewEl = document.getElementById('ind-phone-preview');
+    if (previewEl) previewEl.style.display = 'none';
+
+    // Poblar etiquetas existentes
+    const tagsContainer = document.getElementById('ind-tags-container');
+    if (tagsContainer) {
+        if (!Array.isArray(botTags) || botTags.length === 0) {
+            tagsContainer.innerHTML = '<span style="font-size:0.75rem; color:var(--text-muted);">No hay etiquetas registradas.</span>';
+        } else {
+            tagsContainer.innerHTML = botTags.map(tag => {
+                const color = tag.color || '#6366f1';
+                return `
+                    <label style="display:inline-flex; align-items:center; gap:5px; background:${color}20; border:1px solid ${color}40; color:${color}; padding:3px 8px; border-radius:14px; font-size:0.75rem; cursor:pointer; font-weight:600;">
+                        <input type="checkbox" class="ind-tag-checkbox" value="${tag.id}" style="accent-color:${color}; cursor:pointer;" />
+                        ${tag.name}
+                    </label>
+                `;
+            }).join('');
+        }
+    }
+}
+
+function closeIndividualContactModal() {
+    const indModal = document.getElementById('individual-contact-modal');
+    if (indModal) indModal.style.display = 'none';
+}
+
+function normalizePhoneNumberClient(rawPhone) {
+    let phone = String(rawPhone || '').replace(/\D/g, '').trim();
+    if (!phone) return '';
+    if (phone.startsWith('0')) {
+        phone = phone.slice(1);
+    }
+    if (phone.length === 10) {
+        phone = `549${phone}`;
+    } else if (phone.length === 11 && phone.startsWith('9')) {
+        phone = `54${phone}`;
+    } else if (phone.length === 12 && phone.startsWith('54') && !phone.startsWith('549')) {
+        phone = `549${phone.slice(2)}`;
+    }
+    return phone;
+}
+
+function previewNormalizedPhone(val) {
+    const previewEl = document.getElementById('ind-phone-preview');
+    if (!previewEl) return;
+    const normalized = normalizePhoneNumberClient(val);
+    if (normalized) {
+        previewEl.style.display = 'block';
+        previewEl.innerHTML = `<i class="fas fa-check-circle mr-1"></i> Formato Normalizado: <strong>${normalized}</strong>`;
+    } else {
+        previewEl.style.display = 'none';
+    }
+}
+
+async function saveIndividualContact() {
+    const phoneVal = document.getElementById('ind-phone-input')?.value;
+    const nameVal = document.getElementById('ind-name-input')?.value;
+    const btn = document.getElementById('btn-save-ind-contact');
+
+    const normalized = normalizePhoneNumberClient(phoneVal);
+    if (!normalized || normalized.length < 8) {
+        window.swalAlert('Atención', 'Por favor ingresa un número de teléfono válido.', 'warning');
+        return;
+    }
+
+    const tagCheckboxes = document.querySelectorAll('.ind-tag-checkbox:checked');
+    const selectedTagIds = Array.from(tagCheckboxes).map((cb) => cb.value);
+
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Guardando...';
+    }
+
+    try {
+        const activeChat = chats.find(c => c.id === activeChatId);
+        const pId = activeChat?.project_id || '';
+
+        const res = await fetch(`/api/backoffice/chats/create-individual?token=${token}&projectId=${pId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                rawPhone: phoneVal,
+                name: nameVal,
+                tagIds: selectedTagIds,
+                projectId: pId
+            })
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+            throw new Error(data.error || 'Error al guardar el contacto');
+        }
+
+        window.swalAlert('¡Contacto Creado!', `Contacto ${data.normalizedPhone} registrado exitosamente.`, 'success');
+        closeIndividualContactModal();
+
+        // Refrescar chats
+        await fetchChats(true);
+        await fetchBotTags();
+
+        // Seleccionar automáticamente el chat creado
+        if (data.normalizedPhone) {
+            window.selectChat(data.normalizedPhone);
+        }
+    } catch (err) {
+        console.error('[saveIndividualContact] Error:', err);
+        window.swalAlert('Error', err.message || 'No se pudo guardar el contacto', 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save mr-1"></i> Guardar Contacto';
+        }
+    }
+}
+
+window.openIndividualContactModal = openIndividualContactModal;
+window.closeIndividualContactModal = closeIndividualContactModal;
+window.normalizePhoneNumberClient = normalizePhoneNumberClient;
+window.previewNormalizedPhone = previewNormalizedPhone;
+window.saveIndividualContact = saveIndividualContact;
+
 window.startContactSync = startContactSync;
 window.closeSyncModal = closeSyncModal;
 

@@ -71,6 +71,12 @@ historyEvents.on('setting_changed', async ({ key, value, projectId }: { key: str
 });
 
 
+// Helper to dynamically extract projectId from query, body, or headers
+export const resolveProjectId = (req: any): string | null => {
+    const pId = req?.query?.projectId || (req?.body && req?.body.projectId) || req?.headers?.['x-project-id'] || (req?.auth && req?.auth.projectId);
+    return (pId && pId !== 'default') ? pId : null;
+};
+
 // Caché para fotos de perfil (chatId -> {url, timestamp})
 const profilePicCache = new Map<string, { url: string, expires: number }>();
 const CACHE_TTL = 1000 * 60 * 60; // 1 hora
@@ -658,11 +664,7 @@ export const registerBackofficeRoutes = (app: any) => {
         });
     }
 
-    // Helper to dynamically extract projectId from query, body, or headers
-    const resolveProjectId = (req: any): string | null => {
-        const pId = req.query.projectId || (req.body && req.body.projectId) || req.headers['x-project-id'] || (req.auth && req.auth.projectId);
-        return (pId && pId !== 'default') ? pId : null;
-    };
+
 
     // --- SYSTEM LOGS ---
     app.post('/api/backoffice/log-error', backofficeAuth, bodyParser.json(), (req: any, res: any) => {
@@ -981,6 +983,10 @@ export const registerBackofficeRoutes = (app: any) => {
 
     app.post('/api/backoffice/chats/import', backofficeAuth, (req: any, res: any) => {
         return processImportExcel(req, res);
+    });
+
+    app.post('/api/backoffice/chats/create-individual', backofficeAuth, (req: any, res: any) => {
+        return processCreateIndividualContact(req, res);
     });
 
 
@@ -4884,5 +4890,75 @@ export const processImportExcel = async (req: any, res: any) => {
     } catch (error: any) {
         console.error('❌ Error importando contactos:', error);
         return res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+export const processCreateIndividualContact = async (req: any, res: any) => {
+    try {
+        const { rawPhone, name, tagIds, projectId: bodyProjectId } = req.body;
+        const targetProjectId = bodyProjectId || req.query.projectId || resolveProjectId(req) || (HistoryHandlerClass as any).PROJECT_ID || 'default';
+
+        let phone = String(rawPhone || '').replace(/\D/g, '').trim();
+        if (!phone) {
+            return res.status(400).json({ success: false, error: 'Proporciona un número de teléfono válido.' });
+        }
+
+        if (phone.startsWith('0')) {
+            phone = phone.slice(1);
+        }
+        if (phone.length === 10) {
+            phone = `549${phone}`;
+        } else if (phone.length === 11 && phone.startsWith('9')) {
+            phone = `54${phone}`;
+        } else if (phone.length === 12 && phone.startsWith('54') && !phone.startsWith('549')) {
+            phone = `549${phone.slice(2)}`;
+        }
+
+        const supabase = HistoryHandlerClass.getSupabase();
+        if (!supabase) {
+            return res.status(500).json({ success: false, error: 'Base de datos no disponible.' });
+        }
+
+        const chatRow = {
+            id: phone,
+            project_id: targetProjectId,
+            name: name && String(name).trim() !== '' ? String(name).trim() : null,
+            type: 'whatsapp',
+            bot_enabled: true,
+            assigned_agent: 'asistente1',
+            last_message_at: new Date().toISOString()
+        };
+
+        const { error: chatErr } = await supabase
+            .from('chats')
+            .upsert(chatRow, { onConflict: 'id,project_id' });
+
+        if (chatErr) {
+            console.error('[create-individual] Error guardando chat:', chatErr);
+            return res.status(500).json({ success: false, error: chatErr.message });
+        }
+
+        if (Array.isArray(tagIds) && tagIds.length > 0) {
+            const tagRows = tagIds.map((tagId: string) => ({
+                chat_id: phone,
+                tag_id: tagId
+            }));
+
+            await supabase
+                .from('chat_tags')
+                .upsert(tagRows, { onConflict: 'chat_id,tag_id' });
+        }
+
+        console.log(`✅ [create-individual] Contacto ${phone} (${name || 'Sin nombre'}) creado para proyecto ${targetProjectId}`);
+
+        return res.json({
+            success: true,
+            chatId: phone,
+            normalizedPhone: phone,
+            message: 'Contacto creado exitosamente.'
+        });
+    } catch (err: any) {
+        console.error('[create-individual] Error:', err);
+        return res.status(500).json({ success: false, error: err.message || 'Error interno al crear contacto.' });
     }
 };
