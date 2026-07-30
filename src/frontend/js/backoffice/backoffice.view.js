@@ -308,7 +308,7 @@ window.backofficeView = {
                     <div data-field="crm-phone">
                         <label><i class="fas fa-phone"></i> Telefono</label>
                         <div class="phone-input-wrap">
-                            <input type="text" id="crm-phone-side" class="crm-input" readonly>
+                            <input type="text" id="crm-phone-side" class="crm-input" placeholder="Ej: 5491122334455">
                             <button class="phone-wa-btn" id="btn-whatsapp-direct-side" onclick="openWhatsAppDirectSide()">
                                 <i class="fab fa-whatsapp"></i>
                             </button>

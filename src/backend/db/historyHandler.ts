@@ -1258,7 +1258,9 @@ export class HistoryHandler {
             return { success };
         }
         if (details.name === '[-]') details.name = undefined;
-        const { ticket_title: ticketTitle, ...chatDetails } = details as any;
+        const { ticket_title: ticketTitle, newPhone: rawNewPhone, phone: rawPhone, ...chatDetails } = details as any;
+        const targetNewPhone = rawNewPhone || rawPhone;
+        let updatedPhoneId: string | null = null;
 
         try {
             // Resolver el project_id real buscando el chat en base de datos si no fue provisto
@@ -1275,14 +1277,38 @@ export class HistoryHandler {
                 }
             }
 
+            // Si se especificó un nuevo teléfono de contacto, actualizar el ID del chat en la base de datos (con ON UPDATE CASCADE)
+            if (targetNewPhone && typeof targetNewPhone === 'string') {
+                let cleanPhone = targetNewPhone.replace(/\D/g, '').trim();
+                if (cleanPhone.startsWith('0')) cleanPhone = cleanPhone.slice(1);
+                if (cleanPhone.length === 10) cleanPhone = `549${cleanPhone}`;
+
+                if (cleanPhone && cleanPhone !== chatId) {
+                    console.log(`📌 [updateContactDetails] Actualizando teléfono de chat: ${chatId} -> ${cleanPhone} para el proyecto ${currentProjectId}`);
+                    const { error: phoneErr } = await supabase
+                        .from('chats')
+                        .update({ id: cleanPhone })
+                        .eq('id', chatId)
+                        .eq('project_id', currentProjectId);
+
+                    if (!phoneErr) {
+                        updatedPhoneId = cleanPhone;
+                    } else {
+                        console.error('❌ [updateContactDetails] Error actualizando ID de teléfono:', phoneErr.message);
+                    }
+                }
+            }
+
+            const activeId = updatedPhoneId || chatId;
+
             // Invalidar cache
-            this.invalidateChatCache(chatId, currentProjectId);
+            this.invalidateChatCache(activeId, currentProjectId);
 
             if (Object.keys(chatDetails).length > 0) {
                 const { error } = await supabase
                     .from('chats')
                     .update(chatDetails)
-                    .eq('id', chatId)
+                    .eq('id', activeId)
                     .eq('project_id', currentProjectId);
 
                 if (error) throw error;
@@ -1413,7 +1439,7 @@ export class HistoryHandler {
                 details: chatDetails
             });
 
-            return { success: true };
+            return { success: true, newPhone: updatedPhoneId || undefined };
         } catch (err: any) {
             console.error('[HistoryHandler] Error en updateContactDetails:', err);
             return { success: false, error: err.message };

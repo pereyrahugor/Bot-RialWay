@@ -1643,8 +1643,11 @@ function openWhatsAppDirectSide() {
 async function saveCRMDetails() {
     if (!activeChatId) return;
 
+    const phoneInputVal = document.getElementById('crm-phone-side')?.value || '';
+
     const details = {
         name: document.getElementById('crm-name').value,
+        phone: phoneInputVal,
         email: document.getElementById('crm-email').value,
         source: document.getElementById('crm-source').value,
         notes: document.getElementById('crm-notes').value,
@@ -1660,6 +1663,7 @@ async function saveCRMDetails() {
 
     try {
         showToast('💾 Guardando cambios...');
+        let updatedNewPhone = null;
 
         // 1. Si hay un ticket activo, actualizar Ticket y Metadatos
         if (activeTicketId) {
@@ -1685,6 +1689,8 @@ async function saveCRMDetails() {
             if (resJson.success === false) {
                 throw new Error(resJson.error || 'Error al guardar detalles de ticket');
             }
+
+            if (resJson.newPhone) updatedNewPhone = resJson.newPhone;
 
             // Sincronizar Metadatos (Columna)
             const col = crmColumns.find(c => c.id === details.crm_status || c.title === details.crm_status);
@@ -1716,14 +1722,22 @@ async function saveCRMDetails() {
             if (resJson.success === false) {
                 throw new Error(resJson.error || 'Error al guardar contacto');
             }
+            if (resJson.newPhone) updatedNewPhone = resJson.newPhone;
         }
 
-        const chat = chats.find(c => c.id === activeChatId);
-        if (chat) {
-            Object.assign(chat, details);
-            const updatedName = (chat.name && chat.name !== '[-]') ? chat.name : 'Lead sin nombre';
-            document.getElementById('active-chat-name').innerText = updatedName;
-            renderChatList();
+        if (updatedNewPhone && updatedNewPhone !== activeChatId) {
+            console.log(`[saveCRMDetails] Teléfono de chat modificado de ${activeChatId} -> ${updatedNewPhone}`);
+            activeChatId = updatedNewPhone;
+            await fetchChats(true);
+            selectChat(activeChatId);
+        } else {
+            const chat = chats.find(c => c.id === activeChatId);
+            if (chat) {
+                Object.assign(chat, details);
+                const updatedName = (chat.name && chat.name !== '[-]') ? chat.name : 'Lead sin nombre';
+                document.getElementById('active-chat-name').innerText = updatedName;
+                renderChatList();
+            }
         }
 
         showToast('✅ Cambios guardados y sincronizados');
