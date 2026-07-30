@@ -2387,13 +2387,13 @@ export const registerBackofficeRoutes = (app: any) => {
 
                 // Construir componentes (como multimedia por defecto)
                 const components: any[] = [];
-                let mediaLink = "";
                 const headerComp = template.components?.find((c: any) => c.type === 'HEADER');
                 if (headerComp && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComp.format)) {
                     const lowFormat = headerComp.format.toLowerCase();
-                    mediaLink = headerComp.example?.header_handle?.[0] || '';
+                    let mediaLink = headerComp.example?.header_handle?.[0] || '';
+                    let headerParamPayload: any = null;
+
                     if (mediaLink) {
-                        // Si es un link de Meta/Facebook, lo descargamos y servimos localmente
                         const isMetaUrl = mediaLink.includes('fbcdn') || mediaLink.includes('fbsbx') || mediaLink.includes('facebook.com') || mediaLink.includes('lookaside.fbsbx.com') || mediaLink.includes('whatsapp.net') || mediaLink.includes('whatsapp.com');
                         if (isMetaUrl) {
                             try {
@@ -2426,36 +2426,63 @@ export const registerBackofficeRoutes = (app: any) => {
                                 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
                                 const filename = `quick-bulk-${Date.now()}-${Math.floor(Math.random()*1000)}.${ext}`;
-                                const dest = path.join(uploadsDir, filename);
-                                fs.writeFileSync(dest, response.data);
+                                const downloadedPath = path.join(uploadsDir, filename);
+                                fs.writeFileSync(downloadedPath, response.data);
 
-                                // Construir URL pública
-                                let baseUrl = process.env.PROJECT_URL;
-                                if (!baseUrl) {
-                                    const host = req.headers.host || '';
-                                    if (!host.includes('localhost')) {
-                                        baseUrl = `https://${host}`;
-                                    } else {
-                                        baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : `http://${host}`;
+                                // Intentar subir directamente a Meta para obtener media_id
+                                if (typeof (provider as any).uploadMedia === 'function') {
+                                    const uploadedMediaId = await (provider as any).uploadMedia(downloadedPath);
+                                    if (uploadedMediaId) {
+                                        headerParamPayload = { id: uploadedMediaId };
+                                        console.log(`✅ [QUICK BULK] Multimedia subida a Meta con éxito. Media ID: ${uploadedMediaId}`);
                                     }
                                 }
-                                if (!baseUrl.startsWith('http')) baseUrl = `https://${baseUrl}`;
-                                mediaLink = `${baseUrl.replace(/\/$/, '')}/uploads/${filename}`;
-                                console.log(`✅ [QUICK BULK] Multimedia descargado y servido localmente en: ${mediaLink}`);
+
+                                if (!headerParamPayload) {
+                                    let baseUrl = process.env.PROJECT_URL;
+                                    if (!baseUrl) {
+                                        const host = req.headers.host || '';
+                                        if (!host.includes('localhost')) {
+                                            baseUrl = `https://${host}`;
+                                        } else {
+                                            baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : `http://${host}`;
+                                        }
+                                    }
+                                    if (!baseUrl.startsWith('http')) baseUrl = `https://${baseUrl}`;
+                                    const publicUrl = `${baseUrl.replace(/\/$/, '')}/uploads/${filename}`;
+                                    headerParamPayload = { link: publicUrl };
+                                    console.log(`✅ [QUICK BULK] Multimedia servida localmente en: ${publicUrl}`);
+                                }
                             } catch (downloadErr: any) {
                                 console.error(`❌ [QUICK BULK] Error descargando multimedia de cabecera:`, downloadErr.message);
                             }
                         }
+                    }
 
+                    // Fallback: Si no hay payload listo pero hay handle/link original
+                    if (!headerParamPayload) {
+                        const rawHandle = headerComp.example?.header_handle?.[0];
+                        if (rawHandle) {
+                            if (rawHandle.startsWith('http://') || rawHandle.startsWith('https://')) {
+                                headerParamPayload = { link: rawHandle };
+                            } else {
+                                headerParamPayload = { handle: rawHandle };
+                            }
+                        } else if (mediaLink) {
+                            headerParamPayload = { link: mediaLink };
+                        }
+                    }
+
+                    if (headerParamPayload) {
                         components.push({
                             type: 'HEADER',
                             parameters: [{
                                 type: lowFormat,
-                                [lowFormat]: { link: mediaLink }
+                                [lowFormat]: headerParamPayload
                             }]
                         });
                     } else {
-                        console.warn(`⚠️ [QUICK BULK] Plantilla ${templateName} tiene cabecera multimedia pero no tiene link/handle de ejemplo.`);
+                        console.warn(`⚠️ [QUICK BULK] Plantilla ${templateName} tiene cabecera multimedia pero no fue posible resolver un parámetro válido.`);
                     }
                 }
 

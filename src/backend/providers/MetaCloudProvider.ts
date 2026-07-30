@@ -533,7 +533,7 @@ class MetaCloudProvider extends ProviderClass {
     /**
      * Sube un archivo local a Meta para obtener un media_id
      */
-    private async uploadMedia(filePath: string, mimeType?: string): Promise<string | null> {
+    public async uploadMedia(filePath: string, mimeType?: string): Promise<string | null> {
         const { phone_number_id, access_token } = this.config;
         if (!fs.existsSync(filePath)) {
             console.error(`❌ [MetaCloudProvider] uploadMedia: El archivo no existe en ${filePath}`);
