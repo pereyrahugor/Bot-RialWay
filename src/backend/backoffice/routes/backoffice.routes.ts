@@ -4945,12 +4945,17 @@ export const processCreateIndividualContact = async (req: any, res: any) => {
         if (Array.isArray(tagIds) && tagIds.length > 0) {
             const tagRows = tagIds.map((tagId: string) => ({
                 chat_id: phone,
-                tag_id: tagId
+                tag_id: tagId,
+                project_id: targetProjectId
             }));
 
-            await supabase
+            const { error: tagErr } = await supabase
                 .from('chat_tags')
-                .upsert(tagRows, { onConflict: 'chat_id,tag_id' });
+                .upsert(tagRows, { onConflict: 'chat_id,tag_id,project_id' });
+
+            if (tagErr) {
+                console.error('[create-individual] Error asignando etiquetas:', tagErr.message);
+            }
         }
 
         console.log(`✅ [create-individual] Contacto ${phone} (${name || 'Sin nombre'}) creado para proyecto ${targetProjectId}`);
