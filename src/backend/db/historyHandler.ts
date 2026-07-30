@@ -2317,7 +2317,35 @@ export class HistoryHandler {
 
             // 3. Actualizar Contacto (Chat) en Supabase si corresponde o si se cierra el ticket
             const hasContactDetails = details.contact !== undefined;
-            if ((hasContactDetails || ticketUpdate.estado === 'Cerrado') && ticket.chat_id) {
+            let updatedPhoneId: string | null = null;
+
+            if (hasContactDetails && ticket.chat_id) {
+                const targetNewPhone = details.contact.phone || details.contact.newPhone;
+                if (targetNewPhone && typeof targetNewPhone === 'string') {
+                    let cleanPhone = targetNewPhone.replace(/\D/g, '').trim();
+                    if (cleanPhone.startsWith('0')) cleanPhone = cleanPhone.slice(1);
+                    if (cleanPhone.length === 10) cleanPhone = `549${cleanPhone}`;
+
+                    if (cleanPhone && cleanPhone !== ticket.chat_id) {
+                        console.log(`📌 [updateLeadAndTicket] Actualizando teléfono de chat: ${ticket.chat_id} -> ${cleanPhone} para el proyecto ${currentProjectId}`);
+                        const { error: phoneErr } = await supabase
+                            .from('chats')
+                            .update({ id: cleanPhone })
+                            .eq('id', ticket.chat_id)
+                            .eq('project_id', currentProjectId);
+
+                        if (!phoneErr) {
+                            updatedPhoneId = cleanPhone;
+                        } else {
+                            console.error('❌ [updateLeadAndTicket] Error actualizando ID de teléfono:', phoneErr.message);
+                        }
+                    }
+                }
+            }
+
+            const activeChatTargetId = updatedPhoneId || ticket.chat_id;
+
+            if ((hasContactDetails || ticketUpdate.estado === 'Cerrado') && activeChatTargetId) {
                 const chatUpdate: any = {};
                 if (hasContactDetails) {
                     if (details.contact.name !== undefined) chatUpdate.name = details.contact.name;
@@ -2345,7 +2373,7 @@ export class HistoryHandler {
                     const { error: upChatErr } = await supabase
                         .from('chats')
                         .update(chatUpdate)
-                        .eq('id', ticket.chat_id)
+                        .eq('id', activeChatTargetId)
                         .eq('project_id', currentProjectId);
 
                     if (upChatErr) throw upChatErr;
@@ -2355,7 +2383,7 @@ export class HistoryHandler {
                         const { data: currentChat } = await supabase
                             .from('chats')
                             .select('metadata')
-                            .eq('id', ticket.chat_id)
+                            .eq('id', activeChatTargetId)
                             .eq('project_id', currentProjectId)
                             .maybeSingle();
 
@@ -2371,45 +2399,40 @@ export class HistoryHandler {
                                     .from('chats')
                                     .select('id')
                                     .eq('project_id', currentProjectId)
-                                    .eq('metadata->>lid', `${ticket.chat_id}@lid`)
+                                    .eq('metadata->>lid', `${activeChatTargetId}@lid`)
                                     .maybeSingle();
                                 if (phoneChat) companionId = phoneChat.id;
                             }
                         }
 
-                        if (companionId && companionId !== ticket.chat_id) {
-                            const syncDetails = { ...chatUpdate };
-                            delete syncDetails.metadata; // Preservar metadatos individuales
-                            if (Object.keys(syncDetails).length > 0) {
-                                this.invalidateChatCache(companionId, currentProjectId);
-                                await supabase
-                                    .from('chats')
-                                    .update(syncDetails)
-                                    .eq('id', companionId)
-                                    .eq('project_id', currentProjectId);
-                            }
+                        if (companionId && companionId !== activeChatTargetId) {
+                            await supabase
+                                .from('chats')
+                                .update(chatUpdate)
+                                .eq('id', companionId)
+                                .eq('project_id', currentProjectId);
                         }
                     } catch (syncErr: any) {
                         console.error(`[HistoryHandler] Error en sincronización dual LID/Teléfono en updateLeadAndTicket:`, syncErr.message);
                     }
 
                     historyEvents.emit('contact_updated', {
-                        chatId: ticket.chat_id,
+                        chatId: activeChatTargetId,
                         project_id: currentProjectId,
                         details: chatUpdate
                     });
                 }
 
-                this.invalidateChatCache(ticket.chat_id, currentProjectId);
+                this.invalidateChatCache(activeChatTargetId, currentProjectId);
 
                 if (ticketUpdate.estado === 'Cerrado') {
-                    historyEvents.emit('bot_toggled', { chatId: ticket.chat_id, enabled: true, assigned_agent: 'asistente1', projectId: currentProjectId });
+                    historyEvents.emit('bot_toggled', { chatId: activeChatTargetId, enabled: true, assigned_agent: 'asistente1', projectId: currentProjectId });
                 }
             }
 
-            historyEvents.emit('ticket_updated', { id: ticketId, chat_id: ticket.chat_id, ...ticketUpdate });
+            historyEvents.emit('ticket_updated', { id: ticketId, chat_id: activeChatTargetId, ...ticketUpdate });
 
-            return { success: true };
+            return { success: true, newPhone: updatedPhoneId || undefined };
         } catch (err: any) {
             console.error('[HistoryHandler] Error en updateLeadAndTicket:', err);
             return { success: false, error: err.message };
