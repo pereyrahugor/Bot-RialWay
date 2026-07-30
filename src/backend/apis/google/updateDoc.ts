@@ -21,10 +21,15 @@ export async function updateAllDocs() {
     }
 
     try {
-        const { data: docSettings } = await supabase
-            .from("settings")
-            .select("project_id, value")
-            .eq("key", "DOCX_ID_UPDATE");
+        const currentProjectId = process.env.PROJECT_ID || process.env.RAILWAY_PROJECT_ID || HistoryHandler.PROJECT_IDENTIFIER;
+        let query = supabase.from("settings").select("project_id, value").eq("key", "DOCX_ID_UPDATE");
+
+        if (currentProjectId && !['default_project', 'default', 'test-hugo-local', 'local-dev'].includes(currentProjectId)) {
+            console.log(`📌 [GoogleDocs] Sincronizando documentos exclusivamente para el proyecto activo: ${currentProjectId}`);
+            query = query.eq("project_id", currentProjectId);
+        }
+
+        const { data: docSettings } = await query;
 
         const envDocx = process.env.DOCX_ID_UPDATE || "";
         const docTasks: Array<{ projectId: string; docxId: string }> = [];
