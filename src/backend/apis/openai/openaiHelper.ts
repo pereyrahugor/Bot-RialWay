@@ -296,6 +296,21 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
             messages[0].content += `\n\n[ÚLTIMO RESULTADO DE BASE DE DATOS CACHEADO]:\n${lastDbResult}\n(Usa esta información de máquinas/preguntas anteriores si el usuario se refiere a ella o te pregunta al respecto, para responder de inmediato sin necesidad de volver a ejecutar la consulta query_database a menos que sea estrictamente necesario)`;
         }
 
+        // Inyectar contexto RAG de documentos de Supabase si existe coincidencia semántica
+        const lastUserMsg = messages.filter((m: any) => m.role === 'user').slice(-1)[0]?.content;
+        if (lastUserMsg && typeof lastUserMsg === 'string' && projectId) {
+            try {
+                const { searchKnowledgeBase } = await import('../../rag/ragService.js');
+                const ragContext = await searchKnowledgeBase(projectId, lastUserMsg, 4);
+                if (ragContext && ragContext.trim() !== '') {
+                    messages[0].content += `\n\n[INFORMACIÓN DE DOCUMENTOS/INSTRUCTIVOS DE LA EMPRESA (RAG)]:\n${ragContext}\n(Usa esta información como fuente oficial de la empresa para responder las dudas del usuario)`;
+                    console.log(`🧠 [RAG] Contexto inyectado en el turno para proyecto ${projectId}`);
+                }
+            } catch (ragErr) {
+                console.error('[RAG] Error inyectando contexto de base de conocimientos:', ragErr);
+            }
+        }
+
         // 3. Preparar Herramientas (Tools)
         let tools: any[] = [];
         const toolsJson = await HistoryHandler.getSetting('OPENAI_TOOLS_DEFINITION', projectId);
@@ -385,6 +400,15 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
 
                             // Persistir el resultado para que esté disponible en futuros turnos del contexto
                             await HistoryHandler.updateLastDbResult(userId, toolResult, projectId ?? undefined);
+                        }
+                    } else if (funcName === "search_knowledge_base" || funcName === "file_search") {
+                        try {
+                            const query = args.query || args.busqueda || args.q || "";
+                            const { searchKnowledgeBase } = await import("../../rag/ragService.js");
+                            toolResult = await searchKnowledgeBase(projectId || "default", query, 5);
+                            if (!toolResult) toolResult = "No se encontró información relevante en la base de conocimientos.";
+                        } catch (ragToolErr: any) {
+                            toolResult = "Error consultando la base de conocimientos: " + ragToolErr.message;
                         }
                     } else {
                         // Intentar enrutar a herramientas del cliente o Mercado Pago
