@@ -156,16 +156,9 @@ export class SupabaseBaileysProvider extends BaileysProvider {
             // --- STORE INICIALIZACIÓN (DESACTIVADO POR RENDIMIENTO) ---
             (this as any).store = null;
 
-            // Obtener dinámicamente la última versión de WhatsApp Web para evitar desconexiones 428
-            let version: any = [2, 3000, 1015901307]; // Versión de fallback
-            try {
-                const { fetchLatestBaileysVersion } = await import('@whiskeysockets/baileys');
-                const { version: latestVer } = await fetchLatestBaileysVersion();
-                version = latestVer;
-                console.log(`[SupabaseBaileysProvider] 📡 Versión de WhatsApp Web resuelta: v${version.join('.')}`);
-            } catch (err: any) {
-                console.warn(`[SupabaseBaileysProvider] ⚠️ No se pudo obtener la versión de WhatsApp Web más reciente, usando fallback. Error:`, err.message);
-            }
+            // Usar versión fija conocida de WhatsApp Web para mantener activa la sesión tras reinicios o redeploys
+            const version: any = [2, 3000, 1043857760];
+            console.log(`[SupabaseBaileysProvider] 📡 Usando versión fija de WhatsApp Web: v${version.join('.')}`);
 
             console.log(`[SupabaseBaileysProvider] 📡 Iniciando socket con globalVendorArgs:`, JSON.stringify(this.globalVendorArgs));
 
