@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { getArgentinaDatetimeString } from "../../utils/ArgentinaTime";
 import { executeDbQuery } from "../../db/dbHandler";
 import { SystemLogger } from "../../utils/logger.js";
+import { RagToolManager } from "../../rag/ragToolManager.js";
 
 // Instancias perezosas para Hot-update
 let _openai: OpenAI | null = null;
@@ -297,20 +298,6 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
         }
 
         // Inyectar contexto RAG de documentos de Supabase si existe coincidencia semántica
-        const lastUserMsg = messages.filter((m: any) => m.role === 'user').slice(-1)[0]?.content;
-        if (lastUserMsg && typeof lastUserMsg === 'string' && projectId) {
-            try {
-                const { searchKnowledgeBase } = await import('../../rag/ragService.js');
-                const ragContext = await searchKnowledgeBase(projectId, lastUserMsg, 4);
-                if (ragContext && ragContext.trim() !== '') {
-                    messages[0].content += `\n\n[INFORMACIÓN DE DOCUMENTOS/INSTRUCTIVOS DE LA EMPRESA (RAG)]:\n${ragContext}\n(Usa esta información como fuente oficial de la empresa para responder las dudas del usuario)`;
-                    console.log(`🧠 [RAG] Contexto inyectado en el turno para proyecto ${projectId}`);
-                }
-            } catch (ragErr) {
-                console.error('[RAG] Error inyectando contexto de base de conocimientos:', ragErr);
-            }
-        }
-
         // 3. Preparar Herramientas (Tools)
         let tools: any[] = [];
         const toolsJson = await HistoryHandler.getSetting('OPENAI_TOOLS_DEFINITION', projectId);
@@ -354,6 +341,9 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
                 console.error("[openaiHelper] Error parseando o reparando tools:", e);
             }
         }
+
+        // Inyectar definiciones de herramientas RAG si se requieren según el prompt
+        tools = RagToolManager.injectRagToolsIfNeeded(tools, systemPrompt);
 
 
         // 4. Bucle de ejecución para Chat Completions con Function Calling
