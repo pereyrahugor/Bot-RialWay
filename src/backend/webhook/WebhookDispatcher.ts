@@ -21,7 +21,7 @@ export class WebhookDispatcher {
                     return {
                         chat_id: chat.id,
                         name: chat.name,
-                        phone: chat.id, // El ID del chat es el número de teléfono en RialWay
+                        phone: chat.id, // El ID del chat es el número de teléfono en Neurolinks
                         email: chat.email || null,
                         cuit_dni: chat.cuit_dni || null,
                         address: chat.address || null,
@@ -235,7 +235,7 @@ export class WebhookDispatcher {
                 const hmac = crypto.createHmac('sha256', secret);
                 hmac.update(bodyStr);
                 const signature = hmac.digest('hex');
-                headers['X-Rialway-Signature'] = signature;
+                headers['X-Neurolinks-Signature'] = signature;
             }
 
             console.log(`📡 [WebhookDispatcher] Despachando evento '${eventType}' a ${webhookUrl}...`);

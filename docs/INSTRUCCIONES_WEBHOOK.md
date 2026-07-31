@@ -1,14 +1,14 @@
 # 📡 Guía de Integración de Webhooks Salientes
 
-Los webhooks salientes de RialWay permiten recibir notificaciones HTTP en tiempo real en tu propio servidor cuando ocurren eventos clave dentro de la plataforma.
+Los webhooks salientes de Neurolinks permiten recibir notificaciones HTTP en tiempo real en tu propio servidor cuando ocurren eventos clave dentro de la plataforma.
 
 ---
 
-## ⚙️ Configuración en RialWay
+## ⚙️ Configuración en Neurolinks
 
 1. Dirígete a la pestaña **Integraciones > Webhooks**.
 2. Especifica tu **URL de Webhook** (debe comenzar con `https://`).
-3. (Opcional pero recomendado) Genera o ingresa un **Secreto de Firma HMAC** para asegurar y verificar que las solicitudes provienen de RialWay.
+3. (Opcional pero recomendado) Genera o ingresa un **Secreto de Firma HMAC** para asegurar y verificar que las solicitudes provienen de Neurolinks.
 4. Selecciona con un tilde los **Eventos Suscritos** que necesitas recibir.
 5. Guarda los cambios.
 6. Haz clic en **Enviar Evento de Prueba** para verificar la comunicación directa con tu servidor.
@@ -36,7 +36,7 @@ Se dispara cuando se actualiza la información de perfil de un cliente o contact
       "chat_id": "5491130792788",
       "name": "Hugo Pereyra",
       "phone": "5491130792788",
-      "email": "contacto@rialway.com",
+      "email": "contacto@neurolinks.com",
       "cuit_dni": "20301234567",
       "address": "Av. Siempreviva 742",
       "notes": "Interesado en propuestas premium",
@@ -106,7 +106,7 @@ Se genera cada vez que entra un mensaje directo de un cliente a la plataforma.
 
 ## 🔒 Seguridad: Validación de Firmas HMAC
 
-Si configuras un **Secreto de Firma**, RialWay calculará una firma digital y la incluirá en la cabecera HTTP `X-Rialway-Signature`. Esta firma te permite certificar que la petición proviene de RialWay y no fue alterada.
+Si configuras un **Secreto de Firma**, Neurolinks calculará una firma digital y la incluirá en la cabecera HTTP `X-Neurolinks-Signature`. Esta firma te permite certificar que la petición proviene de Neurolinks y no fue alterada.
 
 ### Cómo verificar la firma en Node.js (Express)
 
@@ -114,7 +114,7 @@ Si configuras un **Secreto de Firma**, RialWay calculará una firma digital y la
 import crypto from 'crypto';
 
 app.post('/webhook', (req, res) => {
-    const signature = req.headers['x-rialway-signature'];
+    const signature = req.headers['x-neurolinks-signature'];
     const secret = 'tu_secreto_webhook_configurado';
     
     // Obtener el body JSON sin formatear (raw body string)

@@ -17,14 +17,14 @@ window.webhookConfigView = (() => {
                     <!-- URL del webhook -->
                     <div class="variable-group" style="padding:0; background:none; border:none; display:flex; flex-direction:column; gap:6px;">
                         <h3 style="margin:0; font-size:0.95rem; font-weight:700; color:var(--text-main);">URL de Webhook</h3>
-                        <p class="description" style="margin:0; font-size:0.82rem; color:var(--text-muted);">La URL HTTPS a la que RialWay enviará las peticiones HTTP POST.</p>
+                        <p class="description" style="margin:0; font-size:0.82rem; color:var(--text-muted);">La URL HTTPS a la que Neurolinks enviará las peticiones HTTP POST.</p>
                         <input type="text" id="webhook-url" placeholder="https://tu-servidor.com/webhook" style="width:100%; padding:10px 14px; border-radius:10px; border:1.5px solid var(--border); background:var(--bg-header); color:var(--text-main); font-size:0.9rem;">
                     </div>
 
                     <!-- Secreto HMAC -->
                     <div class="variable-group" style="padding:0; background:none; border:none; display:flex; flex-direction:column; gap:6px;">
                         <h3 style="margin:0; font-size:0.95rem; font-weight:700; color:var(--text-main);">Secreto de Firma HMAC</h3>
-                        <p class="description" style="margin:0; font-size:0.82rem; color:var(--text-muted);">Clave secreta utilizada para firmar los payloads y verificar el origen seguro en tu servidor (cabecera <code>X-Rialway-Signature</code>).</p>
+                        <p class="description" style="margin:0; font-size:0.82rem; color:var(--text-muted);">Clave secreta utilizada para firmar los payloads y verificar el origen seguro en tu servidor (cabecera <code>X-Neurolinks-Signature</code>).</p>
                         <div style="display:flex; gap:10px; align-items:center;">
                             <div style="position:relative; flex:1;">
                                 <input type="password" id="webhook-secret" placeholder="Deja en blanco para no firmar" style="width:100%; padding:10px 14px; padding-right:90px; border-radius:10px; border:1.5px solid var(--border); background:var(--bg-header); color:var(--text-main); font-size:0.9rem;">

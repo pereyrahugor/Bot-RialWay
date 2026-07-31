@@ -92,9 +92,9 @@ export const registerWebhookRoutes = (app: any) => {
                 timestamp: new Date().toISOString(),
                 project_id: projectId,
                 data: {
-                    message: '¡Prueba de webhook de RialWay exitosa!',
+                    message: '¡Prueba de webhook de Neurolinks exitosa!',
                     version: '1.0.0',
-                    details: 'Este evento simula una conexión de webhook exitosa desde RialWay.'
+                    details: 'Este evento simula una conexión de webhook exitosa desde Neurolinks.'
                 }
             };
 
@@ -107,7 +107,7 @@ export const registerWebhookRoutes = (app: any) => {
                 const crypto = await import('crypto');
                 const hmac = crypto.createHmac('sha256', webhookSecret);
                 hmac.update(bodyStr);
-                headers['X-Rialway-Signature'] = hmac.digest('hex');
+                headers['X-Neurolinks-Signature'] = hmac.digest('hex');
             }
 
             console.log(`🧪 [WebhookRoutes] Enviando evento de prueba a ${webhookUrl}...`);
