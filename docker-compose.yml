@@ -2,6 +2,9 @@ version: "3.9"
 services:
   bot-asistente-base-v1-test:
     build: .
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     env_file:
       - .env
     ports:
