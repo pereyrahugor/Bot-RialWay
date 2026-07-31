@@ -1,4 +1,6 @@
 import { WebDriver, By, until } from 'selenium-webdriver';
+import * as fs from 'fs';
+import * as path from 'path';
 
 /**
  * Clase para manejar la autenticación del administrador utilizando Selenium.
@@ -86,6 +88,27 @@ export class LoginAdminSelenium {
 
         } catch (error: any) {
             console.error("❌ Error en el proceso de inicio de sesión de Selenium:", error.message || error);
+            try {
+                const currentUrl = await this.driver.getCurrentUrl();
+                const pageTitle = await this.driver.getTitle();
+                const pageSource = await this.driver.getPageSource();
+
+                console.log(`🔍 [Depuración Remota] URL al fallar: "${currentUrl}"`);
+                console.log(`🔍 [Depuración Remota] Título al fallar: "${pageTitle}"`);
+                console.log(`🔍 [Depuración Remota] Fragmento HTML (primeros 1000 caracteres):\n`, pageSource.substring(0, 1000));
+
+                console.log("📸 Tomando captura de pantalla por fallo de inicio de sesión...");
+                const screenshot = await this.driver.takeScreenshot();
+                const screenshotPath = path.join(process.cwd(), 'login_failure.png');
+                fs.writeFileSync(screenshotPath, screenshot, 'base64');
+                console.log(`📸 Captura de pantalla de inicio de sesión guardada en: ${screenshotPath}`);
+
+                const sourcePath = path.join(process.cwd(), 'login_failure_page.html');
+                fs.writeFileSync(sourcePath, pageSource, 'utf8');
+                console.log(`📄 Código fuente de la página guardado en: ${sourcePath}`);
+            } catch (screenErr: any) {
+                console.error("⚠️ No se pudo tomar la captura de pantalla o leer datos del navegador:", screenErr.message);
+            }
             return false;
         }
     }
