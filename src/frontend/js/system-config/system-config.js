@@ -208,7 +208,7 @@ async function _initSystemConfigPage() {
 
         // ─── PARCHE: Campos de credenciales (los browsers omiten type="password" en FormData) ───
         // Capturamos ADMIN_USER y ADMIN_PASS directamente del DOM.
-        const credentialFields = ['ADMIN_USER', 'ADMIN_PASS'];
+        const credentialFields = ['ADMIN_USER', 'ADMIN_PASS', 'GANAMOSNET_WEBSHARE_API_KEY', 'GANAMOSNET_PROXY_URL'];
         credentialFields.forEach(key => {
             const el = document.getElementById(key);
             if (!el) return;

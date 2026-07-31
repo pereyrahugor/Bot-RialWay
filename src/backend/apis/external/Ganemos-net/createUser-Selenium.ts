@@ -3,6 +3,7 @@ import chrome from 'selenium-webdriver/chrome.js';
 import { LoginAdminSelenium } from './loginAdmin-Selenium.js';
 import * as fs from 'fs';
 import * as path from 'path';
+import { ProxyManager } from '../../../utils/proxyManager.js';
 
 /**
  * Genera un nombre de usuario basado en un nombre base + 1 letra aleatoria + 4 números aleatorios.
@@ -33,11 +34,22 @@ export async function createUserSelenium(
     options.addArguments('--disable-dev-shm-usage');
     options.addArguments('--disable-gpu');
 
+    // Consultar gestor modular de proxies para Ganemosnet
+    const proxySession = await ProxyManager.getProxySession('ganemos-net');
+    if (proxySession) {
+        console.log(`🔌 [Ganemos-net] Aplicando proxy a Chrome: ${proxySession.proxyUrl}`);
+        options.addArguments(`--proxy-server=${proxySession.proxyUrl}`);
+    }
+
     console.log("🔌 Iniciando instancia de Chrome...");
     const driver: WebDriver = await new Builder()
         .forBrowser('chrome')
         .setChromeOptions(options)
         .build();
+
+    if (proxySession) {
+        (driver as any)._proxyCleanup = proxySession.cleanup;
+    }
 
     try {
         // 1. Iniciar sesión usando LoginAdminSelenium
@@ -145,6 +157,7 @@ export async function createUserSelenium(
         if (result && !result.success) {
             console.error(`❌ [Ganemos-net] Error al crear jugador: "${result.error}"`);
             await driver.quit();
+            if ((driver as any)._proxyCleanup) await (driver as any)._proxyCleanup();
             return null;
         }
 
@@ -161,6 +174,7 @@ export async function createUserSelenium(
         } else {
             console.log("[Ganemos-net] recharge es false. Cerrando navegador...");
             await driver.quit();
+            if ((driver as any)._proxyCleanup) await (driver as any)._proxyCleanup();
             return {
                 username: usernameGenerated,
                 password: defaultPassword
@@ -179,7 +193,10 @@ export async function createUserSelenium(
             } catch (screenErr: any) {
                 console.error("⚠️ No se pudo tomar la captura de pantalla:", screenErr.message);
             }
-            try { await driver.quit(); } catch (e) { /* ignore */ }
+            try { 
+                await driver.quit(); 
+                if ((driver as any)._proxyCleanup) await (driver as any)._proxyCleanup();
+            } catch (e) { /* ignore */ }
         }
         return null;
     }

@@ -3,6 +3,7 @@ import chrome from 'selenium-webdriver/chrome.js';
 import { LoginAdminSelenium } from './loginAdmin-Selenium.js';
 import * as fs from 'fs';
 import * as path from 'path';
+import { ProxyManager } from '../../../utils/proxyManager.js';
 
 /**
  * Servicio para recargar fichas/saldo a un usuario en Ganemosnet utilizando Selenium.
@@ -30,10 +31,20 @@ export async function rechargeUserSelenium(
         options.addArguments('--disable-dev-shm-usage');
         options.addArguments('--disable-gpu');
 
+        const proxySession = await ProxyManager.getProxySession('ganemos-net');
+        if (proxySession) {
+            console.log(`🔌 [Ganemos-net] Aplicando proxy a Chrome para recarga: ${proxySession.proxyUrl}`);
+            options.addArguments(`--proxy-server=${proxySession.proxyUrl}`);
+        }
+
         localDriver = await new Builder()
             .forBrowser('chrome')
             .setChromeOptions(options)
             .build();
+
+        if (proxySession) {
+            (localDriver as any)._proxyCleanup = proxySession.cleanup;
+        }
 
         try {
             const authenticator = new LoginAdminSelenium(localDriver);
@@ -153,6 +164,7 @@ export async function rechargeUserSelenium(
 
             if (shouldQuit && localDriver) {
                 await localDriver.quit();
+                if ((localDriver as any)._proxyCleanup) await (localDriver as any)._proxyCleanup();
             }
             return false;
         }
@@ -162,6 +174,7 @@ export async function rechargeUserSelenium(
         // Cerrar el navegador al finalizar la operación en todos los casos
         if (shouldQuit && localDriver) {
             await localDriver.quit();
+            if ((localDriver as any)._proxyCleanup) await (localDriver as any)._proxyCleanup();
             console.log("[Ganemos-net] Navegador cerrado correctamente.");
         }
         return true;
@@ -177,7 +190,10 @@ export async function rechargeUserSelenium(
                 console.log(`📸 Captura de pantalla guardada en: ${screenshotPath}`);
             } catch (e) { /* ignore */ }
 
-            try { await localDriver.quit(); } catch (e) { /* ignore */ }
+            try { 
+                await localDriver.quit(); 
+                if ((localDriver as any)._proxyCleanup) await (localDriver as any)._proxyCleanup();
+            } catch (e) { /* ignore */ }
         }
         return false;
     }

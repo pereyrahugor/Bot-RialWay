@@ -3,6 +3,7 @@ import chrome from 'selenium-webdriver/chrome.js';
 import { LoginAdminSelenium } from './loginAdmin-Selenium.js';
 import * as fs from 'fs';
 import * as path from 'path';
+import { ProxyManager } from '../../../utils/proxyManager.js';
 
 /**
  * Servicio para procesar retiros de saldo/fichas de un usuario en Ganemosnet utilizando Selenium.
@@ -30,10 +31,20 @@ export async function withdrawalUser(
         options.addArguments('--disable-dev-shm-usage');
         options.addArguments('--disable-gpu');
 
+        const proxySession = await ProxyManager.getProxySession('ganemos-net');
+        if (proxySession) {
+            console.log(`🔌 [Ganemos-net] Aplicando proxy a Chrome para retiro: ${proxySession.proxyUrl}`);
+            options.addArguments(`--proxy-server=${proxySession.proxyUrl}`);
+        }
+
         localDriver = await new Builder()
             .forBrowser('chrome')
             .setChromeOptions(options)
             .build();
+
+        if (proxySession) {
+            (localDriver as any)._proxyCleanup = proxySession.cleanup;
+        }
 
         try {
             const authenticator = new LoginAdminSelenium(localDriver);
@@ -162,6 +173,7 @@ export async function withdrawalUser(
 
             if (shouldQuit && localDriver) {
                 await localDriver.quit();
+                if ((localDriver as any)._proxyCleanup) await (localDriver as any)._proxyCleanup();
             }
             return false;
         }
@@ -171,6 +183,7 @@ export async function withdrawalUser(
         // Cerrar el navegador al finalizar la operación
         if (shouldQuit && localDriver) {
             await localDriver.quit();
+            if ((localDriver as any)._proxyCleanup) await (localDriver as any)._proxyCleanup();
             console.log("[Ganemos-net] Navegador cerrado correctamente.");
         }
         return true;
@@ -186,7 +199,10 @@ export async function withdrawalUser(
                 console.log(`📸 Captura de pantalla guardada en: ${screenshotPath}`);
             } catch (e) { /* ignore */ }
 
-            try { await localDriver.quit(); } catch (e) { /* ignore */ }
+            try { 
+                await localDriver.quit(); 
+                if ((localDriver as any)._proxyCleanup) await (localDriver as any)._proxyCleanup();
+            } catch (e) { /* ignore */ }
         }
         return false;
     }

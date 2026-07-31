@@ -256,6 +256,18 @@ window.systemConfigView = {
                                         <input type="password" name="GANAMOSNET_PASS" id="GANAMOSNET_PASS" autocomplete="new-password" style="width:100%;">
                                         <button type="button" class="toggle-password-inline" onclick="toggleFieldVisibility('GANAMOSNET_PASS', this)"><i class="fas fa-eye"></i> Mostrar</button>
                                     </div>
+                                <div class="variable-group" style="padding:0; background:none; border:none;">
+                                    <h3>GANAMOSNET_WEBSHARE_API_KEY</h3>
+                                    <p class="description">API Key de Webshare para rotación automática de proxies</p>
+                                    <div class="input-wrapper" style="position:relative; width:100%;">
+                                        <input type="password" name="GANAMOSNET_WEBSHARE_API_KEY" id="GANAMOSNET_WEBSHARE_API_KEY" autocomplete="new-password" style="width:100%;" placeholder="3ungp0asxaux...">
+                                        <button type="button" class="toggle-password-inline" onclick="toggleFieldVisibility('GANAMOSNET_WEBSHARE_API_KEY', this)"><i class="fas fa-eye"></i> Mostrar</button>
+                                    </div>
+                                </div>
+                                <div class="variable-group" style="padding:0; background:none; border:none;">
+                                    <h3>GANAMOSNET_PROXY_URL</h3>
+                                    <p class="description">Proxy estático opcional (ej: http://user:pass@ip:port)</p>
+                                    <input type="text" name="GANAMOSNET_PROXY_URL" id="GANAMOSNET_PROXY_URL" style="width:100%;" placeholder="http://user:pass@ip:port">
                                 </div>
                              </div>
                         </div>
