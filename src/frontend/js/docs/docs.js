@@ -25,8 +25,10 @@ window.switchDoc = function(type) {
     _docsCurrentType = type;
     const userBtn = document.getElementById('btn-user-docs');
     const apiBtn = document.getElementById('btn-api-docs');
+    const webhookBtn = document.getElementById('btn-webhook-docs');
     if (userBtn) userBtn.classList.toggle('active', type === 'user');
     if (apiBtn) apiBtn.classList.toggle('active', type === 'api');
+    if (webhookBtn) webhookBtn.classList.toggle('active', type === 'webhook');
     const contentEl = document.getElementById('content');
     if (contentEl) contentEl.innerHTML = 'Cargando manual...';
     _loadDocsContent();
@@ -36,7 +38,9 @@ window.initDocsView = function() {
     _docsCurrentType = 'user';
     const userBtn = document.getElementById('btn-user-docs');
     const apiBtn = document.getElementById('btn-api-docs');
+    const webhookBtn = document.getElementById('btn-webhook-docs');
     if (userBtn) userBtn.classList.add('active');
     if (apiBtn) apiBtn.classList.remove('active');
+    if (webhookBtn) webhookBtn.classList.remove('active');
     _loadDocsContent();
 };

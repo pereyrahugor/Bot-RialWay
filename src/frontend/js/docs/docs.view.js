@@ -22,6 +22,9 @@ window.docsView = {
                 <button class="docs-nav-tab" id="btn-api-docs" onclick="switchDoc('api')" role="tab">
                     <i class="fas fa-code"></i><span>Instrucciones Tecnicas API</span>
                 </button>
+                <button class="docs-nav-tab" id="btn-webhook-docs" onclick="switchDoc('webhook')" role="tab">
+                    <i class="fas fa-satellite-dish"></i><span>Instrucciones de Webhook</span>
+                </button>
             </nav>
 
             <div class="docs-content-area">

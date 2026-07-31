@@ -4227,7 +4227,12 @@ Hemos recibido tu pago con éxito.
     // --- GET README / INSTRUCTIONS ---
     app.get('/api/backoffice/get-docs', backofficeAuth, async (req: any, res: any) => {
         try {
-            const docType = req.query.type === 'api' ? 'INSTRUCCIONES_API.md' : 'INSTRUCCIONES_USO.md';
+            let docType = 'INSTRUCCIONES_USO.md';
+            if (req.query.type === 'api') {
+                docType = 'INSTRUCCIONES_API.md';
+            } else if (req.query.type === 'webhook') {
+                docType = 'INSTRUCCIONES_WEBHOOK.md';
+            }
             const rootDir = process.cwd();
             const docsPath = path.join(rootDir, 'docs', docType);
             const distDocsPath = path.join(rootDir, 'dist', 'docs', docType);

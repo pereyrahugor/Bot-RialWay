@@ -25,6 +25,8 @@ import { startFileCleanupWorker } from "./backend/workers/fileCleanup.worker";
 import { AiManager } from "./backend/bot/ai.manager";
 import { registerExternalApiRoutes } from "./backend/apis/external/external_api.routes";
 import { syncAssistantTools, getOpenAI, getOpenAIVision } from "./backend/apis/openai/openaiHelper";
+import { registerWebhookRoutes } from "./backend/webhook/webhook.routes";
+import { WebhookDispatcher } from "./backend/webhook/WebhookDispatcher";
 import { discoverMetaIds } from "./backend/apis/meta/metaDiscovery";
 import { RailwayApi } from "./backend/apis/railway/Railway";
 import { smartBodyParser, compatibilityLayer, rootRedirect } from "./backend/middleware/global";
@@ -99,6 +101,8 @@ const main = async () => {
     // Await initDatabase so settings/variables are loaded from DB first
     try {
         await HistoryHandler.initDatabase();
+        // Inicializar despachador de webhooks salientes
+        WebhookDispatcher.init();
     } catch (err) {
         console.warn('[App] initDatabase error:', err);
     }
@@ -405,6 +409,7 @@ const main = async () => {
         registerDashboardRoutes(app);
         registerStaticRoutes(app, { __dirname });
         registerWebchatRoutes(app);
+        registerWebhookRoutes(app);
 
         registerExternalApiRoutes(app, { adapterProvider });
         registerRailwayRoutes(app, { RailwayApi });
