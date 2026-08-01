@@ -61,6 +61,8 @@ export interface Message {
 export class HistoryHandler {
     static readonly PROJECT_IDENTIFIER = process.env.PROJECT_ID || process.env.RAILWAY_PROJECT_ID || "default_project";
     static readonly PROJECT_ID = process.env.PROJECT_ID || process.env.RAILWAY_PROJECT_ID || "default_project";
+    static readonly SERVICE_IDENTIFIER = process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || "default_service";
+    static readonly SERVICE_ID = process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || "default_service";
     static initialized = false;
 
     // In-memory caches to optimize database performance and avoid Disk I/O exhaustion (Supabase Best Practice)
@@ -128,6 +130,7 @@ export class HistoryHandler {
                     id TEXT,
                     user_id TEXT,
                     project_id TEXT,
+                    service_id TEXT,
                     type TEXT NOT NULL,
                     name TEXT,
                     bot_enabled BOOLEAN DEFAULT true,
@@ -147,6 +150,7 @@ export class HistoryHandler {
                 sql: `CREATE TABLE IF NOT EXISTS tags (
                     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
                     project_id TEXT,
+                    service_id TEXT,
                     name TEXT NOT NULL,
                     color TEXT DEFAULT '#000000',
                     created_at TIMESTAMPTZ DEFAULT NOW()
@@ -176,6 +180,7 @@ export class HistoryHandler {
                     chat_id TEXT,
                     tag_id uuid REFERENCES tags(id) ON DELETE CASCADE,
                     project_id TEXT,
+                    service_id TEXT,
                     PRIMARY KEY (chat_id, tag_id, project_id),
                     FOREIGN KEY (chat_id, project_id) REFERENCES chats(id, project_id) ON UPDATE CASCADE ON DELETE CASCADE
                 );
@@ -189,6 +194,7 @@ export class HistoryHandler {
                     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
                     chat_id TEXT,
                     project_id TEXT,
+                    service_id TEXT,
                     role TEXT NOT NULL,
                     content TEXT NOT NULL,
                     type TEXT DEFAULT 'text',
@@ -205,6 +211,7 @@ export class HistoryHandler {
                 sql: `CREATE TABLE IF NOT EXISTS tickets (
                     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
                     project_id TEXT,
+                    service_id TEXT,
                     chat_id TEXT,
                     titulo TEXT NOT NULL,
                     descripcion TEXT,
@@ -223,6 +230,7 @@ export class HistoryHandler {
                 name: 'meta_onboarding',
                 sql: `CREATE TABLE IF NOT EXISTS meta_onboarding (
                     project_id TEXT PRIMARY KEY,
+                    service_id TEXT,
                     waba_id TEXT,
                     phone_number_id TEXT,
                     access_token TEXT,
@@ -240,6 +248,7 @@ export class HistoryHandler {
                 name: 'settings',
                 sql: `CREATE TABLE IF NOT EXISTS settings (
                     project_id TEXT,
+                    service_id TEXT,
                     key TEXT,
                     value TEXT,
                     updated_at TIMESTAMPTZ DEFAULT NOW(),
@@ -254,6 +263,7 @@ export class HistoryHandler {
                 sql: `CREATE TABLE IF NOT EXISTS users (
                     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
                     project_id TEXT,
+                    service_id TEXT,
                     username TEXT NOT NULL,
                     password TEXT NOT NULL,
                     full_name TEXT,
@@ -272,6 +282,7 @@ export class HistoryHandler {
                     phone_number_id TEXT PRIMARY KEY,
                     waba_id TEXT,
                     project_id TEXT,
+                    service_id TEXT,
                     project_url TEXT,
                     updated_at TIMESTAMPTZ DEFAULT NOW()
                 );
@@ -880,6 +891,7 @@ export class HistoryHandler {
                         id: chatId,
                         user_id: userId,
                         project_id: currentProjectId,
+                        service_id: HistoryHandler.SERVICE_IDENTIFIER,
                         type,
                         name,
                         bot_enabled: true,
@@ -1026,6 +1038,7 @@ export class HistoryHandler {
             const { error: insertError, data: insertedMsg } = await supabase.from('messages').insert({
                 chat_id: chatId,
                 project_id: currentProjectId,
+                service_id: HistoryHandler.SERVICE_IDENTIFIER,
                 role,
                 content,
                 type,
@@ -1415,6 +1428,7 @@ export class HistoryHandler {
                     .from('tickets')
                     .insert({
                         project_id: currentProjectId,
+                        service_id: HistoryHandler.SERVICE_IDENTIFIER,
                         chat_id: chatId,
                         titulo: ticketTitle || `Lead: ${name}`,
                         descripcion: details.notes || 'Lead detectado automáticamente',
@@ -1464,7 +1478,7 @@ export class HistoryHandler {
             // 2. Si no existe, crearlo
             const { data: newTag, error } = await supabase
                 .from('tags')
-                .insert({ project_id: projectId, name: tagName })
+                .insert({ project_id: projectId, service_id: HistoryHandler.SERVICE_IDENTIFIER, name: tagName })
                 .select('id')
                 .single();
 
@@ -1498,7 +1512,8 @@ export class HistoryHandler {
                         .upsert({
                             chat_id: chatId,
                             tag_id: tagId,
-                            project_id: projectId
+                            project_id: projectId,
+                            service_id: HistoryHandler.SERVICE_IDENTIFIER
                         }, { onConflict: 'chat_id,tag_id,project_id' });
                 }
             }
@@ -1530,6 +1545,7 @@ export class HistoryHandler {
                 .upsert({
                     id: chatId,
                     project_id: currentProjectId,
+                    service_id: HistoryHandler.SERVICE_IDENTIFIER,
                     type: details.type || 'whatsapp',
                     ...details,
                     is_lead: true,
@@ -1551,6 +1567,7 @@ export class HistoryHandler {
                 .from('tickets')
                 .insert({
                     project_id: currentProjectId,
+                    service_id: HistoryHandler.SERVICE_IDENTIFIER,
                     chat_id: chatId,
                     titulo: `Lead: ${details.name || chatId}`,
                     descripcion: details.notes || 'Lead creado manualmente',

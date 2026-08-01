@@ -54,35 +54,41 @@
         window.BOT_NAME = '{{BOT_NAME}}';
         window.__SYSTEM_CONFIG_VISIBLE = '{{SYSTEM_CONFIG_VISIBLE_JS}}' !== 'false';
         window.railwayProjectId = '{{PROJECT_ID}}';
+        window.railwayServiceId = '{{SERVICE_ID}}';
         (function() {
             const originalFetch = window.fetch;
             window.fetch = function(input, init) {
-                if (window.railwayProjectId) {
+                if (window.railwayProjectId || window.railwayServiceId) {
                     if (typeof input === 'string') {
                         if (input.includes('/api/')) {
                             try {
                                 const urlObj = new URL(input, window.location.origin);
-                                if (!urlObj.searchParams.has('projectId')) {
+                                if (window.railwayProjectId && !urlObj.searchParams.has('projectId')) {
                                     urlObj.searchParams.set('projectId', window.railwayProjectId);
-                                    input = urlObj.pathname + urlObj.search + urlObj.hash;
                                 }
+                                if (window.railwayServiceId && !urlObj.searchParams.has('serviceId')) {
+                                    urlObj.searchParams.set('serviceId', window.railwayServiceId);
+                                }
+                                input = urlObj.pathname + urlObj.search + urlObj.hash;
                             } catch (e) {}
                         }
                     }
                     if (init && init.headers) {
                         if (Array.isArray(init.headers)) {
-                            if (!init.headers.some(h => h[0].toLowerCase() === 'x-project-id')) {
+                            if (window.railwayProjectId && !init.headers.some(h => h[0].toLowerCase() === 'x-project-id')) {
                                 init.headers.push(['x-project-id', window.railwayProjectId]);
                             }
-                        } else if (typeof init.headers.set === 'function') {
-                            init.headers.set('x-project-id', window.railwayProjectId);
-                        } else {
-                            init.headers['x-project-id'] = window.railwayProjectId;
+                            if (window.railwayServiceId && !init.headers.some(h => h[0].toLowerCase() === 'x-service-id')) {
+                                init.headers.push(['x-service-id', window.railwayServiceId]);
+                            }
+                        } else if (typeof init.headers === 'object' && !(init.headers instanceof Headers)) {
+                            if (window.railwayProjectId && !init.headers['x-project-id'] && !init.headers['X-Project-Id']) {
+                                init.headers['x-project-id'] = window.railwayProjectId;
+                            }
+                            if (window.railwayServiceId && !init.headers['x-service-id'] && !init.headers['X-Service-Id']) {
+                                init.headers['x-service-id'] = window.railwayServiceId;
+                            }
                         }
-                    } else if (init) {
-                        init.headers = { 'x-project-id': window.railwayProjectId };
-                    } else {
-                        init = { headers: { 'x-project-id': window.railwayProjectId } };
                     }
                 }
                 return originalFetch.call(this, input, init);

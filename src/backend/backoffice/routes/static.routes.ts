@@ -112,10 +112,12 @@ export const registerStaticRoutes = (app: any, { __dirname }: { __dirname: strin
                     // Reemplazo universal de placeholders
                     const projectName = botName;
                     const projectId = HistoryHandler.PROJECT_IDENTIFIER || process.env.RAILWAY_PROJECT_ID || "";
+                    const serviceId = HistoryHandler.SERVICE_IDENTIFIER || process.env.RAILWAY_SERVICE_ID || "";
                     htmlContent = htmlContent.replace(/{{BOT_NAME}}/g, botName);
                     htmlContent = htmlContent.replace(/{{ASSISTANT_NAME}}/g, botName);
                     htmlContent = htmlContent.replace(/{{PROJECT_NAME}}/g, projectName);
                     htmlContent = htmlContent.replace(/{{PROJECT_ID}}/g, projectId);
+                    htmlContent = htmlContent.replace(/{{SERVICE_ID}}/g, serviceId);
                     htmlContent = htmlContent.replace(/{{SHOW_BACKOFFICE_STYLE}}/g, showBackoffice);
                     htmlContent = htmlContent.replace(/{{SHOW_CRM_STYLE}}/g, showCRM);
                     htmlContent = htmlContent.replace(/{{SHOW_SYSTEM_CONFIG_STYLE}}/g, showSystemConfig);

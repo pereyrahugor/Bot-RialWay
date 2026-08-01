@@ -6,6 +6,10 @@ function resolveProjectId(req: any): string {
     return req.query.projectId || (req.body && req.body.projectId) || req.headers['x-project-id'] || (req.auth && req.auth.projectId) || HistoryHandler.PROJECT_IDENTIFIER || 'default';
 }
 
+function resolveServiceId(req: any): string {
+    return req.query.serviceId || (req.body && req.body.serviceId) || req.headers['x-service-id'] || (req.auth && req.auth.serviceId) || HistoryHandler.SERVICE_IDENTIFIER || 'default';
+}
+
 export const registerWebhookRoutes = (app: any) => {
     // 1. GET /api/backoffice/webhooks/config -> Retorna la configuración actual
     app.get('/api/backoffice/webhooks/config', backofficeAuth, async (req: any, res: any) => {
@@ -45,6 +49,7 @@ export const registerWebhookRoutes = (app: any) => {
     app.post('/api/backoffice/webhooks/config', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         try {
             const projectId = resolveProjectId(req);
+            const serviceId = resolveServiceId(req);
             const { webhookUrl, webhookSecret, webhookEvents } = req.body;
 
             if (webhookUrl && !webhookUrl.startsWith('http') && webhookUrl.trim() !== '') {
@@ -56,9 +61,9 @@ export const registerWebhookRoutes = (app: any) => {
 
             // Guardar settings en Supabase usando upsert
             const settingsToUpsert = [
-                { project_id: projectId, key: 'WEBHOOK_URL', value: (webhookUrl || '').trim(), updated_at: new Date().toISOString() },
-                { project_id: projectId, key: 'WEBHOOK_SECRET', value: (webhookSecret || '').trim(), updated_at: new Date().toISOString() },
-                { project_id: projectId, key: 'WEBHOOK_EVENTS', value: eventsValue, updated_at: new Date().toISOString() }
+                { project_id: projectId, service_id: serviceId, key: 'WEBHOOK_URL', value: (webhookUrl || '').trim(), updated_at: new Date().toISOString() },
+                { project_id: projectId, service_id: serviceId, key: 'WEBHOOK_SECRET', value: (webhookSecret || '').trim(), updated_at: new Date().toISOString() },
+                { project_id: projectId, service_id: serviceId, key: 'WEBHOOK_EVENTS', value: eventsValue, updated_at: new Date().toISOString() }
             ];
 
             const { error } = await supabase
@@ -81,6 +86,7 @@ export const registerWebhookRoutes = (app: any) => {
     app.post('/api/backoffice/webhooks/test', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         try {
             const projectId = resolveProjectId(req);
+            const serviceId = resolveServiceId(req);
             const { webhookUrl, webhookSecret } = req.body;
 
             if (!webhookUrl || !webhookUrl.startsWith('http')) {
@@ -91,6 +97,7 @@ export const registerWebhookRoutes = (app: any) => {
                 event: 'test.connection',
                 timestamp: new Date().toISOString(),
                 project_id: projectId,
+                service_id: serviceId,
                 data: {
                     message: '¡Prueba de webhook de Neurolinks exitosa!',
                     version: '1.0.0',

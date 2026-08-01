@@ -124,6 +124,7 @@ export async function indexDocumentForRAG(projectId: string, fileId: string, fil
 
         const rowsToInsert = chunks.map((content, idx) => ({
             project_id: projectId,
+            service_id: HistoryHandler.SERVICE_IDENTIFIER,
             file_id: fileId,
             file_name: fileName,
             content: content,

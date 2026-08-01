@@ -77,6 +77,12 @@ export const resolveProjectId = (req: any): string | null => {
     return (pId && pId !== 'default') ? pId : null;
 };
 
+// Helper to dynamically extract serviceId from query, body, or headers
+export const resolveServiceId = (req: any): string | null => {
+    const sId = req?.query?.serviceId || (req?.body && req?.body.serviceId) || req?.headers?.['x-service-id'] || (req?.auth && req?.auth.serviceId);
+    return (sId && sId !== 'default') ? sId : (process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || 'default_service');
+};
+
 // Caché para fotos de perfil (chatId -> {url, timestamp})
 const profilePicCache = new Map<string, { url: string, expires: number }>();
 const CACHE_TTL = 1000 * 60 * 60; // 1 hora

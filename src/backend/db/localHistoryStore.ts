@@ -41,6 +41,7 @@ function writeJsonFile<T>(fileName: string, data: T) {
 export interface LocalChat {
     id: string;
     project_id: string;
+    service_id?: string;
     type: string;
     name: string | null;
     bot_enabled: boolean;
@@ -67,6 +68,7 @@ export interface LocalMessage {
     id: string;
     chat_id: string;
     project_id: string;
+    service_id?: string;
     role: string;
     content: string;
     type: string;
@@ -77,6 +79,7 @@ export interface LocalMessage {
 export interface LocalTicket {
     id: string;
     project_id: string;
+    service_id?: string;
     chat_id: string;
     titulo: string;
     descripcion: string | null;
@@ -92,6 +95,7 @@ export interface LocalTicket {
 export interface LocalTag {
     id: string;
     project_id: string;
+    service_id?: string;
     name: string;
     color: string;
     created_at: string;
@@ -101,6 +105,7 @@ export interface LocalChatTag {
     chat_id: string;
     tag_id: string;
     project_id: string;
+    service_id?: string;
 }
 
 export class LocalHistoryStore {
@@ -136,6 +141,7 @@ export class LocalHistoryStore {
             chat = {
                 id: chatId,
                 project_id: projectId,
+                service_id: process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || "default_service",
                 type: type,
                 name: name,
                 bot_enabled: true,
@@ -351,6 +357,7 @@ export class LocalHistoryStore {
             id: crypto.randomUUID(),
             chat_id: chatId,
             project_id: projectId,
+            service_id: process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || "default_service",
             role: role,
             content: content,
             type: type,
@@ -430,6 +437,7 @@ export class LocalHistoryStore {
         const newTicket: LocalTicket = {
             id: crypto.randomUUID(),
             project_id: projectId,
+            service_id: process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || "default_service",
             chat_id: chatId,
             titulo,
             descripcion,
@@ -666,6 +674,7 @@ export class LocalHistoryStore {
             tag = {
                 id: crypto.randomUUID(),
                 project_id: projectId,
+                service_id: process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || "default_service",
                 name: tagName,
                 color: "#6366f1",
                 created_at: new Date().toISOString()
@@ -685,6 +694,7 @@ export class LocalHistoryStore {
         const newTag: LocalTag = {
             id: crypto.randomUUID(),
             project_id: projectId,
+            service_id: process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || "default_service",
             name: name,
             color: color,
             created_at: new Date().toISOString()
@@ -725,7 +735,7 @@ export class LocalHistoryStore {
         const chatTags = this.getChatTagsForProject(projectId);
         const exists = chatTags.some(ct => ct.chat_id === chatId && ct.tag_id === tagId);
         if (!exists) {
-            chatTags.push({ chat_id: chatId, tag_id: tagId, project_id: projectId });
+            chatTags.push({ chat_id: chatId, tag_id: tagId, project_id: projectId, service_id: process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || "default_service" });
             this.saveChatTagsForProject(projectId, chatTags);
             return true;
         }
@@ -758,7 +768,7 @@ export class LocalHistoryStore {
         for (const tagName of tagsList) {
             const tagId = await this.ensureTagExists(tagName, projectId);
             if (tagId) {
-                filtered.push({ chat_id: chatId, tag_id: tagId, project_id: projectId });
+                filtered.push({ chat_id: chatId, tag_id: tagId, project_id: projectId, service_id: process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || "default_service" });
             }
         }
         this.saveChatTagsForProject(projectId, filtered);
@@ -783,6 +793,7 @@ export class LocalHistoryStore {
         const newQM = {
             id: crypto.randomUUID(),
             project_id: projectId,
+            service_id: process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || "default_service",
             title,
             message,
             created_at: new Date().toISOString()

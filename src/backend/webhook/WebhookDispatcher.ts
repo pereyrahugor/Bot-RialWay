@@ -221,6 +221,7 @@ export class WebhookDispatcher {
                 event: eventType,
                 timestamp: new Date().toISOString(),
                 project_id: projectId,
+                service_id: HistoryHandler.SERVICE_IDENTIFIER,
                 data: eventData
             };
 

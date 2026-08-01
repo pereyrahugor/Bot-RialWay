@@ -17,7 +17,7 @@ export const startHumanInactivityWorker = (timeoutMinutes = 15) => {
             // 1. Obtener todos los chats con bot desactivado en cualquier proyecto
             const { data: inactiveChats, error } = await supabase
                 .from('chats')
-                .select('id, project_id, last_human_message_at')
+                .select('id, project_id, service_id, last_human_message_at')
                 .eq('bot_enabled', false)
                 .or(`last_human_message_at.lte.${threshold.toISOString()},last_human_message_at.is.null`);
 
