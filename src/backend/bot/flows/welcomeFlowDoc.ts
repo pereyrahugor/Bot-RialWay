@@ -51,8 +51,39 @@ export const welcomeFlowDoc = addKeyword<BaileysProvider, MemoryDB>(EVENTS.DOCUM
                 fs.mkdirSync("./tmp/", { recursive: true });
             }
 
+            // Prevenir 'Error: MIME type not found' en BaileysProvider asegurando mimetype por defecto
+            if (ctx) {
+                if (ctx.message?.documentMessage && !ctx.message.documentMessage.mimetype) {
+                    ctx.message.documentMessage.mimetype = "application/pdf";
+                }
+                if (ctx.message?.documentWithCaptionMessage?.message?.documentMessage && !ctx.message.documentWithCaptionMessage.message.documentMessage.mimetype) {
+                    ctx.message.documentWithCaptionMessage.message.documentMessage.mimetype = "application/pdf";
+                }
+                if (ctx.media && !ctx.media.mimetype) {
+                    ctx.media.mimetype = "application/pdf";
+                }
+                if (!ctx.mimetype) {
+                    ctx.mimetype = "application/pdf";
+                }
+            }
+
             // Guardar el PDF en tmp
-            localPath = await provider.saveFile(ctx, { path: "./tmp/" });
+            try {
+                localPath = await provider.saveFile(ctx, { path: "./tmp/" });
+            } catch (saveErr: any) {
+                console.warn("⚠️ [welcomeFlowDoc] provider.saveFile falló con error:", saveErr.message || saveErr);
+                if (ctx) {
+                    ctx.mimetype = "application/pdf";
+                    if (ctx.media) ctx.media.mimetype = "application/pdf";
+                    if (ctx.message?.documentMessage) ctx.message.documentMessage.mimetype = "application/pdf";
+                }
+                try {
+                    localPath = await provider.saveFile(ctx, { path: "./tmp/", name: `pdf_${Date.now()}.pdf` });
+                } catch (retryErr: any) {
+                    console.error("❌ [welcomeFlowDoc] Error persistente al guardar PDF:", retryErr.message || retryErr);
+                }
+            }
+
             if (!localPath) {
                 await flowDynamic("No se pudo guardar el PDF recibido.");
                 return;
