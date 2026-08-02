@@ -27,7 +27,7 @@ export async function rechargeUserSelenium(
         console.log("[Ganemos-net] No se proveyó WebDriver. Iniciando nueva instancia...");
         const options = new chrome.Options();
         
-        // Configuración Anti-Detección Bot (Stealth Mode)
+        // Configuración Anti-Detección Bot (Stealth Mode) y Bloqueo de Tráfico en Segundo Plano
         options.addArguments('--disable-blink-features=AutomationControlled');
         options.excludeSwitches('enable-automation');
         options.addArguments('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
@@ -36,6 +36,16 @@ export async function rechargeUserSelenium(
         options.addArguments('--no-sandbox');
         options.addArguments('--disable-dev-shm-usage');
         options.addArguments('--disable-gpu');
+
+        // Bloquear conexiones secundarias e innecesarias de Chrome (GCM puerto 5228, Sync, métricas)
+        options.addArguments('--disable-background-networking');
+        options.addArguments('--disable-default-apps');
+        options.addArguments('--disable-extensions');
+        options.addArguments('--disable-sync');
+        options.addArguments('--disable-translate');
+        options.addArguments('--metrics-recording-only');
+        options.addArguments('--no-first-run');
+        options.addArguments('--safebrowsing-disable-auto-update');
 
         if (process.env.DISABLE_HEADLESS !== 'true') {
             options.addArguments('--headless=new');
