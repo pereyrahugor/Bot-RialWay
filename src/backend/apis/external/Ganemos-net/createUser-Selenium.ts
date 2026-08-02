@@ -26,43 +26,49 @@ export async function createUserSelenium(
     baseName: string,
     recharge: boolean
 ): Promise<{ username: string; password?: string; driver?: WebDriver } | null> {
-    console.log(`[Ganemos-net] Iniciando creación de usuario para baseName: ${baseName} | recharge: ${recharge}`);
+    const maxAttempts = 3;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        console.log(`[Ganemos-net] Intento ${attempt}/${maxAttempts} para crear usuario (baseName: ${baseName})...`);
 
-    const options = new chrome.Options();
-    options.addArguments('--headless=new');
-    options.addArguments('--no-sandbox');
-    options.addArguments('--disable-dev-shm-usage');
-    options.addArguments('--disable-gpu');
+        const options = new chrome.Options();
+        options.addArguments('--headless=new');
+        options.addArguments('--no-sandbox');
+        options.addArguments('--disable-dev-shm-usage');
+        options.addArguments('--disable-gpu');
 
-    // Consultar gestor modular de proxies para Ganemosnet
-    const proxySession = await ProxyManager.getProxySession('ganemos-net');
-    if (proxySession) {
-        console.log(`🔌 [Ganemos-net] Aplicando proxy a Chrome: ${proxySession.proxyUrl}`);
-        options.addArguments(`--proxy-server=${proxySession.proxyUrl}`);
-    }
-
-    console.log("🔌 Iniciando instancia de Chrome...");
-    const driver: WebDriver = await new Builder()
-        .forBrowser('chrome')
-        .setChromeOptions(options)
-        .build();
-
-    if (proxySession) {
-        (driver as any)._proxyCleanup = proxySession.cleanup;
-    }
-
-    try {
-        // 1. Iniciar sesión usando LoginAdminSelenium
-        const authenticator = new LoginAdminSelenium(driver);
-        const adminUser = process.env.GANAMOSNET_USER || '';
-        const adminPass = process.env.GANAMOSNET_PASS || '';
-
-        const loginSuccess = await authenticator.login(adminUser, adminPass);
-        if (!loginSuccess) {
-            console.error("❌ [Ganemos-net] No se pudo loguear al administrador. Abortando.");
-            await driver.quit();
-            return null;
+        const proxySession = await ProxyManager.getProxySession('ganemos-net');
+        if (proxySession) {
+            console.log(`🔌 [Ganemos-net] Aplicando proxy a Chrome (Intento ${attempt}): ${proxySession.proxyUrl}`);
+            options.addArguments(`--proxy-server=${proxySession.proxyUrl}`);
         }
+
+        console.log("🔌 Iniciando instancia de Chrome...");
+        const driver: WebDriver = await new Builder()
+            .forBrowser('chrome')
+            .setChromeOptions(options)
+            .build();
+
+        if (proxySession) {
+            (driver as any)._proxyCleanup = proxySession.cleanup;
+        }
+
+        try {
+            const authenticator = new LoginAdminSelenium(driver);
+            const adminUser = process.env.GANAMOSNET_USER || '';
+            const adminPass = process.env.GANAMOSNET_PASS || '';
+
+            const loginSuccess = await authenticator.login(adminUser, adminPass);
+            if (!loginSuccess) {
+                console.warn(`⚠️ [Ganemos-net] Login no exitoso en intento ${attempt}. Reintentando con nueva IP...`);
+                await driver.quit();
+                if ((driver as any)._proxyCleanup) await (driver as any)._proxyCleanup();
+                if (attempt < maxAttempts) {
+                    await new Promise(r => setTimeout(r, 1500));
+                    continue;
+                }
+                console.error("❌ [Ganemos-net] No se pudo loguear al administrador tras múltiples intentos. Abortando.");
+                return null;
+            }
 
         // 2. Asegurarse de estar en la URL: https://agents.ganamosnet.org/users/all
         const usersListUrl = "https://agents.ganamosnet.org/users/all";
@@ -178,23 +184,28 @@ export async function createUserSelenium(
             };
         }
 
-    } catch (error: any) {
-        console.error("❌ Error en el proceso de creación de usuario de Selenium:", error.message || error);
-        if (driver) {
-            try {
-                console.log("📸 Tomando captura de pantalla por fallo de creación...");
-                const screenshot = await driver.takeScreenshot();
-                const screenshotPath = path.join(process.cwd(), 'create_user_failure.png');
-                fs.writeFileSync(screenshotPath, screenshot, 'base64');
-                console.log(`📸 Captura de pantalla guardada en: ${screenshotPath}`);
-            } catch (screenErr: any) {
-                console.error("⚠️ No se pudo tomar la captura de pantalla:", screenErr.message);
+        } catch (error: any) {
+            console.error(`❌ Error en el intento ${attempt} de creación de usuario de Selenium:`, error.message || error);
+            if (driver) {
+                try {
+                    console.log("📸 Tomando captura de pantalla por fallo de creación...");
+                    const screenshot = await driver.takeScreenshot();
+                    const screenshotPath = path.join(process.cwd(), 'create_user_failure.png');
+                    fs.writeFileSync(screenshotPath, screenshot, 'base64');
+                    console.log(`📸 Captura de pantalla guardada en: ${screenshotPath}`);
+                } catch (screenErr: any) {
+                    console.error("⚠️ No se pudo tomar la captura de pantalla:", screenErr.message);
+                }
+                try { 
+                    await driver.quit(); 
+                    if ((driver as any)._proxyCleanup) await (driver as any)._proxyCleanup();
+                } catch (e) { /* ignore */ }
             }
-            try { 
-                await driver.quit(); 
-                if ((driver as any)._proxyCleanup) await (driver as any)._proxyCleanup();
-            } catch (e) { /* ignore */ }
+            if (attempt < maxAttempts) {
+                await new Promise(r => setTimeout(r, 1500));
+                continue;
+            }
         }
-        return null;
     }
+    return null;
 }

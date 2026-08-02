@@ -29,8 +29,20 @@ export class LoginAdminSelenium {
 
         try {
             // URL genérica para el panel del administrador
-            const targetUrl = "https://agents.ganamosnet.org/"; 
             await this.driver.get(targetUrl);
+
+            // Verificar si la IP entregada por la proxy rotatoria fue bloqueada (403 Forbidden)
+            let pageSource = await this.driver.getPageSource();
+            if (pageSource.includes('Forbidden') || pageSource.includes('REQUEST-IP') || pageSource.includes('403')) {
+                console.warn('⚠️ [SeleniumAuth] IP rotatoria bloqueada con 403. Reintentando refresh para forzar rotación de IP...');
+                await this.driver.navigate().refresh();
+                await this.driver.sleep(2000);
+                pageSource = await this.driver.getPageSource();
+                if (pageSource.includes('Forbidden') || pageSource.includes('REQUEST-IP')) {
+                    console.error('❌ [SeleniumAuth] IP rotatoria rechazada por el servidor objetivo (403 Forbidden).');
+                    return false;
+                }
+            }
 
             // XPaths genéricos para los campos del formulario
             const userXPath = "/html/body/div[3]/div/section/div/div[2]/div[1]/input";
