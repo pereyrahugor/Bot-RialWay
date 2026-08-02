@@ -116,7 +116,10 @@ export class HistoryHandler {
         // 0.1. Cargar todas las settings de la DB a process.env para compatibilidad con flujos legacy
         await this.loadSettingsIntoProcessEnv();
 
-        // 0.2. Suscribirse a cambios en tiempo real de la tabla settings
+        // 0.2. Auto-sincronizar routing_table para el router central de Meta webhooks
+        await this.syncRoutingTableOnStartup();
+
+        // 0.3. Suscribirse a cambios en tiempo real de la tabla settings
         this.subscribeToSettingsChanges();
         this.subscribeToTicketChanges();
         this.subscribeToUsersChanges();
@@ -2666,6 +2669,7 @@ export class HistoryHandler {
                         phone_number_id: phoneId,
                         waba_id: wabaId,
                         project_id: targetProjectId,
+                        service_id: HistoryHandler.SERVICE_IDENTIFIER,
                         project_url: projectUrl,
                         updated_at: new Date().toISOString()
                     }, { onConflict: 'phone_number_id' });
@@ -2755,6 +2759,43 @@ export class HistoryHandler {
         } catch (err) {
             console.error('[HistoryHandler] Error en getMetaOnboardingData:', err);
             return null;
+        }
+    }
+
+    /**
+     * Sincroniza automáticamente la routing_table al inicio del servidor con la URL activa de Railway
+     */
+    static async syncRoutingTableOnStartup() {
+        try {
+            if (!supabase) return;
+            const onboardingData = await this.getMetaOnboardingData();
+            if (!onboardingData || !onboardingData.phone_number_id) return;
+
+            const publicDomain = (process.env.RAILWAY_STATIC_URL && process.env.RAILWAY_STATIC_URL.includes('.up.railway.app'))
+                ? process.env.RAILWAY_STATIC_URL
+                : (process.env.RAILWAY_PUBLIC_DOMAIN && process.env.RAILWAY_PUBLIC_DOMAIN.includes('.up.railway.app'))
+                    ? process.env.RAILWAY_PUBLIC_DOMAIN
+                    : (process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PROJECT_URL);
+
+            if (publicDomain) {
+                let projectUrl = publicDomain.startsWith('http') ? publicDomain : `https://${publicDomain}`;
+                if (projectUrl.endsWith('/')) projectUrl = projectUrl.slice(0, -1);
+
+                console.log(`📡 [HistoryHandler] Auto-sincronizando routing_table al inicio para phoneId ${onboardingData.phone_number_id} -> ${projectUrl} (Service: ${this.SERVICE_IDENTIFIER})`);
+
+                await supabase
+                    .from('routing_table')
+                    .upsert({
+                        phone_number_id: onboardingData.phone_number_id,
+                        waba_id: onboardingData.waba_id,
+                        project_id: this.PROJECT_IDENTIFIER,
+                        service_id: this.SERVICE_IDENTIFIER,
+                        project_url: projectUrl,
+                        updated_at: new Date().toISOString()
+                    }, { onConflict: 'phone_number_id' });
+            }
+        } catch (err: any) {
+            console.error('❌ [HistoryHandler] Error en syncRoutingTableOnStartup:', err?.message || err);
         }
     }
 
