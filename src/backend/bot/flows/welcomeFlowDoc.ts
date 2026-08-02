@@ -25,7 +25,7 @@ function extraerPaginasComoPNG(pdfPath: string, outputDir: string) {
 }
 
 export const welcomeFlowDoc = addKeyword<BaileysProvider, MemoryDB>(EVENTS.DOCUMENT)
-    .addAction(async (ctx, { gotoFlow, flowDynamic, provider }) => {
+    .addAction(async (ctx, { gotoFlow, flowDynamic, provider, state }) => {
         const { HistoryHandler } = await import("~/db/historyHandler");
         const timeoutCierreValue = await HistoryHandler.getConfig('timeOutCierre') || 45;
         const setTime = Number(timeoutCierreValue) * 60 * 1000;
