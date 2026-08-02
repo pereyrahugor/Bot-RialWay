@@ -122,40 +122,37 @@ export async function createUserSelenium(
         );
         await confirmBtn.click();
 
-        // 8. Esperar a que se procese la creación (generalmente redirige de vuelta a /users/all)
+        // 8. Esperar a que se procese la creación
         console.log("[Ganemos-net] Enviando formulario de creación final...");
-        
-        // Esperamos a ver si cambia la URL o aparece un cartel de error
-        const result: any = await driver.wait(async (d) => {
-            const currentUrl = await d.getCurrentUrl();
-            if (currentUrl.includes('/users/all')) {
-                return { success: true };
-            }
-            
-            // Buscar cartel de error en pantalla (restringido a contenedores de alertas/modales para evitar falsos positivos con textos estáticos de la página)
-            const errorElements = await d.findElements(By.xpath(
-                "//*[contains(@class, 'swal') or contains(@class, 'modal') or contains(@class, 'alert') or contains(@class, 'toast') or contains(@class, 'popup') or contains(@class, 'notification') or contains(@class, 'dialog')]" +
-                "//*[contains(text(), 'Error') or contains(text(), 'error') or contains(text(), 'ya existe') or contains(text(), 'inválido')]"
-            ));
-            if (errorElements.length > 0) {
-                for (const el of errorElements) {
-                    try {
-                        if (await el.isDisplayed()) {
-                            const text = await el.getText();
-                            if (text && text.trim() !== '') {
-                                return { success: false, error: text };
-                            }
-                        }
-                    } catch (e) {
-                        // Ignorar si el elemento ya no está en el DOM o está obsoleto
+        await driver.sleep(3000); // Esperar procesamiento del formulario
+
+        const currentUrlAfterSubmit = await driver.getCurrentUrl();
+
+        // Buscar cartel explícito de error real (evitando falsos positivos con modales neutros o de éxito)
+        const errorElements = await driver.findElements(By.xpath(
+            "//*[contains(@class, 'swal2-icon-error') or contains(@class, 'alert-danger') or contains(@class, 'toast-error')]" +
+            "//*[contains(text(), 'ya existe') or contains(text(), 'inválido') or contains(text(), 'incorrecto')]"
+        ));
+
+        let hasRealError = false;
+        let errorMessage = '';
+        for (const el of errorElements) {
+            try {
+                if (await el.isDisplayed()) {
+                    const text = await el.getText();
+                    if (text && text.trim() !== '' && !text.includes('None')) {
+                        hasRealError = true;
+                        errorMessage = text;
+                        break;
                     }
                 }
+            } catch (e) {
+                // Ignorar elementos obsoletos
             }
-            return false;
-        }, 15000);
+        }
 
-        if (result && !result.success) {
-            console.error(`❌ [Ganemos-net] Error al crear jugador: "${result.error}"`);
+        if (hasRealError && !currentUrlAfterSubmit.includes('/users/all')) {
+            console.error(`❌ [Ganemos-net] Error al crear jugador: "${errorMessage}"`);
             await driver.quit();
             if ((driver as any)._proxyCleanup) await (driver as any)._proxyCleanup();
             return null;
