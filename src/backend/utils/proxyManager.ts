@@ -44,6 +44,14 @@ export class ProxyManager {
                 webshareApiKey = await HistoryHandler.getConfig('WEBSHARE_API_KEY') || process.env.WEBSHARE_API_KEY || null;
             }
 
+            // 4. Fallback al proyecto maestro de referencia
+            if (!proxyUrl && !webshareApiKey) {
+                proxyUrl = await HistoryHandler.getSetting(`${prefix}_PROXY_URL`, '79cbfba7-d278-4298-84d3-a29ad021b579') 
+                    || await HistoryHandler.getSetting('PROXY_URL', '79cbfba7-d278-4298-84d3-a29ad021b579');
+                webshareApiKey = await HistoryHandler.getSetting(`${prefix}_WEBSHARE_API_KEY`, '79cbfba7-d278-4298-84d3-a29ad021b579') 
+                    || await HistoryHandler.getSetting('WEBSHARE_API_KEY', '79cbfba7-d278-4298-84d3-a29ad021b579');
+            }
+
             // Si hay Webshare API Key, consultar la lista dinámica
             if (!proxyUrl && webshareApiKey) {
                 proxyUrl = await this.fetchProxyFromWebshareApi(webshareApiKey);
