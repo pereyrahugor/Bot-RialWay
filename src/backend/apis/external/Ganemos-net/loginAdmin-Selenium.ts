@@ -28,7 +28,7 @@ export class LoginAdminSelenium {
         console.log(`[SeleniumAuth] Iniciando sesión para el administrador: ${username}...`);
 
         try {
-            // URL genérica para el panel del administrador
+            const targetUrl = "https://agents.ganamosnet.org/"; 
             await this.driver.get(targetUrl);
 
             // Verificar si la IP entregada por la proxy rotatoria fue bloqueada (403 Forbidden)
