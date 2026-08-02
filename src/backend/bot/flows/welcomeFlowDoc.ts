@@ -67,20 +67,42 @@ export const welcomeFlowDoc = addKeyword<BaileysProvider, MemoryDB>(EVENTS.DOCUM
                 }
             }
 
-            // Guardar el PDF en tmp
+            // 1. Intentar guardar usando provider.saveFile del framework
             try {
                 localPath = await provider.saveFile(ctx, { path: "./tmp/" });
             } catch (saveErr: any) {
                 console.warn("⚠️ [welcomeFlowDoc] provider.saveFile falló con error:", saveErr.message || saveErr);
-                if (ctx) {
-                    ctx.mimetype = "application/pdf";
-                    if (ctx.media) ctx.media.mimetype = "application/pdf";
-                    if (ctx.message?.documentMessage) ctx.message.documentMessage.mimetype = "application/pdf";
-                }
+            }
+
+            // 2. Si provider.saveFile falló (ej: MIME type not found en Baileys), descargar directamente mediante el stream de Baileys
+            if (!localPath || !fs.existsSync(localPath)) {
                 try {
-                    localPath = await provider.saveFile(ctx, { path: "./tmp/", name: `pdf_${Date.now()}.pdf` });
-                } catch (retryErr: any) {
-                    console.error("❌ [welcomeFlowDoc] Error persistente al guardar PDF:", retryErr.message || retryErr);
+                    console.log("🔄 [welcomeFlowDoc] Ejecutando descarga directa de stream de Baileys...");
+                    const messageObj = ctx.message?.documentMessage 
+                        || ctx.message?.documentWithCaptionMessage?.message?.documentMessage 
+                        || ctx.message?.imageMessage 
+                        || ctx.message?.viewOnceMessage?.message?.documentMessage
+                        || ctx.message?.viewOnceMessageV2?.message?.documentMessage;
+
+                    const mediaType = (ctx.message?.imageMessage) ? 'image' : 'document';
+
+                    if (messageObj) {
+                        const { downloadContentFromMessage } = await import("@whiskeysockets/baileys");
+                        const stream = await downloadContentFromMessage(messageObj, mediaType as any);
+                        let buffer = Buffer.from([]);
+                        for await (const chunk of stream) {
+                            buffer = Buffer.concat([buffer, chunk]);
+                        }
+
+                        if (buffer.length > 0) {
+                            const fallbackPath = path.join("./tmp/", `doc_${Date.now()}.pdf`);
+                            fs.writeFileSync(fallbackPath, buffer);
+                            localPath = fallbackPath;
+                            console.log(`✅ [welcomeFlowDoc] PDF descargado directamente con éxito en: ${localPath} (${buffer.length} bytes)`);
+                        }
+                    }
+                } catch (directErr: any) {
+                    console.error("❌ [welcomeFlowDoc] Error en descarga directa de stream de Baileys:", directErr.message || directErr);
                 }
             }
 
