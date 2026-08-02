@@ -187,9 +187,41 @@ export const welcomeFlowDoc = addKeyword<BaileysProvider, MemoryDB>(EVENTS.DOCUM
             }
 
             if (!receiptProcessed) {
+                const analysisResults: string[] = [];
                 for (const imgPath of imagenes) {
                     const imgBuffer = fs.readFileSync(imgPath);
-                    await processImageWithVision(imgBuffer, flowDynamic, dynamicProjectId);
+                    const pageText = await processImageWithVision(imgBuffer, flowDynamic, dynamicProjectId, 'ASSISTANT_ID_IMG', true);
+                    if (pageText) analysisResults.push(pageText);
+                }
+
+                const finalAnalysis = analysisResults.join("\n") || "Documento PDF recibido.";
+                const caption = (ctx.body && !ctx.body.includes('_event_')) ? ctx.body : (ctx.payload?.message?.documentMessage?.caption || '');
+                ctx.body = `[Comprobante / Documento PDF recibido]${caption ? ': ' + caption : ''}. (Contenido): ${finalAnalysis}`;
+
+                try {
+                    await HistoryHandler.saveMessage(
+                        ctx.from,
+                        'user',
+                        `📄 Comprobante/PDF recibido: "${finalAnalysis}"`,
+                        'text',
+                        null,
+                        ctx.userId,
+                        null,
+                        ctx.platform || 'whatsapp',
+                        dynamicProjectId
+                    );
+                } catch (dbErr) {
+                    console.error("❌ Error guardando análisis de PDF en BD:", dbErr);
+                }
+
+                // Reencolar el mensaje para que el asistente principal procese el comprobante y ejecute DEPOSITAR
+                if (!userQueues.has(ctx.from)) {
+                    userQueues.set(ctx.from, []);
+                }
+                userQueues.get(ctx.from)!.push({ ctx, flowDynamic, state, provider, gotoFlow });
+                
+                if (!userLocks.get(ctx.from) && userQueues.get(ctx.from)!.length === 1) {
+                    await handleQueue(ctx.from);
                 }
             }
             imagenesGeneradas.push(...imagenes);
