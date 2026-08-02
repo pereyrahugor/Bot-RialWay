@@ -113,6 +113,9 @@ export class HistoryHandler {
         // 0. Bootstrap de configuración
         await this.bootstrapConfig();
 
+        // 0.05. Reclamar / Asignar automáticamente settings de 'default_service' o NULL al service_id activo de Railway
+        await this.autoMigrateSettingsServiceIdOnStartup();
+
         // 0.1. Cargar todas las settings de la DB a process.env para compatibilidad con flujos legacy
         await this.loadSettingsIntoProcessEnv();
 
@@ -2814,6 +2817,41 @@ export class HistoryHandler {
             }
         } catch (err: any) {
             console.error('❌ [HistoryHandler] Error en syncRoutingTableOnStartup:', err?.message || err);
+        }
+    }
+
+    /**
+     * Al desplegar/reiniciar, reclama automáticamente todas las settings del proyecto
+     * que estén en 'default_service' o NULL y las asigna al service_id activo de Railway.
+     */
+    static async autoMigrateSettingsServiceIdOnStartup() {
+        try {
+            if (!supabase) return;
+            const currentProjectId = this.PROJECT_IDENTIFIER;
+            const currentServiceId = process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || this.SERVICE_IDENTIFIER;
+
+            if (!currentServiceId || currentServiceId === 'default_service') return;
+
+            const { data: defaultSettings } = await supabase
+                .from('settings')
+                .select('key')
+                .eq('project_id', currentProjectId)
+                .or('service_id.eq.default_service,service_id.is.null');
+
+            if (defaultSettings && defaultSettings.length > 0) {
+                console.log(`📡 [HistoryHandler] Asignando automáticamente ${defaultSettings.length} settings de 'default_service' -> '${currentServiceId}' (Proyecto: ${currentProjectId})...`);
+                
+                for (const setting of defaultSettings) {
+                    await supabase
+                        .from('settings')
+                        .update({ service_id: currentServiceId, updated_at: new Date().toISOString() })
+                        .eq('project_id', currentProjectId)
+                        .eq('key', setting.key)
+                        .or('service_id.eq.default_service,service_id.is.null');
+                }
+            }
+        } catch (err: any) {
+            console.error('❌ [HistoryHandler] Error en autoMigrateSettingsServiceIdOnStartup:', err?.message || err);
         }
     }
 
