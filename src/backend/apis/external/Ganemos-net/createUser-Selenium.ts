@@ -31,10 +31,20 @@ export async function createUserSelenium(
         console.log(`[Ganemos-net] Intento ${attempt}/${maxAttempts} para crear usuario (baseName: ${baseName})...`);
 
         const options = new chrome.Options();
-        options.addArguments('--headless=new');
+        
+        // Configuración Anti-Detección Bot (Stealth Mode)
+        options.addArguments('--disable-blink-features=AutomationControlled');
+        options.excludeSwitches('enable-automation');
+        options.addArguments('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
+        options.addArguments('--window-size=1920,1080');
+        options.addArguments('--start-maximized');
         options.addArguments('--no-sandbox');
         options.addArguments('--disable-dev-shm-usage');
         options.addArguments('--disable-gpu');
+
+        if (process.env.DISABLE_HEADLESS !== 'true') {
+            options.addArguments('--headless=new');
+        }
 
         const proxySession = await ProxyManager.getProxySession('ganemos-net');
         if (proxySession) {
