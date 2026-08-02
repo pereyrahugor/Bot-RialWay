@@ -51,13 +51,22 @@ export const welcomeFlowDoc = addKeyword<BaileysProvider, MemoryDB>(EVENTS.DOCUM
                 fs.mkdirSync("./tmp/", { recursive: true });
             }
 
-            // Prevenir 'Error: MIME type not found' en BaileysProvider asegurando mimetype por defecto
+            // Prevenir 'Error: MIME type not found' en BaileysProvider asegurando mimetype por defecto en ctx y ctx.payload
             if (ctx) {
+                if (ctx.payload?.message?.documentMessage && !ctx.payload.message.documentMessage.mimetype) {
+                    ctx.payload.message.documentMessage.mimetype = "application/pdf";
+                }
+                if (ctx.payload?.message?.documentWithCaptionMessage?.message?.documentMessage && !ctx.payload.message.documentWithCaptionMessage.message.documentMessage.mimetype) {
+                    ctx.payload.message.documentWithCaptionMessage.message.documentMessage.mimetype = "application/pdf";
+                }
+                if (ctx.payload?.documentMessage && !ctx.payload.documentMessage.mimetype) {
+                    ctx.payload.documentMessage.mimetype = "application/pdf";
+                }
+                if (ctx.payload && !ctx.payload.mimetype) {
+                    ctx.payload.mimetype = "application/pdf";
+                }
                 if (ctx.message?.documentMessage && !ctx.message.documentMessage.mimetype) {
                     ctx.message.documentMessage.mimetype = "application/pdf";
-                }
-                if (ctx.message?.documentWithCaptionMessage?.message?.documentMessage && !ctx.message.documentWithCaptionMessage.message.documentMessage.mimetype) {
-                    ctx.message.documentWithCaptionMessage.message.documentMessage.mimetype = "application/pdf";
                 }
                 if (ctx.media && !ctx.media.mimetype) {
                     ctx.media.mimetype = "application/pdf";
@@ -86,8 +95,8 @@ export const welcomeFlowDoc = addKeyword<BaileysProvider, MemoryDB>(EVENTS.DOCUM
                         localPath = fallbackPath;
                         console.log(`✅ [welcomeFlowDoc] PDF guardado desde ctx.media.buffer: ${localPath} (${ctx.media.buffer.length} bytes)`);
                     } else {
-                        // 2b. Extraer objeto de media de cualquier estructura posible de Baileys
-                        const rawMsg = ctx.message || ctx.msg || ctx;
+                        // 2b. Extraer objeto de media buscando primero en ctx.payload (estructura primaria de Baileys en Builderbot)
+                        const rawMsg = ctx.payload?.message || ctx.payload || ctx.message || ctx.msg || ctx;
                         let targetMedia = rawMsg?.documentMessage 
                             || rawMsg?.documentWithCaptionMessage?.message?.documentMessage 
                             || rawMsg?.ephemeralMessage?.message?.documentMessage 
@@ -98,6 +107,21 @@ export const welcomeFlowDoc = addKeyword<BaileysProvider, MemoryDB>(EVENTS.DOCUM
 
                         if (targetMedia?.message) {
                             targetMedia = targetMedia.message.documentMessage || targetMedia.message.imageMessage || targetMedia.message;
+                        }
+
+                        // Escaneo recursivo inteligente si las llaves no están en el primer nivel
+                        if (!targetMedia?.mediaKey && !targetMedia?.url && !targetMedia?.directPath) {
+                            const findMediaObj = (obj: any, depth = 0): any => {
+                                if (!obj || typeof obj !== 'object' || depth > 4) return null;
+                                if (obj.mediaKey || obj.url || obj.directPath) return obj;
+                                for (const k of Object.keys(obj)) {
+                                    if (k === 'key' || k === 'client' || k === 'provider') continue;
+                                    const res = findMediaObj(obj[k], depth + 1);
+                                    if (res) return res;
+                                }
+                                return null;
+                            };
+                            targetMedia = findMediaObj(ctx) || targetMedia;
                         }
 
                         const mediaType = (targetMedia?.mimetype?.includes('image') || rawMsg?.imageMessage) ? 'image' : 'document';
