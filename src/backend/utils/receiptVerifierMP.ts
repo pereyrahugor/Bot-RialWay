@@ -123,9 +123,47 @@ export async function verifyReceiptFlow(
 
                 if (insertError) {
                     console.error("[ReceiptVerifierMP] Error insertando registro de pago verificado en BD:", insertError);
+                } else {
+                    console.log(`✅ [ReceiptVerifierMP] Pago registrado exitosamente en DB (ID: ${paymentId}, Monto: $${mpAmount})`);
                 }
 
-                await flowDynamic(`✅ ¡Comprobante verificado con éxito! Pago acreditado en tu cuenta por un monto de $${mpAmount}.`);
+                // Inyectar la confirmación estricta de pago verificado para habilitar DEPOSITAR en la IA
+                const systemMsgText = `[SISTEMA_INTERNO_PAYMENT_VERIFIED: monto=${mpAmount}, op=${paymentId}]. El pago fue verificado y aprobado exitosamente en la API de Mercado Pago. Procede a ejecutar la herramienta DEPOSITAR para el cliente.`;
+                
+                const { userQueues, userLocks, handleQueue } = await import("../bot/queueManager");
+                const { HistoryHandler } = await import("../db/historyHandler");
+
+                try {
+                    await HistoryHandler.saveMessage(
+                        userId,
+                        'user',
+                        systemMsgText,
+                        'text',
+                        null,
+                        null,
+                        null,
+                        'whatsapp',
+                        projectId
+                    );
+                } catch (dbErr) {
+                    console.error("❌ Error guardando mensaje de verificación en BD:", dbErr);
+                }
+
+                const mockCtx = {
+                    from: userId,
+                    body: systemMsgText,
+                    key: { remoteJid: userId, fromMe: false }
+                };
+
+                if (!userQueues.has(userId)) {
+                    userQueues.set(userId, []);
+                }
+                userQueues.get(userId)!.push({ ctx: mockCtx, flowDynamic, state: {}, provider: null, gotoFlow: null });
+
+                if (!userLocks.get(userId) && userQueues.get(userId)!.length === 1) {
+                    await handleQueue(userId);
+                }
+
                 return true;
             } else {
                 console.log(`[ReceiptVerifierMP] Operación encontrada pero estado no es approved: ${mpStatus}`);

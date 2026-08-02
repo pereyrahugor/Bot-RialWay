@@ -184,6 +184,13 @@ export const welcomeFlowDoc = addKeyword<BaileysProvider, MemoryDB>(EVENTS.DOCUM
                         break;
                     }
                 }
+
+                if (receiptProcessed) {
+                    return; // Finalizar flujo porque ya fue manejado por la verificación estricta de Mercado Pago
+                } else {
+                    await flowDynamic("⚠️ No se pudo validar la transferencia en la API de Mercado Pago. Por favor, verifica que el comprobante sea correcto e intenta nuevamente.");
+                    return; // Detener flujo para evitar recargas sin verificación real por API
+                }
             }
 
             if (!receiptProcessed) {
