@@ -24,12 +24,19 @@ export class ProxyManager {
     public static async getProxySession(clientSlug?: string): Promise<ProxySession | null> {
         try {
             const prefix = clientSlug ? clientSlug.toUpperCase().replace(/[^A-Z0-9]/g, '_') : '';
+            const altPrefix = prefix.includes('_') ? prefix.split('_')[0] : prefix;
 
             // 1. Verificar si hay un PROXY_URL estático configurado para el cliente
             let proxyUrl = prefix ? (await HistoryHandler.getConfig(`${prefix}_PROXY_URL`) || process.env[`${prefix}_PROXY_URL`]) : null;
+            if (!proxyUrl && altPrefix && altPrefix !== prefix) {
+                proxyUrl = await HistoryHandler.getConfig(`${altPrefix}_PROXY_URL`) || process.env[`${altPrefix}_PROXY_URL`];
+            }
 
             // 2. Verificar Webshare API Key para el cliente
             let webshareApiKey = prefix ? (await HistoryHandler.getConfig(`${prefix}_WEBSHARE_API_KEY`) || process.env[`${prefix}_WEBSHARE_API_KEY`]) : null;
+            if (!webshareApiKey && altPrefix && altPrefix !== prefix) {
+                webshareApiKey = await HistoryHandler.getConfig(`${altPrefix}_WEBSHARE_API_KEY`) || process.env[`${altPrefix}_WEBSHARE_API_KEY`];
+            }
 
             // 3. Fallback a configuración global si no hay específica del cliente
             if (!proxyUrl && !webshareApiKey) {
