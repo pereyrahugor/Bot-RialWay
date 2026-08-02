@@ -42,25 +42,40 @@ export async function verifyReceiptFlow(
             return false;
         }
 
-        // 4. Intentar parsear el JSON estructurado del comprobante
-        let receiptData: any = null;
+        // 4. Intentar parsear el JSON estructurado del comprobante o extraer por RegEx
+        let paymentId: string | null = null;
+        let amount: number | null = null;
+
         try {
             const cleanJson = ocrResult.replace(/```json/g, "").replace(/```/g, "").trim();
-            receiptData = JSON.parse(cleanJson);
+            const receiptData = JSON.parse(cleanJson);
+            if (receiptData?.numero_operacion) paymentId = String(receiptData.numero_operacion).trim();
+            if (receiptData?.monto_numerico) amount = Number(receiptData.monto_numerico);
         } catch (e: any) {
-            console.error("[ReceiptVerifierMP] Error parseando respuesta de OCR como JSON:", e.message, "\nResultado crudo:", ocrResult);
+            console.log("[ReceiptVerifierMP] OCR no retornó JSON estricto. Aplicando extracción por RegEx sobre descripción...");
+        }
+
+        if (!paymentId) {
+            const fullText = `${ocrResult} ${description}`;
+            const matchOp = fullText.match(/(?:operaci[oó]n|transacci[oó]n|n[uú]mero|id|nro|num)\s*[:#]?\s*(\d{8,15})/i);
+            if (matchOp) paymentId = matchOp[1];
+        }
+
+        if (!amount) {
+            const fullText = `${ocrResult} ${description}`;
+            const matchAmount = fullText.match(/(?:importe|monto|total|\$)\s*[:#]?\s*\$?\s*([\d.,]{2,12})/i);
+            if (matchAmount) {
+                const cleanAmt = matchAmount[1].replace(/\./g, "").replace(",", ".");
+                amount = parseFloat(cleanAmt);
+            }
+        }
+
+        if (!paymentId) {
+            console.warn("[ReceiptVerifierMP] El comprobante no pudo ser leído o no se extrajo el número de operación.", { ocrResult, description });
             return false;
         }
 
-        if (!receiptData || receiptData.estado_lectura !== "EXITO" || !receiptData.numero_operacion) {
-            console.log("[ReceiptVerifierMP] El comprobante no pudo ser leído exitosamente o no contiene número de operación.", receiptData);
-            return false;
-        }
-
-        const paymentId = String(receiptData.numero_operacion).trim();
-        const amount = Number(receiptData.monto_numerico);
-
-        console.log(`[ReceiptVerifierMP] Comprobante leído. Operación: ${paymentId}, Monto: ${amount}`);
+        console.log(`[ReceiptVerifierMP] Comprobante extraído con éxito -> Operación: ${paymentId}, Monto: ${amount || 'A confirmar por API'}`);
 
         // 5. Verificar duplicados en la base de datos (mercadopago_payments_clients)
         const { data: existingPayment, error: dbError } = await supabase

@@ -25,11 +25,17 @@ export async function processImageWithVision(
     return "";
   }
 
-  // 2. Obtener el Assistant ID de la base de datos según la clave
-  const assistantId = await HistoryHandler.getSetting(assistantKey, projectId) || await HistoryHandler.getConfig(assistantKey);
+  // 2. Obtener el Assistant ID de la base de datos según la clave (con fallback jerárquico)
+  const assistantId = await HistoryHandler.getSetting(assistantKey, projectId) 
+    || await HistoryHandler.getConfig(assistantKey)
+    || await HistoryHandler.getSetting('ASSISTANT_ID_IMG', projectId)
+    || await HistoryHandler.getConfig('ASSISTANT_ID_IMG')
+    || await HistoryHandler.getSetting('ASSISTANT_ID', projectId)
+    || await HistoryHandler.getConfig('ASSISTANT_ID');
+
   if (!assistantId) {
     if (!silent) {
-      await flowDynamic(`No se encontró el ${assistantKey} en la base de datos.`);
+      await flowDynamic(`No se encontró el ${assistantKey} ni asistente de respaldo en la base de datos.`);
     }
     return "";
   }
