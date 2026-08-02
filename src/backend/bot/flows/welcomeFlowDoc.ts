@@ -36,13 +36,13 @@ export const welcomeFlowDoc = addKeyword<BaileysProvider, MemoryDB>(EVENTS.DOCUM
         const botPhoneNumber = provider?.globalVendorArgs?.phone_number_id || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
         const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || HistoryHandler.PROJECT_IDENTIFIER;
         try {
-            let tipo = "desconocido";
-            const mimetype = ctx?.media?.mimetype || ctx?.message?.documentMessage?.mimetype;
-            if (mimetype === "application/pdf") tipo = "pdf";
-            else tipo = mimetype || "desconocido";
+            const mimetype = (ctx?.media?.mimetype || ctx?.message?.documentMessage?.mimetype || ctx?.mimetype || '').toLowerCase();
+            const fileName = (ctx?.media?.filename || ctx?.message?.documentMessage?.fileName || '').toLowerCase();
 
-            if (tipo !== "pdf") {
-                await flowDynamic("Solo se aceptan archivos PDF en este flujo.");
+            const isPdf = mimetype.includes('pdf') || fileName.endsWith('.pdf') || mimetype === 'application/octet-stream' || mimetype === 'application/x-pdf' || !mimetype;
+
+            if (!isPdf) {
+                await flowDynamic("Solo se aceptan comprobantes en formato PDF o Imagen en este flujo.");
                 return;
             }
 
