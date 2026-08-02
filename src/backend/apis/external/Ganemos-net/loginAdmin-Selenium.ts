@@ -32,25 +32,37 @@ export class LoginAdminSelenium {
             const targetUrl = "https://agents.ganamosnet.org/"; 
             await this.driver.get(targetUrl);
 
-            // XPaths genéricos para los campos del formulario.
-            // Puedes reemplazarlos por los de tu plataforma en tu entorno local.
+            // XPaths genéricos para los campos del formulario
             const userXPath = "/html/body/div[3]/div/section/div/div[2]/div[1]/input";
             const passwordXPath = "/html/body/div[3]/div/section/div/div[2]/div[2]/div[2]/input";
             const submitButtonXPath = "/html/body/div[3]/div/section/div/div[2]/div[3]/button";
 
-            // 1. Localizar y escribir en el campo de usuario
-            const userInput = await this.driver.wait(
-                until.elementLocated(By.xpath(userXPath)), 
-                5000 // Timeout máximo de 10 segundos
-            );
+            // 1. Localizar y escribir en el campo de usuario (Timeout 15s para React SPA en proxy)
+            let userInput: any = null;
+            try {
+                userInput = await this.driver.wait(until.elementLocated(By.xpath(userXPath)), 15000);
+            } catch (e) {
+                console.log('⚠️ [SeleniumAuth] XPath primario no localizado en 15s. Probando selectores CSS...');
+                userInput = await this.driver.wait(until.elementLocated(By.css('input[type="text"], input[name="username"], input.form-control')), 5000);
+            }
             await userInput.sendKeys(username);
 
             // 2. Localizar y escribir en el campo de contraseña
-            const passwordInput = await this.driver.findElement(By.xpath(passwordXPath));
+            let passwordInput: any = null;
+            try {
+                passwordInput = await this.driver.findElement(By.xpath(passwordXPath));
+            } catch (e) {
+                passwordInput = await this.driver.findElement(By.css('input[type="password"], input[name="password"]'));
+            }
             await passwordInput.sendKeys(password);
 
             // 3. Localizar y hacer click en el botón de ingreso
-            const submitButton = await this.driver.findElement(By.xpath(submitButtonXPath));
+            let submitButton: any = null;
+            try {
+                submitButton = await this.driver.findElement(By.xpath(submitButtonXPath));
+            } catch (e) {
+                submitButton = await this.driver.findElement(By.css('button[type="submit"], button.btn-primary, button'));
+            }
             await submitButton.click();
 
             // 4. Esperar a que la URL cambie tras hacer clic o aparezca un mensaje de error en pantalla

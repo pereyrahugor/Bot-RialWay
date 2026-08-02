@@ -18,9 +18,14 @@ export const ganemosModule = {
     // CORE TOOLS (Para mapear respuestas del Asistente OpenAI)
     // ----------------------------------------------------
     CREAR_JUGADOR: async (args: any, context: any) => {
-      const nombre = args.nombre || args.baseName || args.username || 'jugador';
+      const rawNombre = args.nombre || args.baseName || args.username;
+      const nombre = rawNombre ? String(rawNombre).trim() : '';
 
-      console.log(`[ganemosModule] 👤 Invocando CREAR_JUGADOR para: "${nombre}"`);
+      console.log(`[ganemosModule] 👤 Invocando CREAR_JUGADOR para: "${nombre || 'sin_nombre'}"`);
+      
+      if (!nombre || nombre.toLowerCase() === 'jugador' || nombre.toLowerCase() === 'cliente' || nombre.toLowerCase() === 'user') {
+          return `❌ Se requiere obligatoriamente el nombre de pila del cliente para generar su usuario. Por favor pregúntale su nombre al cliente primero.`;
+      }
       
       const res = await createUserSelenium(nombre, false);
       if (res) {
@@ -90,13 +95,13 @@ export const ganemosModule = {
       "type": "function",
       "function": {
         "name": "CREAR_JUGADOR",
-        "description": "Crea una nueva cuenta de jugador en la plataforma Ganemos-net.",
+        "description": "Crea una nueva cuenta de jugador en la plataforma Ganemos-net. OBLIGATORIO: Debes pedirle primero el nombre de pila al cliente. NO invocar esta función sin el nombre proporcionado por el usuario.",
         "parameters": {
           "type": "object",
           "properties": {
             "nombre": {
               "type": "string",
-              "description": "Nombre de pila o base del cliente para generar su usuario (ej. lucas)."
+              "description": "Nombre de pila del cliente proporcionado explícitamente por él en el chat (ej. Lucas, Carlos, María). Prohibido inventar o enviar 'jugador'."
             }
           },
           "required": ["nombre"]
