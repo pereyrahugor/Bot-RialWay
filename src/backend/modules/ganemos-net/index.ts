@@ -112,7 +112,7 @@ export const ganemosModule = {
       "type": "function",
       "function": {
         "name": "DEPOSITAR",
-        "description": "Carga/Deposita créditos o saldo en la cuenta de un jugador registrado en la plataforma Ganemos-net.",
+        "description": "Carga/Deposita créditos o saldo en la cuenta de un jugador en Ganemos-net. PROHIBIDO Y ESTRICTAMENTE DENEGADO: Queda totalmente prohibido invocar esta función si el cliente no ha enviado un comprobante de transferencia y este no ha sido verificado. Si el cliente solicita recarga por texto sin adjuntar comprobante, indícale el CBU/Alias o monto mínimo y pídele que envíe el comprobante primero.",
         "parameters": {
           "type": "object",
           "properties": {
@@ -122,7 +122,7 @@ export const ganemosModule = {
             },
             "monto": {
               "type": "number",
-              "description": "Monto numérico de créditos a depositar (ej. 500)."
+              "description": "Monto numérico exacto extraído del comprobante de transferencia verificado."
             }
           },
           "required": ["username", "monto"]

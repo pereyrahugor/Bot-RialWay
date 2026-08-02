@@ -78,27 +78,46 @@ export const welcomeFlowDoc = addKeyword<BaileysProvider, MemoryDB>(EVENTS.DOCUM
             if (!localPath || !fs.existsSync(localPath)) {
                 try {
                     console.log("🔄 [welcomeFlowDoc] Ejecutando descarga directa de stream de Baileys...");
-                    const messageObj = ctx.message?.documentMessage 
-                        || ctx.message?.documentWithCaptionMessage?.message?.documentMessage 
-                        || ctx.message?.imageMessage 
-                        || ctx.message?.viewOnceMessage?.message?.documentMessage
-                        || ctx.message?.viewOnceMessageV2?.message?.documentMessage;
 
-                    const mediaType = (ctx.message?.imageMessage) ? 'image' : 'document';
+                    // 2a. Verificar si el buffer ya existe en memoria en el contexto
+                    if (ctx?.media?.buffer && Buffer.isBuffer(ctx.media.buffer) && ctx.media.buffer.length > 0) {
+                        const fallbackPath = path.join("./tmp/", `doc_${Date.now()}.pdf`);
+                        fs.writeFileSync(fallbackPath, ctx.media.buffer);
+                        localPath = fallbackPath;
+                        console.log(`✅ [welcomeFlowDoc] PDF guardado desde ctx.media.buffer: ${localPath} (${ctx.media.buffer.length} bytes)`);
+                    } else {
+                        // 2b. Extraer objeto de media de cualquier estructura posible de Baileys
+                        const rawMsg = ctx.message || ctx.msg || ctx;
+                        let targetMedia = rawMsg?.documentMessage 
+                            || rawMsg?.documentWithCaptionMessage?.message?.documentMessage 
+                            || rawMsg?.ephemeralMessage?.message?.documentMessage 
+                            || rawMsg?.viewOnceMessage?.message?.documentMessage 
+                            || rawMsg?.viewOnceMessageV2?.message?.documentMessage 
+                            || rawMsg?.imageMessage
+                            || rawMsg;
 
-                    if (messageObj) {
-                        const { downloadContentFromMessage } = await import("@whiskeysockets/baileys");
-                        const stream = await downloadContentFromMessage(messageObj, mediaType as any);
-                        let buffer = Buffer.from([]);
-                        for await (const chunk of stream) {
-                            buffer = Buffer.concat([buffer, chunk]);
+                        if (targetMedia?.message) {
+                            targetMedia = targetMedia.message.documentMessage || targetMedia.message.imageMessage || targetMedia.message;
                         }
 
-                        if (buffer.length > 0) {
-                            const fallbackPath = path.join("./tmp/", `doc_${Date.now()}.pdf`);
-                            fs.writeFileSync(fallbackPath, buffer);
-                            localPath = fallbackPath;
-                            console.log(`✅ [welcomeFlowDoc] PDF descargado directamente con éxito en: ${localPath} (${buffer.length} bytes)`);
+                        const mediaType = (targetMedia?.mimetype?.includes('image') || rawMsg?.imageMessage) ? 'image' : 'document';
+
+                        if (targetMedia && (targetMedia.url || targetMedia.directPath || targetMedia.mediaKey)) {
+                            const { downloadContentFromMessage } = await import("@whiskeysockets/baileys");
+                            const stream = await downloadContentFromMessage(targetMedia, mediaType as any);
+                            let buffer = Buffer.from([]);
+                            for await (const chunk of stream) {
+                                buffer = Buffer.concat([buffer, chunk]);
+                            }
+
+                            if (buffer.length > 0) {
+                                const fallbackPath = path.join("./tmp/", `doc_${Date.now()}.pdf`);
+                                fs.writeFileSync(fallbackPath, buffer);
+                                localPath = fallbackPath;
+                                console.log(`✅ [welcomeFlowDoc] PDF descargado directamente con éxito en: ${localPath} (${buffer.length} bytes)`);
+                            }
+                        } else {
+                            console.error("⚠️ [welcomeFlowDoc] No se pudo encontrar objeto con llaves de descarga en ctx. Keys de ctx:", Object.keys(ctx || {}));
                         }
                     }
                 } catch (directErr: any) {
