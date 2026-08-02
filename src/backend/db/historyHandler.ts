@@ -2941,22 +2941,24 @@ export class HistoryHandler {
         }
     }
 
-    static async saveSetting(key: string, value: string, projectId: string | null = null) {
+    static async saveSetting(key: string, value: string, projectId: string | null = null, serviceId: string | null = null) {
         if (!supabase) return;
         const targetProjectId = projectId || HistoryHandler.PROJECT_IDENTIFIER;
+        const targetServiceId = serviceId || process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || HistoryHandler.SERVICE_IDENTIFIER;
 
         // Invalidar cache en memoria
-        const cacheKey = `${targetProjectId}:${key}`;
+        const cacheKey = `${targetProjectId}:${targetServiceId}:${key}`;
         this.settingsCache.delete(cacheKey);
 
         const { error } = await supabase
             .from('settings')
             .upsert({
                 project_id: targetProjectId,
+                service_id: targetServiceId,
                 key,
                 value,
                 updated_at: new Date().toISOString()
-            }, { onConflict: 'project_id,key' });
+            }, { onConflict: 'project_id,service_id,key' });
 
         if (error) {
             console.error(`❌ [HistoryHandler] Error guardando setting ${key}:`, error);
@@ -2992,10 +2994,11 @@ export class HistoryHandler {
         }
     }
 
-    static async getSetting(key: string, projectId: string | null = null): Promise<string | null> {
+    static async getSetting(key: string, projectId: string | null = null, serviceId: string | null = null): Promise<string | null> {
         if (!supabase) return null;
         const targetProjectId = projectId || HistoryHandler.PROJECT_IDENTIFIER;
-        const cacheKey = `${targetProjectId}:${key}`;
+        const targetServiceId = serviceId || process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || HistoryHandler.SERVICE_IDENTIFIER;
+        const cacheKey = `${targetProjectId}:${targetServiceId}:${key}`;
         const now = Date.now();
 
         // 1. Intentar obtener desde cache en memoria (excepto credenciales para garantizar realtime)
@@ -3006,12 +3009,17 @@ export class HistoryHandler {
             }
         }
 
-        const { data, error } = await supabase
+        let query = supabase
             .from('settings')
             .select('value')
             .eq('project_id', targetProjectId)
-            .eq('key', key)
-            .maybeSingle();
+            .eq('key', key);
+
+        if (targetServiceId && targetServiceId !== 'default_service') {
+            query = query.eq('service_id', targetServiceId);
+        }
+
+        const { data, error } = await query.maybeSingle();
 
         if (error && error.code !== 'PGRST116') {
             console.error(`❌ [HistoryHandler] Error obteniendo setting ${key}:`, error);
@@ -3278,12 +3286,19 @@ export class HistoryHandler {
     static async loadSettingsIntoProcessEnv() {
         try {
             const currentProjectId = this.PROJECT_IDENTIFIER;
-            console.log(`📡 [HistoryHandler] Sincronizando settings de DB -> process.env (Project: ${currentProjectId})...`);
+            const currentServiceId = process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || this.SERVICE_IDENTIFIER;
+            console.log(`📡 [HistoryHandler] Sincronizando settings de DB -> process.env (Project: ${currentProjectId}, Service: ${currentServiceId})...`);
 
-            const { data, error } = await supabase
+            let query = supabase
                 .from('settings')
                 .select('key, value')
                 .eq('project_id', currentProjectId);
+
+            if (currentServiceId && currentServiceId !== 'default_service') {
+                query = query.eq('service_id', currentServiceId);
+            }
+
+            const { data, error } = await query;
 
             if (error) throw error;
 
