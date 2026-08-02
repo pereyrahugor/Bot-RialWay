@@ -1324,12 +1324,18 @@ export class HistoryHandler {
             this.invalidateChatCache(activeId, currentProjectId);
 
             if (Object.keys(chatDetails).length > 0) {
-                const { error } = await supabase
+                const currentServiceId = process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || this.SERVICE_IDENTIFIER;
+                let query = supabase
                     .from('chats')
                     .update(chatDetails)
                     .eq('id', activeId)
                     .eq('project_id', currentProjectId);
 
+                if (currentServiceId && currentServiceId !== 'default_service') {
+                    query = query.eq('service_id', currentServiceId);
+                }
+
+                const { error } = await query;
                 if (error) throw error;
             }
 
