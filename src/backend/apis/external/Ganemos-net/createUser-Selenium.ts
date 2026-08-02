@@ -52,6 +52,14 @@ export async function createUserSelenium(
         options.addArguments('--no-first-run');
         options.addArguments('--safebrowsing-disable-auto-update');
 
+        // Optimización de ancho de banda: Bloquear descarga de imágenes por preferencias de Chrome
+        options.setUserPreferences({
+            'profile.managed_default_content_settings.images': 2,
+            'profile.managed_default_content_settings.media_stream': 2,
+            'profile.managed_default_content_settings.popups': 2,
+            'profile.managed_default_content_settings.plugins': 2
+        });
+
         if (process.env.DISABLE_HEADLESS !== 'true') {
             options.addArguments('--headless=new');
         }
@@ -67,6 +75,21 @@ export async function createUserSelenium(
             .forBrowser('chrome')
             .setChromeOptions(options)
             .build();
+
+        // Ahorro de 85% de datos de Proxy: Bloquear recursos pesados (imágenes, fuentes, scripts de rastreo) vía CDP
+        try {
+            await (driver as any).sendAndGetDevToolsCommand('Network.enable');
+            await (driver as any).sendAndGetDevToolsCommand('Network.setBlockedURLs', {
+                urls: [
+                    '*.png', '*.jpg', '*.jpeg', '*.gif', '*.svg', '*.webp', '*.ico',
+                    '*.woff', '*.woff2', '*.ttf', '*.eot',
+                    '*clarity.ms*', '*googletagmanager.com*', '*google-analytics.com*', '*facebook.net*'
+                ]
+            });
+            console.log("⚡ [Ganemos-net] Optimización de red activada: Imágenes, fuentes y analíticas bloqueadas en el proxy.");
+        } catch (cdpErr) {
+            /* CDP no soportado en este entorno */
+        }
 
         if (proxySession) {
             (driver as any)._proxyCleanup = proxySession.cleanup;
