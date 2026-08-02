@@ -3019,10 +3019,24 @@ export class HistoryHandler {
             query = query.eq('service_id', targetServiceId);
         }
 
-        const { data, error } = await query.maybeSingle();
+        const { data: mainData, error } = await query.maybeSingle();
 
         if (error && error.code !== 'PGRST116') {
             console.error(`❌ [HistoryHandler] Error obteniendo setting ${key}:`, error);
+        }
+
+        let data = mainData;
+        if (!data && targetServiceId && targetServiceId !== 'default_service') {
+            const fallbackRes = await supabase
+                .from('settings')
+                .select('value')
+                .eq('project_id', targetProjectId)
+                .eq('service_id', 'default_service')
+                .eq('key', key)
+                .maybeSingle();
+            if (fallbackRes.data) {
+                data = fallbackRes.data;
+            }
         }
 
         let value = data ? data.value : null;
@@ -3291,11 +3305,11 @@ export class HistoryHandler {
 
             let query = supabase
                 .from('settings')
-                .select('key, value')
+                .select('key, value, service_id')
                 .eq('project_id', currentProjectId);
 
             if (currentServiceId && currentServiceId !== 'default_service') {
-                query = query.eq('service_id', currentServiceId);
+                query = query.in('service_id', [currentServiceId, 'default_service']);
             }
 
             const { data, error } = await query;
