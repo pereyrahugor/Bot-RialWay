@@ -1705,8 +1705,12 @@ export class HistoryHandler {
                     .from('chats')
                     .select(selectString);
 
-                // Filtrar strictly por el ID único de este bot en Railway
+                // Filtrar strictly por el ID único de este bot en Railway y su servicio
                 query = query.eq('project_id', currentProjectId);
+                const currentServiceId = process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || this.SERVICE_IDENTIFIER;
+                if (currentServiceId && currentServiceId !== 'default_service') {
+                    query = query.eq('service_id', currentServiceId);
+                }
 
                 if (matchingChatIds !== null) {
                     query = query.in('id', matchingChatIds);
@@ -2628,6 +2632,7 @@ export class HistoryHandler {
                 .from('meta_onboarding')
                 .upsert({
                     project_id: targetProjectId,
+                    service_id: HistoryHandler.SERVICE_IDENTIFIER,
                     waba_id: wabaId,
                     phone_number_id: phoneId,
                     access_token: tokenToSave,
@@ -2635,7 +2640,7 @@ export class HistoryHandler {
                     owner_id: superUserId,
                     status: 'active',
                     updated_at: new Date().toISOString()
-                }, { onConflict: 'project_id' })
+                }, { onConflict: 'project_id,service_id' })
                 .select()
                 .single();
 
@@ -2709,14 +2714,17 @@ export class HistoryHandler {
     /**
      * Obtiene los datos de onboarding configurados
      */
-    static async getMetaOnboardingData(projectId: string | null = null, fallbackToMain: boolean = false) {
+    static async getMetaOnboardingData(projectId: string | null = null, fallbackToMain: boolean = false, serviceId: string | null = null) {
         try {
-            const targetProjectId = projectId || PROJECT_ID;
-            const { data: initialData, error } = await supabase
-                .from('meta_onboarding')
-                .select('*')
-                .eq('project_id', targetProjectId)
-                .maybeSingle();
+            const targetProjectId = projectId || this.PROJECT_IDENTIFIER;
+            const targetServiceId = serviceId || this.SERVICE_IDENTIFIER;
+
+            let query = supabase.from('meta_onboarding').select('*').eq('project_id', targetProjectId);
+            if (targetServiceId && targetServiceId !== 'default_service') {
+                query = query.eq('service_id', targetServiceId);
+            }
+
+            const { data: initialData, error } = await query.maybeSingle();
 
             if (error) throw error;
 
