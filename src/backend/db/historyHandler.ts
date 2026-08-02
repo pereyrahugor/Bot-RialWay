@@ -1852,11 +1852,18 @@ export class HistoryHandler {
             return msgs.reverse();
         }
         try {
-            const { data, error } = await supabase
+            const currentServiceId = process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || this.SERVICE_IDENTIFIER;
+            let query = supabase
                 .from('messages')
                 .select('*')
                 .in('chat_id', [chatId, `${chatId}@s.whatsapp.net`, `${chatId}@c.us`])
-                .eq('project_id', targetProjectId)
+                .eq('project_id', targetProjectId);
+
+            if (currentServiceId && currentServiceId !== 'default_service') {
+                query = query.eq('service_id', currentServiceId);
+            }
+
+            const { data, error } = await query
                 .order('created_at', { ascending: false })
                 .range(offset, offset + limit - 1);
 
@@ -1877,11 +1884,17 @@ export class HistoryHandler {
         }
         if (!supabase) return [];
         try {
-            const { data, error } = await supabase
+            const currentServiceId = process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || this.SERVICE_IDENTIFIER;
+            let query = supabase
                 .from('tags')
                 .select('*')
-                .eq('project_id', currentProjectId)
-                .order('name');
+                .eq('project_id', currentProjectId);
+
+            if (currentServiceId && currentServiceId !== 'default_service') {
+                query = query.eq('service_id', currentServiceId);
+            }
+
+            const { data, error } = await query.order('name');
             if (error) throw error;
             return data || [];
         } catch (err) {
@@ -2256,6 +2269,11 @@ export class HistoryHandler {
                 .from('tickets')
                 .select('*')
                 .eq('project_id', currentProjectId);
+
+            const currentServiceId = process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || this.SERVICE_IDENTIFIER;
+            if (currentServiceId && currentServiceId !== 'default_service') {
+                query = query.eq('service_id', currentServiceId);
+            }
 
             if (ticketId && ticketId !== 'null' && ticketId !== 'undefined' && ticketId !== '') {
                 query = query.eq('id', ticketId);
