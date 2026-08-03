@@ -5,8 +5,8 @@ let _adminPassPromise: Promise<string> | null = null;
 let _adminPassAt = 0;
 const ADMIN_PASS_TTL = 5 * 60 * 1000;
 
-// Cache temporal para usuarios (userId -> { role, projectId, timestamp })
-const _userCache = new Map<string, { role: string; projectId: string | null; timestamp: number }>();
+// Cache temporal para usuarios (userId -> { role, projectId, serviceId, timestamp })
+const _userCache = new Map<string, { role: string; projectId: string | null; serviceId: string | null; timestamp: number }>();
 const USER_ROLE_TTL = 5 * 60 * 1000;
 
 /** Invalida el cache de contraseña del admin — llamar cuando se actualice ADMIN_PASS en la DB */
@@ -25,38 +25,42 @@ async function _getUserRole(userId: string): Promise<string> {
     }
     let role = 'subuser';
     let projectId: string | null = null;
+    let serviceId: string | null = null;
     try {
         const user = await HistoryHandler.getUserById(userId);
         if (user) {
             role = user.role || 'subuser';
             projectId = user.project_id || null;
+            serviceId = user.service_id || null;
         }
     } catch (e) {
         console.error('[AUTH] Error obteniendo rol del usuario:', e);
     }
-    _userCache.set(userId, { role, projectId, timestamp: now });
+    _userCache.set(userId, { role, projectId, serviceId, timestamp: now });
     return role;
 }
 
-async function _getUserInfo(userId: string): Promise<{ role: string; projectId: string | null }> {
+async function _getUserInfo(userId: string): Promise<{ role: string; projectId: string | null; serviceId: string | null }> {
     const now = Date.now();
     const cached = _userCache.get(userId);
     if (cached && (now - cached.timestamp) < USER_ROLE_TTL) {
-        return { role: cached.role, projectId: cached.projectId };
+        return { role: cached.role, projectId: cached.projectId, serviceId: cached.serviceId };
     }
     let role = 'subuser';
     let projectId: string | null = null;
+    let serviceId: string | null = null;
     try {
         const user = await HistoryHandler.getUserById(userId);
         if (user) {
             role = user.role || 'subuser';
             projectId = user.project_id || null;
+            serviceId = user.service_id || null;
         }
     } catch (e) {
         console.error('[AUTH] Error obteniendo info del usuario:', e);
     }
-    _userCache.set(userId, { role, projectId, timestamp: now });
-    return { role, projectId };
+    _userCache.set(userId, { role, projectId, serviceId, timestamp: now });
+    return { role, projectId, serviceId };
 }
 
 async function _fetchAdminPass(): Promise<string> {
@@ -123,6 +127,7 @@ export const backofficeAuth = async (req: any, res: any, next: () => void) => {
     let userId = null;
     let userRole = 'subuser';
     let userProjectId: string | null = null;
+    let userServiceId: string | null = null;
 
     if (!isValid && typeof token === 'string' && token.startsWith('sub:')) {
         userId = token.split(':')[1];
@@ -131,6 +136,7 @@ export const backofficeAuth = async (req: any, res: any, next: () => void) => {
         const userInfo = await _getUserInfo(userId);
         userRole = userInfo.role;
         userProjectId = userInfo.projectId;
+        userServiceId = userInfo.serviceId;
     }
     
     if (token && isValid) {
@@ -138,7 +144,8 @@ export const backofficeAuth = async (req: any, res: any, next: () => void) => {
             isAdmin: !isSubUser || userRole === 'admin',
             isSubUser,
             userId,
-            projectId: userProjectId
+            projectId: userProjectId,
+            serviceId: userServiceId
         };
         return next();
     }

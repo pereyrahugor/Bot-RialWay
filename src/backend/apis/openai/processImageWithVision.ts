@@ -10,12 +10,15 @@ export async function processImageWithVision(
   flowDynamic: any, 
   projectId?: string, 
   assistantKey: string = 'ASSISTANT_ID_IMG',
-  silent: boolean = false
+  silent: boolean = false,
+  serviceId?: string
 ): Promise<string> {
   const { HistoryHandler } = await import("../../db/historyHandler");
   
   // 1. Obtener la clave de imagen de la base de datos (u obtener el fallback principal si no hay)
-  const openaiKey = await HistoryHandler.getSetting('OPENAI_API_KEY_IMG', projectId) || await HistoryHandler.getConfig('OPENAI_API_KEY_IMG') || await HistoryHandler.getConfig('OPENAI_API_KEY');
+  const openaiKey = await HistoryHandler.getSetting('OPENAI_API_KEY_IMG', projectId, serviceId) 
+    || await HistoryHandler.getConfig('OPENAI_API_KEY_IMG', projectId, serviceId) 
+    || await HistoryHandler.getConfig('OPENAI_API_KEY', projectId, serviceId);
   
   if (!openaiKey || openaiKey.includes('*****') || openaiKey.trim() === '') {
     console.warn("⚠️ OPENAI_API_KEY_IMG no detectada. Procesamiento de imágenes desactivado.");
@@ -26,12 +29,12 @@ export async function processImageWithVision(
   }
 
   // 2. Obtener el Assistant ID de la base de datos según la clave (con fallback jerárquico)
-  const assistantId = await HistoryHandler.getSetting(assistantKey, projectId) 
-    || await HistoryHandler.getConfig(assistantKey)
-    || await HistoryHandler.getSetting('ASSISTANT_ID_IMG', projectId)
-    || await HistoryHandler.getConfig('ASSISTANT_ID_IMG')
-    || await HistoryHandler.getSetting('ASSISTANT_ID', projectId)
-    || await HistoryHandler.getConfig('ASSISTANT_ID');
+  const assistantId = await HistoryHandler.getSetting(assistantKey, projectId, serviceId) 
+    || await HistoryHandler.getConfig(assistantKey, projectId, serviceId)
+    || await HistoryHandler.getSetting('ASSISTANT_ID_IMG', projectId, serviceId)
+    || await HistoryHandler.getConfig('ASSISTANT_ID_IMG', projectId, serviceId)
+    || await HistoryHandler.getSetting('ASSISTANT_ID', projectId, serviceId)
+    || await HistoryHandler.getConfig('ASSISTANT_ID', projectId, serviceId);
 
   if (!assistantId) {
     if (!silent) {
@@ -43,8 +46,8 @@ export async function processImageWithVision(
   // 3. Obtener el prompt (instrucciones) específico para sobreescribir si está en la base de datos
   let promptOverride: string | undefined = undefined;
   if (assistantKey === 'ASSISTANT_ID_MP_OCR') {
-    promptOverride = await HistoryHandler.getSetting('ASSISTANT_PROMPT_MP_OCR', projectId) 
-      || await HistoryHandler.getConfig('ASSISTANT_PROMPT_MP_OCR');
+    promptOverride = (await HistoryHandler.getSetting('ASSISTANT_PROMPT_MP_OCR', projectId, serviceId) 
+      || await HistoryHandler.getConfig('ASSISTANT_PROMPT_MP_OCR', projectId, serviceId)) || undefined;
   }
 
   const baseURL = getOpenAIBaseUrl();

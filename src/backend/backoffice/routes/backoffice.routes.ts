@@ -1847,10 +1847,11 @@ export const registerBackofficeRoutes = (app: any) => {
     // --- ONBOARDING META ---
 
     app.get('/api/backoffice/whatsapp/config', backofficeAuth, async (req: any, res: any) => {
-        const projectId = (req.query.projectId as string) || process.env.RAILWAY_PROJECT_ID || "default";
+        const projectId = resolveProjectId(req) || process.env.RAILWAY_PROJECT_ID || "default";
+        const serviceId = resolveServiceId(req);
 
         // Intentar obtener config de la DB para este proyecto
-        const config = await depsHistoryHandler.getMetaOnboardingData(projectId);
+        const config = await depsHistoryHandler.getMetaOnboardingData(projectId, false, serviceId);
 
         // Merge: DB tiene prioridad, pero "PENDING" se considera ausente
         const dbConfig: Record<string, any> = config || {};
@@ -1860,9 +1861,9 @@ export const registerBackofficeRoutes = (app: any) => {
         if (isAbsent(mergedConfig.phone_number_id) && process.env.META_PHONE_ID)     mergedConfig.phone_number_id = process.env.META_PHONE_ID;
         if (isAbsent(mergedConfig.access_token)   && process.env.META_ACCESS_TOKEN) mergedConfig.access_token   = process.env.META_ACCESS_TOKEN;
 
-        const dbAppId = await depsHistoryHandler.getConfig('META_APP_ID', projectId);
-        const dbAppSecret = await depsHistoryHandler.getConfig('META_APP_SECRET', projectId);
-        const dbConfigId = await depsHistoryHandler.getConfig('META_CONFIG_ID', projectId);
+        const dbAppId = await depsHistoryHandler.getConfig('META_APP_ID', projectId, serviceId);
+        const dbAppSecret = await depsHistoryHandler.getConfig('META_APP_SECRET', projectId, serviceId);
+        const dbConfigId = await depsHistoryHandler.getConfig('META_CONFIG_ID', projectId, serviceId);
 
         res.json({
             success: true,
@@ -1870,6 +1871,7 @@ export const registerBackofficeRoutes = (app: any) => {
             appSecret: dbAppSecret || process.env.META_APP_SECRET,
             configId: dbConfigId || process.env.META_CONFIG_ID,
             railwayProjectId: projectId,
+            serviceId: serviceId,
             config: mergedConfig
         });
     });
@@ -1879,7 +1881,8 @@ export const registerBackofficeRoutes = (app: any) => {
         if (!manualToken) return res.status(400).json({ success: false, error: 'Token is required' });
 
         try {
-            const projectId = bodyProjectId || req.query.projectId || process.env.RAILWAY_PROJECT_ID;
+            const projectId = bodyProjectId || resolveProjectId(req) || process.env.RAILWAY_PROJECT_ID;
+            const serviceId = resolveServiceId(req);
             let finalWabaId = wabaId;
             let finalPhoneId = phoneNumberId;
             let extra: any = { syncedBy: 'manual-sync-tool' };
@@ -1887,8 +1890,8 @@ export const registerBackofficeRoutes = (app: any) => {
             if (!finalWabaId || !finalPhoneId) {
                 const { discoverMetaIds } = await import("../../apis/meta/metaDiscovery");
                 console.log(`📡 [META-SYNC-MANUAL] Iniciando descubrimiento manual por falta de IDs...`);
-                const appId = await depsHistoryHandler.getConfig('META_APP_ID', projectId) || process.env.META_APP_ID || '1493670789148486';
-                const appSecret = await depsHistoryHandler.getConfig('META_APP_SECRET', projectId) || process.env.META_APP_SECRET || '362b2ec20c00bdf51336fd165ad47160';
+                const appId = await depsHistoryHandler.getConfig('META_APP_ID', projectId, serviceId) || process.env.META_APP_ID || '1493670789148486';
+                const appSecret = await depsHistoryHandler.getConfig('META_APP_SECRET', projectId, serviceId) || process.env.META_APP_SECRET || '362b2ec20c00bdf51336fd165ad47160';
                 const discovery = await discoverMetaIds(manualToken, null, appId, appSecret);
                 if (!discovery.found || !discovery.data?.phoneNumberId) {
                     return res.status(404).json({ success: false, error: 'No se pudieron encontrar los datos automáticamente. Por favor ingresa los IDs manualmente.' });
@@ -1903,7 +1906,8 @@ export const registerBackofficeRoutes = (app: any) => {
                 finalPhoneId, 
                 manualToken,
                 extra,
-                projectId
+                projectId,
+                serviceId
             );
 
             res.json(result);
@@ -1916,8 +1920,8 @@ export const registerBackofficeRoutes = (app: any) => {
     // --- TEMPLATES & BULK MESSAGING ---
     
     /** Asegura que el proveedor tenga la config más reciente de la DB */
-    const syncMetaProvider = async (projectId: string | null = null) => {
-        const config = await depsHistoryHandler.getMetaOnboardingData(projectId || process.env.RAILWAY_PROJECT_ID);
+    const syncMetaProvider = async (projectId: string | null = null, serviceId: string | null = null) => {
+        const config = await depsHistoryHandler.getMetaOnboardingData(projectId || process.env.RAILWAY_PROJECT_ID, false, serviceId);
         if (config && adapterProvider && adapterProvider.updateConfig) {
             // El objeto config puede venir de la DB (whatsappToken) o de una sincronización previa (access_token)
             const token = config.whatsappToken || config.access_token;
@@ -1942,7 +1946,7 @@ export const registerBackofficeRoutes = (app: any) => {
 
     app.get('/api/backoffice/whatsapp/templates', backofficeAuth, async (req: any, res: any) => {
         try {
-            await syncMetaProvider(resolveProjectId(req));
+            await syncMetaProvider(resolveProjectId(req), resolveServiceId(req));
             if (!adapterProvider) return res.status(503).json({ success: false, error: 'Provider not ready' });
             // Detectar si el provider soporta getTemplates
             const provider = (adapterProvider.constructor.name === 'MetaCloudProvider') ? adapterProvider : groupProvider;
@@ -1959,7 +1963,7 @@ export const registerBackofficeRoutes = (app: any) => {
 
     app.get('/api/backoffice/whatsapp/library-templates', backofficeAuth, async (req: any, res: any) => {
         try {
-            await syncMetaProvider(resolveProjectId(req));
+            await syncMetaProvider(resolveProjectId(req), resolveServiceId(req));
             if (!adapterProvider) return res.status(503).json({ success: false, error: 'Provider not ready' });
             const provider = (adapterProvider.constructor.name === 'MetaCloudProvider') ? adapterProvider : groupProvider;
             if (!provider || typeof provider.getLibraryTemplates !== 'function') {
@@ -1979,7 +1983,7 @@ export const registerBackofficeRoutes = (app: any) => {
 
     app.post('/api/backoffice/whatsapp/templates', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         try {
-            await syncMetaProvider(resolveProjectId(req));
+            await syncMetaProvider(resolveProjectId(req), resolveServiceId(req));
             const { name, category, language, text, examples } = req.body;
             if (!name || !category || !language || !text) {
                 return res.status(400).json({ success: false, error: 'Faltan campos obligatorios para crear la plantilla.' });
@@ -2015,7 +2019,8 @@ export const registerBackofficeRoutes = (app: any) => {
     app.post('/api/backoffice/whatsapp/register-step-1', bodyParser.json(), async (req: any, res: any) => {
         const { phoneNumber, verifiedName, projectId, manualWabaId, manualToken } = req.body;
         try {
-            const config = await depsHistoryHandler.getMetaOnboardingData(projectId, true); // Fallback al main_token habilitado
+            const serviceId = resolveServiceId(req);
+            const config = await depsHistoryHandler.getMetaOnboardingData(projectId, true, serviceId); // Fallback al main_token habilitado
             
             // Si el usuario provee un token manual (Super User), lo priorizamos
             const token = manualToken || config?.access_token;
@@ -2040,7 +2045,8 @@ export const registerBackofficeRoutes = (app: any) => {
                     null, 
                     token, 
                     { activatedVia: 'manual-advanced-form' }, 
-                    projectId
+                    projectId,
+                    serviceId
                 );
             }
 
@@ -2067,7 +2073,8 @@ export const registerBackofficeRoutes = (app: any) => {
     app.post('/api/backoffice/whatsapp/register-step-2', bodyParser.json(), async (req: any, res: any) => {
         const { phoneId, code, projectId } = req.body;
         try {
-            const config = await depsHistoryHandler.getMetaOnboardingData(projectId);
+            const serviceId = resolveServiceId(req);
+            const config = await depsHistoryHandler.getMetaOnboardingData(projectId, false, serviceId);
             const token = config.access_token;
 
             const { verifyPhoneNumberOtp } = await import("../../apis/meta/metaDiscovery");
@@ -2076,7 +2083,7 @@ export const registerBackofficeRoutes = (app: any) => {
             await verifyPhoneNumberOtp(token, phoneId, code);
 
             // 2. Guardar definitivamente en nuestra DB
-            await depsHistoryHandler.saveMetaOnboardingData(config.waba_id, phoneId, token, { activatedVia: 'auto-registration' }, projectId);
+            await depsHistoryHandler.saveMetaOnboardingData(config.waba_id, phoneId, token, { activatedVia: 'auto-registration' }, projectId, serviceId);
 
             res.json({ success: true });
         } catch (error: any) {

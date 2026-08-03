@@ -48,8 +48,9 @@ class MetaCloudProvider extends ProviderClass {
             try {
                 const { HistoryHandler } = await import('../db/historyHandler');
                 const resolvedProjectId = await HistoryHandler.getProjectIdByRecipient(recipientPhoneId);
+                const resolvedServiceId = await HistoryHandler.getServiceIdByRecipient(recipientPhoneId);
                 if (resolvedProjectId) {
-                    const tenantOnboarding = await HistoryHandler.getMetaOnboardingData(resolvedProjectId);
+                    const tenantOnboarding = await HistoryHandler.getMetaOnboardingData(resolvedProjectId, false, resolvedServiceId);
                     if (tenantOnboarding?.whatsappToken) {
                         access_token = tenantOnboarding.whatsappToken;
                     }

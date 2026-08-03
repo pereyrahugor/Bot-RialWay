@@ -267,7 +267,8 @@ const main = async () => {
 
                     // Sincronizar Meta Provider antes de procesar si es necesario
                     const pId = req.query.projectId || (req.body && req.body.projectId) || req.headers['x-project-id'] || (req.auth && req.auth.projectId) || null;
-                    const metaOnboarding = await HistoryHandler.getMetaOnboardingData(pId);
+                    const sId = req.query.serviceId || (req.body && req.body.serviceId) || req.headers['x-service-id'] || (req.auth && req.auth.serviceId) || null;
+                    const metaOnboarding = await HistoryHandler.getMetaOnboardingData(pId, false, sId);
                     if (metaOnboarding && adapterProvider && adapterProvider.updateConfig) {
                         adapterProvider.updateConfig({
                             access_token: metaOnboarding.whatsappToken,

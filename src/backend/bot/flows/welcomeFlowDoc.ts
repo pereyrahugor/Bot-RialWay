@@ -35,6 +35,7 @@ export const welcomeFlowDoc = addKeyword<BaileysProvider, MemoryDB>(EVENTS.DOCUM
         const imagenesGeneradas = [];
         const botPhoneNumber = provider?.globalVendorArgs?.phone_number_id || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
         const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || HistoryHandler.PROJECT_IDENTIFIER;
+        const dynamicServiceId = await HistoryHandler.getServiceIdByRecipient(botPhoneNumber) || HistoryHandler.SERVICE_IDENTIFIER;
         try {
             const mimetype = (ctx?.media?.mimetype || ctx?.message?.documentMessage?.mimetype || ctx?.mimetype || '').toLowerCase();
             const fileName = (ctx?.media?.filename || ctx?.message?.documentMessage?.fileName || '').toLowerCase();
@@ -170,15 +171,15 @@ export const welcomeFlowDoc = addKeyword<BaileysProvider, MemoryDB>(EVENTS.DOCUM
             }
             let receiptProcessed = false;
             
-            const isOcrEnabled = await HistoryHandler.getSetting('MERCADOPAGO_OCR_ENABLED', dynamicProjectId)
-                || await HistoryHandler.getConfig('MERCADOPAGO_OCR_ENABLED');
+            const isOcrEnabled = await HistoryHandler.getSetting('MERCADOPAGO_OCR_ENABLED', dynamicProjectId, dynamicServiceId)
+                || await HistoryHandler.getConfig('MERCADOPAGO_OCR_ENABLED', dynamicProjectId, dynamicServiceId);
 
             if (isOcrEnabled === 'true') {
                 const { verifyReceiptFlow } = await import("../../utils/receiptVerifierMP");
                 
                 for (const imgPath of imagenes) {
                     const imgBuffer = fs.readFileSync(imgPath);
-                    const processed = await verifyReceiptFlow(imgBuffer, flowDynamic, dynamicProjectId, ctx.from, state);
+                    const processed = await verifyReceiptFlow(imgBuffer, flowDynamic, dynamicProjectId, ctx.from, state, dynamicServiceId);
                     if (processed) {
                         receiptProcessed = true;
                         break;
@@ -197,7 +198,7 @@ export const welcomeFlowDoc = addKeyword<BaileysProvider, MemoryDB>(EVENTS.DOCUM
                 const analysisResults: string[] = [];
                 for (const imgPath of imagenes) {
                     const imgBuffer = fs.readFileSync(imgPath);
-                    const pageText = await processImageWithVision(imgBuffer, flowDynamic, dynamicProjectId, 'ASSISTANT_ID_IMG', true);
+                    const pageText = await processImageWithVision(imgBuffer, flowDynamic, dynamicProjectId, 'ASSISTANT_ID_IMG', true, dynamicServiceId);
                     if (pageText) analysisResults.push(pageText);
                 }
 
@@ -215,7 +216,8 @@ export const welcomeFlowDoc = addKeyword<BaileysProvider, MemoryDB>(EVENTS.DOCUM
                         ctx.userId,
                         null,
                         ctx.platform || 'whatsapp',
-                        dynamicProjectId
+                        dynamicProjectId,
+                        dynamicServiceId
                     );
                 } catch (dbErr) {
                     console.error("❌ Error guardando análisis de PDF en BD:", dbErr);

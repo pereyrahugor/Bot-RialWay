@@ -339,7 +339,8 @@ export class LocalHistoryStore {
         contactName: string | null,
         userId: string | null,
         externalId: string | null,
-        projectId: string
+        projectId: string,
+        serviceId?: string
     ): Promise<LocalMessage> {
         // Ensure chat exists
         const chat = await this.getOrCreateChat(chatId, "whatsapp", contactName, userId, projectId);
@@ -357,7 +358,7 @@ export class LocalHistoryStore {
             id: crypto.randomUUID(),
             chat_id: chatId,
             project_id: projectId,
-            service_id: process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || "default_service",
+            service_id: serviceId || process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || "default_service",
             role: role,
             content: content,
             type: type,

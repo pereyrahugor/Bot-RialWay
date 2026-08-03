@@ -764,13 +764,14 @@ export class HistoryHandler {
     /**
      * Obtiene los detalles completos de un chat, incluyendo etiquetas
      */
-    static async getChat(rawChatId: string, forcedProjectId?: string): Promise<any | null> {
+    static async getChat(rawChatId: string, forcedProjectId?: string, forcedServiceId?: string): Promise<any | null> {
         const chatId = this.normalizeId(rawChatId);
         const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+        const currentServiceId = forcedServiceId || this.SERVICE_IDENTIFIER;
         if (process.env.STORAGE_MODE === "local") {
             return LocalHistoryStore.getChat(chatId, currentProjectId);
         }
-        const cacheKey = `${currentProjectId}:${chatId}`;
+        const cacheKey = `${currentProjectId}:${currentServiceId}:${chatId}`;
         const now = Date.now();
 
         // 1. Intentar obtener desde cache en memoria
@@ -780,12 +781,17 @@ export class HistoryHandler {
         }
 
         try {
-            const { data, error } = await supabase
+            let query = supabase
                 .from('chats')
                 .select('*, chat_tags(tag_id, tags(*))')
                 .eq('id', chatId)
-                .eq('project_id', currentProjectId)
-                .maybeSingle();
+                .eq('project_id', currentProjectId);
+
+            if (currentServiceId && currentServiceId !== 'default_service') {
+                query = query.eq('service_id', currentServiceId);
+            }
+
+            const { data, error } = await query.maybeSingle();
 
             if (error) throw error;
             if (data) {
@@ -929,9 +935,10 @@ export class HistoryHandler {
     /**
      * Guarda un mensaje en la base de datos
      */
-    static async saveMessage(rawChatId: string, role: 'user' | 'assistant' | 'system', content: string, type: string = 'text', contactName: string | null = null, userId: string | null = null, external_id: string | null = null, platformType?: 'whatsapp' | 'webchat' | 'instagram' | 'messenger', forcedProjectId?: string) {
+    static async saveMessage(rawChatId: string, role: 'user' | 'assistant' | 'system', content: string, type: string = 'text', contactName: string | null = null, userId: string | null = null, external_id: string | null = null, platformType?: 'whatsapp' | 'webchat' | 'instagram' | 'messenger', forcedProjectId?: string, forcedServiceId?: string) {
         const chatId = this.normalizeId(rawChatId);
         const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+        const currentServiceId = forcedServiceId || this.SERVICE_IDENTIFIER;
 
         // Registrar en cache si es respuesta del bot/operador para evitar falsas intervenciones manuales
         if (role === 'assistant' && content) {
@@ -958,7 +965,7 @@ export class HistoryHandler {
         }
 
         if (process.env.STORAGE_MODE === "local") {
-            const msg = await LocalHistoryStore.saveMessage(chatId, role, content, type, contactName, userId, external_id, currentProjectId);
+            const msg = await LocalHistoryStore.saveMessage(chatId, role, content, type, contactName, userId, external_id, currentProjectId, currentServiceId);
             historyEvents.emit('message_saved', { chatId, projectId: currentProjectId, role, content, type });
             return [msg] as any;
         }
@@ -1044,7 +1051,7 @@ export class HistoryHandler {
             const { error: insertError, data: insertedMsg } = await supabase.from('messages').insert({
                 chat_id: chatId,
                 project_id: currentProjectId,
-                service_id: HistoryHandler.SERVICE_IDENTIFIER,
+                service_id: currentServiceId,
                 role,
                 content,
                 type,
@@ -1184,9 +1191,9 @@ export class HistoryHandler {
         }
     }
 
-    static async getAssignedAgent(rawChatId: string, forcedProjectId?: string): Promise<string> {
+    static async getAssignedAgent(rawChatId: string, forcedProjectId?: string, forcedServiceId?: string): Promise<string> {
         try {
-            const chat = await this.getChat(rawChatId, forcedProjectId);
+            const chat = await this.getChat(rawChatId, forcedProjectId, forcedServiceId);
             return chat && chat.assigned_agent ? chat.assigned_agent : 'asistente1';
         } catch (err) {
             console.error('[HistoryHandler] Error en getAssignedAgent:', err);
@@ -1194,12 +1201,10 @@ export class HistoryHandler {
         }
     }
 
-    /**
-     * Actualiza el asistente asignado al chat
-     */
-    static async setAssignedAgent(rawChatId: string, agentName: string, forcedProjectId?: string) {
+    static async setAssignedAgent(rawChatId: string, agentName: string, forcedProjectId?: string, forcedServiceId?: string) {
         const chatId = this.normalizeId(rawChatId);
         const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+        const currentServiceId = forcedServiceId || this.SERVICE_IDENTIFIER;
 
         // Invalidar cache
         this.invalidateChatCache(chatId, currentProjectId);
@@ -1213,11 +1218,17 @@ export class HistoryHandler {
                 updateObj.last_db_result = null;
             }
 
-            await supabase
+            let query = supabase
                 .from('chats')
                 .update(updateObj)
                 .eq('id', chatId)
                 .eq('project_id', currentProjectId);
+
+            if (currentServiceId && currentServiceId !== 'default_service') {
+                query = query.eq('service_id', currentServiceId);
+            }
+
+            await query;
 
             // Emitir evento para refrescar la UI en tiempo real
             historyEvents.emit('bot_toggled', {
@@ -1607,9 +1618,9 @@ export class HistoryHandler {
     /**
      * Verifica si el bot está habilitado para un usuario
      */
-    static async isBotEnabled(rawChatId: string, projectId?: string | null): Promise<boolean> {
+    static async isBotEnabled(rawChatId: string, projectId?: string | null, serviceId?: string | null): Promise<boolean> {
         try {
-            const chat = await this.getChat(rawChatId, projectId || undefined);
+            const chat = await this.getChat(rawChatId, projectId || undefined, serviceId || undefined);
             return chat ? (chat.bot_enabled !== false) : true;
         } catch (err) {
             console.error('[HistoryHandler] Error en isBotEnabled:', err);
@@ -2634,9 +2645,10 @@ export class HistoryHandler {
     /**
      * Guarda o actualiza los datos de onboarding de Meta
      */
-    static async saveMetaOnboardingData(wabaId: string, phoneId: string, token: string, extra: any = {}, projectId: string | null = null) {
+    static async saveMetaOnboardingData(wabaId: string, phoneId: string, token: string, extra: any = {}, projectId: string | null = null, serviceId: string | null = null) {
         try {
             const targetProjectId = projectId || PROJECT_ID;
+            const targetServiceId = serviceId || HistoryHandler.SERVICE_IDENTIFIER;
 
             // Identificar al Super Usuario (Carlitos Pepe) para asignar propiedad
             let superUserId = null;
@@ -2662,7 +2674,7 @@ export class HistoryHandler {
                 .from('meta_onboarding')
                 .upsert({
                     project_id: targetProjectId,
-                    service_id: HistoryHandler.SERVICE_IDENTIFIER,
+                    service_id: targetServiceId,
                     waba_id: wabaId,
                     phone_number_id: phoneId,
                     access_token: tokenToSave,
@@ -2696,7 +2708,7 @@ export class HistoryHandler {
                         phone_number_id: phoneId,
                         waba_id: wabaId,
                         project_id: targetProjectId,
-                        service_id: HistoryHandler.SERVICE_IDENTIFIER,
+                        service_id: targetServiceId,
                         project_url: projectUrl,
                         updated_at: new Date().toISOString()
                     }, { onConflict: 'phone_number_id' });
@@ -3142,8 +3154,8 @@ export class HistoryHandler {
      * Helper de configuración dinámica (Hot-update).
      * Busca primero en la base de datos (settings) y si no existe, recurre a process.env.
      */
-    static async getConfig(key: string, projectId: string | null = null): Promise<string | null> {
-        const dbValue = await this.getSetting(key, projectId);
+    static async getConfig(key: string, projectId: string | null = null, serviceId: string | null = null): Promise<string | null> {
+        const dbValue = await this.getSetting(key, projectId, serviceId);
         if (dbValue !== null && dbValue !== undefined && dbValue !== '') {
             return dbValue;
         }
@@ -3581,6 +3593,70 @@ export class HistoryHandler {
             return null;
         } catch (err: any) {
             console.error('[HistoryHandler] Error en getProjectIdByRecipient:', err?.message || err);
+            return null;
+        }
+    }
+
+    /**
+     * Resuelve el service_id a partir del número de teléfono o ID del bot.
+     * Útil para ruteo multitenant dinámico.
+     */
+    static async getServiceIdByRecipient(recipientId: string | null): Promise<string | null> {
+        if (!recipientId || !supabase) return null;
+
+        const cleanRecipient = recipientId.trim();
+        const digitsOnly = cleanRecipient.replace(/\D/g, '');
+
+        try {
+            // 1. Buscar por phone_number_id o waba_id en meta_onboarding
+            const { data: metaData } = await supabase
+                .from('meta_onboarding')
+                .select('service_id')
+                .or(`phone_number_id.eq.${cleanRecipient},waba_id.eq.${cleanRecipient}`)
+                .maybeSingle();
+
+            if (metaData?.service_id) return metaData.service_id;
+
+            // 2. Buscar por phone_number_id o waba_id en routing_table
+            const { data: routeData } = await supabase
+                .from('routing_table')
+                .select('service_id')
+                .or(`phone_number_id.eq.${cleanRecipient},waba_id.eq.${cleanRecipient}`)
+                .maybeSingle();
+
+            if (routeData?.service_id) return routeData.service_id;
+
+            // 3. Buscar por coincidencia con display_phone_number en meta_onboarding (limpiando caracteres)
+            if (digitsOnly.length >= 7) {
+                const { data: allOnboarding } = await supabase
+                    .from('meta_onboarding')
+                    .select('service_id, onboarding_data');
+
+                if (allOnboarding && allOnboarding.length > 0) {
+                    for (const row of allOnboarding) {
+                        const displayNum = row.onboarding_data?.display_phone_number;
+                        if (displayNum) {
+                            const cleanDisplay = String(displayNum).replace(/\D/g, '');
+                            if (cleanDisplay && (cleanDisplay.includes(digitsOnly) || digitsOnly.includes(cleanDisplay))) {
+                                return row.service_id;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 4. Fallback: buscar en settings por un valor que coincida (ej: WABA_NUMBER o PHONE_NUMBER_ID)
+            const { data: settingsData } = await supabase
+                .from('settings')
+                .select('service_id')
+                .eq('value', cleanRecipient)
+                .maybeSingle();
+
+            if (settingsData?.service_id) return settingsData.service_id;
+
+            return null;
+        } catch (err: any) {
+            console.error('[HistoryHandler] Error en getServiceIdByRecipient:', err?.message || err);
             return null;
         }
     }

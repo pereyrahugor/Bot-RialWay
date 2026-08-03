@@ -58,6 +58,7 @@ export const welcomeFlowVoice = addKeyword<any, any>(EVENTS.VOICE_NOTE)
         const { supabase } = await import("~/db/historyHandler");
         const botPhoneNumber = provider?.globalVendorArgs?.phone_number_id || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
         const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || HistoryHandler.PROJECT_IDENTIFIER;
+        const dynamicServiceId = await HistoryHandler.getServiceIdByRecipient(botPhoneNumber) || HistoryHandler.SERVICE_IDENTIFIER;
         const chatId = userId;
         const externalId = ctx.key?.id || ctx.payload?.id || ctx.id;
 
@@ -95,7 +96,8 @@ export const welcomeFlowVoice = addKeyword<any, any>(EVENTS.VOICE_NOTE)
                         type: ctx.type || 'voice'
                     })
                     .eq('external_id', externalId)
-                    .eq('project_id', dynamicProjectId);
+                    .eq('project_id', dynamicProjectId)
+                    .eq('service_id', dynamicServiceId);
                 console.log(`💾 Mensaje de voz ${externalId} actualizado en BD con la ruta local: ${webPath}`);
             } catch (dbErr: any) {
                 console.error("❌ Error actualizando ruta de nota de voz en base de datos:", dbErr.message);
@@ -103,8 +105,8 @@ export const welcomeFlowVoice = addKeyword<any, any>(EVENTS.VOICE_NOTE)
         }
 
         // Verificar si el bot está activo para este chat/proyecto
-        const isBotActiveForUser = await HistoryHandler.isBotEnabled(chatId, dynamicProjectId);
-        const isGlobalBotEnabledSetting = await HistoryHandler.getSetting('GLOBAL_BOT_ENABLED', dynamicProjectId);
+        const isBotActiveForUser = await HistoryHandler.isBotEnabled(chatId, dynamicProjectId, dynamicServiceId);
+        const isGlobalBotEnabledSetting = await HistoryHandler.getSetting('GLOBAL_BOT_ENABLED', dynamicProjectId, dynamicServiceId);
         const isGlobalBotEnabled = isGlobalBotEnabledSetting !== 'false';
         const botEnabledForChat = isGlobalBotEnabled && isBotActiveForUser;
 

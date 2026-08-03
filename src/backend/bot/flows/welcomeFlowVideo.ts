@@ -73,6 +73,7 @@ const welcomeFlowVideo = addKeyword(EVENTS.MEDIA).addAction(
       try {
         const botPhoneNumber = provider?.globalVendorArgs?.phone_number_id || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
         const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || HistoryHandler.PROJECT_IDENTIFIER;
+        const dynamicServiceId = await HistoryHandler.getServiceIdByRecipient(botPhoneNumber) || HistoryHandler.SERVICE_IDENTIFIER;
         
         await HistoryHandler.saveMessage(
           userId,
@@ -83,7 +84,8 @@ const welcomeFlowVideo = addKeyword(EVENTS.MEDIA).addAction(
           ctx.userId,
           null,
           ctx.platform || 'whatsapp',
-          dynamicProjectId
+          dynamicProjectId,
+          dynamicServiceId
         );
       } catch (dbErr) {
         console.error("❌ Error guardando log de video en base de datos:", dbErr);

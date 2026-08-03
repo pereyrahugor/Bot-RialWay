@@ -113,14 +113,15 @@ const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
       
       const botPhoneNumber = provider?.globalVendorArgs?.phone_number_id || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
       const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || HistoryHandler.PROJECT_IDENTIFIER;
+      const dynamicServiceId = await HistoryHandler.getServiceIdByRecipient(botPhoneNumber) || HistoryHandler.SERVICE_IDENTIFIER;
 
       // 1. Intentar validar la imagen como comprobante de Mercado Pago (si está habilitado)
-      const isOcrEnabled = await HistoryHandler.getSetting('MERCADOPAGO_OCR_ENABLED', dynamicProjectId)
-          || await HistoryHandler.getConfig('MERCADOPAGO_OCR_ENABLED');
+      const isOcrEnabled = await HistoryHandler.getSetting('MERCADOPAGO_OCR_ENABLED', dynamicProjectId, dynamicServiceId)
+          || await HistoryHandler.getConfig('MERCADOPAGO_OCR_ENABLED', dynamicProjectId, dynamicServiceId);
 
       if (isOcrEnabled === 'true') {
           const { verifyReceiptFlow } = await import("../../utils/receiptVerifierMP");
-          const processed = await verifyReceiptFlow(buffer, flowDynamic, dynamicProjectId, userId, state);
+          const processed = await verifyReceiptFlow(buffer, flowDynamic, dynamicProjectId, userId, state, dynamicServiceId);
           
           if (processed) {
               return; // Manejado exitosamente por la verificación estricta de Mercado Pago
@@ -131,7 +132,7 @@ const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
       }
 
       // Cargar modelo dinámico de la base de datos para análisis convencional
-      let visionModel = await HistoryHandler.getConfig('OPENAI_MODEL') || "gpt-4o-mini";
+      let visionModel = await HistoryHandler.getConfig('OPENAI_MODEL', dynamicProjectId, dynamicServiceId) || "gpt-4o-mini";
       // Si el modelo es de razonamiento (o1, o3, etc.), hacemos fallback a gpt-4o-mini porque no soportan entrada de visión en la llamada estándar
       if (visionModel.startsWith('o1') || visionModel.startsWith('o3')) {
         visionModel = "gpt-4o-mini";
@@ -171,7 +172,8 @@ const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
           ctx.userId,
           null,
           ctx.platform || 'whatsapp',
-          dynamicProjectId
+          dynamicProjectId,
+          dynamicServiceId
         );
       } catch (dbErr) {
         console.error("❌ Error guardando análisis de imagen en base de datos:", dbErr);

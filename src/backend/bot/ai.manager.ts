@@ -123,6 +123,7 @@ export class AiManager {
         // Ruteo Multitenant Dinámico
         const botPhoneNumber = provider?.globalVendorArgs?.phone_number_id || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
         const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || HistoryHandler.PROJECT_IDENTIFIER;
+        const dynamicServiceId = await HistoryHandler.getServiceIdByRecipient(botPhoneNumber) || HistoryHandler.SERVICE_IDENTIFIER;
         
         // Determinar el agente asignado. 
         // Si no hay agente en el 'state' (redeploy/reset), forzamos asistente1
@@ -130,11 +131,11 @@ export class AiManager {
         if (!assigned) {
             console.log(`[AiManager] 🔄 Sesión fresca o redeploy detectado para ${ctx.from}. Forzando asistente1.`);
             assigned = 'asistente1';
-            await HistoryHandler.setAssignedAgent(ctx.from, 'asistente1', dynamicProjectId);
+            await HistoryHandler.setAssignedAgent(ctx.from, 'asistente1', dynamicProjectId, dynamicServiceId);
             await state.update({ assignedAgent: 'asistente1' });
         } else {
             // Si ya hay en state, verificar que coincida con DB (opcional, pero seguro)
-            const dbAssigned = await HistoryHandler.getAssignedAgent(ctx.from, dynamicProjectId);
+            const dbAssigned = await HistoryHandler.getAssignedAgent(ctx.from, dynamicProjectId, dynamicServiceId);
             if (dbAssigned !== assigned) {
                 assigned = dbAssigned;
                 await state.update({ assignedAgent: dbAssigned });
@@ -230,9 +231,9 @@ export class AiManager {
             // await HistoryHandler.saveMessage( ... );
 
             // --- FILTRO DE BOT GLOBAL ---
-            const isGlobalBotEnabledSetting = await HistoryHandler.getSetting('GLOBAL_BOT_ENABLED', dynamicProjectId);
+            const isGlobalBotEnabledSetting = await HistoryHandler.getSetting('GLOBAL_BOT_ENABLED', dynamicProjectId, dynamicServiceId);
             const isGlobalBotEnabled = isGlobalBotEnabledSetting !== 'false';
-            const isBotActiveForUser = await HistoryHandler.isBotEnabled(ctx.from, dynamicProjectId);
+            const isBotActiveForUser = await HistoryHandler.isBotEnabled(ctx.from, dynamicProjectId, dynamicServiceId);
 
             if (!isGlobalBotEnabled || !isBotActiveForUser) {
                 if (!isGlobalBotEnabled) {
@@ -244,7 +245,7 @@ export class AiManager {
             }
 
             // --- FILTRO DE LISTA NEGRA ---
-            const blacklistActive = await HistoryHandler.getSetting('BLACKLIST_ACTIVE', dynamicProjectId);
+            const blacklistActive = await HistoryHandler.getSetting('BLACKLIST_ACTIVE', dynamicProjectId, dynamicServiceId);
             if (blacklistActive === 'true') {
                 const { supabase: supa } = await import('../db/historyHandler');
                 if (supa) {
@@ -258,7 +259,7 @@ export class AiManager {
                         console.log(`[AiManager] ⛔ Contacto ${ctx.from} en lista negra (sin_bot=${blEntry.sin_bot}, bloqueado_crm=${blEntry.bloqueado_crm}). Activando intervención humana permanente.`);
                         // Asegurar que el chat esté en modo intervención humana (bot_enabled=false)
                         // El worker de inactividad lo excluye, por lo que permanecerá así indefinidamente.
-                        const currentBotState = await HistoryHandler.isBotEnabled(ctx.from, dynamicProjectId);
+                        const currentBotState = await HistoryHandler.isBotEnabled(ctx.from, dynamicProjectId, dynamicServiceId);
                         if (currentBotState) {
                             await HistoryHandler.toggleBot(ctx.from, false, dynamicProjectId);
                         }

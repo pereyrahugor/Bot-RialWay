@@ -106,6 +106,7 @@ export const locationFlow = addKeyword(EVENTS.LOCATION).addAction(
                     try {
                         const botPhoneNumber = ctx.provider?.globalVendorArgs?.phone_number_id || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
                         const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || HistoryHandler.PROJECT_IDENTIFIER;
+                        const dynamicServiceId = await HistoryHandler.getServiceIdByRecipient(botPhoneNumber) || HistoryHandler.SERVICE_IDENTIFIER;
                         await HistoryHandler.saveMessage(
                             ctx.from,
                             'user',
@@ -115,7 +116,8 @@ export const locationFlow = addKeyword(EVENTS.LOCATION).addAction(
                             ctx.userId,
                             null,
                             ctx.platform || 'whatsapp',
-                            dynamicProjectId
+                            dynamicProjectId,
+                            dynamicServiceId
                         );
                     } catch (dbErr) {
                         console.error("❌ Error guardando ubicación en base de datos:", dbErr);
