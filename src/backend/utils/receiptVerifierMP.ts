@@ -12,7 +12,8 @@ export async function verifyReceiptFlow(
     imgBuffer: Buffer,
     flowDynamic: any,
     projectId: string,
-    userId: string
+    userId: string,
+    state?: any
 ): Promise<boolean> {
     try {
         // 1. Ejecutar el asistente general para descripción
@@ -155,10 +156,17 @@ export async function verifyReceiptFlow(
                     key: { remoteJid: userId, fromMe: false }
                 };
 
+                const validState = (state && typeof state.get === 'function') ? state : {
+                    get: (key?: string) => (key ? undefined : {}),
+                    update: async () => {},
+                    clear: async () => {},
+                    getMyState: () => ({})
+                };
+
                 if (!userQueues.has(userId)) {
                     userQueues.set(userId, []);
                 }
-                userQueues.get(userId)!.push({ ctx: mockCtx, flowDynamic, state: {}, provider: null, gotoFlow: null });
+                userQueues.get(userId)!.push({ ctx: mockCtx, flowDynamic, state: validState, provider: null, gotoFlow: null });
 
                 if (!userLocks.get(userId) && userQueues.get(userId)!.length === 1) {
                     await handleQueue(userId);

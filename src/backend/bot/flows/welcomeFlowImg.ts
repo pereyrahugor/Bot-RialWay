@@ -120,7 +120,7 @@ const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
 
       if (isOcrEnabled === 'true') {
           const { verifyReceiptFlow } = await import("../../utils/receiptVerifierMP");
-          const processed = await verifyReceiptFlow(buffer, flowDynamic, dynamicProjectId, userId);
+          const processed = await verifyReceiptFlow(buffer, flowDynamic, dynamicProjectId, userId, state);
           
           if (processed) {
               return; // Manejado exitosamente por la verificación estricta de Mercado Pago

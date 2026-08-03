@@ -178,7 +178,7 @@ export const welcomeFlowDoc = addKeyword<BaileysProvider, MemoryDB>(EVENTS.DOCUM
                 
                 for (const imgPath of imagenes) {
                     const imgBuffer = fs.readFileSync(imgPath);
-                    const processed = await verifyReceiptFlow(imgBuffer, flowDynamic, dynamicProjectId, ctx.from);
+                    const processed = await verifyReceiptFlow(imgBuffer, flowDynamic, dynamicProjectId, ctx.from, state);
                     if (processed) {
                         receiptProcessed = true;
                         break;
