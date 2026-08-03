@@ -1721,7 +1721,7 @@ export class HistoryHandler {
                 query = query.eq('project_id', currentProjectId);
                 const currentServiceId = process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || this.SERVICE_IDENTIFIER;
                 if (currentServiceId && currentServiceId !== 'default_service') {
-                    query = query.eq('service_id', currentServiceId);
+                    query = query.or(`service_id.eq.${currentServiceId},service_id.eq.default_service,service_id.is.null`);
                 }
 
                 if (matchingChatIds !== null) {
