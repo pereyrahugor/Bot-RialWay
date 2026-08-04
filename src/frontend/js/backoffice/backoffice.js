@@ -2270,7 +2270,9 @@ window.realToggleMeta = toggleMetaPanel;
 
 function launchMetaOnboarding() {
     const activeToken = localStorage.getItem('system_config_token') || localStorage.getItem('backoffice_token');
-    fetch('/api/backoffice/whatsapp/config?token=' + activeToken)
+    const sId = (typeof window !== 'undefined' && window.railwayServiceId) ? window.railwayServiceId : '';
+    const pId = (typeof window !== 'undefined' && window.railwayProjectId) ? window.railwayProjectId : '';
+    fetch(`/api/backoffice/whatsapp/config?token=${activeToken}&serviceId=${sId}&projectId=${pId}`)
         .then(res => res.json())
         .then(data => {
             if (!data.appId || !data.railwayProjectId) {
@@ -2447,7 +2449,9 @@ window.isMetaConnected = false;
 
 async function checkMetaStatus() {
     try {
-        const res = await fetch(`/api/backoffice/whatsapp/config?token=${token}`);
+        const sId = (typeof window !== 'undefined' && window.railwayServiceId) ? window.railwayServiceId : '';
+        const pId = (typeof window !== 'undefined' && window.railwayProjectId) ? window.railwayProjectId : '';
+        const res = await fetch(`/api/backoffice/whatsapp/config?token=${token}&serviceId=${sId}&projectId=${pId}`);
         const data = await res.json();
         console.log('📡 [META-STATUS] Configuración recibida:', data);
 

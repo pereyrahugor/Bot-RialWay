@@ -219,7 +219,9 @@ window.metaView = (() => {
     // ── Verificacion de conexion ──────────────────────────────────────────
     async function checkMetaConnection(silent = false) {
         try {
-            const res  = await fetch(`/api/backoffice/whatsapp/config?token=${_token}`);
+            const sId = (typeof window !== 'undefined' && window.railwayServiceId) ? window.railwayServiceId : '';
+            const pId = (typeof window !== 'undefined' && window.railwayProjectId) ? window.railwayProjectId : '';
+            const res  = await fetch(`/api/backoffice/whatsapp/config?token=${_token}&serviceId=${sId}&projectId=${pId}`);
             const data = await res.json();
             _metaConfig = (data && data.config) || {};
             const validId = (v) => v && v !== 'PENDING';
@@ -652,7 +654,9 @@ window.metaView = (() => {
         const statusEl = document.getElementById('meta-onboard-status');
         if (statusEl) statusEl.style.display = 'block';
 
-        fetch('/api/backoffice/whatsapp/config?token=' + _token)
+        const sId = (typeof window !== 'undefined' && window.railwayServiceId) ? window.railwayServiceId : '';
+        const pId = (typeof window !== 'undefined' && window.railwayProjectId) ? window.railwayProjectId : '';
+        fetch(`/api/backoffice/whatsapp/config?token=${_token}&serviceId=${sId}&projectId=${pId}`)
             .then(res => res.json())
             .then(data => {
                 if (!data.appId) {
