@@ -188,9 +188,10 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
         const history = await HistoryHandler.getMessages(userId, historyLimit, 0, projectId);
         console.log(`[openaiHelper] 📜 Historial recuperado para ${userId}: ${history.length} mensajes (Limit: ${historyLimit}) | Project: ${projectId}`);
 
-        // Cargar datos del chat para obtener el último resultado de BD
+        // Cargar datos del chat para obtener el último resultado de BD y service_id
         const chatData = await HistoryHandler.getChat(userId, projectId ?? undefined);
         const lastDbResult = chatData?.last_db_result;
+        const serviceId = chatData?.service_id || null;
 
         // 2. Preparar el prompt del sistema
         // Intentar obtener un prompt específico para este asistente usando su nombre lógico (asistente1, asistente2...)
@@ -200,17 +201,17 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
             promptKey = `ASSISTANT_PROMPT_${num}`;
         }
 
-        let systemPrompt = await HistoryHandler.getSetting(promptKey, projectId);
+        let systemPrompt = await HistoryHandler.getSetting(promptKey, projectId, serviceId);
 
         // Fallback: si no hay por nombre lógico, intentar por Assistant ID (legacy)
         if (!systemPrompt) {
-            systemPrompt = await HistoryHandler.getSetting(`ASSISTANT_PROMPT_${assistantId}`, projectId);
+            systemPrompt = await HistoryHandler.getSetting(`ASSISTANT_PROMPT_${assistantId}`, projectId, serviceId);
         }
 
         // Segundo Fallback: usar el genérico 'ASSISTANT_PROMPT'
         if (!systemPrompt) {
-            const dbPrompt = await HistoryHandler.getSetting('ASSISTANT_PROMPT', projectId);
-            systemPrompt = dbPrompt || await HistoryHandler.getConfig('ASSISTANT_PROMPT') || "Eres un asistente servicial.";
+            const dbPrompt = await HistoryHandler.getSetting('ASSISTANT_PROMPT', projectId, serviceId);
+            systemPrompt = dbPrompt || await HistoryHandler.getConfig('ASSISTANT_PROMPT', projectId, serviceId) || "Eres un asistente servicial.";
         }
 
         // Filtrar mensajes válidos y formatear para OpenAI

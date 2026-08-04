@@ -3054,8 +3054,16 @@ export class HistoryHandler {
     static async getSetting(key: string, projectId: string | null = null, serviceId: string | null = null): Promise<string | null> {
         if (!supabase) return null;
         const targetProjectId = projectId || HistoryHandler.PROJECT_IDENTIFIER;
-        const targetServiceId = serviceId || process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || HistoryHandler.SERVICE_IDENTIFIER;
-        const cacheKey = `${targetProjectId}:${targetServiceId}:${key}`;
+        const rawServiceId = serviceId || process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || HistoryHandler.SERVICE_IDENTIFIER;
+
+        const isGenericService = !rawServiceId || 
+                                 rawServiceId === 'default_service' || 
+                                 rawServiceId === 'generic' || 
+                                 rawServiceId === 'null' || 
+                                 rawServiceId.trim() === '';
+
+        const targetServiceId = isGenericService ? null : rawServiceId;
+        const cacheKey = `${targetProjectId}:${targetServiceId || 'default'}:${key}`;
         const now = Date.now();
 
         // 1. Intentar obtener desde cache en memoria (excepto credenciales para garantizar realtime)
@@ -3072,7 +3080,7 @@ export class HistoryHandler {
             .eq('project_id', targetProjectId)
             .eq('key', key);
 
-        if (targetServiceId && targetServiceId !== 'default_service') {
+        if (targetServiceId) {
             query = query.eq('service_id', targetServiceId);
         }
 
@@ -3083,13 +3091,15 @@ export class HistoryHandler {
         }
 
         let data = mainData;
-        if (!data && targetServiceId && targetServiceId !== 'default_service') {
+
+        // Fallback: Si no lo encontró con service_id específico, buscar solo por project_id
+        if (!data && targetServiceId) {
             const fallbackRes = await supabase
                 .from('settings')
                 .select('value')
                 .eq('project_id', targetProjectId)
-                .eq('service_id', 'default_service')
                 .eq('key', key)
+                .limit(1)
                 .maybeSingle();
             if (fallbackRes.data) {
                 data = fallbackRes.data;

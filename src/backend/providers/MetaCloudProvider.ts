@@ -990,7 +990,7 @@ class MetaCloudProvider extends ProviderClass {
                     if (messages && Array.isArray(messages)) {
 
                         // Filtro de número destino para asegurar que es para nosotros
-                        // En entorno multitenant, el phone_number_id del webhook puede corresponder a cualquiera de nuestros tenants en la DB
+                        // En entorno multitenant cada instancia de Railway debe procesar ÚNICAMENTE sus propios mensajes
                         let isValidPhoneId = false;
                         if (value.metadata?.phone_number_id) {
                             const incomingPhoneId = String(value.metadata.phone_number_id);
@@ -999,14 +999,21 @@ class MetaCloudProvider extends ProviderClass {
                             } else {
                                 const { HistoryHandler } = await import('../db/historyHandler');
                                 const resolvedProject = await HistoryHandler.getProjectIdByRecipient(incomingPhoneId);
-                                if (resolvedProject) {
+                                const resolvedService = await HistoryHandler.getServiceIdByRecipient(incomingPhoneId);
+                                const currentProject = HistoryHandler.PROJECT_IDENTIFIER;
+                                const currentService = HistoryHandler.SERVICE_IDENTIFIER;
+
+                                if (
+                                    (resolvedProject && currentProject && resolvedProject === currentProject) ||
+                                    (resolvedService && currentService && resolvedService === currentService)
+                                ) {
                                     isValidPhoneId = true;
                                 }
                             }
                         }
 
-                        if (!isValidPhoneId && phone_number_id && value.metadata?.phone_number_id && value.metadata?.phone_number_id !== String(phone_number_id)) {
-                            console.log(`⚠️ [MetaCloudProvider] Ignorando mensaje (ID mismatch y no registrado: ${value.metadata?.phone_number_id} != ${phone_number_id})`);
+                        if (!isValidPhoneId) {
+                            console.log(`⚠️ [MetaCloudProvider] Ignorando mensaje para Phone ID ${value.metadata?.phone_number_id}: no pertenece a esta instancia`);
                             continue;
                         }
 

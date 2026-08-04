@@ -4124,11 +4124,13 @@ Hemos recibido tu pago con éxito.
             const envKey = index === '1' ? 'ASSISTANT_ID' : `ASSISTANT_${index}`;
             
             const projectId = resolveProjectId(req);
-            const prompt = await depsHistoryHandler.getSetting(settingKey, projectId);
+            const serviceId = resolveServiceId(req);
+            const prompt = await depsHistoryHandler.getSetting(settingKey, projectId, serviceId);
+            const assistantId = await depsHistoryHandler.getConfig(envKey, projectId, serviceId) || process.env[envKey] || '';
             res.json({ 
                 success: true, 
                 prompt: prompt || '',
-                assistantId: process.env[envKey] || ''
+                assistantId: assistantId
             });
         } catch (error: any) {
             res.status(500).json({ success: false, error: error.message });
@@ -4198,11 +4200,12 @@ Hemos recibido tu pago con éxito.
             const envKey = idx === '1' ? 'ASSISTANT_ID' : `ASSISTANT_${idx}`;
             
             const projectId = resolveProjectId(req);
+            const serviceId = resolveServiceId(req);
             // Prioridad: 1. DB, 2. Env
-            const assistantId = await depsHistoryHandler.getConfig(envKey, projectId) || process.env[envKey];
+            const assistantId = await depsHistoryHandler.getConfig(envKey, projectId, serviceId) || process.env[envKey];
 
             console.log(`📡 [HOT-UPDATE] Actualizando prompt para Asistente ${idx} en base de datos para proyecto ${projectId}...`);
-            await depsHistoryHandler.saveSetting(settingKey, prompt, projectId);
+            await depsHistoryHandler.saveSetting(settingKey, prompt, projectId, serviceId);
 
             // Sincronizar hacia OpenAI (Empujar cambio al dashboard de OpenAI)
             const { getOpenAI } = await import("../../apis/openai/openaiHelper");
