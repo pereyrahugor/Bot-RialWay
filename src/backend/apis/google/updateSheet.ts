@@ -197,9 +197,16 @@ async function processSheetById(SHEET_ID: string, options: { forceRecreate?: boo
             return null;
         }
         // Validar headers
-        const headers = fullRows[0].map((h: string) => (h || "").trim());
-        const validHeaders = headers.filter(h => h.length > 0);
-        if (validHeaders.length === 0) {
+        const rawHeaders = fullRows[0].map((h: string) => (h || "").trim());
+        const activeColumns = rawHeaders
+            .map((h, idx) => ({
+                original: h,
+                sanitized: sanitizeColumnName(h),
+                idx
+            }))
+            .filter(col => col.sanitized.length > 0);
+
+        if (activeColumns.length === 0) {
             console.warn("⚠️ La primera fila no contiene encabezados válidos.");
             return null;
         }
@@ -209,9 +216,9 @@ async function processSheetById(SHEET_ID: string, options: { forceRecreate?: boo
             .filter(row => row && row.length > 0 && row.some(cell => (cell || "").trim() !== ""))
             .map((row) => {
                 const obj: Record<string, any> = {};
-                headers.forEach((header, idx) => {
+                activeColumns.forEach(col => {
                     // Obtener valor crudo. Google Sheets ya devuelve números como números si el formato de celda es automático.
-                    let cellValue = row[idx];
+                    let cellValue = row[col.idx];
                     
                     if (cellValue === undefined || cellValue === null) {
                         cellValue = "";
@@ -219,10 +226,10 @@ async function processSheetById(SHEET_ID: string, options: { forceRecreate?: boo
 
                     // Si es string, solo hacemos trim.
                     if (typeof cellValue === "string") {
-                         obj[header] = cellValue.trim();
+                         obj[col.original] = cellValue.trim();
                     } else {
                          // Si es número u otro tipo, lo guardamos tal cual
-                         obj[header] = cellValue;
+                         obj[col.original] = cellValue;
                     }
                 });
                 return obj;
@@ -241,7 +248,7 @@ async function processSheetById(SHEET_ID: string, options: { forceRecreate?: boo
 
         // --- SUPABASE INTEGRATION START ---
         if (supabase) {
-            const headersSanitized = headers.map(h => sanitizeColumnName(h));
+            const headersSanitized = activeColumns.map(col => col.sanitized);
             
             if (options.forceRecreate) {
                 console.log(`⚠️ Forzando recreación de tabla '${tableName}' (DROP TABLE)...`);
@@ -260,8 +267,8 @@ async function processSheetById(SHEET_ID: string, options: { forceRecreate?: boo
                 // Map data to sanitized keys
                 const supabaseData = formattedData.map(row => {
                     const newRow: any = {};
-                    Object.keys(row).forEach(key => {
-                        newRow[sanitizeColumnName(key)] = row[key];
+                    activeColumns.forEach(col => {
+                        newRow[col.sanitized] = row[col.original];
                     });
                     return newRow;
                 });
