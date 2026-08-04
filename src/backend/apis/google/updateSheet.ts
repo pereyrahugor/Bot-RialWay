@@ -8,6 +8,7 @@ import { createClient } from "@supabase/supabase-js";
 
 import { vault } from "../../db/vault";
 import { autoUpdateBotAbilities } from "../openai/toolGenerator";
+import { HistoryHandler } from "../../db/historyHandler.js";
 
 dotenv.config();
 
@@ -29,8 +30,9 @@ const getSheetsClient = () => {
     return google.sheets({ version: "v4", auth });
 };
 
-const getOpenAIClient = () => {
-    const key = process.env.OPENAI_API_KEY;
+const getOpenAIClient = async (projectId?: string, serviceId?: string) => {
+    let key = projectId ? await HistoryHandler.getConfig('OPENAI_API_KEY', projectId, serviceId) : null;
+    if (!key) key = process.env.OPENAI_API_KEY;
     const baseURL = getOpenAIBaseUrl();
     return key ? new OpenAI({ 
         apiKey: key,
@@ -40,36 +42,95 @@ const getOpenAIClient = () => {
 
 
 // Función principal para procesar todos los sheets
-export async function updateAllSheets(options: { forceRecreate?: boolean } = {}) {
-    const SHEET_IDS = (process.env.SHEET_ID_UPDATE || "")
-        .split(",")
-        .map(id => id.trim())
-        .filter(Boolean);
-
-    const sheets = getSheetsClient();
-    const tableNames: string[] = [];
-    for (const SHEET_ID of SHEET_IDS) {
-        if (SHEET_ID === "default" || SHEET_ID === "PENDING" || SHEET_ID.startsWith("default_")) {
-            console.log(`ℹ️ [GoogleSheets] Saltando ID de hoja marcador de posición: "${SHEET_ID}"`);
-            continue;
-        }
-
-        const tableName = await processSheetById(SHEET_ID, options);
-
-        if (tableName) {
-            tableNames.push(tableName);
-        }
+export async function updateAllSheets(options: { forceRecreate?: boolean; projectId?: string; serviceId?: string } = {}) {
+    if (!supabase) {
+        console.log("⚠️ [GoogleSheets] Supabase no disponible para actualizar sheets.");
+        return;
     }
 
-    // Al finalizar, actualizar automáticamente las habilidades del bot
-    if (tableNames.length > 0) {
-        await autoUpdateBotAbilities(tableNames);
+    try {
+        const currentProjectId = options.projectId || process.env.PROJECT_ID || process.env.RAILWAY_PROJECT_ID || HistoryHandler.PROJECT_IDENTIFIER;
+        const currentServiceId = options.serviceId || process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || HistoryHandler.SERVICE_IDENTIFIER;
+
+        let query = supabase.from("settings").select("project_id, service_id, value").eq("key", "SHEET_ID_UPDATE");
+
+        if (currentProjectId && !['default_project', 'default', 'test-hugo-local', 'local-dev'].includes(currentProjectId)) {
+            console.log(`📌 [GoogleSheets] Sincronizando sheets para el proyecto activo: ${currentProjectId}`);
+            query = query.eq("project_id", currentProjectId);
+            
+            if (currentServiceId && !['default_service', 'generic', 'null'].includes(currentServiceId)) {
+                query = query.eq("service_id", currentServiceId);
+            }
+        }
+
+        const { data: sheetSettings, error } = await query;
+        if (error) throw error;
+
+        const sheetTasks: Array<{ projectId: string; serviceId: string | null; sheetId: string }> = [];
+
+        if (sheetSettings && sheetSettings.length > 0) {
+            for (const s of sheetSettings) {
+                const ids = (s.value || "").split(",").map(id => id.trim()).filter(Boolean);
+                for (const sheetId of ids) {
+                    if (sheetId && sheetId !== "default" && sheetId !== "PENDING" && !sheetId.startsWith("default_")) {
+                        sheetTasks.push({ projectId: s.project_id, serviceId: s.service_id, sheetId });
+                    }
+                }
+            }
+        }
+
+        // Fallback env
+        const envSheet = process.env.SHEET_ID_UPDATE || "";
+        if (envSheet && envSheet !== "default" && envSheet !== "PENDING") {
+            const ids = envSheet.split(",").map(id => id.trim()).filter(Boolean);
+            for (const sheetId of ids) {
+                if (sheetId && !sheetTasks.some(t => t.sheetId === sheetId)) {
+                    sheetTasks.push({ projectId: currentProjectId, serviceId: currentServiceId || null, sheetId });
+                }
+            }
+        }
+
+        const tableNames: string[] = [];
+        for (const task of sheetTasks) {
+            const tableName = await processSheetById(task.sheetId, task.projectId, task.serviceId || undefined, options);
+            if (tableName) {
+                tableNames.push(tableName);
+            }
+        }
+
+        // Al finalizar, actualizar automáticamente las habilidades del bot agrupando por proyecto/servicio
+        if (tableNames.length > 0) {
+            const tasksByProject = new Map<string, { serviceId?: string, tables: string[] }>();
+            for (let i = 0; i < sheetTasks.length; i++) {
+                const task = sheetTasks[i];
+                const tableName = tableNames[i];
+                if (tableName) {
+                    const key = `${task.projectId}:${task.serviceId || 'default'}`;
+                    if (!tasksByProject.has(key)) {
+                        tasksByProject.set(key, { serviceId: task.serviceId || undefined, tables: [] });
+                    }
+                    tasksByProject.get(key)!.tables.push(tableName);
+                }
+            }
+
+            for (const [projKey, val] of tasksByProject.entries()) {
+                const [projId] = projKey.split(':');
+                await autoUpdateBotAbilities(val.tables, projId, val.serviceId);
+            }
+        }
+    } catch (err: any) {
+        console.error("❌ [GoogleSheets] Error en updateAllSheets:", err?.message || err);
     }
 }
 
-// Helper function to sanitize valid table name
-const sanitizeTableName = (name: string) => {
-    return name.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '');
+// Helper function to sanitize valid table name with project prefix
+const sanitizeTableName = (name: string, projectId?: string) => {
+    const baseName = name.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '');
+    if (!projectId || ['default_project', 'default', 'test-hugo-local', 'local-dev'].includes(projectId)) {
+        return baseName;
+    }
+    const cleanProj = projectId.replace(/[^a-zA-Z0-9]/g, '').substring(0, 8);
+    return `p_${cleanProj}_${baseName}`;
 };
 
 // Helper function to sanitize column names
@@ -102,26 +163,25 @@ async function ensureTableExists(tableName: string, headers: string[]) {
             GRANT ALL ON TABLE ${tableName} TO authenticated;
             GRANT SELECT ON TABLE ${tableName} TO anon;
         `;
-
         
-        const rpc = await supabase.rpc('exec_sql', { query: createSql });
-        if (rpc.error) {
-            console.error(`❌ Error al intentar crear la tabla '${tableName}'. Asegúrate de tener una función RPC 'exec_sql' en Supabase.`);
-            console.error("RPC Error Details:", JSON.stringify(rpc.error, null, 2));
-            console.error("Query intentada:", createSql);
+        const res = await supabase.rpc('exec_sql', { query: createSql });
+        
+        if (res.error) {
+            console.error(`❌ Error creando tabla '${tableName}':`, res.error);
             return false;
         }
-        console.log(`✅ Tabla '${tableName}' creada exitosamente.`);
+        console.log(`✅ Tabla '${tableName}' creada con éxito.`);
         
-        // Esperar a que el caché del esquema se actualice (PostgREST puede tardar unos segundos)
-        console.log(`⏳ Esperando a que Supabase refresque el caché del esquema para '${tableName}'...`);
-        for (let i = 0; i < 10; i++) {
-            await new Promise(r => setTimeout(r, 2000));
+        // Wait 1 second and check again to avoid immediate cache sync issues
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        for (let i = 0; i < 3; i++) {
             const recheck = await supabase.from(tableName).select('*').limit(1);
             if (!recheck.error) {
-                console.log(`✅ Tabla '${tableName}' verificada y visible para la API.`);
+                console.log(`✅ [Supabase] Confirmada existencia de la tabla '${tableName}' tras ${i+1} intentos.`);
                 return true;
             }
+            await new Promise(resolve => setTimeout(resolve, 1000));
         }
         console.warn(`⚠️ La tabla '${tableName}' fue creada pero la API aún no la reconoce. La inserción podría fallar.`);
         return true;
@@ -133,7 +193,7 @@ async function ensureTableExists(tableName: string, headers: string[]) {
 }
 
 // Procesa un sheet por ID, obtiene el nombre real y ejecuta la lógica
-async function processSheetById(SHEET_ID: string, options: { forceRecreate?: boolean } = {}) {
+async function processSheetById(SHEET_ID: string, projectId: string, serviceId: string | undefined, options: { forceRecreate?: boolean } = {}) {
     const sheets = getSheetsClient();
     try {
         // Obtener metadatos para el nombre real de la hoja principal
@@ -141,7 +201,7 @@ async function processSheetById(SHEET_ID: string, options: { forceRecreate?: boo
 
         const sheetTitle = meta.data.sheets?.[0]?.properties?.title || "Sheet1";
         const SHEET_NAME = sheetTitle;
-        const tableName = sanitizeTableName(SHEET_NAME);
+        const tableName = sanitizeTableName(SHEET_NAME, projectId);
         const TXT_PATH = path.join("temp", `${SHEET_NAME}.json`);
 
         console.log(`📌 Obteniendo datos de Google Sheets: ${SHEET_ID} (${SHEET_NAME})`);
@@ -325,7 +385,7 @@ async function processSheetById(SHEET_ID: string, options: { forceRecreate?: boo
         // --- SUPABASE INTEGRATION END ---
 
         // Enviar el archivo de texto al vector store
-        const success = await uploadDataToAssistant(TXT_PATH, SHEET_ID);
+        const success = await uploadDataToAssistant(TXT_PATH, SHEET_ID, projectId, serviceId);
         if (!success) {
             console.error("❌ Error al enviar los datos al vector store.");
         }
@@ -338,8 +398,8 @@ async function processSheetById(SHEET_ID: string, options: { forceRecreate?: boo
 }
 
 // Función para subir datos al vector store de OpenAI
-export async function uploadDataToAssistant(filePath: string, stateId: string) {
-    const openai = getOpenAIClient();
+export async function uploadDataToAssistant(filePath: string, stateId: string, projectId?: string, serviceId?: string) {
+    const openai = await getOpenAIClient(projectId, serviceId);
     if (!openai) {
         console.warn("⚠️ IA Desactivada: Saltando subida al vector store.");
         return true; // Continuar aunque no haya IA configurada
@@ -349,7 +409,7 @@ export async function uploadDataToAssistant(filePath: string, stateId: string) {
             console.log("📂 Utilizando archivo existente con ID:", currentFileId);
             return true;
         }
-        await deleteOldFiles(filePath);
+        await deleteOldFiles(filePath, projectId, serviceId);
         console.log("🚀 Subiendo archivo al vector store...");
         const fileStream = fs.createReadStream(filePath);
         const response = await openai.files.create({
@@ -358,7 +418,7 @@ export async function uploadDataToAssistant(filePath: string, stateId: string) {
         });
         currentFileId = response.id;
         console.log(`📂 Archivo subido con ID: ${currentFileId}`);
-        const success = await attachFileToVectorStore(currentFileId);
+        const success = await attachFileToVectorStore(currentFileId, projectId, serviceId);
         if (!success) {
             return false;
         }
@@ -372,9 +432,10 @@ export async function uploadDataToAssistant(filePath: string, stateId: string) {
     }
 }
 
-async function attachFileToVectorStore(fileId: string) {
-    const VECTOR_STORE_ID = process.env.VECTOR_STORE_ID || "";
-    const openai = getOpenAIClient();
+async function attachFileToVectorStore(fileId: string, projectId?: string, serviceId?: string) {
+    let VECTOR_STORE_ID = projectId ? await HistoryHandler.getSetting('VECTOR_STORE_ID', projectId, serviceId) : null;
+    if (!VECTOR_STORE_ID) VECTOR_STORE_ID = process.env.VECTOR_STORE_ID || "";
+    const openai = await getOpenAIClient(projectId, serviceId);
 
     if (!openai) return true;
     try {
@@ -400,8 +461,8 @@ async function attachFileToVectorStore(fileId: string) {
     }
 }
 
-async function deleteOldFiles(filePath: string) {
-    const openai = getOpenAIClient();
+async function deleteOldFiles(filePath: string, projectId?: string, serviceId?: string) {
+    const openai = await getOpenAIClient(projectId, serviceId);
     if (!openai) return;
     try {
         const fileName = path.basename(filePath);

@@ -8,8 +8,8 @@ import { vault } from "../../db/vault";
  * Genera automáticamente la definición de herramientas (Tools) y actualiza la configuración del bot
  * basándose en las tablas disponibles en la base de datos.
  */
-export async function autoUpdateBotAbilities(tableNames: string[]) {
-    console.log("🤖 [ToolGenerator] Iniciando actualización automática de habilidades...");
+export async function autoUpdateBotAbilities(tableNames: string[], projectId: string, serviceId?: string) {
+    console.log(`🤖 [ToolGenerator] Iniciando actualización automática de habilidades para proyecto ${projectId}...`);
 
     if (!tableNames || tableNames.length === 0) {
         console.warn("⚠️ [ToolGenerator] No se proporcionaron nombres de tablas. Saltando.");
@@ -20,8 +20,9 @@ export async function autoUpdateBotAbilities(tableNames: string[]) {
         const supabaseUrl = process.env.SUPABASE_URL || vault.supabaseUrl;
         const supabaseKey = process.env.SUPABASE_KEY || vault.supabaseKey;
         
-        // Intentar obtener la clave específica para el generador, fallback a la principal
-        const openaiKey = await HistoryHandler.getConfig('OPENAI_API_KEY_TOOLS') || await HistoryHandler.getConfig('OPENAI_API_KEY');
+        // Intentar obtener la clave específica para el generador, fallback a la principal (filtrando por proyecto/servicio)
+        const openaiKey = await HistoryHandler.getConfig('OPENAI_API_KEY_TOOLS', projectId, serviceId) 
+            || await HistoryHandler.getConfig('OPENAI_API_KEY', projectId, serviceId);
 
         if (!supabaseUrl || !supabaseKey || !openaiKey) {
             console.error("❌ [ToolGenerator] Faltan credenciales (Supabase u OpenAI).");
@@ -35,9 +36,9 @@ export async function autoUpdateBotAbilities(tableNames: string[]) {
             ...(baseURL ? { baseURL } : {})
         });
 
-        // 1. Actualizar DB_TABLES en la configuración
+        // 1. Actualizar DB_TABLES en la configuración (filtrando por proyecto/servicio)
         const dbTablesStr = tableNames.join(',');
-        await HistoryHandler.saveSetting('DB_TABLES', dbTablesStr);
+        await HistoryHandler.saveSetting('DB_TABLES', dbTablesStr, projectId, serviceId);
         console.log(`✅ [ToolGenerator] DB_TABLES actualizada: ${dbTablesStr}`);
 
         // 2. Obtener esquema de las tablas (columnas)
@@ -132,14 +133,14 @@ ${JSON.stringify(tablesSchema, null, 2)}
             }
 
             // 4. Guardar en la base de datos
-            await HistoryHandler.saveSetting('OPENAI_TOOLS_DEFINITION', toolsJson);
+            await HistoryHandler.saveSetting('OPENAI_TOOLS_DEFINITION', toolsJson, projectId, serviceId);
             console.log("✅ [ToolGenerator] OPENAI_TOOLS_DEFINITION actualizada exitosamente.");
 
 
             // 5. Sincronizar con el Asistente
-            const assistantId = await HistoryHandler.getConfig('ASSISTANT_ID');
+            const assistantId = await HistoryHandler.getConfig('ASSISTANT_ID', projectId, serviceId);
             if (assistantId) {
-                await syncAssistantTools(assistantId);
+                await syncAssistantTools(assistantId, projectId, serviceId);
                 console.log("📡 [ToolGenerator] Herramientas sincronizadas con el Asistente de OpenAI.");
             }
         }

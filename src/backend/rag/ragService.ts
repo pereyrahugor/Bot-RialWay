@@ -7,8 +7,8 @@ import OpenAI from 'openai';
 import { HistoryHandler } from '../db/historyHandler.js';
 import { getOpenAIBaseUrl } from '../apis/openai/openaiHelper.js';
 
-async function getOpenAIClient(projectId?: string) {
-    let key = projectId ? await HistoryHandler.getConfig('OPENAI_API_KEY', projectId) : null;
+async function getOpenAIClient(projectId?: string, serviceId?: string) {
+    let key = projectId ? await HistoryHandler.getConfig('OPENAI_API_KEY', projectId, serviceId) : null;
     if (!key) key = process.env.OPENAI_API_KEY;
     const baseURL = getOpenAIBaseUrl();
     return (key && key.length > 5) ? new OpenAI({
@@ -75,8 +75,8 @@ export function chunkText(text: string, chunkSize = 600, overlap = 100): string[
 }
 
 // Genera embeddings para un conjunto de textos usando OpenAI text-embedding-3-small
-export async function generateEmbeddings(texts: string[], projectId?: string): Promise<number[][]> {
-    const openai = await getOpenAIClient(projectId);
+export async function generateEmbeddings(texts: string[], projectId?: string, serviceId?: string): Promise<number[][]> {
+    const openai = await getOpenAIClient(projectId, serviceId);
     if (!openai || texts.length === 0) return [];
 
     const response = await openai.embeddings.create({
@@ -88,7 +88,7 @@ export async function generateEmbeddings(texts: string[], projectId?: string): P
 }
 
 // Procesa un archivo descargado de Google Drive/Docs y lo almacena en Supabase knowledge_chunks
-export async function indexDocumentForRAG(projectId: string, fileId: string, fileName: string, filePath: string): Promise<boolean> {
+export async function indexDocumentForRAG(projectId: string, fileId: string, fileName: string, filePath: string, serviceId?: string): Promise<boolean> {
     const supabase = HistoryHandler.getSupabase();
     if (!supabase) {
         console.error('❌ Supabase no disponible para RAG.');
@@ -109,22 +109,28 @@ export async function indexDocumentForRAG(projectId: string, fileId: string, fil
 
         if (chunks.length === 0) return false;
 
-        const embeddings = await generateEmbeddings(chunks, projectId);
+        const embeddings = await generateEmbeddings(chunks, projectId, serviceId);
         if (embeddings.length !== chunks.length) {
             console.error('❌ Error generando embeddings para los chunks.');
             return false;
         }
 
-        // Eliminar fragmentos anteriores del mismo fileId / projectId
-        await supabase
+        // Eliminar fragmentos anteriores del mismo fileId / projectId / serviceId (multi-tenant & multi-service check)
+        let deleteQuery = supabase
             .from('knowledge_chunks')
             .delete()
             .eq('project_id', projectId)
             .eq('file_id', fileId);
 
+        if (serviceId) {
+            deleteQuery = deleteQuery.eq('service_id', serviceId);
+        }
+
+        await deleteQuery;
+
         const rowsToInsert = chunks.map((content, idx) => ({
             project_id: projectId,
-            service_id: HistoryHandler.SERVICE_IDENTIFIER,
+            service_id: serviceId || HistoryHandler.SERVICE_IDENTIFIER || null,
             file_id: fileId,
             file_name: fileName,
             content: content,

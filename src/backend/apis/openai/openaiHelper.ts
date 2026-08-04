@@ -83,28 +83,28 @@ function safeParseJson(jsonStr: string | undefined): any {
  * Sincroniza las herramientas (tools) definidas en las variables de entorno con el asistente de OpenAI.
  * Esto evita tener que configurar manualmente el Dashboard.
  */
-export async function syncAssistantTools(assistantId: string, projectId: string | null = null): Promise<boolean> {
+export async function syncAssistantTools(assistantId: string, projectId: string | null = null, serviceId: string | null = null): Promise<boolean> {
     const openai = await getOpenAI();
     if (!openai || !assistantId) return false;
 
     try {
         const { HistoryHandler } = await import("../../db/historyHandler");
         const targetProjectId = projectId || HistoryHandler.PROJECT_IDENTIFIER;
-        let toolsJson = await HistoryHandler.getSetting('OPENAI_TOOLS_DEFINITION', targetProjectId);
+        let toolsJson = await HistoryHandler.getSetting('OPENAI_TOOLS_DEFINITION', targetProjectId, serviceId);
 
         if (!toolsJson) {
             console.log("[openaiHelper] No se detectó OPENAI_TOOLS_DEFINITION. Verificando DB_TABLES para autogeneración...");
-            const dbTablesStr = await HistoryHandler.getSetting('DB_TABLES', targetProjectId);
+            const dbTablesStr = await HistoryHandler.getSetting('DB_TABLES', targetProjectId, serviceId);
 
             if (dbTablesStr && dbTablesStr.trim() !== "") {
                 try {
                     const { autoUpdateBotAbilities } = await import("./toolGenerator");
                     const tableNames = dbTablesStr.split(',').map(t => t.trim());
                     console.log(`[openaiHelper] 🤖 Intentando autogenerar tools para tablas: ${dbTablesStr}`);
-                    await autoUpdateBotAbilities(tableNames);
+                    await autoUpdateBotAbilities(tableNames, targetProjectId, serviceId || undefined);
 
                     // Re-intentar obtener la definición recién generada
-                    toolsJson = await HistoryHandler.getSetting('OPENAI_TOOLS_DEFINITION', targetProjectId);
+                    toolsJson = await HistoryHandler.getSetting('OPENAI_TOOLS_DEFINITION', targetProjectId, serviceId);
                 } catch (genError: any) {
                     console.error("[openaiHelper] ❌ Error en autogeneración de tools:", genError.message);
                 }
@@ -127,7 +127,7 @@ export async function syncAssistantTools(assistantId: string, projectId: string 
         const assistantsKeys = ['ASSISTANT_ID', 'ASSISTANT_2', 'ASSISTANT_3', 'ASSISTANT_4', 'ASSISTANT_5'];
         let assistantIndex = '1';
         for (const envKey of assistantsKeys) {
-            const val = await HistoryHandler.getSetting(envKey, targetProjectId);
+            const val = await HistoryHandler.getSetting(envKey, targetProjectId, serviceId);
             if (val === assistantId) {
                 if (envKey === 'ASSISTANT_ID') assistantIndex = '1';
                 else assistantIndex = envKey.replace('ASSISTANT_', '');
@@ -137,7 +137,7 @@ export async function syncAssistantTools(assistantId: string, projectId: string 
 
         // 2. Obtener el prompt específico del asistente correspondiente
         const promptKey = assistantIndex === '1' ? 'ASSISTANT_PROMPT' : `ASSISTANT_PROMPT_${assistantIndex}`;
-        const prompt = await HistoryHandler.getSetting(promptKey, targetProjectId);
+        const prompt = await HistoryHandler.getSetting(promptKey, targetProjectId, serviceId);
 
         // 3. Filtrar herramientas: Solo incluimos la herramienta si su nombre lógico se menciona en el prompt
         let filteredTools = tools;

@@ -13,7 +13,7 @@ const getDriveClient = () => {
     return google.drive({ version: "v3", auth });
 };
 
-export async function updateAllDocs() {
+export async function updateAllDocs(projectId?: string, serviceId?: string) {
     const supabase = HistoryHandler.getSupabase();
     if (!supabase) {
         console.log("⚠️ [GoogleDocs] Supabase no disponible para actualizar documentos.");
@@ -21,25 +21,30 @@ export async function updateAllDocs() {
     }
 
     try {
-        const currentProjectId = process.env.PROJECT_ID || process.env.RAILWAY_PROJECT_ID || HistoryHandler.PROJECT_IDENTIFIER;
-        let query = supabase.from("settings").select("project_id, value").eq("key", "DOCX_ID_UPDATE");
+        const currentProjectId = projectId || process.env.PROJECT_ID || process.env.RAILWAY_PROJECT_ID || HistoryHandler.PROJECT_IDENTIFIER;
+        const currentServiceId = serviceId || process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || HistoryHandler.SERVICE_IDENTIFIER;
+        let query = supabase.from("settings").select("project_id, service_id, value").eq("key", "DOCX_ID_UPDATE");
 
         if (currentProjectId && !['default_project', 'default', 'test-hugo-local', 'local-dev'].includes(currentProjectId)) {
             console.log(`📌 [GoogleDocs] Sincronizando documentos exclusivamente para el proyecto activo: ${currentProjectId}`);
             query = query.eq("project_id", currentProjectId);
+            
+            if (currentServiceId && !['default_service', 'generic', 'null'].includes(currentServiceId)) {
+                query = query.eq("service_id", currentServiceId);
+            }
         }
 
         const { data: docSettings } = await query;
 
         const envDocx = process.env.DOCX_ID_UPDATE || "";
-        const docTasks: Array<{ projectId: string; docxId: string }> = [];
+        const docTasks: Array<{ projectId: string; serviceId: string | null; docxId: string }> = [];
 
         if (docSettings && docSettings.length > 0) {
             for (const s of docSettings) {
                 const ids = (s.value || "").split(",").map(id => id.trim()).filter(Boolean);
                 for (const docxId of ids) {
                     if (docxId && docxId !== "default" && docxId !== "PENDING" && !docxId.startsWith("default_")) {
-                        docTasks.push({ projectId: s.project_id, docxId });
+                        docTasks.push({ projectId: s.project_id, serviceId: s.service_id, docxId });
                     }
                 }
             }
@@ -49,7 +54,7 @@ export async function updateAllDocs() {
             const ids = envDocx.split(",").map(id => id.trim()).filter(Boolean);
             for (const docxId of ids) {
                 if (docxId && !docTasks.some(t => t.docxId === docxId)) {
-                    docTasks.push({ projectId: "default", docxId });
+                    docTasks.push({ projectId: currentProjectId, serviceId: currentServiceId || null, docxId });
                 }
             }
         }
@@ -62,14 +67,14 @@ export async function updateAllDocs() {
         console.log(`📡 [GoogleDocs] Procesando ${docTasks.length} documentos para RAG en Supabase...`);
 
         for (const task of docTasks) {
-            await processDocById(task.projectId, task.docxId);
+            await processDocById(task.projectId, task.docxId, task.serviceId || undefined);
         }
     } catch (err: any) {
         console.error("❌ [GoogleDocs] Error en updateAllDocs:", err?.message || err);
     }
 }
 
-async function processDocById(projectId: string, DOCX_FILE_ID: string) {
+async function processDocById(projectId: string, DOCX_FILE_ID: string, serviceId?: string) {
     const drive = getDriveClient();
     try {
         if (!DOCX_FILE_ID) throw new Error("No se definió DOCX_FILE_ID");
@@ -121,7 +126,7 @@ async function processDocById(projectId: string, DOCX_FILE_ID: string) {
         if (!downloaded) throw new Error("No se pudo descargar ni exportar el documento.");
 
         // Indexar documento para RAG en Supabase
-        const indexOk = await indexDocumentForRAG(projectId, DOCX_FILE_ID, fileName, tempDocxPath);
+        const indexOk = await indexDocumentForRAG(projectId, DOCX_FILE_ID, fileName, tempDocxPath, serviceId);
 
         deleteTemporaryDocx(tempDocxPath);
 
