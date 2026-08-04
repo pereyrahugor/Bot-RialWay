@@ -308,7 +308,8 @@ async function fetchChats(refresh = false) {
     _fetchChatsController = new AbortController();
     try {
         const platformParam = currentPlatform === 'all' ? '' : `&platform=${currentPlatform}`;
-        const url = `/api/backoffice/chats?token=${token}&limit=${CHAT_LIMIT}&offset=${chatOffset}&search=${encodeURIComponent(query)}&tag=${tagFilter}${platformParam}`;
+        const serviceParam = window.railwayServiceId ? `&serviceId=${window.railwayServiceId}` : '';
+        const url = `/api/backoffice/chats?token=${token}&limit=${CHAT_LIMIT}&offset=${chatOffset}&search=${encodeURIComponent(query)}&tag=${tagFilter}${platformParam}${serviceParam}`;
         const res = await fetch(url, { signal: _fetchChatsController.signal });
         if (res.status === 401) {
             logout();

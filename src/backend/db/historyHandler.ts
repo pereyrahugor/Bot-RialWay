@@ -1699,7 +1699,7 @@ export class HistoryHandler {
     /**
      * Lista todos los chats activos (con tags incluidos)
      */
-    static async listChats(limit: number = 20, offset: number = 0, search?: string, tagId?: string, assignedTo?: string | null, platform?: string, projectId: string | null = null) {
+    static async listChats(limit: number = 20, offset: number = 0, search?: string, tagId?: string, assignedTo?: string | null, platform?: string, projectId: string | null = null, serviceId?: string | null) {
         const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
         if (process.env.STORAGE_MODE === "local") {
             const res = await LocalHistoryStore.listChats(limit, offset, search, tagId, assignedTo, platform, currentProjectId);
@@ -1728,9 +1728,10 @@ export class HistoryHandler {
                     .from('chats')
                     .select(selectString);
 
-                // Filtrar strictly por el ID único de este bot en Railway y su servicio
+                // Filtrar por project_id y service_id para correcta segregación multi-servicio
                 query = query.eq('project_id', currentProjectId);
-                const currentServiceId = process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || this.SERVICE_IDENTIFIER;
+                // Prefer explicitly passed serviceId, then fall back to process.env
+                const currentServiceId = serviceId || process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || this.SERVICE_IDENTIFIER;
                 if (currentServiceId && currentServiceId !== 'default_service') {
                     query = query.or(`service_id.eq.${currentServiceId},service_id.eq.default_service,service_id.is.null`);
                 }

@@ -805,7 +805,8 @@ export const registerBackofficeRoutes = (app: any) => {
         const assignedTo = req.auth.isSubUser ? req.auth.userId : null;
         
         const projectId = resolveProjectId(req);
-        const chats = await depsHistoryHandler.listChats(limit, offset, search, tag, assignedTo, platform, projectId);
+        const serviceId = resolveServiceId(req);
+        const chats = await depsHistoryHandler.listChats(limit, offset, search, tag, assignedTo, platform, projectId, serviceId);
         res.json(chats);
     });
 
