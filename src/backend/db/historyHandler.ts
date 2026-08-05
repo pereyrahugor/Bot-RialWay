@@ -3238,13 +3238,19 @@ export class HistoryHandler {
             }
 
             // 1. Obtener todas las llaves configuradas en el proyecto actual
-            const { data: currentSettings } = await supabase.from('settings').select('key').eq('project_id', currentProjectId);
+            const { data: currentSettings } = await supabase.from('settings')
+                .select('key')
+                .eq('project_id', currentProjectId)
+                .eq('service_id', HistoryHandler.SERVICE_IDENTIFIER);
             const currentKeys = new Set((currentSettings || []).map(s => s.key));
 
-            console.log(`[Bootstrap] Proyecto ${currentProjectId} tiene ${currentKeys.size} variables en DB.`);
+            console.log(`[Bootstrap] Proyecto ${currentProjectId} (Servicio: ${HistoryHandler.SERVICE_IDENTIFIER}) tiene ${currentKeys.size} variables en DB.`);
 
             // 2. Obtener configuración del maestro 'defaul'
-            const { data: masterSettings } = await supabase.from('settings').select('key, value').eq('project_id', MASTER_ID);
+            const { data: masterSettings } = await supabase.from('settings')
+                .select('key, value')
+                .eq('project_id', MASTER_ID)
+                .eq('service_id', 'default_service');
 
             if (masterSettings && masterSettings.length > 0) {
                 // Lista de llaves que NUNCA deben clonarse automáticamente desde el maestro
@@ -3255,6 +3261,7 @@ export class HistoryHandler {
                     .filter(s => !currentKeys.has(s.key)) // Solo las que no existen en el proyecto actual
                     .map(s => ({
                         project_id: currentProjectId,
+                        service_id: HistoryHandler.SERVICE_IDENTIFIER,
                         key: s.key,
                         value: s.value,
                         updated_at: new Date().toISOString()
@@ -3281,6 +3288,7 @@ export class HistoryHandler {
                 .from('settings')
                 .select('value')
                 .eq('project_id', currentProjectId)
+                .eq('service_id', HistoryHandler.SERVICE_IDENTIFIER)
                 .eq('key', 'api_key')
                 .maybeSingle();
 
@@ -3289,6 +3297,7 @@ export class HistoryHandler {
                 console.log(`🆕 [Bootstrap] Generando API_KEY única para el proyecto: ${uniqueKey}`);
                 await supabase.from('settings').insert({
                     project_id: currentProjectId,
+                    service_id: HistoryHandler.SERVICE_IDENTIFIER,
                     key: 'api_key',
                     value: uniqueKey,
                     updated_at: new Date().toISOString()
@@ -3316,6 +3325,7 @@ export class HistoryHandler {
                     .from('settings')
                     .select('key, value')
                     .eq('project_id', currentProjectId)
+                    .eq('service_id', HistoryHandler.SERVICE_IDENTIFIER)
                     .eq('key', item.key)
                     .maybeSingle();
 
@@ -3333,6 +3343,7 @@ export class HistoryHandler {
                             .from('settings')
                             .select('value')
                             .eq('project_id', MASTER_ID)
+                            .eq('service_id', 'default_service')
                             .eq('key', item.key)
                             .maybeSingle();
 
@@ -3346,10 +3357,11 @@ export class HistoryHandler {
                         // console.log(`🆕 [Bootstrap] ${!existingEntry ? 'Creando' : 'Actualizando'} variable '${item.key}' con valor: ${finalValue.substring(0, 10)}...`);
                         await supabase.from('settings').upsert({
                             project_id: currentProjectId,
+                            service_id: HistoryHandler.SERVICE_IDENTIFIER,
                             key: item.key,
                             value: finalValue,
                             updated_at: new Date().toISOString()
-                        }, { onConflict: 'project_id,key' });
+                        }, { onConflict: 'project_id,service_id,key' });
                     }
                 }
             }
