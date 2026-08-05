@@ -31,14 +31,14 @@ RUN pnpm run build
 # Stage 2: Production stage
 FROM node:22-slim AS deploy
 
-# Instalar dependencias de runtime necesarias e instalar Google Chrome estable
+# Instalar dependencias de runtime necesarias, Chromium y Chromium Driver
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    poppler-utils ffmpeg curl ca-certificates gnupg wget && \
-    wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/googlechrome-keyring.gpg && \
-    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/googlechrome-keyring.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list && \
-    apt-get update && apt-get install -y --no-install-recommends \
-    google-chrome-stable && \
+    poppler-utils ffmpeg curl ca-certificates gnupg wget \
+    chromium chromium-driver && \
     rm -rf /var/lib/apt/lists/*
+
+# Forzar a Selenium a funcionar en modo offline (evita descargas a través de internet en runtime)
+ENV SE_OFFLINE=true
 
 WORKDIR /app
 
