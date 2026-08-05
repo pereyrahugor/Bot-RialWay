@@ -19,225 +19,212 @@ export async function rechargeUserSelenium(
 ): Promise<boolean> {
     console.log(`[Ganemos-net] Iniciando recarga de saldo de ${amount} para: ${username}...`);
 
-    let localDriver: WebDriver | undefined = driver;
-    const shouldQuit = true; // Por defecto cerramos al final: "y listo, cerramos navegador"
-
-    // Si no se pasa un driver activo, creamos uno nuevo y nos logueamos
-    if (!localDriver) {
-        console.log("[Ganemos-net] No se proveyó WebDriver. Iniciando nueva instancia...");
-        const options = new chrome.Options();
-        
-        // Configuración Anti-Detección Bot (Stealth Mode) y Bloqueo de Tráfico en Segundo Plano
-        options.addArguments('--disable-blink-features=AutomationControlled');
-        options.excludeSwitches('enable-automation');
-        options.addArguments('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
-        options.addArguments('--window-size=1920,1080');
-        options.addArguments('--start-maximized');
-        options.addArguments('--no-sandbox');
-        options.addArguments('--disable-dev-shm-usage');
-        options.addArguments('--disable-gpu');
-
-        // Bloquear conexiones secundarias e innecesarias de Chrome (GCM puerto 5228, Sync, métricas)
-        options.addArguments('--disable-background-networking');
-        options.addArguments('--disable-default-apps');
-        options.addArguments('--disable-extensions');
-        options.addArguments('--disable-sync');
-        options.addArguments('--disable-translate');
-        options.addArguments('--metrics-recording-only');
-        options.addArguments('--no-first-run');
-        options.addArguments('--safebrowsing-disable-auto-update');
-
-        // Optimización de ancho de banda: Bloquear descarga de imágenes por preferencias de Chrome
-        options.setUserPreferences({
-            'profile.managed_default_content_settings.images': 2,
-            'profile.managed_default_content_settings.media_stream': 2,
-            'profile.managed_default_content_settings.popups': 2,
-            'profile.managed_default_content_settings.plugins': 2
-        });
-
-        if (process.env.DISABLE_HEADLESS !== 'true') {
-            options.addArguments('--headless=new');
+    const maxAttempts = driver ? 1 : 3;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        if (!driver) {
+            console.log(`[Ganemos-net] Intento ${attempt}/${maxAttempts} para realizar recarga...`);
         }
-
-        const proxySession = await ProxyManager.getProxySession('ganemos-net');
-        if (proxySession) {
-            console.log(`🔌 [Ganemos-net] Aplicando proxy a Chrome para recarga: ${proxySession.proxyUrl}`);
-            options.addArguments(`--proxy-server=${proxySession.proxyUrl}`);
-        }
-
-        localDriver = await new Builder()
-            .forBrowser('chrome')
-            .setChromeOptions(options)
-            .build();
-
-        // Ahorro de 85% de datos de Proxy: Bloquear recursos pesados (imágenes, fuentes, scripts de rastreo) vía CDP
-        try {
-            await (localDriver as any).sendAndGetDevToolsCommand('Network.enable');
-            await (localDriver as any).sendAndGetDevToolsCommand('Network.setBlockedURLs', {
-                urls: [
-                    '*.png', '*.jpg', '*.jpeg', '*.gif', '*.svg', '*.webp', '*.ico',
-                    '*.woff', '*.woff2', '*.ttf', '*.eot',
-                    '*clarity.ms*', '*googletagmanager.com*', '*google-analytics.com*', '*facebook.net*'
-                ]
-            });
-            console.log("⚡ [Ganemos-net] Optimización de red activada: Imágenes, fuentes y analíticas bloqueadas en el proxy.");
-        } catch (cdpErr) {
-            /* CDP no soportado en este entorno */
-        }
-
-        if (proxySession) {
-            (localDriver as any)._proxyCleanup = proxySession.cleanup;
-        }
+        let localDriver: WebDriver | undefined = driver;
+        const shouldQuit = true; // Por defecto cerramos al final: "y listo, cerramos navegador"
 
         try {
-            const authenticator = new LoginAdminSelenium(localDriver);
-            const adminUser = process.env.GANAMOSNET_USER || '';
-            const adminPass = process.env.GANAMOSNET_PASS || '';
+            // Si no se pasa un driver activo, creamos uno nuevo y nos logueamos
+            if (!localDriver) {
+                console.log("[Ganemos-net] No se proveyó WebDriver. Iniciando nueva instancia...");
+                const options = new chrome.Options();
+                
+                // Configuración Anti-Detección Bot (Stealth Mode) y Bloqueo de Tráfico en Segundo Plano
+                options.addArguments('--disable-blink-features=AutomationControlled');
+                options.excludeSwitches('enable-automation');
+                options.addArguments('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
+                options.addArguments('--window-size=1920,1080');
+                options.addArguments('--start-maximized');
+                options.addArguments('--no-sandbox');
+                options.addArguments('--disable-dev-shm-usage');
+                options.addArguments('--disable-gpu');
 
-            const logged = await authenticator.login(adminUser, adminPass);
-            if (!logged) {
-                console.error("❌ [Ganemos-net] Fallo en la autenticación del administrador para recarga.");
-                await localDriver.quit();
-                return false;
-            }
-        } catch (authErr: any) {
-            console.error("❌ [Ganemos-net] Excepción durante el login para recarga:", authErr.message || authErr);
-            if (localDriver) {
-                try { await localDriver.quit(); } catch (e) { /* ignore */ }
-            }
-            return false;
-        }
-    }
+                // Bloquear conexiones secundarias e innecesarias de Chrome (GCM puerto 5228, Sync, métricas)
+                options.addArguments('--disable-background-networking');
+                options.addArguments('--disable-default-apps');
+                options.addArguments('--disable-extensions');
+                options.addArguments('--disable-sync');
+                options.addArguments('--disable-translate');
+                options.addArguments('--metrics-recording-only');
+                options.addArguments('--no-first-run');
+                options.addArguments('--safebrowsing-disable-auto-update');
 
-    try {
-        // 1. Navegar a /users/all si no estamos allí
-        const usersListUrl = "https://agents.ganamosnet.org/users/all";
-        const currentUrl = await localDriver.getCurrentUrl();
-        if (currentUrl !== usersListUrl) {
-            console.log(`[Ganemos-net] Navegando a ${usersListUrl}...`);
-            await localDriver.get(usersListUrl);
-            await localDriver.wait(until.urlIs(usersListUrl), 10000);
-        }
+                // Optimización de ancho de banda: Bloquear descarga de imágenes por preferencias de Chrome
+                options.setUserPreferences({
+                    'profile.managed_default_content_settings.images': 2,
+                    'profile.managed_default_content_settings.media_stream': 2,
+                    'profile.managed_default_content_settings.popups': 2,
+                    'profile.managed_default_content_settings.plugins': 2
+                });
 
-        // 2. Ingresar usuario en el campo de búsqueda
-        const searchInputXPath = "/html/body/div[3]/div/div[2]/main/div[3]/div[1]/div[1]/form/div[1]/div[2]/div[1]/input";
-        console.log(`[Ganemos-net] Escribiendo usuario a buscar: ${username}...`);
-        const searchInput = await localDriver.wait(
-            until.elementLocated(By.xpath(searchInputXPath)),
-            10000
-        );
-        await searchInput.clear();
-        await searchInput.sendKeys(username);
+                if (process.env.DISABLE_HEADLESS !== 'true') {
+                    options.addArguments('--headless=new');
+                }
 
-        // 3. Clic en el botón Buscar
-        const searchBtnXPath = "/html/body/div[3]/div/div[2]/main/div[3]/div[1]/div[1]/form/div[5]/div[2]/button";
-        const searchBtn = await localDriver.findElement(By.xpath(searchBtnXPath));
-        await searchBtn.click();
+                const proxySession = await ProxyManager.getProxySession('ganemos-net');
+                if (proxySession) {
+                    console.log(`🔌 [Ganemos-net] Aplicando proxy a Chrome (Intento ${attempt}): ${proxySession.proxyUrl}`);
+                    options.addArguments(`--proxy-server=${proxySession.proxyUrl}`);
+                }
 
-        // Esperar a que carguen los resultados
-        console.log("[Ganemos-net] Buscando usuario...");
-        await new Promise(resolve => setTimeout(resolve, 2000));
+                localDriver = await new Builder()
+                    .forBrowser('chrome')
+                    .setChromeOptions(options)
+                    .build();
 
-        // 4. Buscar el botón "Depositar" (se busca el elemento enlace por su texto literal en DOM)
-        console.log("[Ganemos-net] Buscando enlace 'Depositar' en la lista...");
-        const depositBtnXPath = "//a[text()='Depositar']";
-        const depositBtn = await localDriver.wait(
-            until.elementLocated(By.xpath(depositBtnXPath)),
-            10000
-        );
-        await depositBtn.click();
+                // Ahorro de 85% de datos de Proxy: Bloquear recursos pesados (imágenes, fuentes, scripts de rastreo) vía CDP
+                try {
+                    await (localDriver as any).sendAndGetDevToolsCommand('Network.enable');
+                    await (localDriver as any).sendAndGetDevToolsCommand('Network.setBlockedURLs', {
+                        urls: [
+                            '*.png', '*.jpg', '*.jpeg', '*.gif', '*.svg', '*.webp', '*.ico',
+                            '*.woff', '*.woff2', '*.ttf', '*.eot',
+                            '*clarity.ms*', '*googletagmanager.com*', '*google-analytics.com*', '*facebook.net*'
+                        ]
+                    });
+                    console.log("⚡ [Ganemos-net] Optimización de red activada: Imágenes, fuentes y analíticas bloqueadas en el proxy.");
+                } catch (cdpErr) {
+                    /* CDP no soportado en este entorno */
+                }
 
-        // 5. Esperar a que redirija a la página de depósito (/user/deposit/{id})
-        await localDriver.wait(until.urlContains('/user/deposit/'), 10000);
-        console.log("[Ganemos-net] Redirección a la página de depósito confirmada.");
+                if (proxySession) {
+                    (localDriver as any)._proxyCleanup = proxySession.cleanup;
+                }
 
-        // 6. Ingresar el monto en el input de depósito
-        const amountInputXPath = "/html/body/div[3]/div/div[2]/main/div[2]/div/div/div[1]/div[5]/div[1]/div/div/div/div/input";
-        const amountInput = await localDriver.wait(
-            until.elementLocated(By.xpath(amountInputXPath)),
-            10000
-        );
-        await amountInput.sendKeys(amount.toString());
+                const authenticator = new LoginAdminSelenium(localDriver);
+                const adminUser = process.env.GANAMOSNET_USER || '';
+                const adminPass = process.env.GANAMOSNET_PASS || '';
 
-        // 7. Clic en el botón de depósito final
-        const submitDepositBtnXPath = "/html/body/div[3]/div/div[2]/main/div[2]/div/div/div[3]/button[2]";
-        const submitDepositBtn = await localDriver.findElement(By.xpath(submitDepositBtnXPath));
-        await submitDepositBtn.click();
-
-        // Esperar a que se procese la operación y redirija a /users/all o similar
-        console.log("[Ganemos-net] Enviando depósito y esperando confirmación...");
-        
-        const result: any = await localDriver.wait(async (d) => {
-            const currUrl = await d.getCurrentUrl();
-            if (currUrl.includes('/users/all')) {
-                return { success: true };
-            }
-            
-            // Buscar cartel de error en pantalla (restringido a contenedores de alertas/modales para evitar falsos positivos con textos estáticos de la página)
-            const errorElements = await d.findElements(By.xpath(
-                "//*[contains(@class, 'swal') or contains(@class, 'modal') or contains(@class, 'alert') or contains(@class, 'toast') or contains(@class, 'popup') or contains(@class, 'notification') or contains(@class, 'dialog')]" +
-                "//*[contains(text(), 'Error') or contains(text(), 'error') or contains(text(), 'insuficiente') or contains(text(), 'inválido') or contains(text(), 'no tiene')]"
-            ));
-            if (errorElements.length > 0) {
-                for (const el of errorElements) {
-                    try {
-                        if (await el.isDisplayed()) {
-                            const text = await el.getText();
-                            if (text && text.trim() !== '') {
-                                return { success: false, error: text };
-                            }
-                        }
-                    } catch (e) {
-                        // Elemento obsoleto o inexistente
-                    }
+                const logged = await authenticator.login(adminUser, adminPass);
+                if (!logged) {
+                    throw new Error("Fallo en la autenticación del administrador para recarga.");
                 }
             }
-            return false;
-        }, 15000);
 
-        if (result && !result.success) {
-            console.error(`❌ [Ganemos-net] Error al realizar depósito: "${result.error}"`);
+            // 1. Navegar a /users/all si no estamos allí
+            const usersListUrl = "https://agents.ganamosnet.org/users/all";
+            const currentUrl = await localDriver.getCurrentUrl();
+            if (currentUrl !== usersListUrl) {
+                console.log(`[Ganemos-net] Navegando a ${usersListUrl}...`);
+                await localDriver.get(usersListUrl);
+                await localDriver.wait(until.urlIs(usersListUrl), 10000);
+            }
+
+            // 2. Ingresar usuario en el campo de búsqueda
+            const searchInputXPath = "/html/body/div[3]/div/div[2]/main/div[3]/div[1]/div[1]/form/div[1]/div[2]/div[1]/input";
+            console.log(`[Ganemos-net] Escribiendo usuario a buscar: ${username}...`);
+            const searchInput = await localDriver.wait(
+                until.elementLocated(By.xpath(searchInputXPath)),
+                10000
+            );
+            await searchInput.clear();
+            await searchInput.sendKeys(username);
+
+            // 3. Clic en el botón Buscar
+            const searchBtnXPath = "/html/body/div[3]/div/div[2]/main/div[3]/div[1]/div[1]/form/div[5]/div[2]/button";
+            const searchBtn = await localDriver.findElement(By.xpath(searchBtnXPath));
+            await searchBtn.click();
+
+            // Esperar a que carguen los resultados
+            console.log("[Ganemos-net] Buscando usuario...");
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
+            // 4. Buscar el botón "Depositar"
+            console.log("[Ganemos-net] Buscando enlace 'Depositar' en la lista...");
+            const depositBtnXPath = "//a[text()='Depositar']";
+            const depositBtn = await localDriver.wait(
+                until.elementLocated(By.xpath(depositBtnXPath)),
+                10000
+            );
+            await depositBtn.click();
+
+            // 5. Esperar a que redirija a la página de depósito (/user/deposit/{id})
+            await localDriver.wait(until.urlContains('/user/deposit/'), 10000);
+            console.log("[Ganemos-net] Redirección a la página de depósito confirmada.");
+
+            // 6. Ingresar el monto en el input de depósito
+            const amountInputXPath = "/html/body/div[3]/div/div[2]/main/div[2]/div/div/div[1]/div[5]/div[1]/div/div/div/div/input";
+            const amountInput = await localDriver.wait(
+                until.elementLocated(By.xpath(amountInputXPath)),
+                10000
+            );
+            await amountInput.sendKeys(amount.toString());
+
+            // 7. Clic en el botón de depósito final
+            const submitDepositBtnXPath = "/html/body/div[3]/div/div[2]/main/div[2]/div/div/div[3]/button[2]";
+            const submitDepositBtn = await localDriver.findElement(By.xpath(submitDepositBtnXPath));
+            await submitDepositBtn.click();
+
+            // Esperar a que se procese la operación y redirija a /users/all o similar
+            console.log("[Ganemos-net] Enviando depósito y esperando confirmación...");
             
-            try {
-                const screenshot = await localDriver.takeScreenshot();
-                const screenshotPath = path.join(process.cwd(), 'recharge_failure.png');
-                fs.writeFileSync(screenshotPath, screenshot, 'base64');
-                console.log(`📸 Captura de pantalla guardada en: ${screenshotPath}`);
-            } catch (e) { /* ignore */ }
+            const result: any = await localDriver.wait(async (d) => {
+                const currUrl = await d.getCurrentUrl();
+                if (currUrl.includes('/users/all')) {
+                    return { success: true };
+                }
+                
+                // Buscar cartel de error en pantalla
+                const errorElements = await d.findElements(By.xpath(
+                    "//*[contains(@class, 'swal') or contains(@class, 'modal') or contains(@class, 'alert') or contains(@class, 'toast') or contains(@class, 'popup') or contains(@class, 'notification') or contains(@class, 'dialog')]" +
+                    "//*[contains(text(), 'Error') or contains(text(), 'error') or contains(text(), 'insuficiente') or contains(text(), 'inválido') or contains(text(), 'no tiene')]"
+                ));
+                if (errorElements.length > 0) {
+                    for (const el of errorElements) {
+                        try {
+                            if (await el.isDisplayed()) {
+                                const text = await el.getText();
+                                if (text && text.trim() !== '') {
+                                    return { success: false, error: text };
+                                }
+                            }
+                        } catch (e) {
+                            // Elemento obsoleto o inexistente
+                        }
+                    }
+                }
+                return false;
+            }, 15000);
 
+            if (result && !result.success) {
+                throw new Error(`Error al realizar depósito: "${result.error}"`);
+            }
+
+            console.log(`🎉 [Ganemos-net] Recarga de saldo completada con éxito para ${username}.`);
+            
+            // Cerrar el navegador al finalizar la operación en todos los casos
             if (shouldQuit && localDriver) {
                 await localDriver.quit();
                 if ((localDriver as any)._proxyCleanup) await (localDriver as any)._proxyCleanup();
+                console.log("[Ganemos-net] Navegador cerrado correctamente.");
             }
-            return false;
-        }
+            return true;
 
-        console.log(`🎉 [Ganemos-net] Recarga de saldo completada con éxito para ${username}.`);
-        
-        // Cerrar el navegador al finalizar la operación en todos los casos
-        if (shouldQuit && localDriver) {
-            await localDriver.quit();
-            if ((localDriver as any)._proxyCleanup) await (localDriver as any)._proxyCleanup();
-            console.log("[Ganemos-net] Navegador cerrado correctamente.");
-        }
-        return true;
+        } catch (error: any) {
+            console.error(`❌ [Ganemos-net] Intento ${attempt}/${maxAttempts} de recarga fallido:`, error.message || error);
+            
+            if (localDriver) {
+                try {
+                    const screenshot = await localDriver.takeScreenshot();
+                    const screenshotPath = path.join(process.cwd(), `recharge_failure_attempt_${attempt}.png`);
+                    fs.writeFileSync(screenshotPath, screenshot, 'base64');
+                    console.log(`📸 Captura de pantalla guardada en: ${screenshotPath}`);
+                } catch (e) { /* ignore */ }
 
-    } catch (error: any) {
-        console.error("❌ Error en el proceso de recarga de usuario de Selenium:", error.message || error);
-        
-        if (localDriver) {
-            try {
-                const screenshot = await localDriver.takeScreenshot();
-                const screenshotPath = path.join(process.cwd(), 'recharge_failure.png');
-                fs.writeFileSync(screenshotPath, screenshot, 'base64');
-                console.log(`📸 Captura de pantalla guardada en: ${screenshotPath}`);
-            } catch (e) { /* ignore */ }
+                try { 
+                    await localDriver.quit(); 
+                    if ((localDriver as any)._proxyCleanup) await (localDriver as any)._proxyCleanup();
+                } catch (e) { /* ignore */ }
+            }
 
-            try { 
-                await localDriver.quit(); 
-                if ((localDriver as any)._proxyCleanup) await (localDriver as any)._proxyCleanup();
-            } catch (e) { /* ignore */ }
+            if (attempt === maxAttempts) {
+                return false;
+            }
         }
-        return false;
     }
+    return false;
 }

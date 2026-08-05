@@ -446,7 +446,32 @@ export class SupabaseBaileysProvider extends BaileysProvider {
                         finalBody = utils.generateRefProvider('_event_media_');
                     }
 
-                    const payload = { body: finalBody, from, phoneNumber: from?.split('@')[0], name: msg.pushName || 'User', type: finalType, payload: msg };
+                    const payload: any = { body: finalBody, from, phoneNumber: from?.split('@')[0], name: msg.pushName || 'User', type: finalType, payload: msg };
+
+                    const isMedia = ['image', 'video', 'voice', 'document'].includes(finalType);
+                    if (isMedia) {
+                        // Asegurar mimetypes por defecto para evitar errores en saveFile
+                        if (msg.message?.documentMessage && !msg.message.documentMessage.mimetype) {
+                            msg.message.documentMessage.mimetype = "application/pdf";
+                        }
+                        if (msg.message?.documentWithCaptionMessage?.message?.documentMessage && !msg.message.documentWithCaptionMessage.message.documentMessage.mimetype) {
+                            msg.message.documentWithCaptionMessage.message.documentMessage.mimetype = "application/pdf";
+                        }
+
+                        try {
+                            if (!fs.existsSync("./tmp/")) {
+                                fs.mkdirSync("./tmp/", { recursive: true });
+                            }
+                            const localPath = await this.saveFile(msg, { path: "./tmp/" });
+                            if (localPath) {
+                                payload.localPath = localPath;
+                                payload.body = localPath;
+                            }
+                        } catch (downloadErr: any) {
+                            console.warn('[SupabaseBaileysProvider] ⚠️ Error auto-descargando archivo multimedia:', downloadErr.message || downloadErr);
+                        }
+                    }
+
                     if (msg.message) this.emit('message', payload);
                 }
             });
