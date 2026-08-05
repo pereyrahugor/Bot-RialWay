@@ -175,6 +175,13 @@ export async function verifyReceiptFlow(
                     getMyState: () => ({})
                 };
 
+                try {
+                    await validState.update({ pendingPaymentId: paymentId });
+                    console.log(`[ReceiptVerifierMP] Guardado pendingPaymentId ${paymentId} en el estado del usuario.`);
+                } catch (stateErr: any) {
+                    console.warn(`[ReceiptVerifierMP] No se pudo guardar pendingPaymentId en el estado:`, stateErr.message);
+                }
+
                 if (!userQueues.has(userId)) {
                     userQueues.set(userId, []);
                 }

@@ -54,6 +54,25 @@ export const casEpcModule = {
       if (success) {
           return `✅ Depósito de $${amount} procesado con éxito para el usuario ${username}.`;
       }
+      
+      // Si falló el depósito automático, liberar el comprobante en la base de datos
+      const paymentId = context?.state?.get?.('pendingPaymentId');
+      if (paymentId) {
+          const { HistoryHandler } = await import("../../db/historyHandler.js");
+          const supabase = HistoryHandler.getSupabase();
+          if (supabase) {
+              const { error } = await supabase
+                  .from("mercadopago_payments_clients")
+                  .delete()
+                  .eq("id", paymentId);
+              if (error) {
+                  console.error(`[casEpcModule] ❌ Error al eliminar comprobante fallido ${paymentId} de la BD:`, error);
+              } else {
+                  console.log(`[casEpcModule] ♻️ Comprobante fallido ${paymentId} liberado en la base de datos para reintento.`);
+              }
+          }
+      }
+      
       return `❌ No se pudo procesar el depósito de $${amount} para el usuario ${username}.`;
     },
 
