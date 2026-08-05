@@ -255,13 +255,13 @@ const sendJson = (res: any, statusCode: number, data: any) => {
     res.end(JSON.stringify(data));
 };
 
-/** Función para procesar el envío masivo de plantillas */
 export const processBulkTemplate = async (req: any, res: any) => {
-    const projectId = req.query.projectId || (req.body && req.body.projectId) || req.headers['x-project-id'] || (req.auth && req.auth.projectId) || null;
+    const depsHistoryHandler = HistoryHandlerClass;
+    const projectId = resolveProjectId(req) || req.query.projectId || (req.body && req.body.projectId) || req.headers['x-project-id'] || (req.auth && req.auth.projectId) || null;
+    const serviceId = resolveServiceId(req) || depsHistoryHandler.SERVICE_IDENTIFIER;
     const file = (req as any).file;
     const { templateName, languageCode } = req.body;
     const adapterProvider = getAdapterProvider();
-    const depsHistoryHandler = HistoryHandlerClass;
     const groupProvider = getGroupProvider();
 
     try {
@@ -535,7 +535,7 @@ export const processBulkTemplate = async (req: any, res: any) => {
                             const isNameVar = ['nombre', 'name', 'nombre_cliente', 'nombrecliente'].includes(lowerVar);
                             if (isNameVar && (!val || val.trim() === '' || val === '-')) {
                                 try {
-                                    const chat = await depsHistoryHandler.getChat(phone, projectId);
+                                    const chat = await depsHistoryHandler.getChat(phone, projectId, serviceId);
                                     if (chat && chat.name) {
                                         val = chat.name;
                                         console.log(`👤 [BULK] Nombre autocompletado desde DB para ${phone}: ${val}`);
@@ -600,7 +600,7 @@ export const processBulkTemplate = async (req: any, res: any) => {
                         const lowFormat = headerComp.format.toLowerCase();
                         const mediaLink = row.header_media_url || defaultMediaUrl || headerComp.example?.header_handle?.[0];
                         if (mediaLink) {
-                            await depsHistoryHandler.saveMessage(phone, 'assistant', mediaLink, lowFormat, undefined, undefined, `${msgId}_media`, 'whatsapp', projectId);
+                            await depsHistoryHandler.saveMessage(phone, 'assistant', mediaLink, lowFormat, undefined, undefined, `${msgId}_media`, 'whatsapp', projectId, serviceId);
                         }
                     }
 
@@ -621,7 +621,7 @@ export const processBulkTemplate = async (req: any, res: any) => {
                     // Guardar con un prefijo informativo para el asistente
                     const historyContent = `[Campaña: ${templateName}]\n${renderedText}`;
 
-                    await depsHistoryHandler.saveMessage(phone, 'assistant', historyContent, 'text', undefined, undefined, msgId, 'whatsapp', projectId);
+                    await depsHistoryHandler.saveMessage(phone, 'assistant', historyContent, 'text', undefined, undefined, msgId, 'whatsapp', projectId, serviceId);
                     sent++;
                 } else {
                     errors++;
@@ -980,7 +980,8 @@ export const registerBackofficeRoutes = (app: any) => {
         try {
             const { id } = req.params;
             const projectId = resolveProjectId(req);
-            const chat = await depsHistoryHandler.getChat(id, projectId);
+            const serviceId = resolveServiceId(req);
+            const chat = await depsHistoryHandler.getChat(id, projectId, serviceId);
             if (!chat) return res.status(404).json({ success: false, error: 'Chat not found' });
             res.json(chat);
         } catch (err: any) {
@@ -1107,8 +1108,10 @@ export const registerBackofficeRoutes = (app: any) => {
 
     app.post('/api/backoffice/whatsapp/sync-contacts', backofficeAuth, async (req: any, res: any) => {
         try {
+            const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
+            const serviceId = resolveServiceId(req) || depsHistoryHandler.SERVICE_IDENTIFIER;
             // 1. Revisar si estamos en modo META OFFICIAL
-            const metaConfig = await depsHistoryHandler.getMetaOnboardingData(depsHistoryHandler.PROJECT_IDENTIFIER);
+            const metaConfig = await depsHistoryHandler.getMetaOnboardingData(projectId, false, serviceId);
             if (metaConfig && metaConfig.access_token && metaConfig.phone_number_id) {
                 console.log(`📡 [SYNC] Sincronización Meta detectada. Solicitando historial SMB...`);
                 try {
@@ -1293,7 +1296,7 @@ export const registerBackofficeRoutes = (app: any) => {
                     color: l.color !== undefined ? `#${Number(l.color).toString(16).padStart(6, '0')}` : '#6366f1'
                 }));
 
-                const syncRes = await depsHistoryHandler.syncTags(tagsToSync);
+                const syncRes = await depsHistoryHandler.syncTags(tagsToSync, projectId, serviceId);
                 if (syncRes.success && syncRes.data) {
                     syncRes.data.forEach((t: any) => tagMap.set(t.name, t.id));
                     syncTagsSummary = syncRes.data.length;
@@ -1327,7 +1330,7 @@ export const registerBackofficeRoutes = (app: any) => {
                 });
 
             console.log(`📡 [SYNC] Procesados ${chatsToSync.length} candidatos para upsert.`);
-            const syncChatsRes = await depsHistoryHandler.syncChats(chatsToSync);
+            const syncChatsRes = await depsHistoryHandler.syncChats(chatsToSync, projectId, serviceId);
 
             // 5. Vincular Etiquetas a Contactos
             const associations: any[] = [];
@@ -1351,7 +1354,7 @@ export const registerBackofficeRoutes = (app: any) => {
 
             if (associations.length > 0) {
                 console.log(`📡 [SYNC] Vinculando ${associations.length} etiquetas a contactos...`);
-                await depsHistoryHandler.syncChatTags(associations);
+                await depsHistoryHandler.syncChatTags(associations, projectId, serviceId);
             }
 
             res.json({
@@ -1641,7 +1644,8 @@ export const registerBackofficeRoutes = (app: any) => {
 
     app.get('/api/backoffice/tags', backofficeAuth, async (req: any, res: any) => {
         const projectId = resolveProjectId(req);
-        const tags = await depsHistoryHandler.getTags(projectId);
+        const serviceId = resolveServiceId(req);
+        const tags = await depsHistoryHandler.getTags(projectId, serviceId);
         res.json(tags);
     });
 
@@ -1664,13 +1668,14 @@ export const registerBackofficeRoutes = (app: any) => {
             const { id } = req.params;
             const { name, email, notes, source, cuit_dni, tax_status, address, offered_product, crm_status, crm_due_date, ticket_title } = req.body;
             const projectId = resolveProjectId(req);
+            const serviceId = resolveServiceId(req);
             const result = await depsHistoryHandler.updateContactDetails(id, { 
                 name, email, notes, source, 
                 cuit_dni, tax_status, address, offered_product,
                 crm_status, crm_due_date,
                 is_lead: true,
                 ticket_title
-            }, projectId);
+            }, projectId, serviceId);
             res.json(result);
         } catch (err: any) {
             res.status(500).json({ success: false, error: err.message });
@@ -1682,7 +1687,8 @@ export const registerBackofficeRoutes = (app: any) => {
             const { chatId, details } = req.body;
             if (!chatId) return res.status(400).json({ success: false, error: 'chatId (phone) is required' });
             const projectId = resolveProjectId(req);
-            const result = await depsHistoryHandler.createNewLeadManual(chatId, details, projectId);
+            const serviceId = resolveServiceId(req);
+            const result = await depsHistoryHandler.createNewLeadManual(chatId, details, projectId, serviceId);
             res.json(result);
         } catch (err: any) {
             res.status(500).json({ success: false, error: err.message });
@@ -1691,29 +1697,39 @@ export const registerBackofficeRoutes = (app: any) => {
 
     app.post('/api/backoffice/tags', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         const { name, color } = req.body;
-        const result = await depsHistoryHandler.createTag(name, color);
+        const projectId = resolveProjectId(req);
+        const serviceId = resolveServiceId(req);
+        const result = await depsHistoryHandler.createTag(name, color, projectId, serviceId);
         res.json(result);
     });
 
     app.put('/api/backoffice/tags/:id', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         const { name, color } = req.body;
-        const result = await depsHistoryHandler.updateTag(req.params.id, name, color);
+        const projectId = resolveProjectId(req);
+        const serviceId = resolveServiceId(req);
+        const result = await depsHistoryHandler.updateTag(req.params.id, name, color, projectId, serviceId);
         res.json(result);
     });
 
     app.delete('/api/backoffice/tags/:id', backofficeAuth, async (req: any, res: any) => {
-        const result = await depsHistoryHandler.deleteTag(req.params.id);
+        const projectId = resolveProjectId(req);
+        const serviceId = resolveServiceId(req);
+        const result = await depsHistoryHandler.deleteTag(req.params.id, projectId, serviceId);
         res.json(result);
     });
 
     app.post('/api/backoffice/chats/:chatId/tags', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         const { tagId } = req.body;
-        const result = await depsHistoryHandler.addTagToChat(req.params.chatId, tagId);
+        const projectId = resolveProjectId(req);
+        const serviceId = resolveServiceId(req);
+        const result = await depsHistoryHandler.addTagToChat(req.params.chatId, tagId, projectId, serviceId);
         res.json(result);
     });
 
     app.delete('/api/backoffice/chats/:chatId/tags/:tagId', backofficeAuth, async (req: any, res: any) => {
-        const result = await depsHistoryHandler.removeTagFromChat(req.params.chatId, req.params.tagId);
+        const projectId = resolveProjectId(req);
+        const serviceId = resolveServiceId(req);
+        const result = await depsHistoryHandler.removeTagFromChat(req.params.chatId, req.params.tagId, projectId, serviceId);
         res.json(result);
     });
 
@@ -2969,10 +2985,11 @@ export const registerBackofficeRoutes = (app: any) => {
     });
 
     app.post('/api/backoffice/whatsapp/sync-ids', backofficeAuth, async (req: any, res: any) => {
-        const projectId = (req.query.projectId as string) || process.env.RAILWAY_PROJECT_ID || 'default';
-        console.log(`🔄 [SYNC-IDS] Iniciando sincronizacion para proyecto: ${projectId}`);
+        const projectId = resolveProjectId(req) || (req.query.projectId as string) || process.env.RAILWAY_PROJECT_ID || 'default';
+        const serviceId = resolveServiceId(req) || depsHistoryHandler.SERVICE_IDENTIFIER;
+        console.log(`🔄 [SYNC-IDS] Iniciando sincronizacion para proyecto: ${projectId}, servicio: ${serviceId}`);
         try {
-            const config = await depsHistoryHandler.getMetaOnboardingData(projectId);
+            const config = await depsHistoryHandler.getMetaOnboardingData(projectId, false, serviceId);
 
             if (!config?.access_token || config.access_token === 'PENDING') {
                 console.warn(`⚠️ [SYNC-IDS] No hay access_token guardado para proyecto: ${projectId}`);
@@ -3022,11 +3039,12 @@ export const registerBackofficeRoutes = (app: any) => {
     });
 
     app.post('/api/backoffice/whatsapp/unlink-meta', backofficeAuth, async (req: any, res: any) => {
-        const projectId = req.query.projectId || process.env.RAILWAY_PROJECT_ID || "default";
-        console.log(`📡 [UNLINK-META] Iniciando desvinculación de Meta para Proyecto: ${projectId}`);
+        const projectId = resolveProjectId(req) || req.query.projectId || process.env.RAILWAY_PROJECT_ID || "default";
+        const serviceId = resolveServiceId(req) || depsHistoryHandler.SERVICE_IDENTIFIER;
+        console.log(`📡 [UNLINK-META] Iniciando desvinculación de Meta para Proyecto: ${projectId}, Servicio: ${serviceId}`);
         try {
             // 1. Obtener datos de onboarding actuales de la base de datos
-            const config = await depsHistoryHandler.getMetaOnboardingData(projectId);
+            const config = await depsHistoryHandler.getMetaOnboardingData(projectId, false, serviceId);
             if (config) {
                 const token = config.access_token || config.whatsappToken;
                 const phoneId = config.phone_number_id || config.whatsappNumberId;
@@ -3063,18 +3081,30 @@ export const registerBackofficeRoutes = (app: any) => {
 
             // 3. Eliminar onboarding de la base de datos para este proyecto
             console.log(`🧹 [UNLINK-META] Eliminando registro onboarding de la DB...`);
-            const { error: errOnboard } = await supabase
+            let obQuery = supabase
                 .from('meta_onboarding')
                 .delete()
                 .eq('project_id', projectId);
+
+            if (serviceId && serviceId !== 'default' && serviceId !== 'default_service') {
+                obQuery = obQuery.eq('service_id', serviceId);
+            }
+
+            const { error: errOnboard } = await obQuery;
             if (errOnboard) throw errOnboard;
 
             // 4. Eliminar rutas de routing_table de la base de datos para este proyecto
             console.log(`🧹 [UNLINK-META] Eliminando registros de rutas en routing_table de la DB...`);
-            const { error: errRoutes } = await supabase
+            let rtQuery = supabase
                 .from('routing_table')
                 .delete()
                 .eq('project_id', projectId);
+
+            if (serviceId && serviceId !== 'default' && serviceId !== 'default_service') {
+                rtQuery = rtQuery.eq('service_id', serviceId);
+            }
+
+            const { error: errRoutes } = await rtQuery;
             if (errRoutes) throw errRoutes;
 
             console.log(`✅ [UNLINK-META] Desvinculación de Meta completada para el proyecto ${projectId}.`);
@@ -4639,8 +4669,9 @@ Hemos recibido tu pago con éxito.
     /** GET /api/backoffice/waba-groups/status */
     app.get('/api/backoffice/waba-groups/status', backofficeAuth, async (req: any, res: any) => {
         try {
-            const projectId = depsHistoryHandler.PROJECT_IDENTIFIER;
-            const active = await depsHistoryHandler.getSetting('META_GROUP_REPORTS_ENABLED', projectId);
+            const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
+            const serviceId = resolveServiceId(req) || depsHistoryHandler.SERVICE_IDENTIFIER;
+            const active = await depsHistoryHandler.getSetting('META_GROUP_REPORTS_ENABLED', projectId, serviceId);
             res.json({ success: true, active: active === 'true' });
         } catch (e: any) {
             res.status(500).json({ success: false, error: e.message });
@@ -4651,8 +4682,9 @@ Hemos recibido tu pago con éxito.
     app.post('/api/backoffice/waba-groups/status', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         try {
             const { active } = req.body;
-            const projectId = depsHistoryHandler.PROJECT_IDENTIFIER;
-            await depsHistoryHandler.saveSetting('META_GROUP_REPORTS_ENABLED', active ? 'true' : 'false', projectId);
+            const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
+            const serviceId = resolveServiceId(req) || depsHistoryHandler.SERVICE_IDENTIFIER;
+            await depsHistoryHandler.saveSetting('META_GROUP_REPORTS_ENABLED', active ? 'true' : 'false', projectId, serviceId);
             res.json({ success: true });
         } catch (e: any) {
             res.status(500).json({ success: false, error: e.message });
@@ -4662,7 +4694,7 @@ Hemos recibido tu pago con éxito.
     /** GET /api/backoffice/waba-groups */
     app.get('/api/backoffice/waba-groups', backofficeAuth, async (req: any, res: any) => {
         try {
-            const projectId = depsHistoryHandler.PROJECT_IDENTIFIER;
+            const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
             const groups = await depsHistoryHandler.getWabaReportGroups(projectId);
             res.json({ success: true, groups });
         } catch (e: any) {
@@ -4674,7 +4706,8 @@ Hemos recibido tu pago con éxito.
     app.post('/api/backoffice/waba-groups', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         try {
             const { id, name, contacts } = req.body;
-            const projectId = depsHistoryHandler.PROJECT_IDENTIFIER;
+            const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
+            const serviceId = resolveServiceId(req) || depsHistoryHandler.SERVICE_IDENTIFIER;
             
             if (!name) {
                 return res.status(400).json({ success: false, error: 'El nombre del grupo es obligatorio.' });
@@ -4780,7 +4813,7 @@ Hemos recibido tu pago con éxito.
                 return groupId;
             };
 
-            const metaConfig = await depsHistoryHandler.getMetaOnboardingData(projectId, true);
+            const metaConfig = await depsHistoryHandler.getMetaOnboardingData(projectId, true, serviceId);
             let groupJid = null;
             let metaError: any = null;
 
@@ -4931,7 +4964,8 @@ Hemos recibido tu pago con éxito.
     app.delete('/api/backoffice/waba-groups/:id', backofficeAuth, async (req: any, res: any) => {
         try {
             const { id } = req.params;
-            const projectId = depsHistoryHandler.PROJECT_IDENTIFIER;
+            const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
+            const serviceId = resolveServiceId(req) || depsHistoryHandler.SERVICE_IDENTIFIER;
 
             const existingGroups = await depsHistoryHandler.getWabaReportGroups(projectId);
             const existingGroup = existingGroups.find((g: any) => g.id === id);
@@ -4961,7 +4995,7 @@ Hemos recibido tu pago con éxito.
                     }
                 } else {
                     // Grupo de Meta: revocar enlace de invitación
-                    const metaConfig = await depsHistoryHandler.getMetaOnboardingData(projectId, true);
+                    const metaConfig = await depsHistoryHandler.getMetaOnboardingData(projectId, true, serviceId);
                     if (metaConfig?.whatsappToken) {
                         console.log(`[MetaGroupsAPI] Revocando enlace de invitación para el grupo Meta ${existingGroup.jid}...`);
                         try {
@@ -5018,6 +5052,9 @@ export const processImportExcel = async (req: any, res: any) => {
     const depsHistoryHandler = HistoryHandlerClass;
     
     if (!req.file) return res.status(400).json({ success: false, error: 'No se subió ningún archivo' });
+
+    const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
+    const serviceId = resolveServiceId(req) || depsHistoryHandler.SERVICE_IDENTIFIER;
 
     try {
         const fileBuffer = fs.readFileSync(req.file.path);
@@ -5097,17 +5134,17 @@ export const processImportExcel = async (req: any, res: any) => {
         const chatsToSync = Array.from(uniqueChatsMap.values());
 
         // 1. Upsert de Chats (Normalizados)
-        await depsHistoryHandler.syncChats(chatsToSync);
+        await depsHistoryHandler.syncChats(chatsToSync, projectId, serviceId);
 
         // 2. Procesar Etiquetas
         if (allUniqueTags.size > 0) {
-            const existingTags = await depsHistoryHandler.getTags();
+            const existingTags = await depsHistoryHandler.getTags(projectId, serviceId);
             const tagMap = new Map<string, string>(); // name -> id
             existingTags.forEach((t: any) => tagMap.set(t.name.toLowerCase(), t.id));
 
             for (const tagName of allUniqueTags) {
                 if (!tagMap.has(tagName.toLowerCase())) {
-                    const newTag = await depsHistoryHandler.createTag(tagName, '#6366f1');
+                    const newTag = await depsHistoryHandler.createTag(tagName, '#6366f1', projectId, serviceId);
                     if (newTag.success && newTag.tag) {
                         tagMap.set(tagName.toLowerCase(), newTag.tag.id);
                     }
@@ -5125,7 +5162,7 @@ export const processImportExcel = async (req: any, res: any) => {
             }
 
             if (associations.length > 0) {
-                await depsHistoryHandler.syncChatTags(associations);
+                await depsHistoryHandler.syncChatTags(associations, projectId, serviceId);
             }
         }
 

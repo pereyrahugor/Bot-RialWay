@@ -11,14 +11,16 @@ async function logApiRequest(data: {
     endpoint: string, 
     status: string, 
     error?: string, 
-    req: any 
+    req: any,
+    projectId?: string,
+    serviceId?: string | null
 }) {
     try {
         const origin_url = data.req.headers.origin || data.req.headers.referer || "direct_request";
         const ip_address = data.req.headers['x-forwarded-for'] || data.req.socket.remoteAddress || null;
         
         const insertData: any = {
-            project_id: HistoryHandler.PROJECT_IDENTIFIER,
+            project_id: data.projectId || HistoryHandler.PROJECT_IDENTIFIER,
             token: data.token || null,
             origin_url: origin_url,
             ip_address: ip_address,
@@ -28,7 +30,7 @@ async function logApiRequest(data: {
             method: data.req.method
         };
 
-        const currentServiceId = HistoryHandler.SERVICE_IDENTIFIER;
+        const currentServiceId = data.serviceId || HistoryHandler.SERVICE_IDENTIFIER;
         if (currentServiceId && currentServiceId !== 'default' && currentServiceId !== 'default_service') {
             insertData.service_id = currentServiceId;
         }
@@ -84,28 +86,35 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
                 return res.status(400).json({ success: false, error: "Falta api_key en la solicitud" });
             }
 
-            // Validar la API KEY contra la base de datos (tabla settings)
-            const storedApiKey = await HistoryHandler.getSetting('api_key');
-            
-            if (!storedApiKey || api_key !== storedApiKey) {
+            // Validar la API KEY contra la base de datos (tabla settings) buscando el tenant correspondiente
+            const { data: settingData, error: settingError } = await supabase
+                .from('settings')
+                .select('project_id, service_id')
+                .eq('key', 'api_key')
+                .eq('value', api_key)
+                .maybeSingle();
+
+            if (settingError || !settingData) {
                 await logApiRequest({ endpoint: '/api/v1/auth', status: 'error', error: 'API KEY inválida', req });
                 return res.status(401).json({ success: false, error: "API KEY inválida" });
             }
+
+            const resolvedProjectId = settingData.project_id;
+            const resolvedServiceId = settingData.service_id;
 
             // Generar token único de un solo uso
             const oneTimeToken = randomBytes(32).toString('hex');
             const expiresInMinutes = 5;
             const expiresAt = new Date(Date.now() + expiresInMinutes * 60000).toISOString();
 
-            const currentServiceId = HistoryHandler.SERVICE_IDENTIFIER;
             const insertData: any = {
                 token: oneTimeToken,
                 expires_at: expiresAt,
                 is_used: false,
-                client_id: HistoryHandler.PROJECT_IDENTIFIER
+                client_id: resolvedProjectId
             };
-            if (currentServiceId && currentServiceId !== 'default' && currentServiceId !== 'default_service') {
-                insertData.service_id = currentServiceId;
+            if (resolvedServiceId && resolvedServiceId !== 'default' && resolvedServiceId !== 'default_service') {
+                insertData.service_id = resolvedServiceId;
             }
 
             // Guardar en la tabla api_tokens
@@ -115,7 +124,14 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
 
             if (error) throw error;
 
-            await logApiRequest({ token: oneTimeToken, endpoint: '/api/v1/auth', status: 'success', req });
+            await logApiRequest({ 
+                token: oneTimeToken, 
+                endpoint: '/api/v1/auth', 
+                status: 'success', 
+                req,
+                projectId: resolvedProjectId,
+                serviceId: resolvedServiceId
+            });
 
             return res.json({ 
                 success: true, 
@@ -147,25 +163,21 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
             }
 
             // Validar y quemar el token
-            let query = supabase
+            const { data: tokenData, error: fetchError } = await supabase
                 .from('api_tokens')
                 .select('*')
                 .eq('token', token)
                 .eq('is_used', false)
-                .eq('client_id', HistoryHandler.PROJECT_IDENTIFIER) // Validación de scope por proyecto
-                .gt('expires_at', new Date().toISOString());
-
-            const valServiceId = HistoryHandler.SERVICE_IDENTIFIER;
-            if (valServiceId && valServiceId !== 'default' && valServiceId !== 'default_service') {
-                query = query.eq('service_id', valServiceId);
-            }
-
-            const { data: tokenData, error: fetchError } = await query.maybeSingle();
+                .gt('expires_at', new Date().toISOString())
+                .maybeSingle();
 
             if (fetchError || !tokenData) {
                 await logApiRequest({ token, endpoint: '/api/v1/send-template', status: 'error', error: 'Token inválido o expirado', req });
                 return res.status(401).json({ success: false, error: "Token inválido, expirado o ya utilizado." });
             }
+
+            const resolvedProjectId = tokenData.client_id;
+            const resolvedServiceId = tokenData.service_id;
 
             // Marcar como usado inmediatamente (Atomicidad para prevenir Race Condition)
             await supabase.from('api_tokens').update({ is_used: true }).eq('id', tokenData.id);
@@ -181,7 +193,15 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
             const foundTemplate = templates.find((t: any) => t.id === template_id || t.name === template_id);
 
             if (!foundTemplate) {
-                await logApiRequest({ token, endpoint: '/api/v1/send-template', status: 'error', error: `Plantilla no encontrada: ${template_id}`, req });
+                await logApiRequest({ 
+                    token, 
+                    endpoint: '/api/v1/send-template', 
+                    status: 'error', 
+                    error: `Plantilla no encontrada: ${template_id}`, 
+                    req,
+                    projectId: resolvedProjectId,
+                    serviceId: resolvedServiceId
+                });
                 return res.status(404).json({ success: false, error: `Plantilla no encontrada: ${template_id}` });
             }
 
@@ -202,7 +222,15 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
                 if (expectedVars.length !== sampleKeys.length) {
                     const errorMsg = `Estructura de variables inválida. La plantilla '${templateName}' espera ${expectedVars.length} variables: [${expectedVars.join(', ')}]. Tú enviaste ${sampleKeys.length}.`;
                     
-                    await logApiRequest({ token, endpoint: '/api/v1/send-template', status: 'error', error: errorMsg, req });
+                    await logApiRequest({ 
+                        token, 
+                        endpoint: '/api/v1/send-template', 
+                        status: 'error', 
+                        error: errorMsg, 
+                        req,
+                        projectId: resolvedProjectId,
+                        serviceId: resolvedServiceId
+                    });
                     
                     return res.status(400).json({ 
                         success: false, 
@@ -253,16 +281,23 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
                         }
                     }
 
-                    await HistoryHandler.saveMessage(firstPhone, 'assistant', `[API Externa: ${templateName}]\n${renderedText}`, 'text', null, null, firstMsgId);
+                    await HistoryHandler.saveMessage(firstPhone, 'assistant', `[API Externa: ${templateName}]\n${renderedText}`, 'text', null, null, firstMsgId, 'whatsapp', resolvedProjectId, resolvedServiceId || undefined);
                 } else {
-
                     throw new Error("Respuesta vacía o inesperada de Meta");
                 }
             } catch (e: any) {
                 const metaError = e.response?.data || { message: e.message };
                 console.error(`❌ [API_EXTERNAL] Error de validación en el primer envío:`, JSON.stringify(metaError));
                 
-                await logApiRequest({ token, endpoint: '/api/v1/send-template', status: 'error', error: JSON.stringify(metaError), req });
+                await logApiRequest({ 
+                    token, 
+                    endpoint: '/api/v1/send-template', 
+                    status: 'error', 
+                    error: JSON.stringify(metaError), 
+                    req,
+                    projectId: resolvedProjectId,
+                    serviceId: resolvedServiceId
+                });
 
                 return res.status(400).json({
                     success: false,
@@ -273,7 +308,14 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
             }
 
             // Registro de éxito inicial
-            await logApiRequest({ token, endpoint: '/api/v1/send-template', status: 'success', req });
+            await logApiRequest({ 
+                token, 
+                endpoint: '/api/v1/send-template', 
+                status: 'success', 
+                req,
+                projectId: resolvedProjectId,
+                serviceId: resolvedServiceId
+            });
 
             // --- RESPUESTA SEGÚN VOLUMEN ---
             if (data.length === 1) {
@@ -297,9 +339,8 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
                 });
 
                 // Procesamos el RESTO de la lista (del índice 1 en adelante)
-                processExternalBulk(provider, templateName, finalLanguage, data.slice(1), token, templateText);
+                processExternalBulk(provider, templateName, finalLanguage, data.slice(1), token, templateText, resolvedProjectId, resolvedServiceId);
             }
-
 
         } catch (err: any) {
             console.error('❌ [API_EXTERNAL] Error en /api/v1/send-template:', err.message);
@@ -314,8 +355,16 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
 /**
  * Procesa el envío masivo en segundo plano
  */
-async function processExternalBulk(provider: any, templateName: string, languageCode: string, data: any[], token?: string, templateText: string = '') {
-
+async function processExternalBulk(
+    provider: any, 
+    templateName: string, 
+    languageCode: string, 
+    data: any[], 
+    token?: string, 
+    templateText: string = '',
+    projectId?: string,
+    serviceId?: string | null
+) {
     let sent = 0;
     let errors = 0;
 
@@ -353,8 +402,7 @@ async function processExternalBulk(provider: any, templateName: string, language
                 }
 
                 // Guardar en el historial para que el operador lo vea
-                await HistoryHandler.saveMessage(phone, 'assistant', `[API Externa: ${templateName}]\n${renderedText}`, 'text', null, null, msgId);
-
+                await HistoryHandler.saveMessage(phone, 'assistant', `[API Externa: ${templateName}]\n${renderedText}`, 'text', null, null, msgId, 'whatsapp', projectId, serviceId || undefined);
             } else {
                 errors++;
             }
@@ -367,6 +415,6 @@ async function processExternalBulk(provider: any, templateName: string, language
         await new Promise(r => setTimeout(r, 250));
     }
 
-    console.log(`✅ [API_EXTERNAL] Envío finalizado: ${sent} éxitos, ${errors} errores.`);
+    console.log(`... [API_EXTERNAL] Envío finalizado: ${sent} éxitos, ${errors} errores.`);
 }
 
