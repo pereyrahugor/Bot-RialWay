@@ -5187,6 +5187,7 @@ export const processCreateIndividualContact = async (req: any, res: any) => {
     try {
         const { rawPhone, name, tagIds, projectId: bodyProjectId } = req.body;
         const targetProjectId = bodyProjectId || req.query.projectId || resolveProjectId(req) || (HistoryHandlerClass as any).PROJECT_ID || 'default';
+        const targetServiceId = resolveServiceId(req) || (HistoryHandlerClass as any).SERVICE_IDENTIFIER;
 
         let phone = String(rawPhone || '').replace(/\D/g, '').trim();
         if (!phone) {
@@ -5209,7 +5210,7 @@ export const processCreateIndividualContact = async (req: any, res: any) => {
             return res.status(500).json({ success: false, error: 'Base de datos no disponible.' });
         }
 
-        const chatRow = {
+        const chatRow: any = {
             id: phone,
             project_id: targetProjectId,
             name: name && String(name).trim() !== '' ? String(name).trim() : null,
@@ -5219,9 +5220,15 @@ export const processCreateIndividualContact = async (req: any, res: any) => {
             last_message_at: new Date().toISOString()
         };
 
+        if (targetServiceId && targetServiceId !== 'default' && targetServiceId !== 'default_service') {
+            chatRow.service_id = targetServiceId;
+        } else {
+            chatRow.service_id = HistoryHandlerClass.SERVICE_IDENTIFIER;
+        }
+
         const { error: chatErr } = await supabase
             .from('chats')
-            .upsert(chatRow, { onConflict: 'id,project_id' });
+            .upsert(chatRow, { onConflict: 'id,project_id,service_id' });
 
         if (chatErr) {
             console.error('[create-individual] Error guardando chat:', chatErr);
@@ -5229,11 +5236,19 @@ export const processCreateIndividualContact = async (req: any, res: any) => {
         }
 
         if (Array.isArray(tagIds) && tagIds.length > 0) {
-            const tagRows = tagIds.map((tagId: string) => ({
-                chat_id: phone,
-                tag_id: tagId,
-                project_id: targetProjectId
-            }));
+            const tagRows = tagIds.map((tagId: string) => {
+                const row: any = {
+                    chat_id: phone,
+                    tag_id: tagId,
+                    project_id: targetProjectId
+                };
+                if (targetServiceId && targetServiceId !== 'default' && targetServiceId !== 'default_service') {
+                    row.service_id = targetServiceId;
+                } else {
+                    row.service_id = HistoryHandlerClass.SERVICE_IDENTIFIER;
+                }
+                return row;
+            });
 
             const { error: tagErr } = await supabase
                 .from('chat_tags')

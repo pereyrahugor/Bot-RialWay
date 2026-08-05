@@ -848,9 +848,17 @@ export class HistoryHandler {
      * @param userId - El nuevo BSUID (Business-Scoped User ID) de Meta
      * @param forcedProjectId - ID opcional del proyecto para forzar el ruteo
      */
-    static async getOrCreateChat(rawChatId: string, type: 'whatsapp' | 'webchat' | 'instagram' | 'messenger', name: string | null = null, userId: string | null = null, forcedProjectId?: string): Promise<Chat | null> {
+    static async getOrCreateChat(
+        rawChatId: string, 
+        type: 'whatsapp' | 'webchat' | 'instagram' | 'messenger', 
+        name: string | null = null, 
+        userId: string | null = null, 
+        forcedProjectId?: string,
+        forcedServiceId?: string | null
+    ): Promise<Chat | null> {
         const chatId = this.normalizeId(rawChatId);
         const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+        const currentServiceId = forcedServiceId || this.SERVICE_IDENTIFIER;
         if (process.env.STORAGE_MODE === "local") {
             return LocalHistoryStore.getOrCreateChat(chatId, type, name, userId, currentProjectId) as any;
         }
@@ -862,12 +870,17 @@ export class HistoryHandler {
 
             // 1. Intentar buscar por user_id (BSUID) si está presente
             if (userId) {
-                const { data: byUserId, error: errUser } = await supabase
+                let query = supabase
                     .from('chats')
                     .select('*')
                     .eq('user_id', userId)
-                    .eq('project_id', currentProjectId)
-                    .maybeSingle();
+                    .eq('project_id', currentProjectId);
+
+                if (currentServiceId && currentServiceId !== 'default' && currentServiceId !== 'default_service') {
+                    query = query.eq('service_id', currentServiceId);
+                }
+
+                const { data: byUserId, error: errUser } = await query.maybeSingle();
 
                 data = byUserId;
                 if (errUser) error = errUser;
@@ -875,12 +888,17 @@ export class HistoryHandler {
 
             // 2. Si no se encontró por BSUID, intentar por chatId (Phone)
             if (!data && !error) {
-                const { data: byChatId, error: errChat } = await supabase
+                let query = supabase
                     .from('chats')
                     .select('*')
                     .eq('id', chatId)
-                    .eq('project_id', currentProjectId)
-                    .maybeSingle();
+                    .eq('project_id', currentProjectId);
+
+                if (currentServiceId && currentServiceId !== 'default' && currentServiceId !== 'default_service') {
+                    query = query.eq('service_id', currentServiceId);
+                }
+
+                const { data: byChatId, error: errChat } = await query.maybeSingle();
 
                 data = byChatId;
                 error = errChat;
@@ -889,10 +907,16 @@ export class HistoryHandler {
                 if (data && userId && !data.user_id) {
                     console.log(`[HistoryHandler] 🔗 Mapeando BSUID ${userId} al chat existente ${chatId}`);
                     this.invalidateChatCache(chatId, currentProjectId);
-                    await supabase.from('chats')
+                    let updateQuery = supabase.from('chats')
                         .update({ user_id: userId })
                         .eq('id', chatId)
-                        .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
+                        .eq('project_id', currentProjectId);
+
+                    if (currentServiceId && currentServiceId !== 'default' && currentServiceId !== 'default_service') {
+                        updateQuery = updateQuery.eq('service_id', currentServiceId);
+                    }
+
+                    await updateQuery;
                     data.user_id = userId;
                 }
             }
@@ -900,19 +924,25 @@ export class HistoryHandler {
             // 3. Si sigue sin existir, lo creamos
             if (!data) {
                 this.invalidateChatCache(chatId, currentProjectId);
+                const insertData: any = {
+                    id: chatId,
+                    user_id: userId,
+                    project_id: currentProjectId,
+                    type,
+                    name,
+                    bot_enabled: true,
+                    assigned_agent: 'asistente1',
+                    last_message_at: new Date().toISOString()
+                };
+                if (currentServiceId && currentServiceId !== 'default' && currentServiceId !== 'default_service') {
+                    insertData.service_id = currentServiceId;
+                } else {
+                    insertData.service_id = HistoryHandler.SERVICE_IDENTIFIER;
+                }
+
                 const { data: newData, error: insertError } = await supabase
                     .from('chats')
-                    .insert({
-                        id: chatId,
-                        user_id: userId,
-                        project_id: currentProjectId,
-                        service_id: HistoryHandler.SERVICE_IDENTIFIER,
-                        type,
-                        name,
-                        bot_enabled: true,
-                        assigned_agent: 'asistente1',
-                        last_message_at: new Date().toISOString()
-                    })
+                    .insert(insertData)
                     .select()
                     .single();
 
@@ -925,7 +955,16 @@ export class HistoryHandler {
             // Actualizar nombre si es null y ahora tenemos uno
             if (name && !data.name) {
                 this.invalidateChatCache(chatId, currentProjectId);
-                await supabase.from('chats').update({ name }).eq('id', chatId).eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
+                let updateQuery = supabase.from('chats')
+                    .update({ name })
+                    .eq('id', chatId)
+                    .eq('project_id', currentProjectId);
+
+                if (currentServiceId && currentServiceId !== 'default' && currentServiceId !== 'default_service') {
+                    updateQuery = updateQuery.eq('service_id', currentServiceId);
+                }
+
+                await updateQuery;
             }
 
             return data;
@@ -989,7 +1028,7 @@ export class HistoryHandler {
             }
 
             // Asegurar que el chat existe
-            const chatObj = await this.getOrCreateChat(chatId, resolvedPlatform, contactName, userId, currentProjectId);
+            const chatObj = await this.getOrCreateChat(chatId, resolvedPlatform, contactName, userId, currentProjectId, currentServiceId);
 
             const msgData: any = {
                 chat_id: chatId,
@@ -1604,11 +1643,13 @@ export class HistoryHandler {
             };
             if (currentServiceId && currentServiceId !== 'default' && currentServiceId !== 'default_service') {
                 chatPayload.service_id = currentServiceId;
+            } else {
+                chatPayload.service_id = HistoryHandler.SERVICE_IDENTIFIER;
             }
 
             const { error: chatErr } = await supabase
                 .from('chats')
-                .upsert(chatPayload, { onConflict: 'id,project_id' });
+                .upsert(chatPayload, { onConflict: 'id,project_id,service_id' });
 
             if (chatErr) throw chatErr;
 
@@ -2068,7 +2109,7 @@ export class HistoryHandler {
 
             // Aseguramos que el chat base existe antes de vincular la etiqueta
             // para evitar fallos de clave foránea si el chat no ha sido persistido aún.
-            await this.getOrCreateChat(chatId, 'whatsapp', currentProjectId, currentServiceId);
+            await this.getOrCreateChat(chatId, 'whatsapp', null, null, currentProjectId, currentServiceId);
 
             const insertData: any = {
                 chat_id: chatId,
@@ -3855,6 +3896,8 @@ export class HistoryHandler {
                 };
                 if (targetServiceId && targetServiceId !== 'default' && targetServiceId !== 'default_service') {
                     upsertData.service_id = targetServiceId;
+                } else {
+                    upsertData.service_id = HistoryHandler.SERVICE_IDENTIFIER;
                 }
                 chatsMap.set(cleanId, upsertData);
             }
@@ -3863,7 +3906,7 @@ export class HistoryHandler {
 
             const { data, error } = await supabase
                 .from('chats')
-                .upsert(chatsToUpsert, { onConflict: 'id,project_id' })
+                .upsert(chatsToUpsert, { onConflict: 'id,project_id,service_id' })
                 .select();
 
             if (error) throw error;
