@@ -79,6 +79,75 @@ export class SupabaseBaileysProvider extends BaileysProvider {
      * BuilderBot define initVendor como una propiedad asignada a una función.
      * Debemos seguir el mismo patrón para evitar conflictos de tipos.
      */
+    /**
+     * Obtiene el mimetype de un mensaje de Baileys
+     */
+    private getMimeTypeCustom(msg: any): string | undefined {
+        const message = msg.message;
+        if (!message) return undefined;
+        const { imageMessage, videoMessage, documentMessage, audioMessage, documentWithCaptionMessage } = message;
+        return (imageMessage?.mimetype ??
+            audioMessage?.mimetype ??
+            videoMessage?.mimetype ??
+            documentMessage?.mimetype ??
+            documentWithCaptionMessage?.message?.documentMessage?.mimetype);
+    }
+
+    /**
+     * Descarga y guarda archivos multimedia recibidos por Baileys,
+     * preservando el nombre original del archivo si es un documento.
+     */
+    public saveFile = async (ctx: any, options: { path?: string } = {}): Promise<string> => {
+        // El WAMessage original puede estar en payload o en ctx directamente
+        const msg = ctx.payload || ctx;
+        
+        // Obtener mimetype
+        const mimeType = this.getMimeTypeCustom(msg);
+        if (!mimeType) {
+            throw new Error("MIME type not found");
+        }
+
+        // Obtener la extensión
+        // @ts-ignore
+        const mimeModule = await import('mime-types');
+        const mime = mimeModule.default || mimeModule;
+        const extension = (mime as any).extension(mimeType) || 'bin';
+
+        // Intentar extraer el nombre original si es un documento
+        const docMsg = msg.message?.documentMessage || 
+                       msg.message?.documentWithCaptionMessage?.message?.documentMessage || 
+                       msg.documentMessage || 
+                       null;
+        
+        let fileName = '';
+        if (docMsg && docMsg.fileName) {
+            // Sanitizar el nombre de archivo para evitar caracteres problemáticos
+            const sanitized = docMsg.fileName.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+            fileName = `${Date.now()}-${sanitized}`;
+            // Asegurar que termina con la extensión correcta si no la tiene
+            if (!fileName.toLowerCase().endsWith(`.${extension.toLowerCase()}`)) {
+                fileName = `${fileName}.${extension}`;
+            }
+        } else {
+            fileName = `file-${Date.now()}.${extension}`;
+        }
+
+        // Descargar el buffer usando whiskeysockets/baileys
+        const buffer = await baileys.downloadMediaMessage(msg, "buffer", {}, {
+            logger: logger
+        } as any);
+
+        const outPath = options.path || './tmp/';
+        if (!fs.existsSync(outPath)) {
+            fs.mkdirSync(outPath, { recursive: true });
+        }
+
+        const pathFile = path.join(process.cwd(), outPath, fileName);
+        fs.writeFileSync(pathFile, buffer);
+        
+        return path.resolve(pathFile);
+    }
+
     public initVendor = async (): Promise<any> => {
         return await this.initProvider();
     }
@@ -451,11 +520,17 @@ export class SupabaseBaileysProvider extends BaileysProvider {
                     const isMedia = ['image', 'video', 'voice', 'document'].includes(finalType);
                     if (isMedia) {
                         // Asegurar mimetypes por defecto para evitar errores en saveFile
-                        if (msg.message?.documentMessage && !msg.message.documentMessage.mimetype) {
-                            msg.message.documentMessage.mimetype = "application/pdf";
-                        }
-                        if (msg.message?.documentWithCaptionMessage?.message?.documentMessage && !msg.message.documentWithCaptionMessage.message.documentMessage.mimetype) {
-                            msg.message.documentWithCaptionMessage.message.documentMessage.mimetype = "application/pdf";
+                        const docMsg = msg.message?.documentMessage || msg.message?.documentWithCaptionMessage?.message?.documentMessage;
+                        if (docMsg && !docMsg.mimetype) {
+                            const fileName = docMsg.fileName || '';
+                            const ext = fileName.split('.').pop()?.toLowerCase();
+                            if (ext === 'png') {
+                                docMsg.mimetype = "image/png";
+                            } else if (ext === 'jpg' || ext === 'jpeg') {
+                                docMsg.mimetype = "image/jpeg";
+                            } else {
+                                docMsg.mimetype = "application/pdf";
+                            }
                         }
 
                         try {
