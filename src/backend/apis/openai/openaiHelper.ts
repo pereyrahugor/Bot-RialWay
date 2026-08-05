@@ -274,10 +274,14 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
             if (cleanSlug === 'ganemos' || cleanSlug === 'ganemos-net' || cleanSlug === 'cas-epc' || cleanSlug === 'casepc') {
                 leadContext = `\n\nDATOS DEL CLIENTE EN CRM (Úsalos para personalizar tu respuesta):
 - Nombre: ${chatData.name || 'No identificado'}
-- Usuario / DNI: ${chatData.cuit_dni || 'No registrado'}
+- Usuario / DNI (Nombre de usuario en la plataforma de juego): ${chatData.cuit_dni || 'No registrado'}
 - Correo Electrónico: ${chatData.email || 'No registrado'}
 - Domicilio: ${chatData.address || 'No registrado'}
-- Notas del CRM: ${chatData.notes || 'Sin notas'}`;
+- Notas del CRM: ${chatData.notes || 'Sin notas'}
+
+INSTRUCCIÓN CRÍTICA DE IDENTIDAD DE JUGADOR:
+- El campo 'Usuario / DNI' representa el nombre de usuario oficial del jugador en la plataforma.
+- Para las llamadas de herramientas 'DEPOSITAR' o 'RETIRAR', debes utilizar este nombre de usuario registrado en la base de datos (${chatData.cuit_dni || 'No registrado'}) como argumento 'username', a menos que el usuario del chat te indique explícitamente en su mensaje que la operación es para un usuario distinto.`;
             } else if (cleanSlug === 'aquavita') {
                 leadContext = `\n\nDATOS DEL CLIENTE EN CRM (Úsalos para personalizar tu respuesta):
 - Nombre: ${chatData.name || 'No identificado'}

@@ -602,7 +602,7 @@ export class SupabaseBaileysProvider extends BaileysProvider {
                             const localPath = await this.saveFile(msg, { path: "./tmp/" });
                             if (localPath) {
                                 payload.localPath = localPath;
-                                payload.body = localPath;
+                                // No sobreescribir payload.body para no romper el enrutamiento de BuilderBot (EVENTS.DOCUMENT / EVENTS.IMAGE)
                                 await SystemLogger.info('SYSTEM', `Auto-descarga exitosa. localPath: ${localPath}`, null, { msgKey: msg.key });
                             } else {
                                 await SystemLogger.warn('SYSTEM', `Auto-descarga retornó localPath vacío`, null, { msgKey: msg.key });
