@@ -301,6 +301,7 @@ export class HistoryHandler {
                 sql: `CREATE TABLE IF NOT EXISTS mercadopago_payments_clients (
                     id TEXT PRIMARY KEY,
                     project_id TEXT,
+                    service_id TEXT,
                     chat_id TEXT,
                     status TEXT,
                     description TEXT,
@@ -318,6 +319,7 @@ export class HistoryHandler {
                 name: 'mercadopago_acount_user',
                 sql: `CREATE TABLE IF NOT EXISTS mercadopago_acount_user (
                     project_id TEXT,
+                    service_id TEXT,
                     user_id TEXT,
                     access_token TEXT,
                     public_key TEXT,
@@ -364,6 +366,7 @@ export class HistoryHandler {
                 sql: `CREATE TABLE IF NOT EXISTS quick_messages (
                     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
                     project_id TEXT NOT NULL,
+                    service_id TEXT,
                     title TEXT NOT NULL,
                     message TEXT NOT NULL,
                     created_at TIMESTAMPTZ DEFAULT NOW()
@@ -1282,7 +1285,7 @@ export class HistoryHandler {
                 const tickets = LocalHistoryStore.getTicketsList(currentProjectId || HistoryHandler.PROJECT_IDENTIFIER);
                 const activeTicket = tickets.find(t => t.chat_id === chatId);
                 if (activeTicket) {
-                    historyEvents.emit('ticket_updated', { id: activeTicket.id, chat_id: chatId, ...activeTicket });
+                    historyEvents.emit('ticket_updated', { ...activeTicket, id: activeTicket.id, chat_id: chatId });
                 }
             }
             return { success };
@@ -1631,9 +1634,10 @@ export class HistoryHandler {
     /**
      * Cambia el estado del bot (Intervención humana)
      */
-    static async toggleBot(rawChatId: string, enabled: boolean, projectId: string | null = null) {
+    static async toggleBot(rawChatId: string, enabled: boolean, projectId: string | null = null, serviceId: string | null = null) {
         const chatId = this.normalizeId(rawChatId);
         const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
+        const currentServiceId = serviceId || this.SERVICE_IDENTIFIER;
         if (process.env.STORAGE_MODE === "local") {
             const res = await LocalHistoryStore.toggleBot(chatId, enabled, currentProjectId);
             historyEvents.emit('bot_toggled', { chatId, enabled, assigned_agent: 'asistente1', projectId: currentProjectId });
@@ -1652,11 +1656,17 @@ export class HistoryHandler {
                 updateData.assigned_agent = 'asistente1';
             }
 
-            const { error } = await supabase
+            let query = supabase
                 .from('chats')
                 .update(updateData)
                 .eq('id', chatId)
                 .eq('project_id', currentProjectId);
+
+            if (currentServiceId && currentServiceId !== 'default' && currentServiceId !== 'default_service') {
+                query = query.eq('service_id', currentServiceId);
+            }
+
+            const { error } = await query;
 
             if (error) throw error;
             // Emitir evento para WebSockets (ahora incluimos el agente y projectId para sincronización frontend)
@@ -3889,17 +3899,23 @@ export class HistoryHandler {
     /**
      * Obtiene todos los mensajes rápidos para un proyecto.
      */
-    static async getQuickMessages(projectId: string): Promise<any[]> {
+    static async getQuickMessages(projectId: string, serviceId: string | null = null): Promise<any[]> {
         const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
+        const currentServiceId = serviceId || this.SERVICE_IDENTIFIER;
         if (process.env.STORAGE_MODE === "local") {
             return LocalHistoryStore.getQuickMessages(currentProjectId);
         }
         try {
-            const { data, error } = await supabase
+            let query = supabase
                 .from('quick_messages')
                 .select('*')
-                .eq('project_id', currentProjectId)
-                .order('created_at', { ascending: false });
+                .eq('project_id', currentProjectId);
+
+            if (currentServiceId && currentServiceId !== 'default' && currentServiceId !== 'default_service') {
+                query = query.eq('service_id', currentServiceId);
+            }
+
+            const { data, error } = await query.order('created_at', { ascending: false });
 
             if (error) throw error;
             return data || [];
@@ -3912,20 +3928,26 @@ export class HistoryHandler {
     /**
      * Crea un nuevo mensaje rápido para el proyecto.
      */
-    static async createQuickMessage(projectId: string, title: string, message: string): Promise<any> {
+    static async createQuickMessage(projectId: string, title: string, message: string, serviceId: string | null = null): Promise<any> {
         const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
+        const currentServiceId = serviceId || this.SERVICE_IDENTIFIER;
         if (process.env.STORAGE_MODE === "local") {
             return LocalHistoryStore.createQuickMessage(currentProjectId, title, message);
         }
         try {
+            const insertData: any = {
+                project_id: currentProjectId,
+                title,
+                message,
+                created_at: new Date().toISOString()
+            };
+            if (currentServiceId && currentServiceId !== 'default' && currentServiceId !== 'default_service') {
+                insertData.service_id = currentServiceId;
+            }
+
             const { data, error } = await supabase
                 .from('quick_messages')
-                .insert({
-                    project_id: currentProjectId,
-                    title,
-                    message,
-                    created_at: new Date().toISOString()
-                })
+                .insert(insertData)
                 .select()
                 .single();
 
@@ -3940,17 +3962,24 @@ export class HistoryHandler {
     /**
      * Elimina un mensaje rápido por su ID.
      */
-    static async deleteQuickMessage(id: string, projectId: string): Promise<boolean> {
+    static async deleteQuickMessage(id: string, projectId: string, serviceId: string | null = null): Promise<boolean> {
         const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
+        const currentServiceId = serviceId || this.SERVICE_IDENTIFIER;
         if (process.env.STORAGE_MODE === "local") {
             return LocalHistoryStore.deleteQuickMessage(id, currentProjectId);
         }
         try {
-            const { error } = await supabase
+            let query = supabase
                 .from('quick_messages')
                 .delete()
                 .eq('id', id)
                 .eq('project_id', currentProjectId);
+
+            if (currentServiceId && currentServiceId !== 'default' && currentServiceId !== 'default_service') {
+                query = query.eq('service_id', currentServiceId);
+            }
+
+            const { error } = await query;
 
             if (error) throw error;
             return true;

@@ -25,19 +25,26 @@ export const startHumanInactivityWorker = (timeoutMinutes = 15) => {
 
             for (const chat of (inactiveChats || [])) {
                 const projectId = chat.project_id;
+                const serviceId = chat.service_id;
 
                 // 2. Si el bot está desactivado globalmente para este proyecto, no auto-activar
-                const isGlobalBotEnabledSetting = await HistoryHandler.getSetting('GLOBAL_BOT_ENABLED', projectId);
+                const isGlobalBotEnabledSetting = await HistoryHandler.getSetting('GLOBAL_BOT_ENABLED', projectId, serviceId);
                 if (isGlobalBotEnabledSetting === 'false') {
                     continue;
                 }
 
                 // 3. Excluir chats en lista negra (marcados como sin_bot o bloqueado_crm)
-                const { data: blEntry, error: blError } = await supabase
+                let blQuery = supabase
                     .from('blacklist')
                     .select('chat_id')
                     .eq('chat_id', chat.id)
-                    .eq('project_id', projectId)
+                    .eq('project_id', projectId);
+
+                if (serviceId && serviceId !== 'default' && serviceId !== 'default_service') {
+                    blQuery = blQuery.eq('service_id', serviceId);
+                }
+
+                const { data: blEntry, error: blError } = await blQuery
                     .or('sin_bot.eq.true,bloqueado_crm.eq.true')
                     .maybeSingle();
 
@@ -52,7 +59,7 @@ export const startHumanInactivityWorker = (timeoutMinutes = 15) => {
                 }
 
                 console.log(`[WORKER] [${new Date().toLocaleTimeString()}] Auto-activando bot para chat ${chat.id} en proyecto ${projectId} (Inactividad > ${timeoutMinutes} min)`);
-                await HistoryHandler.toggleBot(chat.id, true, projectId);
+                await HistoryHandler.toggleBot(chat.id, true, projectId, serviceId);
             }
         } catch (e) {
             console.error('[WORKER] Error en check de inactividad humana:', e);

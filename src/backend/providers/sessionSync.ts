@@ -22,9 +22,9 @@ const supabase = createClient(supabaseUrl, supabaseKey);
  * Restaura la sesión desde Supabase.
  * Soporta formato antiguo (archivos individuales) y nuevo (full_backup).
  */
-export async function restoreSessionFromDb(sessionId: string = 'default') {
+export async function restoreSessionFromDb(sessionId: string = 'default', serviceId: string | null = null) {
     const sessionPath = path.join(SESSION_DIR, sessionId);
-    console.log(`[SessionSync] 📥 Restaurando sesión '${sessionId}' para proyecto '${projectId}'...`);
+    console.log(`[SessionSync] 📥 Restaurando sesión '${sessionId}' para proyecto '${projectId}' y servicio '${serviceId || 'default'}'...`);
 
     try {
         // Limpiar carpeta local antes de restaurar
@@ -38,15 +38,17 @@ export async function restoreSessionFromDb(sessionId: string = 'default') {
             fs.mkdirSync(sessionPath, { recursive: true });
         }
 
-        // const { data, error } = await supabase.rpc('get_whatsapp_session', {
-        //     p_project_id: projectId,
-        //     p_session_id: sessionId
-        // });
-        const { data, error } = await supabase
+        let query = supabase
             .from('whatsapp_sessions')
             .select('key_id, data')
             .eq('project_id', projectId)
             .eq('session_id', sessionId);
+
+        if (serviceId && serviceId !== 'default' && serviceId !== 'default_service') {
+            query = query.eq('service_id', serviceId);
+        }
+
+        const { data, error } = await query;
 
         if (error) {
             console.error('[SessionSync] Error RPC get_whatsapp_session:', error);
@@ -100,18 +102,19 @@ export async function restoreSessionFromDb(sessionId: string = 'default') {
 /**
  * Verifica si existe una sesión guardada en la base de datos.
  */
-export async function isSessionInDb(sessionId: string = 'default'): Promise<boolean> {
+export async function isSessionInDb(sessionId: string = 'default', serviceId: string | null = null): Promise<boolean> {
     try {
-        // const { data, error } = await supabase.rpc('get_whatsapp_session', {
-        //     p_project_id: projectId,
-        //     p_session_id: sessionId
-        // });
-        const { data, error } = await supabase
+        let query = supabase
             .from('whatsapp_sessions')
             .select('key_id')
             .eq('project_id', projectId)
-            .eq('session_id', sessionId)
-            .limit(1);
+            .eq('session_id', sessionId);
+
+        if (serviceId && serviceId !== 'default' && serviceId !== 'default_service') {
+            query = query.eq('service_id', serviceId);
+        }
+
+        const { data, error } = await query.limit(1);
 
         if (error) {
             console.error('[SessionSync] Error verificando sesión en DB:', error);
@@ -128,18 +131,20 @@ export async function isSessionInDb(sessionId: string = 'default'): Promise<bool
 /**
  * Elimina la sesión remota en Supabase.
  */
-export async function deleteSessionFromDb(sessionId: string = 'default') {
-    console.log(`[SessionSync] 🗑️ Eliminando sesión remota '${sessionId}' para proyecto '${projectId}'...`);
+export async function deleteSessionFromDb(sessionId: string = 'default', serviceId: string | null = null) {
+    console.log(`[SessionSync] 🗑️ Eliminando sesión remota '${sessionId}' para proyecto '${projectId}' y servicio '${serviceId || 'default'}'...`);
     try {
-        // const { error } = await supabase.rpc('delete_whatsapp_session', {
-        //     p_project_id: projectId,
-        //     p_session_id: sessionId
-        // });
-        const { error } = await supabase
+        let query = supabase
             .from('whatsapp_sessions')
             .delete()
             .eq('project_id', projectId)
             .eq('session_id', sessionId);
+
+        if (serviceId && serviceId !== 'default' && serviceId !== 'default_service') {
+            query = query.eq('service_id', serviceId);
+        }
+
+        const { error } = await query;
 
         if (error) {
             console.error('[SessionSync] ❌ Error eliminando sesión remota:', error);
@@ -178,27 +183,27 @@ export async function deleteAllProjectSessionsFromDb() {
  * Inicia la sincronización UNIFICADA.
  * Estrategia: Sincronizar a los 30 segundos (estabilización), a los 2 minutos, y luego cada 1 hora.
  */
-export function startSessionSync(sessionId: string = 'default') {
+export function startSessionSync(sessionId: string = 'default', serviceId: string | null = null) {
     console.log(`[SessionSync] 🔄 Iniciando sincronización unificada.`);
     console.log(`[SessionSync] Estrategia: 30s (estabilización) -> 2 min -> Cada 1 Hora.`);
 
     // 1. Ejecutar tras 30 segundos para permitir que el bot se estabilice y no leer archivos mientras se abren
     setTimeout(() => {
-        syncToDb(sessionId).catch(err => console.error('[SessionSync] Error primer guardado:', err));
+        syncToDb(sessionId, serviceId).catch(err => console.error('[SessionSync] Error primer guardado:', err));
     }, 30 * 1000);
 
     // 2. Ejecutar a los 2 minutos (ventana típica para escanear QR y asegurar persistencia rápida)
     setTimeout(() => {
-        syncToDb(sessionId);
+        syncToDb(sessionId, serviceId);
     }, 2 * 60 * 1000);
 
     // 3. Ciclo perpetuo de 10 minutos
     setInterval(async () => {
-        await syncToDb(sessionId);
+        await syncToDb(sessionId, serviceId);
     }, SYNC_INTERVAL_MS);
 }
 
-async function syncToDb(sessionId: string) {
+async function syncToDb(sessionId: string, serviceId: string | null = null) {
     try {
         const sessionPath = path.join(SESSION_DIR, sessionId);
         if (!fs.existsSync(sessionPath)) return;
@@ -238,23 +243,20 @@ async function syncToDb(sessionId: string) {
 
         if (Object.keys(sessionMap).length === 0) return;
 
-        // Subir TODO el mapa en una sola transacción/fila
-        // const { error } = await supabase.rpc('save_whatsapp_session', {
-        //     p_project_id: projectId,
-        //     p_session_id: sessionId,
-        //     p_key_id: 'full_backup', // ID especial para respaldo completo
-        //     p_data: sessionMap,      // Objeto gigante
-        //     p_bot_name: botName
-        // });
+        const upsertData: any = {
+            project_id: projectId,
+            session_id: sessionId,
+            key_id: 'full_backup',
+            data: sessionMap,
+            updated_at: new Date().toISOString()
+        };
+        if (serviceId && serviceId !== 'default' && serviceId !== 'default_service') {
+            upsertData.service_id = serviceId;
+        }
+
         const { error } = await supabase
             .from('whatsapp_sessions')
-            .upsert({
-                project_id: projectId,
-                session_id: sessionId,
-                key_id: 'full_backup',
-                data: sessionMap,
-                updated_at: new Date().toISOString()
-            }, { onConflict: 'project_id,session_id,key_id' });
+            .upsert(upsertData, { onConflict: 'project_id,session_id,key_id' });
 
         if (error) {
             console.error(`[SessionSync] Error subiendo respaldo unificado:`, error.message);

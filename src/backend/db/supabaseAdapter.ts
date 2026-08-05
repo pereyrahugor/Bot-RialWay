@@ -7,7 +7,8 @@ export const useSupabaseAuthState = async (
     supabaseKey: string,
     projectId: string,
     sessionId: string = 'default',
-    botName: string | null = null
+    botName: string | null = null,
+    serviceId: string | null = null
 ): Promise<{ state: AuthenticationState, saveCreds: () => Promise<void>, clearSession: () => Promise<void> }> => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
@@ -16,11 +17,17 @@ export const useSupabaseAuthState = async (
     // Cargar toda la sesión al inicio
     const init = async () => {
         try {
-            const { data: rows, error } = await supabase
+            let query = supabase
                 .from('whatsapp_sessions')
                 .select('key_id, data')
                 .eq('project_id', projectId)
                 .eq('session_id', sessionId);
+
+            if (serviceId && serviceId !== 'default' && serviceId !== 'default_service') {
+                query = query.eq('service_id', serviceId);
+            }
+
+            const { data: rows, error } = await query;
 
             if (error) throw error;
 
@@ -46,15 +53,20 @@ export const useSupabaseAuthState = async (
 
     const saveToDb = async () => {
         try {
+            const upsertData: any = {
+                project_id: projectId,
+                session_id: sessionId,
+                key_id: 'full_backup',
+                data: JSON.parse(JSON.stringify(sessionData, BufferJSON.replacer)),
+                updated_at: new Date().toISOString()
+            };
+            if (serviceId && serviceId !== 'default' && serviceId !== 'default_service') {
+                upsertData.service_id = serviceId;
+            }
+
             const { error } = await supabase
                 .from('whatsapp_sessions')
-                .upsert({
-                    project_id: projectId,
-                    session_id: sessionId,
-                    key_id: 'full_backup',
-                    data: JSON.parse(JSON.stringify(sessionData, BufferJSON.replacer)),
-                    updated_at: new Date().toISOString()
-                }, { onConflict: 'project_id,session_id,key_id' });
+                .upsert(upsertData, { onConflict: 'project_id,session_id,key_id' });
 
             if (error) throw error;
         } catch (error) {
@@ -64,11 +76,17 @@ export const useSupabaseAuthState = async (
 
     const clearSession = async () => {
         try {
-            const { error } = await supabase
+            let query = supabase
                 .from('whatsapp_sessions')
                 .delete()
                 .eq('project_id', projectId)
                 .eq('session_id', sessionId);
+
+            if (serviceId && serviceId !== 'default' && serviceId !== 'default_service') {
+                query = query.eq('service_id', serviceId);
+            }
+
+            const { error } = await query;
             if (error) throw error;
             sessionData = {};
         } catch (error) {

@@ -142,12 +142,15 @@ export class SupabaseBaileysProvider extends BaileysProvider {
                 }
             }
 
+            const serviceId = this.globalVendorArgs.service_id || null;
+
             const { state, saveCreds } = await useSupabaseAuthState(
                 supabaseUrl,
                 supabaseKey,
                 projectId,
                 botName,
-                botName
+                botName,
+                serviceId
             );
             
             this.saveCreds = saveCreds;

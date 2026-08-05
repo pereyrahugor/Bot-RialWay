@@ -80,12 +80,17 @@ export async function verifyReceiptFlow(
         console.log(`[ReceiptVerifierMP] Comprobante extraído con éxito -> Operación: ${paymentId}, Monto: ${amount || 'A confirmar por API'}`);
 
         // 5. Verificar duplicados en la base de datos (mercadopago_payments_clients)
-        const { data: existingPayment, error: dbError } = await supabase
+        let dupQuery = supabase
             .from("mercadopago_payments_clients")
             .select("id")
             .eq("id", paymentId)
-            .eq("project_id", projectId)
-            .maybeSingle();
+            .eq("project_id", projectId);
+
+        if (serviceId && serviceId !== 'default' && serviceId !== 'default_service') {
+            dupQuery = dupQuery.eq("service_id", serviceId);
+        }
+
+        const { data: existingPayment, error: dbError } = await dupQuery.maybeSingle();
 
         if (dbError) {
             console.error("[ReceiptVerifierMP] Error consultando duplicados en BD:", dbError);
@@ -100,7 +105,7 @@ export async function verifyReceiptFlow(
         // 6. Consultar la API de Mercado Pago para verificar la veracidad en cuenta real
         try {
             console.log(`[ReceiptVerifierMP] Consultando API de Mercado Pago para ID: ${paymentId}...`);
-            const paymentInfo = await verifyMercadoPagoPayment(paymentId, projectId);
+            const paymentInfo = await verifyMercadoPagoPayment(paymentId, projectId, serviceId);
             
             const mpAmount = Number(paymentInfo.transaction_amount);
             const mpStatus = paymentInfo.status;
@@ -108,20 +113,25 @@ export async function verifyReceiptFlow(
             if (mpStatus === 'approved') {
                 // Pago verificado y aprobado!
                 // Guardar en la base de datos para control de duplicados
+                const insertData: any = {
+                    id: paymentId,
+                    project_id: projectId,
+                    chat_id: userId,
+                    status: mpStatus,
+                    transaction_amount: mpAmount,
+                    description: paymentInfo.description || 'Verificación automática OCR de comprobante',
+                    payment_method_id: paymentInfo.payment_method_id,
+                    user_id: String(paymentInfo.collector_id),
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                };
+                if (serviceId && serviceId !== 'default' && serviceId !== 'default_service') {
+                    insertData.service_id = serviceId;
+                }
+
                 const { error: insertError } = await supabase
                     .from("mercadopago_payments_clients")
-                    .insert({
-                        id: paymentId,
-                        project_id: projectId,
-                        chat_id: userId,
-                        status: mpStatus,
-                        transaction_amount: mpAmount,
-                        description: paymentInfo.description || 'Verificación automática OCR de comprobante',
-                        payment_method_id: paymentInfo.payment_method_id,
-                        user_id: String(paymentInfo.collector_id),
-                        created_at: new Date().toISOString(),
-                        updated_at: new Date().toISOString()
-                    });
+                    .insert(insertData);
 
                 if (insertError) {
                     console.error("[ReceiptVerifierMP] Error insertando registro de pago verificado en BD:", insertError);

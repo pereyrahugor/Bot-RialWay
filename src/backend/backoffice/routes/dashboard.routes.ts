@@ -52,6 +52,12 @@ export const registerDashboardRoutes = (app: any) => {
         return (pId && pId !== 'default') ? pId : null;
     };
 
+    // Helper to dynamically extract serviceId from query, body, or headers
+    const resolveServiceId = (req: any): string | null => {
+        const sId = req.query.serviceId || (req.body && req.body.serviceId) || req.headers['x-service-id'] || (req.auth && req.auth.serviceId);
+        return (sId && sId !== 'default' && sId !== 'default_service') ? sId : null;
+    };
+
     app.get('/api/dashboard/openai-usage', backofficeAuth, async (req: any, res: any) => {
         try {
             const projectId = resolveProjectId(req);
@@ -84,12 +90,14 @@ export const registerDashboardRoutes = (app: any) => {
     app.get('/api/dashboard/stats', backofficeAuth, async (req: any, res: any) => {
         try {
             const PROJECT_ID = resolveProjectId(req) || HistoryHandler.PROJECT_IDENTIFIER;
+            const SERVICE_ID = resolveServiceId(req) || HistoryHandler.SERVICE_IDENTIFIER;
 
             // 1. Tasa de Conversión y Distribución de Leads
             const { data: chats } = await supabase
                 .from('chats')
                 .select('is_lead, source, bot_enabled')
-                .eq('project_id', PROJECT_ID);
+                .eq('project_id', PROJECT_ID)
+                .eq('service_id', SERVICE_ID);
             
             // 2. Volumen de Mensajes (Últimas 24h)
             const yesterday = new Date();
@@ -98,19 +106,22 @@ export const registerDashboardRoutes = (app: any) => {
                 .from('messages')
                 .select('*', { count: 'exact', head: true })
                 .eq('project_id', PROJECT_ID)
+                .eq('service_id', SERVICE_ID)
                 .gt('created_at', yesterday.toISOString());
 
             // 3. Proactividad del Bot (Total histórico)
             const { data: roleStats } = await supabase
                 .from('messages')
                 .select('role')
-                .eq('project_id', PROJECT_ID);
+                .eq('project_id', PROJECT_ID)
+                .eq('service_id', SERVICE_ID);
             
             // 4. Estado del Funnel y Categorización
             const { data: tickets } = await supabase
                 .from('tickets')
                 .select('estado, tipo')
-                .eq('project_id', PROJECT_ID);
+                .eq('project_id', PROJECT_ID)
+                .eq('service_id', SERVICE_ID);
 
             // 5. Productividad (Acciones de auditoría en 7 días)
             const lastWeek = new Date();
@@ -119,6 +130,7 @@ export const registerDashboardRoutes = (app: any) => {
                 .from('auditoria_acciones')
                 .select('usuario, created_at')
                 .eq('project_id', PROJECT_ID)
+                .eq('service_id', SERVICE_ID)
                 .gt('created_at', lastWeek.toISOString());
 
             // 6. Tiempo de Respuesta Aproximado (Sampling)
@@ -126,6 +138,7 @@ export const registerDashboardRoutes = (app: any) => {
                 .from('messages')
                 .select('chat_id, role, created_at')
                 .eq('project_id', PROJECT_ID)
+                .eq('service_id', SERVICE_ID)
                 .order('created_at', { ascending: false })
                 .limit(100);
 

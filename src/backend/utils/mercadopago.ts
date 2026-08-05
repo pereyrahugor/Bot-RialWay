@@ -13,16 +13,22 @@ export async function createMercadoPagoPreference(
     amount: number,
     quantity = 1,
     projectId: string | null = null,
-    chatId: string | null = null
+    chatId: string | null = null,
+    serviceId: string | null = null
 ): Promise<{ initPoint: string; preferenceId: string }> {
     let accessToken = "";
     try {
-        const { data: acc } = await supabase
+        let query = supabase
             .from("mercadopago_acount_user")
             .select("access_token")
             .eq("project_id", projectId || "default")
-            .eq("is_active", true)
-            .maybeSingle();
+            .eq("is_active", true);
+
+        if (serviceId && serviceId !== 'default' && serviceId !== 'default_service') {
+            query = query.eq("service_id", serviceId);
+        }
+
+        const { data: acc } = await query.maybeSingle();
         accessToken = acc?.access_token || "";
     } catch (dbErr) {
         console.error("[MercadoPago Pref] Error fetching token from DB:", dbErr);
@@ -48,7 +54,7 @@ export async function createMercadoPagoPreference(
                 currency_id: "ARS"
             }
         ],
-        external_reference: `${projectId || ''}:${chatId || ''}`,
+        external_reference: `${projectId || ''}:${chatId || ''}:${serviceId || ''}`,
         auto_return: "approved"
     };
 
@@ -69,18 +75,24 @@ export async function createMercadoPagoPreference(
 
 /**
  * Consulta la API de Mercado Pago para verificar la existencia e información de un cobro.
- * @param paymentId ID de la operación/comprobante de Mercado Pago.
+ * @param paymentId ID de la operation/comprobante de Mercado Pago.
  * @param projectId ID del proyecto activo.
+ * @param serviceId ID del servicio activo.
  */
-export async function verifyMercadoPagoPayment(paymentId: string, projectId: string): Promise<any> {
+export async function verifyMercadoPagoPayment(paymentId: string, projectId: string, serviceId: string | null = null): Promise<any> {
     let accessToken = "";
     try {
-        const { data: acc } = await supabase
+        let query = supabase
             .from("mercadopago_acount_user")
             .select("access_token")
             .eq("project_id", projectId)
-            .eq("is_active", true)
-            .maybeSingle();
+            .eq("is_active", true);
+
+        if (serviceId && serviceId !== 'default' && serviceId !== 'default_service') {
+            query = query.eq("service_id", serviceId);
+        }
+
+        const { data: acc } = await query.maybeSingle();
         accessToken = acc?.access_token || "";
     } catch (dbErr) {
         console.error("[MercadoPago Verify] Error fetching token from DB:", dbErr);

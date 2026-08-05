@@ -29,8 +29,13 @@ import { userQueues, userLocks, handleQueue } from "../queueManager";
 
 const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
   async (ctx, { flowDynamic, provider, gotoFlow, state }) => {
+    const { HistoryHandler } = await import("../../db/historyHandler");
+    const botPhoneNumber = provider?.globalVendorArgs?.phone_number_id || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
+    const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || HistoryHandler.PROJECT_IDENTIFIER;
+    const dynamicServiceId = await HistoryHandler.getServiceIdByRecipient(botPhoneNumber) || HistoryHandler.SERVICE_IDENTIFIER;
+
     const { getOpenAIVision } = await import("../../apis/openai/openaiHelper");
-    const openai = await getOpenAIVision();
+    const openai = await getOpenAIVision(dynamicProjectId, dynamicServiceId);
     if (!openai) {
       console.warn("⚠️ IA Vision Desactivada: Saltando análisis de imagen en flujo.");
       const caption = (ctx.body && !ctx.body.includes('_event_')) ? ctx.body : (ctx.payload?.message?.imageMessage?.caption || ctx.payload?.image?.caption || '');
@@ -61,9 +66,7 @@ const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
         return;
     }
 
-    const { HistoryHandler } = await import("../../db/historyHandler");
-
-    const timeoutCierreValue = await HistoryHandler.getConfig('timeOutCierre') || 45;
+    const timeoutCierreValue = await HistoryHandler.getConfig('timeOutCierre', dynamicProjectId, dynamicServiceId) || 45;
     const setTime = Number(timeoutCierreValue) * 60 * 1000;
     reset(ctx, gotoFlow, setTime);
 
@@ -110,10 +113,6 @@ const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
 
       await state.update({ lastImage: localPath });
       const buffer = fs.default.readFileSync(localPath);
-      
-      const botPhoneNumber = provider?.globalVendorArgs?.phone_number_id || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
-      const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || HistoryHandler.PROJECT_IDENTIFIER;
-      const dynamicServiceId = await HistoryHandler.getServiceIdByRecipient(botPhoneNumber) || HistoryHandler.SERVICE_IDENTIFIER;
 
       // 1. Intentar validar la imagen como comprobante de Mercado Pago (si está habilitado)
       const isOcrEnabled = await HistoryHandler.getSetting('MERCADOPAGO_OCR_ENABLED', dynamicProjectId, dynamicServiceId)

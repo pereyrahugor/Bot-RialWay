@@ -4,11 +4,9 @@ import { executeDbQuery } from "../../db/dbHandler";
 import { SystemLogger } from "../../utils/logger.js";
 import { RagToolManager } from "../../rag/ragToolManager.js";
 
-// Instancias perezosas para Hot-update
-let _openai: OpenAI | null = null;
-let _openaiVision: OpenAI | null = null;
-let _lastKey: string | null = null;
-let _lastVisionKey: string | null = null;
+// Instancias perezosas para Hot-update con caché multi-tenant
+const _openaiMap = new Map<string, OpenAI>();
+const _openaiVisionMap = new Map<string, OpenAI>();
 
 export function getOpenAIBaseUrl(): string | undefined {
     const envBaseURL = process.env.OPENAI_BASE_URL;
@@ -28,42 +26,52 @@ export function getOpenAIBaseUrl(): string | undefined {
 /**
  * Obtiene la instancia de OpenAI principal de forma dinámica.
  */
-export async function getOpenAI(): Promise<OpenAI | null> {
+export async function getOpenAI(projectId?: string, serviceId?: string): Promise<OpenAI | null> {
     const { HistoryHandler } = await import("../../db/historyHandler");
-    const key = await HistoryHandler.getConfig('OPENAI_API_KEY');
+    const targetProjectId = projectId || HistoryHandler.PROJECT_IDENTIFIER;
+    const targetServiceId = serviceId || HistoryHandler.SERVICE_IDENTIFIER;
+    const key = await HistoryHandler.getConfig('OPENAI_API_KEY', targetProjectId, targetServiceId);
+
     if (!key || key.includes('*****') || key === 'tu_api_key_aqui' || key.trim() === '') {
-        console.warn(`📡 [OpenAI] ⚠️ No se detectó una OPENAI_API_KEY válida (vacía o por defecto). getOpenAI() retornará null.`);
+        console.warn(`📡 [OpenAI] ⚠️ No se detectó una OPENAI_API_KEY válida (vacía o por defecto) para proyecto ${targetProjectId}. getOpenAI() retornará null.`);
         return null;
     }
-    if (key !== _lastKey) {
-        console.log(`📡 [OpenAI] Inicializando nueva instancia con Hot-update Key: ${key.slice(0, 8)}...`);
+
+    const cacheKey = `${targetProjectId}:${targetServiceId}:${key}`;
+    if (!_openaiMap.has(cacheKey)) {
+        console.log(`📡 [OpenAI] Inicializando nueva instancia para ${targetProjectId}:${targetServiceId} con Key: ${key.slice(0, 8)}...`);
         const baseURL = getOpenAIBaseUrl();
-        _openai = new OpenAI({
+        const instance = new OpenAI({
             apiKey: key,
             ...(baseURL ? { baseURL } : {})
         });
-        _lastKey = key;
+        _openaiMap.set(cacheKey, instance);
     }
-    return _openai;
+    return _openaiMap.get(cacheKey) || null;
 }
 
 /**
  * Obtiene la instancia de OpenAI para visión/imágenes de forma dinámica.
  */
-export async function getOpenAIVision(): Promise<OpenAI | null> {
+export async function getOpenAIVision(projectId?: string, serviceId?: string): Promise<OpenAI | null> {
     const { HistoryHandler } = await import("../../db/historyHandler");
-    const key = await HistoryHandler.getConfig('OPENAI_API_KEY_IMG');
+    const targetProjectId = projectId || HistoryHandler.PROJECT_IDENTIFIER;
+    const targetServiceId = serviceId || HistoryHandler.SERVICE_IDENTIFIER;
+    const key = await HistoryHandler.getConfig('OPENAI_API_KEY_IMG', targetProjectId, targetServiceId);
 
-    if (!key) return await getOpenAI(); // Fallback al principal
-    if (key !== _lastVisionKey) {
+    if (!key) return await getOpenAI(targetProjectId, targetServiceId); // Fallback al principal
+
+    const cacheKey = `${targetProjectId}:${targetServiceId}:${key}`;
+    if (!_openaiVisionMap.has(cacheKey)) {
+        console.log(`📡 [OpenAI-Vision] Inicializando nueva instancia para ${targetProjectId}:${targetServiceId} con Key: ${key.slice(0, 8)}...`);
         const baseURL = getOpenAIBaseUrl();
-        _openaiVision = new OpenAI({
+        const instance = new OpenAI({
             apiKey: key,
             ...(baseURL ? { baseURL } : {})
         });
-        _lastVisionKey = key;
+        _openaiVisionMap.set(cacheKey, instance);
     }
-    return _openaiVision;
+    return _openaiVisionMap.get(cacheKey) || null;
 }
 
 /**

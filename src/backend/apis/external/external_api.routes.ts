@@ -17,7 +17,7 @@ async function logApiRequest(data: {
         const origin_url = data.req.headers.origin || data.req.headers.referer || "direct_request";
         const ip_address = data.req.headers['x-forwarded-for'] || data.req.socket.remoteAddress || null;
         
-        await supabase.from('api_logs').insert({
+        const insertData: any = {
             project_id: HistoryHandler.PROJECT_IDENTIFIER,
             token: data.token || null,
             origin_url: origin_url,
@@ -26,7 +26,14 @@ async function logApiRequest(data: {
             status: data.status,
             error_message: data.error || null,
             method: data.req.method
-        });
+        };
+
+        const currentServiceId = HistoryHandler.SERVICE_IDENTIFIER;
+        if (currentServiceId && currentServiceId !== 'default' && currentServiceId !== 'default_service') {
+            insertData.service_id = currentServiceId;
+        }
+
+        await supabase.from('api_logs').insert(insertData);
     } catch (err) {
         console.error('⚠️ [API_LOGS] Error guardando log:', err);
     }
@@ -90,15 +97,21 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
             const expiresInMinutes = 5;
             const expiresAt = new Date(Date.now() + expiresInMinutes * 60000).toISOString();
 
+            const currentServiceId = HistoryHandler.SERVICE_IDENTIFIER;
+            const insertData: any = {
+                token: oneTimeToken,
+                expires_at: expiresAt,
+                is_used: false,
+                client_id: HistoryHandler.PROJECT_IDENTIFIER
+            };
+            if (currentServiceId && currentServiceId !== 'default' && currentServiceId !== 'default_service') {
+                insertData.service_id = currentServiceId;
+            }
+
             // Guardar en la tabla api_tokens
             const { error } = await supabase
                 .from('api_tokens')
-                .insert({
-                    token: oneTimeToken,
-                    expires_at: expiresAt,
-                    is_used: false,
-                    client_id: HistoryHandler.PROJECT_IDENTIFIER
-                });
+                .insert(insertData);
 
             if (error) throw error;
 
@@ -134,14 +147,20 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
             }
 
             // Validar y quemar el token
-            const { data: tokenData, error: fetchError } = await supabase
+            let query = supabase
                 .from('api_tokens')
                 .select('*')
                 .eq('token', token)
                 .eq('is_used', false)
                 .eq('client_id', HistoryHandler.PROJECT_IDENTIFIER) // Validación de scope por proyecto
-                .gt('expires_at', new Date().toISOString())
-                .maybeSingle();
+                .gt('expires_at', new Date().toISOString());
+
+            const valServiceId = HistoryHandler.SERVICE_IDENTIFIER;
+            if (valServiceId && valServiceId !== 'default' && valServiceId !== 'default_service') {
+                query = query.eq('service_id', valServiceId);
+            }
+
+            const { data: tokenData, error: fetchError } = await query.maybeSingle();
 
             if (fetchError || !tokenData) {
                 await logApiRequest({ token, endpoint: '/api/v1/send-template', status: 'error', error: 'Token inválido o expirado', req });
