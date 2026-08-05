@@ -602,7 +602,10 @@ export class SupabaseBaileysProvider extends BaileysProvider {
                                 payload.body = localPath;
                             }
                         } catch (downloadErr: any) {
-                            console.warn('[SupabaseBaileysProvider] ⚠️ Error auto-descargando archivo multimedia:', downloadErr.message || downloadErr);
+                            console.error('[SupabaseBaileysProvider] ❌ Error auto-descargando archivo multimedia:', downloadErr.stack || downloadErr.message || downloadErr);
+                            try {
+                                fs.appendFileSync('download_error.log', `[${new Date().toISOString()}] Error: ${downloadErr.message}\nStack: ${downloadErr.stack}\nMsg: ${JSON.stringify(msg)}\n\n`);
+                            } catch (logErr) { /* ignore */ }
                         }
                     }
 
