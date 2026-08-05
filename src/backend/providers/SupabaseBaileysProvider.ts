@@ -593,6 +593,9 @@ export class SupabaseBaileysProvider extends BaileysProvider {
                         }
 
                         try {
+                            const { SystemLogger } = await import('../utils/logger.js');
+                            await SystemLogger.info('SYSTEM', `Iniciando auto-descarga de archivo Baileys. Tipo: ${finalType}`, null, { msgKey: msg.key });
+
                             if (!fs.existsSync("./tmp/")) {
                                 fs.mkdirSync("./tmp/", { recursive: true });
                             }
@@ -600,10 +603,15 @@ export class SupabaseBaileysProvider extends BaileysProvider {
                             if (localPath) {
                                 payload.localPath = localPath;
                                 payload.body = localPath;
+                                await SystemLogger.info('SYSTEM', `Auto-descarga exitosa. localPath: ${localPath}`, null, { msgKey: msg.key });
+                            } else {
+                                await SystemLogger.warn('SYSTEM', `Auto-descarga retornó localPath vacío`, null, { msgKey: msg.key });
                             }
                         } catch (downloadErr: any) {
                             console.error('[SupabaseBaileysProvider] ❌ Error auto-descargando archivo multimedia:', downloadErr.stack || downloadErr.message || downloadErr);
                             try {
+                                const { SystemLogger } = await import('../utils/logger.js');
+                                await SystemLogger.error('SYSTEM', `Error auto-descargando archivo Baileys: ${downloadErr.message}`, null, { stack: downloadErr.stack, msgKey: msg.key });
                                 fs.appendFileSync('download_error.log', `[${new Date().toISOString()}] Error: ${downloadErr.message}\nStack: ${downloadErr.stack}\nMsg: ${JSON.stringify(msg)}\n\n`);
                             } catch (logErr) { /* ignore */ }
                         }
