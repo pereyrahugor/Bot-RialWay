@@ -113,6 +113,16 @@ export class SupabaseBaileysProvider extends BaileysProvider {
         const mime = mimeModule.default || mimeModule;
         const extension = (mime as any).extension(mimeType) || 'bin';
 
+        // Obtener el tipo de media
+        let finalType = 'document';
+        if (mimeType.startsWith('image/')) {
+            finalType = 'image';
+        } else if (mimeType.startsWith('video/')) {
+            finalType = 'video';
+        } else if (mimeType.startsWith('audio/')) {
+            finalType = 'audio';
+        }
+
         // Intentar extraer el nombre original si es un documento
         const docMsg = msg.message?.documentMessage || 
                        msg.message?.documentWithCaptionMessage?.message?.documentMessage || 
@@ -132,10 +142,59 @@ export class SupabaseBaileysProvider extends BaileysProvider {
             fileName = `file-${Date.now()}.${extension}`;
         }
 
-        // Descargar el buffer usando whiskeysockets/baileys
-        const buffer = await baileys.downloadMediaMessage(msg, "buffer", {}, {
-            logger: logger
-        } as any);
+        // Buscar el objeto de media con las llaves de descarga (mediaKey, url, directPath)
+        const rawMsg = msg.message || msg;
+        let targetMedia = rawMsg?.documentMessage 
+            || rawMsg?.documentWithCaptionMessage?.message?.documentMessage 
+            || rawMsg?.ephemeralMessage?.message?.documentMessage 
+            || rawMsg?.viewOnceMessage?.message?.documentMessage 
+            || rawMsg?.viewOnceMessageV2?.message?.documentMessage 
+            || rawMsg?.imageMessage
+            || rawMsg?.videoMessage
+            || rawMsg?.audioMessage
+            || rawMsg;
+
+        if (targetMedia?.message) {
+            targetMedia = targetMedia.message.documentMessage || targetMedia.message.imageMessage || targetMedia.message.videoMessage || targetMedia.message.audioMessage || targetMedia.message;
+        }
+
+        if (!targetMedia?.mediaKey && !targetMedia?.url && !targetMedia?.directPath) {
+            const findMediaObj = (obj: any, depth = 0): any => {
+                if (!obj || typeof obj !== 'object' || depth > 4) {
+                    return null;
+                }
+                if (obj.mediaKey || obj.url || obj.directPath) {
+                    return obj;
+                }
+                for (const k of Object.keys(obj)) {
+                    if (k === 'key' || k === 'client' || k === 'provider') {
+                        continue;
+                    }
+                    const res = findMediaObj(obj[k], depth + 1);
+                    if (res) {
+                        return res;
+                    }
+                }
+                return null;
+            };
+            targetMedia = findMediaObj(msg) || targetMedia;
+        }
+
+        if (!targetMedia || (!targetMedia.url && !targetMedia.directPath && !targetMedia.mediaKey)) {
+            throw new Error("No media credentials/keys found in message payload");
+        }
+
+        // Descargar el buffer usando whiskeysockets/baileys downloadContentFromMessage
+        const { downloadContentFromMessage } = await import("@whiskeysockets/baileys");
+        const stream = await downloadContentFromMessage(targetMedia, finalType as any);
+        let buffer = Buffer.from([]);
+        for await (const chunk of stream) {
+            buffer = Buffer.concat([buffer, chunk]);
+        }
+
+        if (buffer.length === 0) {
+            throw new Error("Downloaded media buffer is empty");
+        }
 
         const outPath = options.path || './tmp/';
         if (!fs.existsSync(outPath)) {
