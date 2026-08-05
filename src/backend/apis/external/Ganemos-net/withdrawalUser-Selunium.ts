@@ -26,6 +26,7 @@ export async function withdrawalUser(
         }
         let localDriver: WebDriver | undefined = driver;
         const shouldQuit = true; // Por defecto cerramos al final: "cerrar navegador"
+        let currentRawProxy: string | null = null;
 
         try {
             // Si no se pasa un driver activo, creamos uno nuevo y nos logueamos
@@ -69,6 +70,7 @@ export async function withdrawalUser(
                 if (proxySession) {
                     console.log(`🔌 [Ganemos-net] Aplicando proxy a Chrome (Intento ${attempt}): ${proxySession.proxyUrl}`);
                     options.addArguments(`--proxy-server=${proxySession.proxyUrl}`);
+                    currentRawProxy = proxySession.rawProxy || null;
                 }
 
                 localDriver = await new Builder()
@@ -164,7 +166,16 @@ export async function withdrawalUser(
             // 7. Clic en el botón de retiro final
             const submitWithdrawalBtnXPath = "/html/body/div[3]/div/div[2]/main/div[2]/div/div/div[2]/button[2]";
             const submitWithdrawalBtn = await localDriver.findElement(By.xpath(submitWithdrawalBtnXPath));
-            await submitWithdrawalBtn.click();
+            try {
+                await submitWithdrawalBtn.click();
+            } catch (clickErr: any) {
+                if (clickErr.name === 'ElementClickInterceptedError' || clickErr.message.includes('click intercepted')) {
+                    console.log("[Ganemos-net] Click en el botón de retiro final interceptado por spinner/overlay. Reintentando mediante JS Executor...");
+                    await localDriver.executeScript("arguments[0].click();", submitWithdrawalBtn);
+                } else {
+                    throw clickErr;
+                }
+            }
 
             // Esperar a que se procese la operación y redirija a /users/all
             console.log("[Ganemos-net] Enviando solicitud de retiro...");
@@ -213,6 +224,10 @@ export async function withdrawalUser(
 
         } catch (error: any) {
             console.error(`❌ [Ganemos-net] Intento ${attempt}/${maxAttempts} de retiro fallido:`, error.message || error);
+            
+            if (currentRawProxy) {
+                ProxyManager.markProxyFailed(currentRawProxy);
+            }
             
             if (localDriver) {
                 try {

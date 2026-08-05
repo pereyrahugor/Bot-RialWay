@@ -96,6 +96,14 @@ export class ProxyManager {
         }
     }
 
+    private static blacklistedProxies = new Map<string, number>();
+
+    public static markProxyFailed(rawProxy: string) {
+        // Expirar en 5 minutos
+        this.blacklistedProxies.set(rawProxy, Date.now() + 5 * 60 * 1000);
+        console.log(`🚫 [ProxyManager] Proxy marcado como fallido temporalmente (5m): ${rawProxy}`);
+    }
+
     /**
      * Consulta la API de Webshare para obtener un proxy activo
      */
@@ -115,10 +123,28 @@ export class ProxyManager {
                 return null;
             }
 
-            // Seleccionar uno de los proxies válidos aleatoriamente
-            const selected = validProxies[Math.floor(Math.random() * validProxies.length)];
+            // Filtrar proxies que no estén en lista negra
+            const now = Date.now();
+            const activeProxies = validProxies.filter((p: any) => {
+                const rawUrl = `http://${p.username}:${p.password}@${p.proxy_address}:${p.port}`;
+                const blacklistExpiry = this.blacklistedProxies.get(rawUrl);
+                if (blacklistExpiry && blacklistExpiry > now) {
+                    return false;
+                }
+                return true;
+            });
+
+            if (activeProxies.length === 0) {
+                console.warn('[ProxyManager] Todos los proxies disponibles están en la lista negra temporal. Usando uno de la lista general como fallback.');
+                const selected = validProxies[Math.floor(Math.random() * validProxies.length)];
+                const rawUrl = `http://${selected.username}:${selected.password}@${selected.proxy_address}:${selected.port}`;
+                return rawUrl;
+            }
+
+            // Seleccionar uno de los proxies activos aleatoriamente
+            const selected = activeProxies[Math.floor(Math.random() * activeProxies.length)];
             const rawUrl = `http://${selected.username}:${selected.password}@${selected.proxy_address}:${selected.port}`;
-            console.log(`📡 [ProxyManager] Proxy obtenido de Webshare API: ${selected.proxy_address}:${selected.port} (${selected.country_code})`);
+            console.log(`📡 [ProxyManager] Proxy obtenido de Webshare API (activo): ${selected.proxy_address}:${selected.port} (${selected.country_code})`);
             return rawUrl;
         } catch (err: any) {
             console.error('[ProxyManager] Error al consultar la API de Webshare:', err.message);
