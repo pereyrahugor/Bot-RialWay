@@ -2231,12 +2231,13 @@ export class HistoryHandler {
         prioridad: string = 'Media',
         forcedProjectId?: string,
         attachments: string[] = [],
-        chats_adjuntos: { chat_id: string; name: string }[] = []
+        chats_adjuntos: { chat_id: string; name: string }[] = [],
+        serviceId?: string | null
     ) {
         const chatId = rawChatId ? this.normalizeId(rawChatId) : null;
         const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
         if (process.env.STORAGE_MODE === "local") {
-            const ticket = await LocalHistoryStore.createTicket(chatId || '', titulo, descripcion, tipo, prioridad, currentProjectId, attachments, chats_adjuntos);
+            const ticket = await LocalHistoryStore.createTicket(chatId || '', titulo, descripcion, tipo, prioridad, currentProjectId, attachments, chats_adjuntos, serviceId);
             historyEvents.emit('ticket_updated', { ticket });
             return { success: true, ticket };
         }
@@ -2252,6 +2253,7 @@ export class HistoryHandler {
                 .from('tickets')
                 .insert({
                     project_id: currentProjectId,
+                    service_id: serviceId || process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || this.SERVICE_IDENTIFIER || "default_service",
                     chat_id: chatId,
                     titulo,
                     descripcion,

@@ -1,3 +1,4 @@
+/* global showToast, Swal */
 window.webhookConfigView = (() => {
     let _token = '';
 
