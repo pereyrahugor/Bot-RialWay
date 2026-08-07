@@ -124,13 +124,8 @@ export async function updateAllSheets(options: { forceRecreate?: boolean; projec
 }
 
 // Helper function to sanitize valid table name with project prefix
-const sanitizeTableName = (name: string, projectId?: string) => {
-    const baseName = name.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '');
-    if (!projectId || ['default_project', 'default', 'test-hugo-local', 'local-dev'].includes(projectId)) {
-        return baseName;
-    }
-    const cleanProj = projectId.replace(/[^a-zA-Z0-9]/g, '').substring(0, 8);
-    return `p_${cleanProj}_${baseName}`;
+const sanitizeTableName = (name: string, _projectId?: string) => {
+    return name.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '');
 };
 
 // Helper function to sanitize column names
