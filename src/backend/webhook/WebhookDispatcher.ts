@@ -88,7 +88,8 @@ export class WebhookDispatcher {
                         content: msg.content,
                         type: msg.type,
                         external_id: msg.external_id || null,
-                        created_at: msg.created_at || new Date().toISOString()
+                        created_at: msg.created_at || new Date().toISOString(),
+                        raw_payload: msg.rawPayload || null
                     };
                 });
             } catch (err: any) {

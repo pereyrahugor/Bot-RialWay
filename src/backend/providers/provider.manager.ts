@@ -169,7 +169,9 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
                     ctx.userId,
                     externalId,
                     ctx.platform || 'whatsapp',
-                    dynamicProjectId
+                    dynamicProjectId,
+                    undefined,
+                    ctx.payload
                 );
 
                 // Si el mensaje original provino de un LID, guardamos el mapeo en metadata de chats para poder resolverlo en la intervención manual

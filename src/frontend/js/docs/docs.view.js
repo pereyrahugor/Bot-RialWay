@@ -19,8 +19,11 @@ window.docsView = {
                 <button class="docs-nav-tab active" id="btn-user-docs" onclick="switchDoc('user')" role="tab">
                     <i class="fas fa-user-tie"></i><span>Instrucciones de Uso</span>
                 </button>
-                <button class="docs-nav-tab" id="btn-api-docs" onclick="switchDoc('api')" role="tab">
-                    <i class="fas fa-code"></i><span>Instrucciones Tecnicas API</span>
+                <button class="docs-nav-tab" id="btn-api-envio-docs" onclick="switchDoc('api_envio_recepcion')" role="tab">
+                    <i class="fas fa-paper-plane"></i><span>API Envío/Recepción</span>
+                </button>
+                <button class="docs-nav-tab" id="btn-api-templates-docs" onclick="switchDoc('api_templates')" role="tab">
+                    <i class="fas fa-copy"></i><span>API Plantillas</span>
                 </button>
                 <button class="docs-nav-tab" id="btn-webhook-docs" onclick="switchDoc('webhook')" role="tab">
                     <i class="fas fa-satellite-dish"></i><span>Instrucciones de Webhook</span>

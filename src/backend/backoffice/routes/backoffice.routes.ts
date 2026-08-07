@@ -4303,8 +4303,10 @@ Hemos recibido tu pago con éxito.
     app.get('/api/backoffice/get-docs', backofficeAuth, async (req: any, res: any) => {
         try {
             let docType = 'INSTRUCCIONES_USO.md';
-            if (req.query.type === 'api') {
-                docType = 'INSTRUCCIONES_API.md';
+            if (req.query.type === 'api' || req.query.type === 'api_templates') {
+                docType = 'INSTRUCCIONES_API_PLANTILLAS.md';
+            } else if (req.query.type === 'api_envio_recepcion') {
+                docType = 'INSTRUCCIONES_API_ENVIO_RECEPCION.md';
             } else if (req.query.type === 'webhook') {
                 docType = 'INSTRUCCIONES_WEBHOOK.md';
             }

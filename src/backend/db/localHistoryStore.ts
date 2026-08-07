@@ -340,7 +340,8 @@ export class LocalHistoryStore {
         userId: string | null,
         externalId: string | null,
         projectId: string,
-        serviceId?: string
+        serviceId?: string,
+        rawPayload?: any
     ): Promise<LocalMessage> {
         // Ensure chat exists
         const chat = await this.getOrCreateChat(chatId, "whatsapp", contactName, userId, projectId);

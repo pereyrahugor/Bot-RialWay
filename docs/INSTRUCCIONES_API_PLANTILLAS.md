@@ -146,7 +146,7 @@ curl -X POST https://bot-rialway-monoagente-production-ab3b.up.railway.app/api/v
 ---
 
 ## <i class="fas fa-screwdriver-wrench"></i> Especificaciones Tecnicas y Observabilidad
-
+ 
 ### Resolucion de Atributos
 El sistema realiza la resolucion automatica del mapeo de plantillas de Meta a traves del `template_id`:
 *   **Namespace & Name:** Resuelve el nombre tecnico registrado de la plantilla.

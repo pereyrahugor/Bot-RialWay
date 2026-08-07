@@ -977,7 +977,7 @@ export class HistoryHandler {
     /**
      * Guarda un mensaje en la base de datos
      */
-    static async saveMessage(rawChatId: string, role: 'user' | 'assistant' | 'system', content: string, type: string = 'text', contactName: string | null = null, userId: string | null = null, external_id: string | null = null, platformType?: 'whatsapp' | 'webchat' | 'instagram' | 'messenger', forcedProjectId?: string, forcedServiceId?: string) {
+    static async saveMessage(rawChatId: string, role: 'user' | 'assistant' | 'system', content: string, type: string = 'text', contactName: string | null = null, userId: string | null = null, external_id: string | null = null, platformType?: 'whatsapp' | 'webchat' | 'instagram' | 'messenger', forcedProjectId?: string, forcedServiceId?: string, rawPayload?: any) {
         const chatId = this.normalizeId(rawChatId);
         const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
         const currentServiceId = forcedServiceId || this.SERVICE_IDENTIFIER;
@@ -1134,7 +1134,8 @@ export class HistoryHandler {
                 created_at: new Date().toISOString(),
                 external_id: external_id || null,
                 project_id: currentProjectId,
-                projectId: currentProjectId
+                projectId: currentProjectId,
+                rawPayload
             });
 
         } catch (err) {

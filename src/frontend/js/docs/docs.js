@@ -24,10 +24,12 @@ window.switchDoc = function(type) {
     if (_docsCurrentType === type) return;
     _docsCurrentType = type;
     const userBtn = document.getElementById('btn-user-docs');
-    const apiBtn = document.getElementById('btn-api-docs');
+    const apiEnvioBtn = document.getElementById('btn-api-envio-docs');
+    const apiTemplatesBtn = document.getElementById('btn-api-templates-docs');
     const webhookBtn = document.getElementById('btn-webhook-docs');
     if (userBtn) userBtn.classList.toggle('active', type === 'user');
-    if (apiBtn) apiBtn.classList.toggle('active', type === 'api');
+    if (apiEnvioBtn) apiEnvioBtn.classList.toggle('active', type === 'api_envio_recepcion');
+    if (apiTemplatesBtn) apiTemplatesBtn.classList.toggle('active', type === 'api_templates');
     if (webhookBtn) webhookBtn.classList.toggle('active', type === 'webhook');
     const contentEl = document.getElementById('content');
     if (contentEl) contentEl.innerHTML = 'Cargando manual...';
@@ -37,10 +39,12 @@ window.switchDoc = function(type) {
 window.initDocsView = function() {
     _docsCurrentType = 'user';
     const userBtn = document.getElementById('btn-user-docs');
-    const apiBtn = document.getElementById('btn-api-docs');
+    const apiEnvioBtn = document.getElementById('btn-api-envio-docs');
+    const apiTemplatesBtn = document.getElementById('btn-api-templates-docs');
     const webhookBtn = document.getElementById('btn-webhook-docs');
     if (userBtn) userBtn.classList.add('active');
-    if (apiBtn) apiBtn.classList.remove('active');
+    if (apiEnvioBtn) apiEnvioBtn.classList.remove('active');
+    if (apiTemplatesBtn) apiTemplatesBtn.classList.remove('active');
     if (webhookBtn) webhookBtn.classList.remove('active');
     _loadDocsContent();
 };

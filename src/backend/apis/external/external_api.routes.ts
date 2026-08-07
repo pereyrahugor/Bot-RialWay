@@ -350,6 +350,127 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
             }
         }
     });
+
+    // --- 3. ENVÍO DE MENSAJES ESTÁNDAR (USA EL TOKEN) ---
+    app.post('/api/v1/send-message', bodyParser.json(), async (req: any, res: any) => {
+        const { token, to, type } = req.body;
+
+        try {
+            if (!token || !to || !type) {
+                await logApiRequest({ token, endpoint: '/api/v1/send-message', status: 'error', error: 'Datos incompletos', req });
+                return res.status(400).json({ success: false, error: "Datos incompletos. Se requiere token, to y type." });
+            }
+
+            // Validar y quemar el token
+            const { data: tokenData, error: fetchError } = await supabase
+                .from('api_tokens')
+                .select('*')
+                .eq('token', token)
+                .eq('is_used', false)
+                .gt('expires_at', new Date().toISOString())
+                .maybeSingle();
+
+            if (fetchError || !tokenData) {
+                await logApiRequest({ token, endpoint: '/api/v1/send-message', status: 'error', error: 'Token inválido o expirado', req });
+                return res.status(401).json({ success: false, error: "Token inválido, expirado o ya utilizado." });
+            }
+
+            const resolvedProjectId = tokenData.client_id;
+            const resolvedServiceId = tokenData.service_id;
+
+            // Marcar como usado inmediatamente (Atomicidad para prevenir Race Condition)
+            await supabase.from('api_tokens').update({ is_used: true }).eq('id', tokenData.id);
+
+            const provider = adapterProvider.constructor.name === 'MetaCloudProvider' ? adapterProvider : groupProvider;
+            if (!provider) {
+                return res.status(503).json({ success: false, error: "Proveedor de WhatsApp no inicializado" });
+            }
+
+            let providerResponse: any = null;
+            let historyContent = '';
+
+            const cleanNumber = String(to).split('@')[0].replace(/\D/g, '');
+            const targetJid = String(to).includes('@') ? to : `${cleanNumber}@s.whatsapp.net`;
+
+            if (type === 'text') {
+                const bodyText = req.body.text?.body || '';
+                if (!bodyText) {
+                    return res.status(400).json({ success: false, error: "Falta el campo text.body para mensajes de tipo text." });
+                }
+                providerResponse = await provider.sendMessage(targetJid, bodyText);
+                historyContent = bodyText;
+            } else if (type === 'image') {
+                const caption = req.body.image?.caption || '';
+                const media = req.body.image?.link || req.body.image?.id;
+                if (!media) {
+                    return res.status(400).json({ success: false, error: "Falta el campo image.link o image.id para mensajes de tipo image." });
+                }
+                providerResponse = await provider.sendMessage(targetJid, caption, { media });
+                historyContent = media;
+            } else if (type === 'video') {
+                const caption = req.body.video?.caption || '';
+                const media = req.body.video?.link || req.body.video?.id;
+                if (!media) {
+                    return res.status(400).json({ success: false, error: "Falta el campo video.link o video.id para mensajes de tipo video." });
+                }
+                providerResponse = await provider.sendMessage(targetJid, caption, { media });
+                historyContent = media;
+            } else if (type === 'document') {
+                const caption = req.body.document?.caption || '';
+                const media = req.body.document?.link || req.body.document?.id;
+                const filename = req.body.document?.filename || 'document';
+                if (!media) {
+                    return res.status(400).json({ success: false, error: "Falta el campo document.link o document.id para mensajes de tipo document." });
+                }
+                providerResponse = await provider.sendMessage(targetJid, caption, { media, fileName: filename });
+                historyContent = media;
+            } else if (type === 'audio') {
+                const media = req.body.audio?.link || req.body.audio?.id;
+                if (!media) {
+                    return res.status(400).json({ success: false, error: "Falta el campo audio.link o audio.id para mensajes de tipo audio." });
+                }
+                providerResponse = await provider.sendMessage(targetJid, '', { media });
+                historyContent = media;
+            } else {
+                return res.status(400).json({ success: false, error: `Tipo de message no soportado: ${type}` });
+            }
+
+            const externalId = providerResponse?.key?.id || providerResponse?.messages?.[0]?.id || providerResponse?.id || null;
+
+            await HistoryHandler.saveMessage(
+                targetJid,
+                'assistant',
+                historyContent,
+                type,
+                null,
+                null,
+                externalId,
+                'whatsapp',
+                resolvedProjectId,
+                resolvedServiceId || undefined
+            );
+
+            await logApiRequest({
+                token,
+                endpoint: '/api/v1/send-message',
+                status: 'success',
+                req,
+                projectId: resolvedProjectId,
+                serviceId: resolvedServiceId
+            });
+
+            return res.json({
+                success: true,
+                message: "Mensaje enviado con éxito",
+                message_id: externalId
+            });
+
+        } catch (err: any) {
+            console.error('❌ [API_EXTERNAL] Error en /api/v1/send-message:', err.message);
+            await logApiRequest({ token, endpoint: '/api/v1/send-message', status: 'error', error: err.message, req });
+            return res.status(500).json({ success: false, error: "Error interno del servidor" });
+        }
+    });
 };
 
 /**
