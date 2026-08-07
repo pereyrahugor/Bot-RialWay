@@ -348,12 +348,22 @@ export const processBulkTemplate = async (req: any, res: any) => {
                         });
                         const contentType = String(response.headers['content-type'] || '');
                         let ext = 'bin';
-                        if (contentType.includes('video')) ext = 'mp4';
-                        else if (contentType.includes('image')) ext = 'jpg';
-                        else if (contentType.includes('pdf')) ext = 'pdf';
-                        else {
-                            const urlWithoutQuery = row.header_media_url.split('?')[0];
-                            ext = urlWithoutQuery.split('.').pop() || 'mp4';
+                        try {
+                            const mimeModule = await import('mime-types');
+                            const mime = mimeModule.default || mimeModule;
+                            ext = mime.extension(contentType) || 'bin';
+                            if (ext === 'bin') {
+                                const urlWithoutQuery = row.header_media_url.split('?')[0];
+                                ext = urlWithoutQuery.split('.').pop() || 'mp4';
+                            }
+                        } catch {
+                            if (contentType.includes('video')) ext = 'mp4';
+                            else if (contentType.includes('image')) ext = 'jpg';
+                            else if (contentType.includes('pdf')) ext = 'pdf';
+                            else {
+                                const urlWithoutQuery = row.header_media_url.split('?')[0];
+                                ext = urlWithoutQuery.split('.').pop() || 'mp4';
+                            }
                         }
 
                         const filename = `bulk-${Date.now()}-${Math.floor(Math.random()*1000)}.${ext}`;
@@ -2373,11 +2383,20 @@ export const registerBackofficeRoutes = (app: any) => {
 
                                     const contentType = String(response.headers['content-type'] || '');
                                     let ext = 'bin';
-                                    if (contentType.includes('video')) ext = 'mp4';
-                                    else if (contentType.includes('image')) ext = 'jpg';
-                                    else if (contentType.includes('pdf')) ext = 'pdf';
-                                    else {
-                                        ext = formatType === 'image' ? 'jpg' : formatType === 'video' ? 'mp4' : 'pdf';
+                                    try {
+                                        const mimeModule = await import('mime-types');
+                                        const mime = mimeModule.default || mimeModule;
+                                        ext = mime.extension(contentType) || 'bin';
+                                        if (ext === 'bin') {
+                                            ext = formatType === 'image' ? 'jpg' : formatType === 'video' ? 'mp4' : 'pdf';
+                                        }
+                                    } catch {
+                                        if (contentType.includes('video')) ext = 'mp4';
+                                        else if (contentType.includes('image')) ext = 'jpg';
+                                        else if (contentType.includes('pdf')) ext = 'pdf';
+                                        else {
+                                            ext = formatType === 'image' ? 'jpg' : formatType === 'video' ? 'mp4' : 'pdf';
+                                        }
                                     }
 
                                     const uploadsDir = path.join(process.cwd(), 'uploads');
@@ -2583,11 +2602,20 @@ export const registerBackofficeRoutes = (app: any) => {
 
                                 const contentType = String(response.headers['content-type'] || '');
                                 let ext = 'bin';
-                                if (contentType.includes('video')) ext = 'mp4';
-                                else if (contentType.includes('image')) ext = 'jpg';
-                                else if (contentType.includes('pdf')) ext = 'pdf';
-                                else {
-                                    ext = lowFormat === 'image' ? 'jpg' : lowFormat === 'video' ? 'mp4' : 'pdf';
+                                try {
+                                    const mimeModule = await import('mime-types');
+                                    const mime = mimeModule.default || mimeModule;
+                                    ext = mime.extension(contentType) || 'bin';
+                                    if (ext === 'bin') {
+                                        ext = lowFormat === 'image' ? 'jpg' : lowFormat === 'video' ? 'mp4' : 'pdf';
+                                    }
+                                } catch {
+                                    if (contentType.includes('video')) ext = 'mp4';
+                                    else if (contentType.includes('image')) ext = 'jpg';
+                                    else if (contentType.includes('pdf')) ext = 'pdf';
+                                    else {
+                                        ext = lowFormat === 'image' ? 'jpg' : lowFormat === 'video' ? 'mp4' : 'pdf';
+                                    }
                                 }
 
                                 const uploadsDir = path.join(process.cwd(), 'uploads');

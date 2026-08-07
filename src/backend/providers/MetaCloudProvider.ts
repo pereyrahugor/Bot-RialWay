@@ -564,18 +564,30 @@ class MetaCloudProvider extends ProviderClass {
 
             if (mimeType && mimeType.includes('/')) {
                 contentType = mimeType;
-            } else if (lowerPath.endsWith('.webp')) contentType = 'image/webp';
-            else if (lowerPath.endsWith('.png')) contentType = 'image/png';
-            else if (lowerPath.endsWith('.jpg') || lowerPath.endsWith('.jpeg')) contentType = 'image/jpeg';
-            else if (lowerPath.endsWith('.pdf')) contentType = 'application/pdf';
-            else if (lowerPath.endsWith('.mp4')) contentType = 'video/mp4';
-            else if (lowerPath.endsWith('.3gp')) contentType = 'video/3gpp';
-            else if (lowerPath.endsWith('.mp3')) contentType = 'audio/mpeg';
-            else if (lowerPath.endsWith('.m4a')) contentType = 'audio/mp4';
-            else if (lowerPath.endsWith('.aac')) contentType = 'audio/aac';
-            else if (lowerPath.endsWith('.amr')) contentType = 'audio/amr';
-            else if (lowerPath.endsWith('.ogg')) contentType = 'audio/ogg';
-            else if (lowerPath.endsWith('.opus')) contentType = 'audio/ogg; codecs=opus';
+            } else {
+                try {
+                    const mime = await import('mime-types') as any;
+                    const lookupResult = (mime.default || mime).lookup(finalPath);
+                    if (lookupResult) {
+                        contentType = lookupResult;
+                    } else if (lowerPath.endsWith('.opus')) {
+                        contentType = 'audio/ogg; codecs=opus';
+                    }
+                } catch {
+                    if (lowerPath.endsWith('.webp')) contentType = 'image/webp';
+                    else if (lowerPath.endsWith('.png')) contentType = 'image/png';
+                    else if (lowerPath.endsWith('.jpg') || lowerPath.endsWith('.jpeg')) contentType = 'image/jpeg';
+                    else if (lowerPath.endsWith('.pdf')) contentType = 'application/pdf';
+                    else if (lowerPath.endsWith('.mp4')) contentType = 'video/mp4';
+                    else if (lowerPath.endsWith('.3gp')) contentType = 'video/3gpp';
+                    else if (lowerPath.endsWith('.mp3')) contentType = 'audio/mpeg';
+                    else if (lowerPath.endsWith('.m4a')) contentType = 'audio/mp4';
+                    else if (lowerPath.endsWith('.aac')) contentType = 'audio/aac';
+                    else if (lowerPath.endsWith('.amr')) contentType = 'audio/amr';
+                    else if (lowerPath.endsWith('.ogg')) contentType = 'audio/ogg';
+                    else if (lowerPath.endsWith('.opus')) contentType = 'audio/ogg; codecs=opus';
+                }
+            }
 
             // Meta no acepta audio/webm — convertir a ogg antes de subir
             let uploadPath = finalPath;
@@ -857,7 +869,18 @@ class MetaCloudProvider extends ProviderClass {
     }
 
     public async sendFile(number: string, media: string, caption: string = ''): Promise<any> {
-        return this.sendMessage(number, caption, { media: { url: media, mimetype: 'application/pdf' } });
+        let mimetype = 'application/pdf';
+        try {
+            const mime = await import('mime-types') as any;
+            const cleanPath = media.split('?')[0];
+            const lookupResult = (mime.default || mime).lookup(cleanPath);
+            if (lookupResult) {
+                mimetype = lookupResult;
+            }
+        } catch {
+            // Fallback
+        }
+        return this.sendMessage(number, caption, { media: { url: media, mimetype } });
     }
 
     /**
@@ -1096,6 +1119,7 @@ class MetaCloudProvider extends ProviderClass {
                                     // Auto-descarga de archivos para que el historial tenga la ruta local (como hace Baileys)
                                     // Ponemos un timeout de 5 segundos para no bloquear el webhook si Meta va lento
                                     const downloadPromise = this.saveFile(formatedMessage);
+                                    // @ts-ignore
                                     const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000));
 
                                     const localPath: any = await Promise.race([downloadPromise, timeoutPromise]);

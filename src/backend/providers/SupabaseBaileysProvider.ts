@@ -582,13 +582,19 @@ export class SupabaseBaileysProvider extends BaileysProvider {
                         const docMsg = msg.message?.documentMessage || msg.message?.documentWithCaptionMessage?.message?.documentMessage;
                         if (docMsg && !docMsg.mimetype) {
                             const fileName = docMsg.fileName || '';
-                            const ext = fileName.split('.').pop()?.toLowerCase();
-                            if (ext === 'png') {
-                                docMsg.mimetype = "image/png";
-                            } else if (ext === 'jpg' || ext === 'jpeg') {
-                                docMsg.mimetype = "image/jpeg";
-                            } else {
-                                docMsg.mimetype = "application/pdf";
+                            try {
+                                const mimeModule = await import('mime-types');
+                                const mime = mimeModule.default || mimeModule;
+                                docMsg.mimetype = mime.lookup(fileName) || "application/pdf";
+                            } catch {
+                                const ext = fileName.split('.').pop()?.toLowerCase();
+                                if (ext === 'png') {
+                                    docMsg.mimetype = "image/png";
+                                } else if (ext === 'jpg' || ext === 'jpeg') {
+                                    docMsg.mimetype = "image/jpeg";
+                                } else {
+                                    docMsg.mimetype = "application/pdf";
+                                }
                             }
                         }
 
