@@ -433,13 +433,14 @@ export class LocalHistoryStore {
         prioridad: string,
         projectId: string,
         attachments: string[] = [],
-        chats_adjuntos: { chat_id: string; name: string }[] = []
+        chats_adjuntos: { chat_id: string; name: string }[] = [],
+        serviceId?: string | null
     ): Promise<LocalTicket> {
         const tickets = this.getTicketsList(projectId);
         const newTicket: LocalTicket = {
             id: crypto.randomUUID(),
             project_id: projectId,
-            service_id: process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || "default_service",
+            service_id: serviceId || process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || "default_service",
             chat_id: chatId,
             titulo,
             descripcion,

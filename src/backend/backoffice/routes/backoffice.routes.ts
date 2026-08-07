@@ -1770,7 +1770,8 @@ export const registerBackofficeRoutes = (app: any) => {
         const adjuntos = Array.isArray(chats_adjuntos) ? chats_adjuntos : [];
         const atts = Array.isArray(attachments) ? attachments : [];
         const projectId = resolveProjectId(req);
-        const result = await depsHistoryHandler.createTicket(chatId, titulo, descripcion, tipo || 'Soporte', 'Media', projectId || undefined, atts, adjuntos);
+        const serviceId = resolveServiceId(req);
+        const result = await depsHistoryHandler.createTicket(chatId, titulo, descripcion, tipo || 'Soporte', 'Media', projectId || undefined, atts, adjuntos, serviceId);
         res.json(result);
     });
 
