@@ -204,6 +204,32 @@ export const registerStaticRoutes = (app: any, { __dirname }: { __dirname: strin
     app.use("/tmp", serve(path.join(process.cwd(), "tmp")));
     app.use("/app/tmp", serve(path.join(process.cwd(), "tmp")));
 
+    app.get("/api/test-tmp", (_req: any, res: any) => {
+        try {
+            const cwd = process.cwd();
+            const tmpPath = path.join(cwd, "tmp");
+            const tempPath = path.join(cwd, "temp");
+            
+            const tmpExists = fs.existsSync(tmpPath);
+            const tempExists = fs.existsSync(tempPath);
+            
+            const tmpFiles = tmpExists ? fs.readdirSync(tmpPath) : [];
+            const tempFiles = tempExists ? fs.readdirSync(tempPath) : [];
+            
+            res.json({
+                cwd,
+                tmpPath,
+                tmpExists,
+                tmpFiles,
+                tempPath,
+                tempExists,
+                tempFiles
+            });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
     // QR genérico / Principal (Con fallback a memoria para evitar 404)
     app.get("/qr.png", async (req: any, res: any) => {
         try {
