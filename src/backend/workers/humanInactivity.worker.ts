@@ -29,10 +29,7 @@ export const startHumanInactivityWorker = (timeoutMinutes = 30) => {
 
             // 2. Obtener lista negra en lotes pequeños (chunks) para evitar desbordar el límite de URL/Headers (16KB) en Supabase/PostgREST
             const allQueryIds = Array.from(new Set(
-                inactiveChats.flatMap(c => {
-                    const norm = HistoryHandler.normalizeId(c.id);
-                    return [c.id, norm, `${norm}@s.whatsapp.net`, `${norm}@c.us`];
-                })
+                inactiveChats.flatMap(c => HistoryHandler.getPossibleJids(c.id))
             ));
             const blacklistEntries: any[] = [];
             const CHUNK_SIZE = 50;
@@ -55,13 +52,23 @@ export const startHumanInactivityWorker = (timeoutMinutes = 30) => {
             const blockedKeys = new Set<string>();
             blacklistEntries.forEach(entry => {
                 const normEntryId = HistoryHandler.normalizeId(entry.chat_id);
-                // Bloqueo a nivel de proyecto (cualquier service_id)
-                blockedKeys.add(`${entry.project_id}:${normEntryId}`);
-                blockedKeys.add(`${entry.project_id}:${entry.chat_id}`);
-                // Bloqueo a nivel de proyecto + service_id
                 const sId = entry.service_id || 'default';
-                blockedKeys.add(`${entry.project_id}:${sId}:${normEntryId}`);
-                blockedKeys.add(`${entry.project_id}:${sId}:${entry.chat_id}`);
+
+                const variants = [entry.chat_id, normEntryId];
+                if (normEntryId.startsWith('54')) {
+                    if (normEntryId.startsWith('549')) {
+                        variants.push('54' + normEntryId.slice(3));
+                    } else {
+                        variants.push('549' + normEntryId.slice(2));
+                    }
+                }
+
+                variants.forEach(v => {
+                    // Bloqueo a nivel de proyecto (cualquier service_id)
+                    blockedKeys.add(`${entry.project_id}:${v}`);
+                    // Bloqueo a nivel de proyecto + service_id
+                    blockedKeys.add(`${entry.project_id}:${sId}:${v}`);
+                });
             });
 
             // Caché en memoria durante este tick para no consultar la misma configuración del mismo proyecto/servicio varias veces

@@ -838,6 +838,32 @@ export class HistoryHandler {
         return cleanId;
     }
 
+    /**
+     * Obtiene todas las variantes de JID y formatos posibles para un número de chat
+     * contemplando la discrepancia de Argentina (549 vs 54).
+     */
+    static getPossibleJids(rawChatId: string): string[] {
+        if (!rawChatId) return [];
+        const chatId = this.normalizeId(rawChatId);
+        const list = [chatId, `${chatId}@s.whatsapp.net`, `${chatId}@c.us`, rawChatId];
+
+        if (chatId.startsWith('54')) {
+            if (chatId.startsWith('549')) {
+                const altId = '54' + chatId.slice(3);
+                list.push(altId);
+                list.push(`${altId}@s.whatsapp.net`);
+                list.push(`${altId}@c.us`);
+            } else {
+                const altId = '549' + chatId.slice(2);
+                list.push(altId);
+                list.push(`${altId}@s.whatsapp.net`);
+                list.push(`${altId}@c.us`);
+            }
+        }
+
+        return Array.from(new Set(list)).filter(Boolean);
+    }
+
     static async getClientContext(rawChatId: string): Promise<any | null> {
         const chatId = this.normalizeId(rawChatId);
         if (process.env.STORAGE_MODE === "local") {
@@ -2049,11 +2075,10 @@ export class HistoryHandler {
     static async isContactBlacklisted(rawChatId: string, projectId?: string | null, serviceId?: string | null): Promise<boolean> {
         if (!supabase) return false;
         try {
-            const chatId = this.normalizeId(rawChatId);
             const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
             const currentServiceId = serviceId || this.SERVICE_IDENTIFIER;
 
-            const possibleIds = Array.from(new Set([chatId, `${chatId}@s.whatsapp.net`, `${chatId}@c.us`, rawChatId])).filter(Boolean);
+            const possibleIds = this.getPossibleJids(rawChatId);
 
             let query = supabase
                 .from('blacklist')
@@ -2362,8 +2387,23 @@ export class HistoryHandler {
                             .eq('project_id', this.PROJECT_IDENTIFIER)
                             .eq('bloqueado_crm', true);
                         if (blockedEntries && blockedEntries.length > 0) {
-                            const blockedIds = new Set(blockedEntries.map((e: any) => e.chat_id));
-                            finalChats = finalChats.filter((c: any) => !blockedIds.has(c.id));
+                            const blockedIds = new Set<string>();
+                            blockedEntries.forEach((e: any) => {
+                                const norm = this.normalizeId(e.chat_id);
+                                blockedIds.add(norm);
+                                blockedIds.add(e.chat_id);
+                                if (norm.startsWith('54')) {
+                                    if (norm.startsWith('549')) {
+                                        blockedIds.add('54' + norm.slice(3));
+                                    } else {
+                                        blockedIds.add('549' + norm.slice(2));
+                                    }
+                                }
+                            });
+                            finalChats = finalChats.filter((c: any) => {
+                                const normCId = this.normalizeId(c.id);
+                                return !blockedIds.has(normCId) && !blockedIds.has(c.id);
+                            });
                         }
                     }
                 } catch (blErr) {

@@ -5322,10 +5322,24 @@ Hemos recibido tu pago con Ã©xito.
             const chatIds = (data || []).map((r: any) => r.chat_id);
             const chatNames: Record<string, string> = {};
             if (chatIds.length > 0) {
+                const extendedChatIds = new Set<string>();
+                chatIds.forEach(id => {
+                    const norm = depsHistoryHandler.normalizeId(id);
+                    extendedChatIds.add(id);
+                    extendedChatIds.add(norm);
+                    if (norm.startsWith('54')) {
+                        if (norm.startsWith('549')) {
+                            extendedChatIds.add('54' + norm.slice(3));
+                        } else {
+                            extendedChatIds.add('549' + norm.slice(2));
+                        }
+                    }
+                });
+
                 let chatQuery = supabase
                     .from('chats')
                     .select('id, name')
-                    .in('id', chatIds)
+                    .in('id', Array.from(extendedChatIds))
                     .eq('project_id', projectId);
 
                 if (serviceId && serviceId !== 'default' && serviceId !== 'default_service') {
@@ -5333,12 +5347,26 @@ Hemos recibido tu pago con Ã©xito.
                 }
 
                 const { data: chatRows } = await chatQuery;
-                (chatRows || []).forEach((c: any) => { chatNames[c.id] = c.name || c.id; });
+                (chatRows || []).forEach((c: any) => {
+                    const normCId = depsHistoryHandler.normalizeId(c.id);
+                    chatNames[c.id] = c.name || c.id;
+                    chatNames[normCId] = c.name || c.id;
+                    if (normCId.startsWith('54')) {
+                        if (normCId.startsWith('549')) {
+                            chatNames['54' + normCId.slice(3)] = c.name || c.id;
+                        } else {
+                            chatNames['549' + normCId.slice(2)] = c.name || c.id;
+                        }
+                    }
+                });
             }
-            const enriched = (data || []).map((r: any) => ({
-                ...r,
-                name: chatNames[r.chat_id] || r.chat_id
-            }));
+            const enriched = (data || []).map((r: any) => {
+                const normRId = depsHistoryHandler.normalizeId(r.chat_id);
+                return {
+                    ...r,
+                    name: chatNames[r.chat_id] || chatNames[normRId] || r.chat_id
+                };
+            });
             res.json(enriched);
         } catch (e: any) {
             res.status(500).json({ success: false, error: e.message });
@@ -5386,8 +5414,7 @@ Hemos recibido tu pago con Ã©xito.
             const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
             const serviceId = resolveServiceId(req) || depsHistoryHandler.SERVICE_IDENTIFIER;
             const chatId = req.params.chatId;
-            const normId = depsHistoryHandler.normalizeId(chatId);
-            const possibleIds = Array.from(new Set([chatId, normId, `${normId}@s.whatsapp.net`, `${normId}@c.us`]));
+            const possibleIds = depsHistoryHandler.getPossibleJids(chatId);
 
             let query = supabase
                 .from('blacklist')
@@ -5452,8 +5479,7 @@ Hemos recibido tu pago con Ã©xito.
                 await depsHistoryHandler.toggleBot(chatId, false, projectId, serviceId);
             } else {
                 // Quitar de la lista
-                const normId = depsHistoryHandler.normalizeId(chatId);
-                const possibleIds = Array.from(new Set([chatId, normId, `${normId}@s.whatsapp.net`, `${normId}@c.us`]));
+                const possibleIds = depsHistoryHandler.getPossibleJids(chatId);
 
                 let query = supabase
                     .from('blacklist')
