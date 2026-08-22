@@ -1,7 +1,6 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { AuthenticationCreds, AuthenticationState, SignalDataTypeMap, initAuthCreds, BufferJSON } from '@whiskeysockets/baileys';
-import { HistoryHandler } from './historyHandler';
 
 export const useSupabaseAuthState = async (
     supabaseUrl: string,
@@ -15,33 +14,12 @@ export const useSupabaseAuthState = async (
     const supabase = createClient(supabaseUrl, supabaseKey);
     let sessionData: Record<string, any> = {};
 
-    const resolveSessionTenantId = async (): Promise<string | null> => {
-        const tenantResolution = await HistoryHandler.resolveTenantIdByProjectId(projectId);
-
-        if (
-            !tenantResolution.resolved ||
-            tenantResolution.globalScope ||
-            !tenantResolution.tenantId
-        ) {
-            console.warn(
-                `[SupabaseAdapter] Tenant no resuelto para ${projectId}. Se omite acceso a whatsapp_sessions.`
-            );
-            return null;
-        }
-
-        return tenantResolution.tenantId;
-    };
-
     // Cargar toda la sesión al inicio
     const init = async () => {
         try {
-            const tenantId = await resolveSessionTenantId();
-            if (!tenantId) return;
-
             let query = supabase
                 .from('whatsapp_sessions')
                 .select('key_id, data')
-                .eq('tenant_id', tenantId)
                 .eq('project_id', projectId)
                 .eq('session_id', sessionId);
 
@@ -75,11 +53,7 @@ export const useSupabaseAuthState = async (
 
     const saveToDb = async () => {
         try {
-            const tenantId = await resolveSessionTenantId();
-            if (!tenantId) return;
-
             const upsertData: any = {
-                tenant_id: tenantId,
                 project_id: projectId,
                 session_id: sessionId,
                 key_id: 'full_backup',
@@ -102,13 +76,9 @@ export const useSupabaseAuthState = async (
 
     const clearSession = async () => {
         try {
-            const tenantId = await resolveSessionTenantId();
-            if (!tenantId) return;
-
             let query = supabase
                 .from('whatsapp_sessions')
                 .delete()
-                .eq('tenant_id', tenantId)
                 .eq('project_id', projectId)
                 .eq('session_id', sessionId);
 

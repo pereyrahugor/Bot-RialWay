@@ -59,7 +59,7 @@ export const registerWebhookRoutes = (app: any) => {
             // Convertir webhookEvents a formato string JSON para almacenar en settings
             const eventsValue = Array.isArray(webhookEvents) ? JSON.stringify(webhookEvents) : '[]';
 
-            // Guardar settings usando HistoryHandler.saveSetting para heredar resolución de tenant_id
+            // Guardar settings usando HistoryHandler.saveSetting
             await HistoryHandler.saveSetting('WEBHOOK_URL', (webhookUrl || '').trim(), projectId, serviceId);
             await HistoryHandler.saveSetting('WEBHOOK_SECRET', (webhookSecret || '').trim(), projectId, serviceId);
             await HistoryHandler.saveSetting('WEBHOOK_EVENTS', eventsValue, projectId, serviceId);

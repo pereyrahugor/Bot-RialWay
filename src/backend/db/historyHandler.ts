@@ -295,7 +295,6 @@ export class HistoryHandler {
                 name: 'chats',
                 sql: `CREATE TABLE IF NOT EXISTS chats (
                     id TEXT,
-                    tenant_id UUID,
                     user_id TEXT,
                     project_id TEXT,
                     service_id TEXT,
@@ -360,7 +359,6 @@ export class HistoryHandler {
                 name: 'messages',
                 sql: `CREATE TABLE IF NOT EXISTS messages (
                     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-                    tenant_id UUID,
                     chat_id TEXT,
                     project_id TEXT,
                     service_id TEXT,
@@ -383,7 +381,6 @@ export class HistoryHandler {
                 name: 'tickets',
                 sql: `CREATE TABLE IF NOT EXISTS tickets (
                     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-                    tenant_id UUID,
                     project_id TEXT,
                     service_id TEXT,
                     chat_id TEXT,
@@ -403,7 +400,6 @@ export class HistoryHandler {
             {
                 name: 'meta_onboarding',
                 sql: `CREATE TABLE IF NOT EXISTS meta_onboarding (
-                    tenant_id UUID,
                     project_id TEXT,
                     service_id TEXT,
                     waba_id TEXT,
@@ -414,27 +410,8 @@ export class HistoryHandler {
                     status TEXT DEFAULT 'active',
                     created_at TIMESTAMPTZ DEFAULT NOW(),
                     updated_at TIMESTAMPTZ DEFAULT NOW(),
-                    PRIMARY KEY (project_id, service_id),
-                    CONSTRAINT meta_onboarding_tenant_id_fkey
-                        FOREIGN KEY (tenant_id)
-                        REFERENCES public.clientes(auth_user_id)
-                        ON UPDATE CASCADE
-                        ON DELETE RESTRICT,
-                    CONSTRAINT meta_onboarding_tenant_scope_check
-                        CHECK (
-                            (
-                                project_id = 'main_token'
-                                AND tenant_id IS NULL
-                            )
-                            OR
-                            (
-                                project_id <> 'main_token'
-                                AND tenant_id IS NOT NULL
-                            )
-                        )
+                    PRIMARY KEY (project_id, service_id)
                 );
-                CREATE INDEX IF NOT EXISTS idx_meta_onboarding_tenant_id
-                    ON meta_onboarding(tenant_id);
                 GRANT ALL ON TABLE meta_onboarding TO service_role;
                 GRANT ALL ON TABLE meta_onboarding TO authenticated;
                 GRANT SELECT ON TABLE meta_onboarding TO anon;`
@@ -442,7 +419,6 @@ export class HistoryHandler {
             {
                 name: 'settings',
                 sql: `CREATE TABLE IF NOT EXISTS settings (
-                    tenant_id UUID,
                     project_id TEXT,
                     service_id TEXT,
                     key TEXT,
@@ -458,7 +434,6 @@ export class HistoryHandler {
                 name: 'users',
                 sql: `CREATE TABLE IF NOT EXISTS users (
                     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-                    tenant_id UUID,
                     project_id TEXT,
                     service_id TEXT,
                     username TEXT NOT NULL,
@@ -477,20 +452,12 @@ export class HistoryHandler {
                 name: 'routing_table',
                 sql: `CREATE TABLE IF NOT EXISTS routing_table (
                     phone_number_id TEXT PRIMARY KEY,
-                    tenant_id UUID NOT NULL,
                     waba_id TEXT,
                     project_id TEXT,
                     service_id TEXT,
                     project_url TEXT,
-                    updated_at TIMESTAMPTZ DEFAULT NOW(),
-                    CONSTRAINT routing_table_tenant_id_fkey
-                        FOREIGN KEY (tenant_id)
-                        REFERENCES public.clientes(auth_user_id)
-                        ON UPDATE CASCADE
-                        ON DELETE RESTRICT
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
                 );
-                CREATE INDEX IF NOT EXISTS idx_routing_table_tenant_id
-                    ON routing_table(tenant_id);
                 GRANT ALL ON TABLE routing_table TO service_role;
                 GRANT ALL ON TABLE routing_table TO authenticated;
                 GRANT SELECT ON TABLE routing_table TO anon;`
@@ -3323,7 +3290,6 @@ export class HistoryHandler {
             const { data, error } = await supabase
                 .from('meta_onboarding')
                 .upsert({
-                    tenant_id: tenantId,
                     project_id: targetProjectId,
                     service_id: targetServiceId,
                     waba_id: wabaId,
@@ -3356,7 +3322,6 @@ export class HistoryHandler {
                 await supabase
                     .from('routing_table')
                     .upsert({
-                        tenant_id: tenantId,
                         phone_number_id: phoneId,
                         waba_id: wabaId,
                         project_id: targetProjectId,
@@ -3514,7 +3479,6 @@ export class HistoryHandler {
                 await supabase
                     .from('routing_table')
                     .upsert({
-                        tenant_id: tenantId,
                         phone_number_id: onboardingData.phone_number_id,
                         waba_id: onboardingData.waba_id,
                         project_id: this.PROJECT_IDENTIFIER,
@@ -3753,10 +3717,6 @@ export class HistoryHandler {
             updated_at: new Date().toISOString()
         };
 
-        if (tenantResolution.resolved) {
-            payload.tenant_id = tenantResolution.tenantId;
-        }
-
         const { error } = await supabase
             .from('settings')
             .upsert(payload, { onConflict: 'project_id,service_id,key' });
@@ -3778,39 +3738,28 @@ export class HistoryHandler {
                         ? process.env.RAILWAY_PUBLIC_DOMAIN
                         : (process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PROJECT_URL);
                 if (publicDomain && value) {
-                    if (
-                        !tenantResolution.resolved ||
-                        tenantResolution.globalScope ||
-                        !tenantResolution.tenantId
-                    ) {
-                        console.warn(
-                            `[HistoryHandler] Omitiendo routing_table para ${key}: tenant no resuelto para ${targetProjectId}`
-                        );
-                    } else {
-                        let projectUrl = publicDomain.startsWith('http')
-                            ? publicDomain
-                            : `https://${publicDomain}`;
+                    let projectUrl = publicDomain.startsWith('http')
+                        ? publicDomain
+                        : `https://${publicDomain}`;
 
-                        if (projectUrl.endsWith('/')) {
-                            projectUrl = projectUrl.slice(0, -1);
-                        }
-
-                        console.log(
-                            `📡 [HistoryHandler] Sincronizando routing_table para ${key}: ${value} -> ${projectUrl}`
-                        );
-
-                        await supabase
-                            .from('routing_table')
-                            .upsert({
-                                tenant_id: tenantResolution.tenantId,
-                                phone_number_id: value,
-                                waba_id: null,
-                                project_id: targetProjectId,
-                                service_id: targetServiceId,
-                                project_url: projectUrl,
-                                updated_at: new Date().toISOString()
-                            }, { onConflict: 'phone_number_id' });
+                    if (projectUrl.endsWith('/')) {
+                        projectUrl = projectUrl.slice(0, -1);
                     }
+
+                    console.log(
+                        `📡 [HistoryHandler] Sincronizando routing_table para ${key}: ${value} -> ${projectUrl}`
+                    );
+
+                    await supabase
+                        .from('routing_table')
+                        .upsert({
+                            phone_number_id: value,
+                            waba_id: null,
+                            project_id: targetProjectId,
+                            service_id: targetServiceId,
+                            project_url: projectUrl,
+                            updated_at: new Date().toISOString()
+                        }, { onConflict: 'phone_number_id' });
                 }
             }
         }
@@ -4064,9 +4013,6 @@ export class HistoryHandler {
                             value: s.value,
                             updated_at: new Date().toISOString()
                         };
-                        if (tenantResolution.resolved) {
-                            payload.tenant_id = tenantResolution.tenantId;
-                        }
                         return payload;
                     });
 
@@ -4105,9 +4051,6 @@ export class HistoryHandler {
                     value: uniqueKey,
                     updated_at: new Date().toISOString()
                 };
-                if (tenantResolution.resolved) {
-                    payload.tenant_id = tenantResolution.tenantId;
-                }
                 await supabase.from('settings').insert(payload);
             }
 
@@ -4168,9 +4111,6 @@ export class HistoryHandler {
                             value: finalValue,
                             updated_at: new Date().toISOString()
                         };
-                        if (tenantResolution.resolved) {
-                            payload.tenant_id = tenantResolution.tenantId;
-                        }
                         await supabase.from('settings').upsert(payload, { onConflict: 'project_id,service_id,key' });
                     }
                 }
@@ -4254,15 +4194,9 @@ export class HistoryHandler {
 
     static async createUser(username: string, pass: string, role: string = 'subuser') {
         try {
-            const tenantResolution = await this.resolveTenantIdByProjectId(HistoryHandler.PROJECT_IDENTIFIER);
-            if (!tenantResolution.resolved || tenantResolution.globalScope || !tenantResolution.tenantId) {
-                return { success: false, error: 'No se pudo resolver un tenant_id válido. No se puede crear el usuario.' };
-            }
-
             const { data, error } = await supabase
                 .from('users')
                 .insert({
-                    tenant_id: tenantResolution.tenantId,
                     project_id: HistoryHandler.PROJECT_IDENTIFIER,
                     username,
                     password: pass,
@@ -4353,7 +4287,7 @@ export class HistoryHandler {
         }
     }
 
-    static async getUserById(userId: string, projectId: string | null = null, tenantId: string | null = null) {
+    static async getUserById(userId: string, projectId: string | null = null) {
         try {
             let query = supabase
                 .from('users')
@@ -4362,9 +4296,6 @@ export class HistoryHandler {
 
             if (projectId) {
                 query = query.eq('project_id', projectId);
-            }
-            if (tenantId) {
-                query = query.eq('tenant_id', tenantId);
             }
 
             const { data, error } = await query.maybeSingle();

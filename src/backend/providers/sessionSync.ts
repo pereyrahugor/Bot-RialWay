@@ -4,8 +4,6 @@ import fs from 'fs';
 import path from 'path';
 
 import { vault } from '../db/vault';
-import { HistoryHandler } from '../db/historyHandler';
-
 // Configuración
 const SESSION_DIR = 'bot_sessions';
 const SYNC_INTERVAL_MS = 10 * 60 * 1000; // 10 Minutos
@@ -18,23 +16,6 @@ const botName = process.env.ASSISTANT_NAME || process.env.BOT_NAME || 'Unknown B
 
 // Cliente Supabase
 const supabase = createClient(supabaseUrl, supabaseKey);
-
-const resolveSessionTenantId = async (): Promise<string | null> => {
-    const tenantResolution = await HistoryHandler.resolveTenantIdByProjectId(projectId);
-
-    if (
-        !tenantResolution.resolved ||
-        tenantResolution.globalScope ||
-        !tenantResolution.tenantId
-    ) {
-        console.warn(
-            `[SessionSync] Tenant no resuelto para ${projectId}. Se omite acceso a whatsapp_sessions.`
-        );
-        return null;
-    }
-
-    return tenantResolution.tenantId;
-};
 
 /**
  * Restaura la sesión desde Supabase.
@@ -56,13 +37,9 @@ export async function restoreSessionFromDb(sessionId: string = 'default', servic
             fs.mkdirSync(sessionPath, { recursive: true });
         }
 
-        const tenantId = await resolveSessionTenantId();
-        if (!tenantId) return;
-
         let query = supabase
             .from('whatsapp_sessions')
             .select('key_id, data')
-            .eq('tenant_id', tenantId)
             .eq('project_id', projectId)
             .eq('session_id', sessionId);
 
@@ -126,13 +103,9 @@ export async function restoreSessionFromDb(sessionId: string = 'default', servic
  */
 export async function isSessionInDb(sessionId: string = 'default', serviceId: string | null = null): Promise<boolean> {
     try {
-        const tenantId = await resolveSessionTenantId();
-        if (!tenantId) return false;
-
         let query = supabase
             .from('whatsapp_sessions')
             .select('key_id')
-            .eq('tenant_id', tenantId)
             .eq('project_id', projectId)
             .eq('session_id', sessionId);
 
@@ -160,13 +133,9 @@ export async function isSessionInDb(sessionId: string = 'default', serviceId: st
 export async function deleteSessionFromDb(sessionId: string = 'default', serviceId: string | null = null) {
     console.log(`[SessionSync] 🗑️ Eliminando sesión remota '${sessionId}' para proyecto '${projectId}' y servicio '${serviceId || 'default'}'...`);
     try {
-        const tenantId = await resolveSessionTenantId();
-        if (!tenantId) return;
-
         let query = supabase
             .from('whatsapp_sessions')
             .delete()
-            .eq('tenant_id', tenantId)
             .eq('project_id', projectId)
             .eq('session_id', sessionId);
 
@@ -193,13 +162,9 @@ export async function deleteSessionFromDb(sessionId: string = 'default', service
 export async function deleteAllProjectSessionsFromDb() {
     console.log(`[SessionSync] 🗑️ Eliminando todas las sesiones del proyecto '${projectId}'...`);
     try {
-        const tenantId = await resolveSessionTenantId();
-        if (!tenantId) return;
-
         const { error } = await supabase
             .from('whatsapp_sessions')
             .delete()
-            .eq('tenant_id', tenantId)
             .eq('project_id', projectId);
 
         if (error) {
@@ -239,9 +204,6 @@ export function startSessionSync(sessionId: string = 'default', serviceId: strin
 
 async function syncToDb(sessionId: string, serviceId: string | null = null) {
     try {
-        const tenantId = await resolveSessionTenantId();
-        if (!tenantId) return;
-
         const sessionPath = path.join(SESSION_DIR, sessionId);
         if (!fs.existsSync(sessionPath)) return;
 
@@ -281,7 +243,6 @@ async function syncToDb(sessionId: string, serviceId: string | null = null) {
         if (Object.keys(sessionMap).length === 0) return;
 
         const upsertData: any = {
-            tenant_id: tenantId,
             project_id: projectId,
             session_id: sessionId,
             key_id: 'full_backup',

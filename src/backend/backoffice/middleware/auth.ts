@@ -157,7 +157,7 @@ export const backofficeAuth = async (req: any, res: any, next: () => void) => {
             isSubUser = true;
             try {
                 // Validación estricta y fresca contra DB (bypassing cache)
-                const user = await HistoryHandler.getUserById(userId, projectId, tenantResolution.tenantId);
+                const user = await HistoryHandler.getUserById(userId, projectId);
                 if (user) {
                     if (user.project_id === projectId && (user.service_id === null || user.service_id === currentServiceId)) {
                         isValid = true;
