@@ -134,7 +134,7 @@ const sanitizeColumnName = (name: string) => {
     let finalName = sanitized;
     if (finalName === 'id') finalName = 'id_';
     else if (finalName === 'created_at') finalName = 'created_at_';
-    return finalName.substring(0, 63);
+    return finalName.substring(0, 63).replace(/_+$/, '');
 };
 
 async function ensureTableExists(tableName: string, headers: string[]) {
@@ -157,6 +157,7 @@ async function ensureTableExists(tableName: string, headers: string[]) {
             GRANT ALL ON TABLE ${tableName} TO service_role;
             GRANT ALL ON TABLE ${tableName} TO authenticated;
             GRANT SELECT ON TABLE ${tableName} TO anon;
+            NOTIFY pgrst, 'reload schema';
         `;
         
         const res = await supabase.rpc('exec_sql', { query: createSql });

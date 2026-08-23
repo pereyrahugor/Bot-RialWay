@@ -36,7 +36,7 @@ const sanitizeColumnName = (name: string) => {
     let finalName = sanitized;
     if (finalName === 'id') finalName = 'id_';
     else if (finalName === 'created_at') finalName = 'created_at_';
-    return finalName.substring(0, 63);
+    return finalName.substring(0, 63).replace(/_+$/, '');
 };
 
 export interface TableMeta {
