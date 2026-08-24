@@ -41,6 +41,7 @@ window.__activeBackofficeChatId = null;
 let _activeChatSyncTimer = null;
 let _syncingActiveChat = false;
 let _backofficeChatScrollTop = null;
+let _backofficeChatListScrollTop = 0;
 let _restoringBackofficeView = false;
 let _globalBotEnabled = localStorage.getItem(getGlobalBotCacheKey()) !== 'false';
 
@@ -875,7 +876,17 @@ async function fetchChats(refresh = false) {
         if (newChats.length < CHAT_LIMIT) allChatsLoaded = true;
 
         if (refresh) {
-            chats = newChats;
+            // Si el usuario ya tenía más chats cargados por scroll previo y no está aplicando filtros nuevos,
+            // actualizamos los datos de los chats existentes sin truncar la lista a 50 para no perder el scroll.
+            if (chats.length > CHAT_LIMIT && !query && !tagFilter) {
+                const newMap = new Map(newChats.map(c => [c.id, c]));
+                const updatedChats = chats.map(c => newMap.has(c.id) ? { ...c, ...newMap.get(c.id) } : c);
+                const existingIds = new Set(chats.map(c => c.id));
+                const freshNew = newChats.filter(nc => !existingIds.has(nc.id));
+                chats = freshNew.length > 0 ? [...freshNew, ...updatedChats] : updatedChats;
+            } else {
+                chats = newChats;
+            }
         } else {
             // Evitar duplicados si hay mensajes en tiempo real entrando
             const existingIds = chats.map(c => c.id);
@@ -1000,7 +1011,13 @@ function renderChatList(listToRender = chats) {
     const list = document.getElementById('chat-list');
     if (!list) return;
 
-    const prevScrollTop = list.scrollTop;
+    // Solo leer el scrollTop si la lista es visible (clientHeight > 0).
+    // Si la lista está oculta (por ejemplo en móvil dentro de un chat), usar el scroll previamente guardado.
+    const isVisible = list.clientHeight > 0;
+    if (isVisible && list.scrollTop > 0) {
+        _backofficeChatListScrollTop = list.scrollTop;
+    }
+    const prevScrollTop = _backofficeChatListScrollTop || 0;
 
     let filteredList = listToRender;
     if (_isSuperAdminMode && _activeServiceFilter !== 'all') {
@@ -1126,8 +1143,13 @@ function renderChatList(listToRender = chats) {
         `;
     }).join('');
 
+    if (isVisible) {
+        list.scrollTop = prevScrollTop;
+    }
     requestAnimationFrame(() => {
-        if (list) list.scrollTop = prevScrollTop;
+        if (list && list.clientHeight > 0) {
+            list.scrollTop = prevScrollTop;
+        }
     });
 }
 
@@ -1183,7 +1205,25 @@ async function checkPlatformVisibility() {
     }
 }
 
+window.backofficeCloseMobileChat = function () {
+    document.body.classList.remove('mobile-chat-active');
+    const list = document.getElementById('chat-list');
+    if (list) {
+        const target = _backofficeChatListScrollTop || 0;
+        requestAnimationFrame(() => {
+            list.scrollTop = target;
+        });
+        setTimeout(() => {
+            if (list) list.scrollTop = target;
+        }, 50);
+    }
+};
+
 async function selectChat(id) {
+    const listEl = document.getElementById('chat-list');
+    if (listEl && listEl.clientHeight > 0 && listEl.scrollTop > 0) {
+        _backofficeChatListScrollTop = listEl.scrollTop;
+    }
     if (_isRecording) cancelRecording();
     activeChatId = id;
     window.__activeBackofficeChatId = id;
@@ -3155,11 +3195,14 @@ if (urlParams.get('openPanel') === 'meta') {
 // Listeners para Infinite Scroll - con null check para no crashear si el script carga fuera del view
 const _chatListEl = document.getElementById('chat-list');
 if (_chatListEl) _chatListEl.addEventListener('scroll', function () {
+    if (this.clientHeight > 0) {
+        _backofficeChatListScrollTop = this.scrollTop;
+    }
     const { scrollTop, scrollHeight, clientHeight } = this;
     if (scrollTop + clientHeight >= scrollHeight - 20) {
         if (!loadingChats && !allChatsLoaded) fetchChats();
     }
-});
+}, { passive: true });
 
 const _messagesEl = document.getElementById('messages');
 if (_messagesEl) _messagesEl.addEventListener('scroll', function () {
@@ -4547,11 +4590,14 @@ window.initBackofficeView = function () {
     const chatList = document.getElementById('chat-list');
     if (chatList) {
         chatList.addEventListener('scroll', function () {
+            if (this.clientHeight > 0) {
+                _backofficeChatListScrollTop = this.scrollTop;
+            }
             const { scrollTop, scrollHeight, clientHeight } = this;
             if (scrollTop + clientHeight >= scrollHeight - 20) {
                 if (!loadingChats && !allChatsLoaded) fetchChats();
             }
-        });
+        }, { passive: true });
     }
     const messagesEl = document.getElementById('messages');
     if (messagesEl) {
