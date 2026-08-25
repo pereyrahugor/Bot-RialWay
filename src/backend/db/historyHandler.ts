@@ -2084,7 +2084,7 @@ export class HistoryHandler {
             return chat ? (chat.bot_enabled !== false) : true;
         } catch (err) {
             console.error('[HistoryHandler] Error en isBotEnabled:', err);
-            return true;
+            return false;
         }
     }
 
@@ -2096,12 +2096,12 @@ export class HistoryHandler {
         const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
         const currentServiceId = serviceId || this.SERVICE_IDENTIFIER;
 
-        // Si se intenta habilitar el bot, verificar que el contacto no esté en lista negra (a menos que se fuerce explícitamente)
-        if (enabled === true && !force) {
+        // Si se intenta habilitar el bot, verificar que el contacto no esté en lista negra
+        if (enabled === true) {
             const isBlocked = await this.isContactBlacklisted(chatId, currentProjectId, currentServiceId);
             if (isBlocked) {
                 console.log(`[HistoryHandler] ⛔ Bloqueada activación de bot para ${chatId} en proyecto ${currentProjectId}: contacto en LISTA NEGRA.`);
-                return { success: false, error: 'Contacto en lista negra (Sin Bot / Bloqueado)' };
+                return { success: false, error: 'Contacto en lista negra (Sin Bot / Bloqueado). Quítalo de la lista negra para reactivar el bot.' };
             }
         }
 
@@ -4527,6 +4527,29 @@ export class HistoryHandler {
                     upsertData.service_id = HistoryHandler.SERVICE_IDENTIFIER;
                 }
                 chatsMap.set(cleanId, upsertData);
+            }
+
+            // Asegurar que ningún contacto en lista negra se inserte/actualice con bot_enabled: true
+            try {
+                const allCleanIds = Array.from(chatsMap.keys());
+                const possibleQueryIds = Array.from(new Set(allCleanIds.flatMap(id => this.getPossibleJids(id))));
+                const { data: blRows } = await supabase
+                    .from('blacklist')
+                    .select('chat_id')
+                    .eq('project_id', targetProjectId)
+                    .in('chat_id', possibleQueryIds)
+                    .or('sin_bot.eq.true,bloqueado_crm.eq.true');
+
+                if (blRows && blRows.length > 0) {
+                    const blSet = new Set(blRows.map(r => this.normalizeId(r.chat_id)));
+                    for (const [cleanId, row] of chatsMap.entries()) {
+                        if (blSet.has(cleanId) || blSet.has(this.normalizeId(cleanId))) {
+                            row.bot_enabled = false;
+                        }
+                    }
+                }
+            } catch (blErr: any) {
+                console.warn('[HistoryHandler] Error verificando blacklist en syncChats:', blErr?.message || blErr);
             }
 
             const chatsToUpsert = Array.from(chatsMap.values());

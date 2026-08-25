@@ -1792,22 +1792,35 @@ function getActiveChatDisplayName() {
 }
 
 async function toggleBot(enabled, options = {}) {
-    const res = await fetch('/api/backoffice/toggle-bot', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'token=' + token
-        },
-        body: JSON.stringify({ chatId: activeChatId, enabled })
-    });
+    try {
+        const res = await fetch('/api/backoffice/toggle-bot', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'token=' + token
+            },
+            body: JSON.stringify({ chatId: activeChatId, enabled })
+        });
 
-    if (res.ok) {
-        const chat = chats.find(c => c.id === activeChatId);
-        if (chat) chat.bot_enabled = enabled;
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.success) {
+            const chat = chats.find(c => c.id === activeChatId);
+            if (chat) chat.bot_enabled = enabled;
+            refreshBotStateUI();
+            if (options.toast) {
+                const name = getActiveChatDisplayName();
+                showToast(enabled ? `Chatbot reanudado para ${name}` : `Chatbot desactivado para ${name}`);
+            }
+        } else {
+            refreshBotStateUI();
+            if (typeof showToast === 'function') {
+                showToast(data.error || 'No se puede activar el bot: contacto en lista negra.', 'warning');
+            }
+        }
+    } catch (e) {
         refreshBotStateUI();
-        if (options.toast) {
-            const name = getActiveChatDisplayName();
-            showToast(enabled ? `Chatbot reanudado para ${name}` : `Chatbot desactivado para ${name}`);
+        if (typeof showToast === 'function') {
+            showToast('Error al cambiar el estado del bot.', 'error');
         }
     }
 }

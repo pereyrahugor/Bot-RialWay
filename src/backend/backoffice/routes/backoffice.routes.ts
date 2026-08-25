@@ -6581,12 +6581,14 @@ export const processCreateIndividualContact = async (req: any, res: any) => {
             return res.status(500).json({ success: false, error: 'Base de datos no disponible.' });
         }
 
+        const isBlacklisted = await depsHistoryHandler.isContactBlacklisted(phone, targetProjectId, targetServiceId);
+
         const chatRow: any = {
             id: phone,
             project_id: targetProjectId,
             name: name && String(name).trim() !== '' ? String(name).trim() : null,
             type: 'whatsapp',
-            bot_enabled: true,
+            bot_enabled: !isBlacklisted,
             assigned_agent: 'asistente1',
             last_message_at: new Date().toISOString()
         };

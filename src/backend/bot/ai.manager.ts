@@ -187,6 +187,12 @@ export class AiManager {
 
             // COMANDOS DE CONTROL (WhatsApp Admin)
             if (body === "#ON#") {
+                const isBlocked = await HistoryHandler.isContactBlacklisted(ctx.from, dynamicProjectId, dynamicServiceId);
+                if (isBlocked) {
+                    const msg = "⛔ No se puede activar el bot: este contacto está en la LISTA NEGRA. Quítalo de la lista negra desde el panel para reactivarlo.";
+                    await flowDynamic([{ body: msg }]);
+                    return state;
+                }
                 await HistoryHandler.toggleBot(ctx.from, true, dynamicProjectId, dynamicServiceId);
                 if (ctx.pushName) await HistoryHandler.getOrCreateChat(ctx.from, 'whatsapp', ctx.pushName, ctx.userId, dynamicProjectId, dynamicServiceId);
                 const msg = "🤖 Bot activado para este chat.";
