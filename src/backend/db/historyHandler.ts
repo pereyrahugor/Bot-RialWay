@@ -3253,19 +3253,6 @@ export class HistoryHandler {
         try {
             const targetProjectId = projectId || PROJECT_ID;
             const targetServiceId = serviceId || HistoryHandler.SERVICE_IDENTIFIER;
-            const tenantResolution = await this.resolveTenantIdByProjectId(targetProjectId);
-
-            if (
-                !tenantResolution.resolved ||
-                tenantResolution.globalScope ||
-                !tenantResolution.tenantId
-            ) {
-                throw new Error(
-                    `[Tenant] No se pudo resolver tenant para Meta onboarding del proyecto ${targetProjectId}`
-                );
-            }
-
-            const tenantId = tenantResolution.tenantId;
 
             // Identificar al Super Usuario (Carlitos Pepe) para asignar propiedad
             let superUserId = null;
@@ -3436,23 +3423,6 @@ export class HistoryHandler {
     static async syncRoutingTableOnStartup() {
         try {
             if (!supabase) return;
-
-            const tenantResolution = await this.resolveTenantIdByProjectId(
-                this.PROJECT_IDENTIFIER
-            );
-
-            if (
-                !tenantResolution.resolved ||
-                tenantResolution.globalScope ||
-                !tenantResolution.tenantId
-            ) {
-                console.warn(
-                    `[HistoryHandler] Omitiendo sync de routing_table: tenant no resuelto para ${this.PROJECT_IDENTIFIER}`
-                );
-                return;
-            }
-
-            const tenantId = tenantResolution.tenantId;
 
             const onboardingData = await this.getMetaOnboardingData();
             if (!onboardingData || !onboardingData.phone_number_id) return;
@@ -3706,8 +3676,6 @@ export class HistoryHandler {
         // Invalidar cache en memoria
         const cacheKey = `${targetProjectId}:${targetServiceId}:${key}`;
         this.settingsCache.delete(cacheKey);
-
-        const tenantResolution = await this.resolveTenantIdByProjectId(targetProjectId);
 
         const payload: any = {
             project_id: targetProjectId,
@@ -3974,8 +3942,6 @@ export class HistoryHandler {
                 console.log(`ℹ️ [Bootstrap] Saltando clonación para proyecto maestro o por defecto.`);
                 return;
             }
-
-            const tenantResolution = await this.resolveTenantIdByProjectId(currentProjectId);
 
             // 1. Obtener todas las llaves configuradas en el proyecto actual
             const { data: currentSettings } = await supabase.from('settings')
