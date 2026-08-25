@@ -319,7 +319,7 @@ export class AssistantResponseProcessor {
             const rawTarget = pdfMatch[1].trim();
             console.log(`[AssistantResponseProcessor] 📄 Detectado bloque [PDF: ${rawTarget}]`);
             try {
-                const filePath = await downloadFileFromDrive(rawTarget);
+                const filePath = await downloadFileFromDrive(rawTarget, projectId, serviceId);
                 if (filePath && fs.existsSync(filePath) && !pdfPaths.includes(filePath)) {
                     pdfPaths.push(filePath);
                 }

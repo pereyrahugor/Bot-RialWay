@@ -1,15 +1,15 @@
 import { google } from "googleapis";
-import { createGoogleAuth } from "./googleAuth";
+import { createGoogleAuthAsync } from "./googleAuth";
 import fs from "fs";
 import path from "path";
 import { finished } from "stream/promises";
 
 // Se eliminaron inicializaciones estáticas para evitar errores de carga prematura
-const getDriveClient = () => {
-    const auth = createGoogleAuth([
+const getDriveClient = async (projectId?: string | null, serviceId?: string | null) => {
+    const auth = await createGoogleAuthAsync([
         "https://www.googleapis.com/auth/drive.readonly",
         "https://www.googleapis.com/auth/drive.file"
-    ]);
+    ], projectId, serviceId);
     return google.drive({ version: "v3", auth });
 };
 
@@ -45,9 +45,11 @@ export const extractGoogleDriveFileId = (input: string): string => {
 /**
  * Descarga un archivo desde Google Drive dado su ID o URL.
  * @param rawFileId ID o URL del archivo en Google Drive, o ruta local.
+ * @param projectId ID del proyecto opcional para resolución de credenciales.
+ * @param serviceId ID del servicio opcional para resolución de credenciales.
  * @returns Path local del archivo descargado.
  */
-export const downloadFileFromDrive = async (rawFileId: string): Promise<string> => {
+export const downloadFileFromDrive = async (rawFileId: string, projectId?: string | null, serviceId?: string | null): Promise<string> => {
     if (!rawFileId) throw new Error("ID de archivo no proporcionado");
     
     // Si ya es un archivo local existente
@@ -67,7 +69,7 @@ export const downloadFileFromDrive = async (rawFileId: string): Promise<string> 
         }
 
         // Obtener metadatos del archivo para saber el nombre original
-        const drive = getDriveClient();
+        const drive = await getDriveClient(projectId, serviceId);
         const fileMetadata = await drive.files.get({
             fileId: fileId,
             fields: "name, mimeType",

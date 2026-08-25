@@ -136,7 +136,7 @@ export class ReconectionFlow {
                 const rawTarget = pdfMatch[1].trim();
                 try {
                     console.log(`[ReconectionFlow] 📄 Detectado PDF: ${rawTarget}. Descargando...`);
-                    const filePath = await downloadFileFromDrive(rawTarget);
+                    const filePath = await downloadFileFromDrive(rawTarget, dynamicProjectId, dynamicServiceId);
                     if (filePath && fs.existsSync(filePath) && !pdfPaths.includes(filePath)) {
                         pdfPaths.push(filePath);
                     }

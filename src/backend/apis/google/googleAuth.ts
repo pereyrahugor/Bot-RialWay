@@ -60,13 +60,49 @@ export const getGooglePrivateKey = (): string => {
     return rawKey.replace(/\\n/g, '\n').trim();
 };
 
-/**
- * Retorna las credenciales de Google configuradas.
- */
-export const getGoogleCredentials = () => {
+export const getGoogleCredentials = async (projectId?: string | null, serviceId?: string | null) => {
+    let clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
+    let privateKey = getGooglePrivateKey();
+
+    if (!clientEmail || !privateKey) {
+        try {
+            const { HistoryHandler, supabase } = await import("../../db/historyHandler");
+            if (projectId) {
+                clientEmail = (await HistoryHandler.getSetting('GOOGLE_CLIENT_EMAIL', projectId, serviceId)) || clientEmail;
+                privateKey = (await HistoryHandler.getSetting('GOOGLE_PRIVATE_KEY', projectId, serviceId)) || privateKey;
+            }
+            if (!clientEmail || !privateKey) {
+                if (supabase) {
+                    const { data } = await supabase
+                        .from('settings')
+                        .select('key, value')
+                        .eq('project_id', 'defaul')
+                        .in('key', ['GOOGLE_CLIENT_EMAIL', 'GOOGLE_PRIVATE_KEY']);
+                    if (data) {
+                        for (const s of data) {
+                            if (s.key === 'GOOGLE_CLIENT_EMAIL' && !clientEmail) clientEmail = s.value;
+                            if (s.key === 'GOOGLE_PRIVATE_KEY' && !privateKey) privateKey = s.value;
+                        }
+                    }
+                }
+            }
+            if (clientEmail && !process.env.GOOGLE_CLIENT_EMAIL) process.env.GOOGLE_CLIENT_EMAIL = clientEmail;
+            if (privateKey && !process.env.GOOGLE_PRIVATE_KEY) process.env.GOOGLE_PRIVATE_KEY = privateKey;
+        } catch (e) {
+            console.warn('[GoogleAuth] Error cargando credenciales desde DB:', e);
+        }
+    }
+
+    if (privateKey) {
+        if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
+            privateKey = privateKey.slice(1, -1);
+        }
+        privateKey = privateKey.replace(/\\n/g, '\n').trim();
+    }
+
     return {
-        client_email: process.env.GOOGLE_CLIENT_EMAIL,
-        private_key: getGooglePrivateKey(),
+        client_email: clientEmail,
+        private_key: privateKey,
     };
 };
 
@@ -74,11 +110,27 @@ export const getGoogleCredentials = () => {
  * Crea una instancia de autenticación de Google con los scopes necesarios.
  * @param scopes Lista de scopes de Google API
  */
-export const createGoogleAuth = (scopes: string[]) => {
-    const creds = getGoogleCredentials();
+export const createGoogleAuth = (scopes: string[], projectId?: string | null, serviceId?: string | null) => {
+    const rawKey = getGooglePrivateKey();
+    const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
+
+    return new google.auth.GoogleAuth({
+        credentials: {
+            client_email: clientEmail,
+            private_key: rawKey,
+        },
+        scopes: scopes,
+    });
+};
+
+/**
+ * Crea una instancia de autenticación de Google de forma asíncrona resolviendo credenciales de DB si faltan en env.
+ */
+export const createGoogleAuthAsync = async (scopes: string[], projectId?: string | null, serviceId?: string | null) => {
+    const creds = await getGoogleCredentials(projectId, serviceId);
     
-    if (!creds.private_key) {
-        console.warn("⚠️ [GoogleAuth] La clave privada de Google está vacía.");
+    if (!creds.private_key || !creds.client_email) {
+        console.warn("⚠️ [GoogleAuth] La clave privada o email de Google están vacíos.");
     }
 
     return new google.auth.GoogleAuth({
