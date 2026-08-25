@@ -75,9 +75,9 @@ async function _getUserInfo(userId: string): Promise<{ role: string; projectId: 
 
 let _adminPassCacheKey = '';
 
-async function _fetchAdminPass(projectId: string, tenantId: string | null): Promise<string> {
+async function _fetchAdminPass(projectId: string, _tenantId: string | null = null): Promise<string> {
     const now = Date.now();
-    const currentKey = `${projectId}:${tenantId || 'global'}`;
+    const currentKey = `${projectId}:admin_pass`;
     if (_adminPassCacheKey === currentKey && _adminPassPromise !== null && (now - _adminPassAt) < ADMIN_PASS_TTL) {
         return _adminPassPromise;
     }
@@ -86,10 +86,7 @@ async function _fetchAdminPass(projectId: string, tenantId: string | null): Prom
     // Timeout de 3s: si Supabase tarda, no bloqueamos todas las requests
     const fallback = new Promise<string>(resolve => setTimeout(() => resolve(''), 3000));
     _adminPassPromise = Promise.race([
-        HistoryHandler.getSetting('ADMIN_PASS').then((dbPass) => {
-            if (tenantId) {
-                return dbPass || '';
-            }
+        HistoryHandler.getSetting('ADMIN_PASS', projectId).then((dbPass) => {
             return dbPass || process.env.ADMIN_PASS || process.env.BACKOFFICE_TOKEN || '';
         }),
         fallback
@@ -123,36 +120,28 @@ export const backofficeAuth = async (req: any, res: any, next: () => void) => {
         token = token.trim();
         if (token.startsWith('token=')) token = token.slice(6);
         else if (token.startsWith('Bearer ')) token = token.slice(7);
-        // Decodear caracteres especiales URL-encodeados (ej: %23 -> #)
+        // Decodear caracteres especiales URL-encodeados (ej. saltos de linea o caracteres base64)
         try { token = decodeURIComponent(token); } catch (_) { /* ya decodificado */ }
     }
 
+    // 2. Extraer contexto de proyecto/servicio
     const projectId = (HistoryHandler as any).PROJECT_IDENTIFIER || process.env.RAILWAY_PROJECT_ID || 'unknown';
     const currentServiceId = (HistoryHandler as any).SERVICE_IDENTIFIER || 'default_service';
 
-    // 2. Determinar si es SUPERADMIN
-    const isSuperAdmin = isSuperAdminToken(token);
-    
     let isValid = false;
+    const isSuperAdmin = isSuperAdminToken(token);
     let isSubUser = false;
-    let userId = null;
-    let userRole = 'subuser';
+    let userId: string | null = null;
+    let userRole = 'admin';
     let userProjectId: string | null = null;
     let userServiceId: string | null = null;
 
-    // 3. Si es SUPERADMIN: permitir, no depende del tenant
+    // 3. Si es SUPERADMIN: permitir
     if (isSuperAdmin) {
         isValid = true;
     } else {
-        // 4. Para autenticación normal: resolver tenant actual del PROJECT_X
-        const tenantResolution = await (HistoryHandler as any).resolveTenantIdByProjectId(projectId);
-        
-        // 5. Si Railway project está huérfano: 401 inmediatamente
-        if (!tenantResolution.resolved && !tenantResolution.globalScope) {
-            console.warn(`[AUTH] Proyecto ${projectId} huérfano. Rechazando acceso a ADMIN normal / Subuser.`);
-            isValid = false;
-        } else if (typeof token === 'string' && token.startsWith('sub:')) {
-            // 7. Si es sub:<uuid>: consultar usuario real en DB
+        if (typeof token === 'string' && token.startsWith('sub:')) {
+            // 4. Si es sub:<uuid>: consultar usuario real en DB
             userId = token.split(':')[1];
             isSubUser = true;
             try {
@@ -176,8 +165,8 @@ export const backofficeAuth = async (req: any, res: any, next: () => void) => {
                 console.error('[AUTH] Error verificando usuario subuser:', e);
             }
         } else {
-            // 6. Si es ADMIN normal (intento de login por token): obtener ADMIN_PASS correspondiente al scope actual
-            const adminPass = await _fetchAdminPass(projectId, tenantResolution.tenantId);
+            // 5. Si es ADMIN normal (intento de login por token): obtener ADMIN_PASS correspondiente al scope actual
+            const adminPass = await _fetchAdminPass(projectId, null);
             if (!adminPass) {
                 console.error('⚡⚡ [AUTH-NON-CONFIGURED] ⚡⚡');
                 console.error(`DETALLE: No se encontró 'ADMIN_PASS' en la tabla 'settings' ni 'BACKOFFICE_TOKEN'/'ADMIN_PASS' en variables de entorno.`);
