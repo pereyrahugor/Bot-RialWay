@@ -613,8 +613,8 @@ const main = async () => {
     }
         
     // 10. Workers Initialization
-    // Se ajusta a 30 minutos (anteriormente 45) según requerimiento del usuario para activaciones manuales
-    startHumanInactivityWorker(30);
+    // Se ejecuta cada 12 horas verificando inactividad de 12 horas para optimizar recursos de Supabase/Railway
+    startHumanInactivityWorker(12, 12);
     startFileCleanupWorker(5);
 
     // 11. Start Server and Sockets

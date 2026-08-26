@@ -1,22 +1,22 @@
 import { HistoryHandler, supabase } from "../db/historyHandler";
 
 /**
- * Inicia un worker que verifica cada minuto los chats con intervención humana (bot desactivado).
- * Si no han recibido un mensaje humano en 30 minutos (o 24 horas si fue manual de la app), reactiva el bot automáticamente.
+ * Inicia un worker que verifica cada 12 horas los chats con intervención humana (bot desactivado).
+ * Si no han recibido un mensaje humano en 12 horas (o 24 horas si fue manual de la app), reactiva el bot automáticamente.
  * Excluye contactos en lista negra (sin_bot o bloqueado_crm) que deben permanecer en atención humana.
  */
-export const startHumanInactivityWorker = (timeoutMinutes = 30) => {
-    console.log(`🤖 [Worker] Iniciando worker de inactividad humana multitenant (${timeoutMinutes} min)...`);
+export const startHumanInactivityWorker = (timeoutHours = 12, intervalHours = 12) => {
+    console.log(`🤖 [Worker] Iniciando worker de inactividad humana multitenant (Revisión cada ${intervalHours}h | Inactividad > ${timeoutHours}h)...`);
 
-    setInterval(async () => {
+    const checkInactivity = async () => {
         try {
             if (!supabase) return;
             const now = new Date();
-            const threshold = new Date(now.getTime() - timeoutMinutes * 60 * 1000);
+            const threshold = new Date(now.getTime() - timeoutHours * 60 * 60 * 1000);
             const minThreshold = new Date(now.getTime() - 48 * 60 * 60 * 1000); // Ventana extendida a 48 horas para contemplar desactivaciones de 24 horas
             
-            // 1. Obtener chats con bot desactivado y actividad humana reciente (entre 48 horas y 15 minutos atrás)
-            const { data: inactiveChats, error } = await supabase
+            // 1. Obtener chats con bot desactivado y actividad humana reciente (filtrando por la instancia actual si no es master)
+            let query = supabase
                 .from('chats')
                 .select('id, project_id, service_id, last_human_message_at, metadata')
                 .eq('bot_enabled', false)
@@ -24,10 +24,22 @@ export const startHumanInactivityWorker = (timeoutMinutes = 30) => {
                 .gte('last_human_message_at', minThreshold.toISOString())
                 .lte('last_human_message_at', threshold.toISOString());
 
+            const currentProjectId = HistoryHandler.PROJECT_IDENTIFIER;
+            const currentServiceId = HistoryHandler.SERVICE_IDENTIFIER;
+
+            if (currentProjectId && !['default_project', 'default', 'test-hugo-local', 'local-dev'].includes(currentProjectId)) {
+                query = query.eq('project_id', currentProjectId);
+                if (currentServiceId && !['default_service', 'generic', 'null'].includes(currentServiceId)) {
+                    query = query.eq('service_id', currentServiceId);
+                }
+            }
+
+            const { data: inactiveChats, error } = await query;
+
             if (error) throw error;
             if (!inactiveChats || inactiveChats.length === 0) return;
 
-            // 2. Obtener lista negra en lotes pequeños (chunks) para evitar desbordar el límite de URL/Headers (16KB) en Supabase/PostgREST
+            // 2. Obtener lista negra en lotes pequeños (chunks) filtrando por proyecto/servicio
             const allQueryIds = Array.from(new Set(
                 inactiveChats.flatMap(c => HistoryHandler.getPossibleJids(c.id))
             ));
@@ -36,11 +48,20 @@ export const startHumanInactivityWorker = (timeoutMinutes = 30) => {
 
             for (let i = 0; i < allQueryIds.length; i += CHUNK_SIZE) {
                 const chunk = allQueryIds.slice(i, i + CHUNK_SIZE);
-                const { data: chunkEntries, error: blError } = await supabase
+                let blQuery = supabase
                     .from('blacklist')
                     .select('chat_id, project_id, service_id')
                     .in('chat_id', chunk)
                     .or('sin_bot.eq.true,bloqueado_crm.eq.true');
+
+                if (currentProjectId && !['default_project', 'default', 'test-hugo-local', 'local-dev'].includes(currentProjectId)) {
+                    blQuery = blQuery.eq('project_id', currentProjectId);
+                    if (currentServiceId && !['default_service', 'generic', 'null'].includes(currentServiceId)) {
+                        blQuery = blQuery.eq('service_id', currentServiceId);
+                    }
+                }
+
+                const { data: chunkEntries, error: blError } = await blQuery;
 
                 if (blError) {
                     console.error('[WORKER] Error consultando blacklist en lote (chunk):', blError);
@@ -111,11 +132,15 @@ export const startHumanInactivityWorker = (timeoutMinutes = 30) => {
                     }
                 }
 
-                console.log(`[WORKER] [${new Date().toLocaleTimeString()}] Auto-activando bot para chat ${chat.id} en proyecto ${projectId} (Inactividad > ${timeoutMinutes} min)`);
+                console.log(`[WORKER] [${new Date().toLocaleTimeString()}] Auto-activando bot para chat ${chat.id} en proyecto ${projectId} (Inactividad > ${timeoutHours}h)`);
                 await HistoryHandler.toggleBot(chat.id, true, projectId, chat.service_id);
             }
         } catch (e) {
             console.error('[WORKER] Error en check de inactividad humana:', e);
         }
-    }, 60 * 1000); // Verificar cada minuto para alta precisión
+    };
+
+    // Ejecución inicial y luego periódica cada 12 horas
+    setTimeout(checkInactivity, 60 * 1000); // 1 minuto después del arranque para no saturar el inicio
+    setInterval(checkInactivity, intervalHours * 60 * 60 * 1000);
 };
