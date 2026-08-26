@@ -1261,6 +1261,7 @@ class MetaCloudProvider extends ProviderClass {
                                 name: actualIsEcho ? 'Operador (App WhatsApp)' : (contact?.profile?.name || 'User'),
                                 type: type,
                                 context: msg.context || null,
+                                referral: msg.referral || null, // Anuncio de origen (Facebook / Instagram CTWA)
                                 payload: msg,
                                 platform: 'whatsapp',
                                 isManualIntervention: isThisChangeEcho && fieldName !== 'history', // Solo marcar intervención si no es historial retroactivo

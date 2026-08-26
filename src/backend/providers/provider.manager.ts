@@ -323,6 +323,41 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
                     rawPayloadToSave
                 );
 
+                // Detección y registro de contexto de Anuncio (Click to WhatsApp Ads - CTWA)
+                const referral = ctx.referral || ctx.payload?.referral || null;
+                const externalAdReply = ctx.payload?.message?.extendedTextMessage?.contextInfo?.externalAdReply ||
+                                        ctx.message?.contextInfo?.externalAdReply || 
+                                        ctx.payload?.contextInfo?.externalAdReply || null;
+                const adHeadline = referral?.headline || externalAdReply?.title || null;
+                const adBody = referral?.body || externalAdReply?.body || null;
+
+                if (adHeadline || adBody) {
+                    try {
+                        const chat = await HistoryHandler.getChat(chatId, dynamicProjectId, dynamicServiceId);
+                        const currentMeta = chat?.metadata || {};
+                        const sourceName = adHeadline ? `Anuncio: ${adHeadline}` : 'Anuncio Meta';
+                        
+                        const updateFields: any = {
+                            metadata: {
+                                ...currentMeta,
+                                referral: referral || externalAdReply
+                            }
+                        };
+
+                        if (!chat?.source || chat.source === '' || chat.source === 'Asistente AI') {
+                            updateFields.source = sourceName;
+                        }
+                        if (!chat?.offered_product && adBody) {
+                            updateFields.offered_product = adBody;
+                        }
+
+                        await HistoryHandler.updateContactDetails(chatId, updateFields, dynamicProjectId, dynamicServiceId);
+                        console.log(`${prefix} 🎯 [CTWA] Detectado anuncio de origen para ${chatId}: "${adHeadline || ''}" - "${adBody || ''}"`);
+                    } catch (adErr: any) {
+                        console.warn(`${prefix} Error guardando datos de anuncio CTWA:`, adErr.message);
+                    }
+                }
+
                 // Si el mensaje original provino de un LID, guardamos el mapeo en metadata de chats para poder resolverlo en la intervención manual
                 if (ctx.payload?.key?.remoteJid?.endsWith('@lid')) {
                     const originalLid = ctx.payload.key.remoteJid;

@@ -299,7 +299,24 @@ export class AiManager {
             const currentAssistantMap = await this.getAssistantMap(dynamicProjectId, dynamicServiceId);
             const currentAssistantId = currentAssistantMap[assigned] || this.assistantId;
 
-            const response = (await this.getAssistantResponse(assignedAssistantId, ctx.body, state, undefined, ctx.from, ctx.thread_id, dynamicProjectId, assigned, dynamicServiceId)) as string;
+            // --- DETECCIÓN Y CONTEXTUALIZACIÓN DE ANUNCIOS (CTWA - Facebook/Instagram) ---
+            const referral = ctx.referral || ctx.payload?.referral || null;
+            const externalAdReply = ctx.payload?.message?.extendedTextMessage?.contextInfo?.externalAdReply ||
+                                    ctx.message?.contextInfo?.externalAdReply || 
+                                    ctx.payload?.contextInfo?.externalAdReply || null;
+            const adHeadline = referral?.headline || externalAdReply?.title || null;
+            const adBody = referral?.body || externalAdReply?.body || null;
+
+            let messageForAI = ctx.body;
+            if (adBody || adHeadline) {
+                const adContext = `[Contexto del Anuncio en Facebook/Instagram desde el que escribe el usuario: "${adHeadline || ''}" - "${adBody || ''}"]`;
+                if (!messageForAI.includes(adBody)) {
+                    messageForAI = `${adContext}\n\nMensaje del usuario: ${messageForAI}`;
+                    console.log(`[AiManager] 🎯 Inyectado contexto de anuncio publicitario para ${ctx.from}: "${adHeadline || ''}"`);
+                }
+            }
+
+            const response = (await this.getAssistantResponse(assignedAssistantId, messageForAI, state, undefined, ctx.from, ctx.thread_id, dynamicProjectId, assigned, dynamicServiceId)) as string;
 
             if (!response) return state;
 
