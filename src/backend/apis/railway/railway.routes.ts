@@ -7,27 +7,36 @@ import { deleteSessionFromDb } from "../../providers/sessionSync";
 export const registerRailwayRoutes = (app: any, { RailwayApi }: any) => {
     
     app.post("/api/restart-bot", backofficeAuth, async (req: any, res: any) => {
-        console.log('POST /api/restart-bot recibido - Solicitando limpieza de sesión y reinicio');
+        console.log('POST /api/restart-bot recibido - Solicitando reinicio del contenedor');
         try {
-            // 1. Calcular nombres de sesión
-            const rawSessionName = process.env.BOT_NAME || process.env.ASSISTANT_NAME || 'bot';
-            const sessionId = rawSessionName.replace(/[^a-zA-Z0-9_-]/g, '_');
-
-            // 2. Eliminar sesiones de la base de datos (Supabase)
-            console.log(`[RailwayRoutes] 🗑️ Eliminando sesiones '${sessionId}' y '${sessionId}_groups' antes del reinicio...`);
-            await deleteSessionFromDb(sessionId);
-            await deleteSessionFromDb(`${sessionId}_groups`);
-
-            // 3. Solicitar reinicio en Railway
-            const result = await RailwayApi.restartActiveDeployment();
-            if (result.success) {
-                res.json({ success: true, message: "Sesión eliminada y reinicio solicitado correctamente." });
-            } else {
-                res.status(500).json({ success: false, error: result.error || "Error al reiniciar en Railway" });
+            // 1. Intentar solicitar reinicio formal en Railway vía GraphQL API si está disponible
+            let railwayResult: any = null;
+            try {
+                railwayResult = await RailwayApi.restartActiveDeployment();
+            } catch (rErr: any) {
+                console.warn('[RailwayRoutes] No se pudo reiniciar vía Railway GraphQL API (se reiniciará por proceso):', rErr?.message || rErr);
             }
+
+            // 2. Responder exitosamente al cliente
+            res.json({
+                success: true,
+                message: "Reinicio del contenedor solicitado correctamente.",
+                railwayApiRestart: railwayResult?.success || false
+            });
+
+            // 3. Programar salida limpia del proceso para que el supervisor de Docker/Railway lo reinicie de inmediato
+            setTimeout(() => {
+                console.log('🔄 [SYSTEM] Reiniciando proceso/contenedor a solicitud del usuario...');
+                process.exit(0);
+            }, 1000);
         } catch (err: any) {
             console.error('Error en /api/restart-bot:', err);
-            res.status(500).json({ success: false, error: err.message });
+            try {
+                res.json({ success: true, message: "Reinicio forzado del proceso." });
+                setTimeout(() => process.exit(0), 1000);
+            } catch (_) {
+                res.status(500).json({ success: false, error: err.message });
+            }
         }
     });
 

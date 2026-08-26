@@ -774,10 +774,15 @@ window.initConexionView = function () {
             reloadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reiniciando...';
             try {
                 const token = localStorage.getItem('backoffice_token');
-                const res = await fetch(`/api/restart-bot?token=${encodeURIComponent(token || '')}`, { method: 'POST' });
+                const res = await fetch(`/api/restart-bot?token=${encodeURIComponent(token || '')}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `token=${token || ''}`
+                    }
+                });
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok || data.success === false) throw new Error(data.error || 'Error al solicitar el reinicio');
-                window.swalAlert("Reinicio solicitado", "La pagina se recargara en 10 segundos.", "success");
+                window.swalAlert("Reinicio solicitado", "El contenedor se está reiniciando. La página se recargará en 10 segundos.", "success");
                 setTimeout(() => window.location.reload(), 10000);
             } catch (e) {
                 window.swalAlert("Error", e.message || "Error al solicitar el reinicio", "error");
