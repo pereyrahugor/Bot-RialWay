@@ -133,7 +133,7 @@ export async function indexDocumentForRAG(projectId: string, fileId: string, fil
             service_id: serviceId || HistoryHandler.SERVICE_IDENTIFIER || null,
             file_id: fileId,
             file_name: fileName,
-            content: content,
+            content: content.replace(/\0/g, '').replace(/\\u0000/g, ''),
             chunk_index: idx,
             embedding: JSON.stringify(embeddings[idx])
         }));

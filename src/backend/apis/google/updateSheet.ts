@@ -19,14 +19,13 @@ const supabase = (supabaseUrl && supabaseKey) ? createClient(supabaseUrl, supaba
 let currentFileId: string | null = null;
 
 
-import { createGoogleAuth } from "./googleAuth";
+import { createGoogleAuthAsync } from "./googleAuth";
 import { getOpenAIBaseUrl } from "../openai/openaiHelper";
 
 // Se eliminaron las inicializaciones estáticas para evitar errores de autenticación antes de cargar settings
 
-
-const getSheetsClient = () => {
-    const auth = createGoogleAuth(["https://www.googleapis.com/auth/spreadsheets"]);
+const getSheetsClient = async (projectId?: string | null, serviceId?: string | null) => {
+    const auth = await createGoogleAuthAsync(["https://www.googleapis.com/auth/spreadsheets"], projectId, serviceId);
     return google.sheets({ version: "v4", auth });
 };
 
@@ -190,7 +189,7 @@ async function ensureTableExists(tableName: string, headers: string[]) {
 
 // Procesa un sheet por ID, obtiene el nombre real y ejecuta la lógica
 async function processSheetById(SHEET_ID: string, projectId: string, serviceId: string | undefined, options: { forceRecreate?: boolean; skipDb?: boolean } = {}) {
-    const sheets = getSheetsClient();
+    const sheets = await getSheetsClient(projectId, serviceId);
     try {
         // Obtener metadatos para el nombre real de la hoja principal
         const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });

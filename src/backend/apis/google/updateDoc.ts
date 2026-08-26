@@ -2,14 +2,14 @@ import fs from "fs";
 import path from "path";
 import { google } from "googleapis";
 import dotenv from "dotenv";
-import { createGoogleAuth } from "./googleAuth.js";
+import { createGoogleAuthAsync } from "./googleAuth.js";
 import { HistoryHandler } from "../../db/historyHandler.js";
 import { indexDocumentForRAG } from "../../rag/ragService.js";
 
 dotenv.config();
 
-const getDriveClient = () => {
-    const auth = createGoogleAuth(["https://www.googleapis.com/auth/drive.readonly"]);
+const getDriveClient = async (projectId?: string | null, serviceId?: string | null) => {
+    const auth = await createGoogleAuthAsync(["https://www.googleapis.com/auth/drive.readonly"], projectId, serviceId);
     return google.drive({ version: "v3", auth });
 };
 
@@ -75,7 +75,7 @@ export async function updateAllDocs(projectId?: string, serviceId?: string) {
 }
 
 async function processDocById(projectId: string, DOCX_FILE_ID: string, serviceId?: string) {
-    const drive = getDriveClient();
+    const drive = await getDriveClient(projectId, serviceId);
     try {
         if (!DOCX_FILE_ID) throw new Error("No se definió DOCX_FILE_ID");
 
