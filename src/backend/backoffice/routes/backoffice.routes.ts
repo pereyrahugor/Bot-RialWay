@@ -3176,10 +3176,70 @@ export const registerBackofficeRoutes = (app: any) => {
                                     const downloadedPath = path.join(uploadsDir, filename);
                                     fs.writeFileSync(downloadedPath, response.data);
 
+                                    // --- LÓGICA DE COMPRESIÓN AUTOMÁTICA DE VIDEO ---
+                                    let finalLocalPath = downloadedPath;
+                                    let finalLocalFilename = filename;
+
+                                    try {
+                                        const stats = fs.statSync(downloadedPath);
+                                        const sizeMB = stats.size / (1024 * 1024);
+
+                                        if (sizeMB > 15.0 && (ext === 'mp4' || formatType === 'video' || contentType.includes('video'))) {
+                                            console.log(`⚠️ [SINGLE-TEMPLATE] Video pesado (${sizeMB.toFixed(2)}MB). Comprimiendo para cumplir límite de 16MB de Meta...`);
+                                            const compressedFilename = `compressed-${filename}`;
+                                            const compressedDest = path.join(uploadsDir, compressedFilename);
+
+                                            let durationStr = '';
+                                            try {
+                                                durationStr = execSync(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${downloadedPath}"`).toString().trim();
+                                            } catch (e) {
+                                                try {
+                                                    const output = execSync(`ffmpeg -i "${downloadedPath}" 2>&1 | grep Duration`).toString();
+                                                    const match = output.match(/Duration: (\d+):(\d+):(\d+\.\d+)/);
+                                                    if (match) {
+                                                        const hours = parseFloat(match[1]);
+                                                        const mins = parseFloat(match[2]);
+                                                        const secs = parseFloat(match[3]);
+                                                        durationStr = (hours * 3600 + mins * 60 + secs).toString();
+                                                    }
+                                                } catch (e2) {
+                                                    console.warn('⚠️ [SINGLE-TEMPLATE] Ni ffprobe ni ffmpeg disponibles para duración.');
+                                                }
+                                            }
+                                            const duration = parseFloat(durationStr);
+
+                                            if (!isNaN(duration) && duration > 0) {
+                                                const maxTotalSizeBytes = 14.0 * 1024 * 1024; // 14MB para margen seguro bajo 16MB
+                                                const totalTargetBitrate = Math.floor((maxTotalSizeBytes * 8) / duration);
+                                                const audioBitrate = 64000;
+                                                let videoBitrate = totalTargetBitrate - audioBitrate;
+                                                if (videoBitrate < 150000) videoBitrate = 150000;
+
+                                                console.log(`🎬 [SINGLE-TEMPLATE] Comprimiendo a ${videoBitrate} bps (Duración: ${durationStr}s)...`);
+                                                execSync(`ffmpeg -i "${downloadedPath}" -b:v ${videoBitrate} -vcodec libx264 -preset fast -acodec aac -b:a ${audioBitrate} -movflags +faststart -y "${compressedDest}"`);
+
+                                                if (fs.existsSync(compressedDest)) {
+                                                    finalLocalPath = compressedDest;
+                                                    finalLocalFilename = compressedFilename;
+                                                    console.log(`✅ [SINGLE-TEMPLATE] Video comprimido con éxito para Meta: ${compressedFilename}`);
+                                                }
+                                            }
+                                        }
+                                    } catch (compressErr: any) {
+                                        console.error(`❌ [SINGLE-TEMPLATE] Error en compresión automática de video:`, compressErr.message);
+                                    }
+
+                                    // Resolver credenciales del tenant para subida directa
+                                    const tenantOnboarding = await depsHistoryHandler.getMetaOnboardingData(projectId, false, serviceId);
+                                    const tenantSendConfig = {
+                                        phone_number_id: tenantOnboarding?.phoneNumberId || tenantOnboarding?.whatsappNumberId || tenantOnboarding?.phone_number_id || provider.config?.phone_number_id,
+                                        access_token: tenantOnboarding?.whatsappToken || tenantOnboarding?.access_token || provider.config?.access_token
+                                    };
+
                                     // 1. Intentar subir directamente a Meta Cloud API para obtener media_id
                                     let uploadedMediaId: string | null = null;
                                     if (typeof (provider as any).uploadMedia === 'function') {
-                                        uploadedMediaId = await (provider as any).uploadMedia(downloadedPath);
+                                        uploadedMediaId = await (provider as any).uploadMedia(finalLocalPath, contentType, finalLocalFilename, tenantSendConfig);
                                     }
 
                                     if (uploadedMediaId) {
@@ -3187,7 +3247,7 @@ export const registerBackofficeRoutes = (app: any) => {
                                         param[formatType].id = uploadedMediaId;
                                         console.log(`✅ [SINGLE-TEMPLATE] Multimedia de cabecera subido exitosamente a Meta. Media ID: ${uploadedMediaId}`);
                                     } else {
-                                        // 2. Fallback: Servir desde nuestro propio dominio público
+                                        // 2. Fallback: Servir desde nuestro propio dominio público (usando el archivo comprimido si hubo)
                                         let baseUrl = process.env.PROJECT_URL;
                                         if (!baseUrl) {
                                             const host = req.headers.host || '';
@@ -3198,7 +3258,7 @@ export const registerBackofficeRoutes = (app: any) => {
                                             }
                                         }
                                         if (!baseUrl.startsWith('http')) baseUrl = `https://${baseUrl}`;
-                                        param[formatType].link = `${baseUrl.replace(/\/$/, '')}/uploads/${filename}`;
+                                        param[formatType].link = `${baseUrl.replace(/\/$/, '')}/uploads/${finalLocalFilename}`;
                                         console.log(`✅ [SINGLE-TEMPLATE] Multimedia servido localmente en: ${param[formatType].link}`);
                                     }
                                 } catch (downloadErr: any) {
@@ -6581,7 +6641,7 @@ export const processCreateIndividualContact = async (req: any, res: any) => {
             return res.status(500).json({ success: false, error: 'Base de datos no disponible.' });
         }
 
-        const isBlacklisted = await depsHistoryHandler.isContactBlacklisted(phone, targetProjectId, targetServiceId);
+        const isBlacklisted = await HistoryHandlerClass.isContactBlacklisted(phone, targetProjectId, targetServiceId);
 
         const chatRow: any = {
             id: phone,
