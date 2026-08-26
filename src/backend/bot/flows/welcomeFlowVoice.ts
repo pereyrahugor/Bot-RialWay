@@ -33,6 +33,14 @@ export const welcomeFlowVoice = addKeyword<any, any>(EVENTS.VOICE_NOTE)
         const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || HistoryHandler.PROJECT_IDENTIFIER;
         const dynamicServiceId = await HistoryHandler.getServiceIdByRecipient(botPhoneNumber) || HistoryHandler.SERVICE_IDENTIFIER;
 
+        // --- FILTRO DE LISTA NEGRA TEMPRANO ---
+        const isBlocked = await HistoryHandler.isContactBlacklisted(userId, dynamicProjectId, dynamicServiceId);
+        if (isBlocked) {
+            console.log(`[welcomeFlowVoice] ⛔ Contacto ${userId} en LISTA NEGRA para proyecto ${dynamicProjectId}, servicio ${dynamicServiceId}. Omitiendo procesamiento.`);
+            stop(ctx);
+            return;
+        }
+
         console.log(`🎙️ Mensaje de voz recibido de ${userId}`);
 
         const timeoutCierreValue = await HistoryHandler.getConfig('timeOutCierre', dynamicProjectId, dynamicServiceId) || 45;

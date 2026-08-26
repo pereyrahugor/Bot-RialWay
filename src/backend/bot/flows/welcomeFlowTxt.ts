@@ -29,6 +29,13 @@ export const welcomeFlowTxt = addKeyword<BaileysProvider, MemoryDB>(EVENTS.WELCO
         const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || HistoryHandler.PROJECT_IDENTIFIER;
         const dynamicServiceId = await HistoryHandler.getServiceIdByRecipient(botPhoneNumber) || HistoryHandler.SERVICE_IDENTIFIER;
 
+        // --- FILTRO DE LISTA NEGRA TEMPRANO ---
+        const isBlocked = await HistoryHandler.isContactBlacklisted(userId, dynamicProjectId, dynamicServiceId);
+        if (isBlocked) {
+            console.log(`[welcomeFlowTxt] ⛔ Contacto ${userId} en LISTA NEGRA. Omitiendo procesamiento.`);
+            return;
+        }
+
         console.log(`📩 Mensaje recibido de :${userId}`);
 
         const timeoutCierreValue = await HistoryHandler.getConfig('timeOutCierre', dynamicProjectId, dynamicServiceId) || 45;

@@ -33,6 +33,14 @@ export const welcomeFlowDoc = addKeyword<BaileysProvider, MemoryDB>(EVENTS.DOCUM
         const botPhoneNumber = provider?.globalVendorArgs?.phone_number_id || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
         const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || HistoryHandler.PROJECT_IDENTIFIER;
         const dynamicServiceId = await HistoryHandler.getServiceIdByRecipient(botPhoneNumber) || HistoryHandler.SERVICE_IDENTIFIER;
+
+        // --- FILTRO DE LISTA NEGRA TEMPRANO ---
+        const isBlocked = await HistoryHandler.isContactBlacklisted(ctx.from, dynamicProjectId, dynamicServiceId);
+        if (isBlocked) {
+            console.log(`[welcomeFlowDoc] ⛔ Contacto ${ctx.from} en LISTA NEGRA. Omitiendo procesamiento.`);
+            return;
+        }
+
         const timeoutCierreValue = await HistoryHandler.getConfig('timeOutCierre', dynamicProjectId, dynamicServiceId) || 45;
         const setTime = Number(timeoutCierreValue) * 60 * 1000;
         reset(ctx, gotoFlow, setTime);

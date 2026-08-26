@@ -34,6 +34,13 @@ const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
     const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || HistoryHandler.PROJECT_IDENTIFIER;
     const dynamicServiceId = await HistoryHandler.getServiceIdByRecipient(botPhoneNumber) || HistoryHandler.SERVICE_IDENTIFIER;
 
+    // --- FILTRO DE LISTA NEGRA TEMPRANO ---
+    const isBlocked = await HistoryHandler.isContactBlacklisted(ctx.from, dynamicProjectId, dynamicServiceId);
+    if (isBlocked) {
+      console.log(`[welcomeFlowImg] ⛔ Contacto ${ctx.from} en LISTA NEGRA. Omitiendo procesamiento.`);
+      return;
+    }
+
     const { getOpenAIVision } = await import("../../apis/openai/openaiHelper");
     const openai = await getOpenAIVision(dynamicProjectId, dynamicServiceId);
     if (!openai) {

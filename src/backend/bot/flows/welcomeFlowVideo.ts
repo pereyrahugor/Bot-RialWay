@@ -29,6 +29,14 @@ const welcomeFlowVideo = addKeyword(EVENTS.MEDIA).addAction(
     const botPhoneNumber = provider?.globalVendorArgs?.phone_number_id || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
     const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || HistoryHandler.PROJECT_IDENTIFIER;
     const dynamicServiceId = await HistoryHandler.getServiceIdByRecipient(botPhoneNumber) || HistoryHandler.SERVICE_IDENTIFIER;
+
+    // --- FILTRO DE LISTA NEGRA TEMPRANO ---
+    const isBlocked = await HistoryHandler.isContactBlacklisted(userId, dynamicProjectId, dynamicServiceId);
+    if (isBlocked) {
+      console.log(`[welcomeFlowVideo] ⛔ Contacto ${userId} en LISTA NEGRA. Omitiendo procesamiento.`);
+      return;
+    }
+
     const timeoutCierreValue = await HistoryHandler.getConfig('timeOutCierre', dynamicProjectId, dynamicServiceId) || 45;
     const setTime = Number(timeoutCierreValue) * 60 * 1000;
     reset(ctx, gotoFlow, setTime);
