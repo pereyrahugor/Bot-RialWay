@@ -561,35 +561,32 @@ class MetaCloudProvider extends ProviderClass {
     /**
      * Convierte archivos de formatos no soportados a formatos compatibles con Meta (MP4 para video, MP3 para audio)
      */
+    /**
+     * Convierte archivos de formatos no soportados a formatos compatibles con Meta (MP4 para video, MP3 para audio)
+     */
     private async transcodeToSupportedFormat(filePath: string, mimeType?: string): Promise<{ outputPath: string; isTemporary: boolean }> {
         const ext = path.extname(filePath).toLowerCase();
+        const lowerMime = (mimeType || '').toLowerCase();
 
-        let isVideo = ['.mkv', '.webm', '.mov', '.avi', '.flv', '.wmv', '.gif'].includes(ext);
-        const isAudio = ['.wav', '.wma', '.flac', '.m4r'].includes(ext);
+        const isAudioMime = lowerMime.startsWith('audio/') || lowerMime.includes('webm') || lowerMime.includes('opus') || lowerMime.includes('ogg');
+        const isVideoMime = lowerMime.startsWith('video/');
 
-        // Si es webm pero el mimeType indica que es audio, no tratarlo como video
-        if (ext === '.webm' && mimeType && mimeType.toLowerCase().includes('audio')) {
-            isVideo = false;
-        }
+        let isVideo = (['.mkv', '.mov', '.avi', '.flv', '.wmv', '.gif'].includes(ext) || (ext === '.webm' && !isAudioMime)) && !isAudioMime;
+        const isAudio = isAudioMime || ['.wav', '.wma', '.flac', '.m4r', '.webm', '.ogg', '.opus'].includes(ext);
 
-        if (!isVideo && !isAudio) {
-            return { outputPath: filePath, isTemporary: false };
-        }
-
-        // Si es video no soportado, convertir a MP4
+        // 1. Si es video no soportado, convertir a MP4
         if (isVideo) {
-            const outPath = path.join(path.dirname(filePath), `converted_${Date.now()}_${path.basename(filePath, ext)}.mp4`);
+            const outPath = path.join(path.dirname(filePath), `converted_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.mp4`);
             console.log(`🎬 [MetaCloudProvider] Transcodificando video no soportado: ${filePath} -> ${outPath}`);
             try {
                 const { exec } = await import('child_process');
                 const { promisify } = await import('util');
                 const execPromise = promisify(exec);
 
-                // Comando ffmpeg optimizado para MP4 compatible con WhatsApp (yuv420p y H.264)
                 await execPromise(`ffmpeg -y -i "${filePath}" -c:v libx264 -pix_fmt yuv420p -c:a aac -map 0:v:0? -map 0:a? "${outPath}"`);
 
-                if (fs.existsSync(outPath)) {
-                    console.log(`✅ [MetaCloudProvider] Transcodificación completada: ${outPath}`);
+                if (fs.existsSync(outPath) && fs.statSync(outPath).size > 0) {
+                    console.log(`✅ [MetaCloudProvider] Transcodificación de video completada: ${outPath}`);
                     return { outputPath: outPath, isTemporary: true };
                 }
             } catch (err: any) {
@@ -597,19 +594,19 @@ class MetaCloudProvider extends ProviderClass {
             }
         }
 
-        // Si es audio no soportado, convertir a MP3
-        if (isAudio) {
-            const outPath = path.join(path.dirname(filePath), `converted_${Date.now()}_${path.basename(filePath, ext)}.mp3`);
-            console.log(`🎵 [MetaCloudProvider] Transcodificando audio no soportado: ${filePath} -> ${outPath}`);
+        // 2. Si es audio WebM, WAV, OGG no estandarizado o grabación de navegador, convertir a MP3 universal
+        if (isAudio && (ext === '.webm' || ext === '.wav' || ext === '.flac' || ext === '.wma' || ext === '.m4r' || lowerMime.includes('webm') || !ext)) {
+            const outPath = path.join(path.dirname(filePath), `converted_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.mp3`);
+            console.log(`🎵 [MetaCloudProvider] Transcodificando audio grabado/no soportado a MP3: ${filePath} -> ${outPath}`);
             try {
                 const { exec } = await import('child_process');
                 const { promisify } = await import('util');
                 const execPromise = promisify(exec);
 
-                await execPromise(`ffmpeg -y -i "${filePath}" -c:a libmp3lame -b:a 128k "${outPath}"`);
+                await execPromise(`ffmpeg -y -i "${filePath}" -c:a libmp3lame -b:a 128k -ar 44100 "${outPath}"`);
 
-                if (fs.existsSync(outPath)) {
-                    console.log(`✅ [MetaCloudProvider] Transcodificación completada: ${outPath}`);
+                if (fs.existsSync(outPath) && fs.statSync(outPath).size > 0) {
+                    console.log(`✅ [MetaCloudProvider] Transcodificación de audio completada: ${outPath}`);
                     return { outputPath: outPath, isTemporary: true };
                 }
             } catch (err: any) {
@@ -631,12 +628,12 @@ class MetaCloudProvider extends ProviderClass {
             return null;
         }
 
-        let finalPath = filePath;
+        let uploadPath = filePath;
         let isTemp = false;
 
         try {
             const transcodeResult = await this.transcodeToSupportedFormat(filePath, mimeType);
-            finalPath = transcodeResult.outputPath;
+            uploadPath = transcodeResult.outputPath;
             isTemp = transcodeResult.isTemporary;
         } catch (transcodeErr: any) {
             console.error(`⚠️ [MetaCloudProvider] Error durante transcodificación, usando archivo original:`, transcodeErr.message);
@@ -644,93 +641,52 @@ class MetaCloudProvider extends ProviderClass {
 
         const apiVersion = process.env.META_API_VERSION || 'v25.0';
         const url = `https://graph.facebook.com/${apiVersion}/${phone_number_id}/media`;
-        let tempOgg: string | null = null;
+
         try {
             const form = new FormData();
             form.append('messaging_product', 'whatsapp');
 
-            const lowerPath = finalPath.toLowerCase();
-            let contentType = 'text/plain'; // Fallback por defecto a text/plain para evitar OAuthException de application/octet-stream
-
-            if (mimeType && mimeType.includes('/')) {
-                contentType = mimeType;
-            } else {
-                try {
-                    const mime = await import('mime-types') as any;
-                    const lookupResult = (mime.default || mime).lookup(finalPath);
-                    if (lookupResult) {
-                        contentType = lookupResult;
-                    } else if (lowerPath.endsWith('.opus')) {
-                        contentType = 'audio/ogg; codecs=opus';
-                    }
-                } catch {
-                    if (lowerPath.endsWith('.webp')) contentType = 'image/webp';
-                    else if (lowerPath.endsWith('.png')) contentType = 'image/png';
-                    else if (lowerPath.endsWith('.jpg') || lowerPath.endsWith('.jpeg')) contentType = 'image/jpeg';
-                    else if (lowerPath.endsWith('.pdf')) contentType = 'application/pdf';
-                    else if (lowerPath.endsWith('.mp4')) contentType = 'video/mp4';
-                    else if (lowerPath.endsWith('.3gp')) contentType = 'video/3gpp';
-                    else if (lowerPath.endsWith('.mp3')) contentType = 'audio/mpeg';
-                    else if (lowerPath.endsWith('.m4a')) contentType = 'audio/mp4';
-                    else if (lowerPath.endsWith('.aac')) contentType = 'audio/aac';
-                    else if (lowerPath.endsWith('.amr')) contentType = 'audio/amr';
-                    else if (lowerPath.endsWith('.ogg')) contentType = 'audio/ogg';
-                    else if (lowerPath.endsWith('.opus')) contentType = 'audio/ogg; codecs=opus';
-                }
-            }
-
-            // Meta no acepta audio/webm — convertir a ogg antes de subir
-            let uploadPath = finalPath;
-            if (lowerPath.endsWith('.webm') && (mimeType?.includes('audio') || !mimeType?.includes('video'))) {
-                try {
-                    tempOgg = finalPath.replace(/\.webm$/i, '_converted.ogg');
-                    await new Promise<void>((resolve, reject) => {
-                        // Intentamos primero con ffmpeg del sistema
-                        child_process.exec(`ffmpeg -y -i "${finalPath}" -c:a libopus -b:a 32k -vbr on "${tempOgg}"`, async (err) => {
-                            if (!err && fs.existsSync(tempOgg!) && fs.statSync(tempOgg!).size > 0) {
-                                resolve();
-                                return;
-                            }
-                            console.warn('⚠️ [MetaCloudProvider] ffmpeg del sistema falló o no está instalado, intentando con @ffmpeg-installer/ffmpeg...');
-                            try {
-                                const ffmpegInstaller = (await import('@ffmpeg-installer/ffmpeg')).default;
-                                child_process.execFile(ffmpegInstaller.path, ['-y', '-i', finalPath, '-c:a', 'libopus', '-b:a', '32k', '-vbr', 'on', tempOgg!], (err2) => {
-                                    if (err2) reject(err2); else resolve();
-                                });
-                            } catch (fallbackErr: any) {
-                                reject(new Error(`No se pudo encontrar ffmpeg en el sistema ni cargar @ffmpeg-installer/ffmpeg: ${fallbackErr.message}`));
-                            }
-                        });
-                    });
-                    if (fs.existsSync(tempOgg) && fs.statSync(tempOgg).size > 0) {
-                        uploadPath = tempOgg;
-                    }
-                } catch (convErr: any) {
-                    console.error('❌ [MetaCloudProvider] Error convirtiendo webm a ogg:', convErr.message);
-                    tempOgg = null;
-                }
-            }
-
             // Derivar contentType estrictamente a partir del archivo real a subir
             const actualLowerPath = uploadPath.toLowerCase();
-            if (actualLowerPath.endsWith('.mp3')) contentType = 'audio/mpeg';
-            else if (actualLowerPath.endsWith('.mp4')) contentType = 'video/mp4';
-            else if (actualLowerPath.endsWith('.m4a') || actualLowerPath.endsWith('.aac')) contentType = 'audio/mp4';
-            else if (actualLowerPath.endsWith('.ogg') || actualLowerPath.endsWith('.opus')) contentType = 'audio/ogg; codecs=opus';
-            else if (actualLowerPath.endsWith('.jpg') || actualLowerPath.endsWith('.jpeg')) contentType = 'image/jpeg';
-            else if (actualLowerPath.endsWith('.png')) contentType = 'image/png';
-            else if (actualLowerPath.endsWith('.webp')) contentType = 'image/webp';
-            else if (actualLowerPath.endsWith('.pdf')) contentType = 'application/pdf';
-            else if (mimeType && mimeType.includes('/')) contentType = mimeType;
+            let contentType = 'application/octet-stream';
+
+            if (actualLowerPath.endsWith('.mp3')) {
+                contentType = 'audio/mpeg';
+            } else if (actualLowerPath.endsWith('.mp4')) {
+                contentType = 'video/mp4';
+            } else if (actualLowerPath.endsWith('.m4a') || actualLowerPath.endsWith('.aac')) {
+                contentType = 'audio/mp4';
+            } else if (actualLowerPath.endsWith('.ogg') || actualLowerPath.endsWith('.opus')) {
+                contentType = 'audio/ogg; codecs=opus';
+            } else if (actualLowerPath.endsWith('.jpg') || actualLowerPath.endsWith('.jpeg')) {
+                contentType = 'image/jpeg';
+            } else if (actualLowerPath.endsWith('.png')) {
+                contentType = 'image/png';
+            } else if (actualLowerPath.endsWith('.webp')) {
+                contentType = 'image/webp';
+            } else if (actualLowerPath.endsWith('.pdf')) {
+                contentType = 'application/pdf';
+            } else if (mimeType && mimeType.includes('/') && !mimeType.includes('webm')) {
+                contentType = mimeType;
+            } else {
+                contentType = 'audio/mpeg';
+            }
 
             // Validar que el archivo no esté vacío
             const fileStats = fs.statSync(uploadPath);
             if (fileStats.size === 0) {
                 console.error(`❌ [MetaCloudProvider] uploadMedia: Archivo vacío (0 bytes) en ${uploadPath}`);
+                if (isTemp && fs.existsSync(uploadPath)) {
+                    try { fs.unlinkSync(uploadPath); } catch (_) {}
+                }
                 return null;
             }
 
-            form.append('file', fs.createReadStream(uploadPath), { contentType, filename: originalFilename || path.basename(uploadPath) });
+            const uploadFilename = originalFilename && !originalFilename.toLowerCase().endsWith('.webm')
+                ? originalFilename
+                : path.basename(uploadPath);
+
+            form.append('file', fs.createReadStream(uploadPath), { contentType, filename: uploadFilename });
 
             const response = await axios.post(url, form, {
                 headers: {
@@ -739,22 +695,16 @@ class MetaCloudProvider extends ProviderClass {
                 }
             });
 
-            // Limpieza
-            if (tempOgg && fs.existsSync(tempOgg)) {
-                try { fs.unlinkSync(tempOgg); } catch (_) { void 0; }
-            }
-            if (isTemp && finalPath && fs.existsSync(finalPath)) {
-                try { fs.unlinkSync(finalPath); } catch (_) { void 0; }
+            // Limpieza de archivo temporal
+            if (isTemp && uploadPath && fs.existsSync(uploadPath)) {
+                try { fs.unlinkSync(uploadPath); } catch (_) {}
             }
 
             return response.data.id;
         } catch (error: any) {
             console.error('❌ [MetaCloudProvider] Error subiendo media a Meta:', error?.response?.data || error.message);
-            if (tempOgg && fs.existsSync(tempOgg)) {
-                try { fs.unlinkSync(tempOgg); } catch (_) { void 0; }
-            }
-            if (isTemp && finalPath && fs.existsSync(finalPath)) {
-                try { fs.unlinkSync(finalPath); } catch (_) { void 0; }
+            if (isTemp && uploadPath && fs.existsSync(uploadPath)) {
+                try { fs.unlinkSync(uploadPath); } catch (_) {}
             }
             return null;
         }
