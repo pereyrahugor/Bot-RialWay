@@ -681,20 +681,20 @@ class MetaCloudProvider extends ProviderClass {
 
             // Meta no acepta audio/webm — convertir a ogg antes de subir
             let uploadPath = finalPath;
-            if (lowerPath.endsWith('.webm')) {
+            if (lowerPath.endsWith('.webm') && (mimeType?.includes('audio') || !mimeType?.includes('video'))) {
                 try {
                     tempOgg = finalPath.replace(/\.webm$/i, '_converted.ogg');
                     await new Promise<void>((resolve, reject) => {
                         // Intentamos primero con ffmpeg del sistema
-                        child_process.exec(`ffmpeg -y -i "${finalPath}" -c:a libopus "${tempOgg}"`, async (err) => {
-                            if (!err) {
+                        child_process.exec(`ffmpeg -y -i "${finalPath}" -c:a libopus -b:a 32k -vbr on "${tempOgg}"`, async (err) => {
+                            if (!err && fs.existsSync(tempOgg!) && fs.statSync(tempOgg!).size > 0) {
                                 resolve();
                                 return;
                             }
                             console.warn('⚠️ [MetaCloudProvider] ffmpeg del sistema falló o no está instalado, intentando con @ffmpeg-installer/ffmpeg...');
                             try {
                                 const ffmpegInstaller = (await import('@ffmpeg-installer/ffmpeg')).default;
-                                child_process.execFile(ffmpegInstaller.path, ['-y', '-i', finalPath, '-c:a', 'libopus', tempOgg!], (err2) => {
+                                child_process.execFile(ffmpegInstaller.path, ['-y', '-i', finalPath, '-c:a', 'libopus', '-b:a', '32k', '-vbr', 'on', tempOgg!], (err2) => {
                                     if (err2) reject(err2); else resolve();
                                 });
                             } catch (fallbackErr: any) {
@@ -702,12 +702,32 @@ class MetaCloudProvider extends ProviderClass {
                             }
                         });
                     });
-                    uploadPath = tempOgg;
-                    contentType = 'audio/ogg; codecs=opus';
+                    if (fs.existsSync(tempOgg) && fs.statSync(tempOgg).size > 0) {
+                        uploadPath = tempOgg;
+                    }
                 } catch (convErr: any) {
                     console.error('❌ [MetaCloudProvider] Error convirtiendo webm a ogg:', convErr.message);
                     tempOgg = null;
                 }
+            }
+
+            // Derivar contentType estrictamente a partir del archivo real a subir
+            const actualLowerPath = uploadPath.toLowerCase();
+            if (actualLowerPath.endsWith('.mp3')) contentType = 'audio/mpeg';
+            else if (actualLowerPath.endsWith('.mp4')) contentType = 'video/mp4';
+            else if (actualLowerPath.endsWith('.m4a') || actualLowerPath.endsWith('.aac')) contentType = 'audio/mp4';
+            else if (actualLowerPath.endsWith('.ogg') || actualLowerPath.endsWith('.opus')) contentType = 'audio/ogg; codecs=opus';
+            else if (actualLowerPath.endsWith('.jpg') || actualLowerPath.endsWith('.jpeg')) contentType = 'image/jpeg';
+            else if (actualLowerPath.endsWith('.png')) contentType = 'image/png';
+            else if (actualLowerPath.endsWith('.webp')) contentType = 'image/webp';
+            else if (actualLowerPath.endsWith('.pdf')) contentType = 'application/pdf';
+            else if (mimeType && mimeType.includes('/')) contentType = mimeType;
+
+            // Validar que el archivo no esté vacío
+            const fileStats = fs.statSync(uploadPath);
+            if (fileStats.size === 0) {
+                console.error(`❌ [MetaCloudProvider] uploadMedia: Archivo vacío (0 bytes) en ${uploadPath}`);
+                return null;
             }
 
             form.append('file', fs.createReadStream(uploadPath), { contentType, filename: originalFilename || path.basename(uploadPath) });
