@@ -558,18 +558,6 @@ class MetaCloudProvider extends ProviderClass {
         ];
     }
 
-    public async sendAudio(number: string, media: string, caption: string = '', options: any = {}): Promise<any> {
-        return this.sendMessage(number, caption, { ...options, media: { url: media, mimetype: 'audio/mpeg' } });
-    }
-
-    public async sendImage(number: string, media: string, caption: string = '', options: any = {}): Promise<any> {
-        return this.sendMessage(number, caption, { ...options, media: { url: media, mimetype: 'image/jpeg' } });
-    }
-
-    public async sendVideo(number: string, media: string, caption: string = '', options: any = {}): Promise<any> {
-        return this.sendMessage(number, caption, { ...options, media: { url: media, mimetype: 'video/mp4' } });
-    }
-
     /**
      * Convierte archivos de formatos no soportados a formatos compatibles con Meta (MP4 para video, MP3 para audio)
      */
