@@ -2219,22 +2219,9 @@ export class HistoryHandler {
         }
         for (let _attempt = 0; _attempt < 2; _attempt++) {
             try {
-                let matchingChatIds: string[] | null = null;
-                if (tagId) {
-                    const { data: taggedEntries, error: tagErr } = await supabase
-                        .from('chat_tags')
-                        .select('chat_id')
-                        .eq('project_id', currentProjectId)
-                        .eq('tag_id', tagId);
-
-                    if (tagErr) throw tagErr;
-                    matchingChatIds = (taggedEntries || []).map((te: any) => te.chat_id);
-                    if (matchingChatIds.length === 0) {
-                        return [];
-                    }
-                }
-
-                const selectString = 'id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, crm_status, crm_due_date, notes, email, source, is_lead, cuit_dni, tax_status, address, offered_product, unread_count, chat_tags(tag_id, tags(*))';
+                const selectString = tagId
+                    ? 'id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, crm_status, crm_due_date, notes, email, source, is_lead, cuit_dni, tax_status, address, offered_product, unread_count, chat_tags!inner(tag_id, tags(*))'
+                    : 'id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, crm_status, crm_due_date, notes, email, source, is_lead, cuit_dni, tax_status, address, offered_product, unread_count, chat_tags(tag_id, tags(*))';
 
                 let query = supabase
                     .from('chats')
@@ -2253,8 +2240,8 @@ export class HistoryHandler {
                     }
                 }
 
-                if (matchingChatIds !== null) {
-                    query = query.in('id', matchingChatIds);
+                if (tagId) {
+                    query = query.eq('chat_tags.tag_id', tagId);
                 }
 
                 if (platform === 'leads') {
@@ -2281,9 +2268,32 @@ export class HistoryHandler {
 
                 if (error) throw error;
 
+                // Enriquecer todas las etiquetas de los chats obtenidos en la página actual
+                let tagMap = new Map<string, any[]>();
+                if (tagId && data && data.length > 0) {
+                    const pageChatIds = data.map((c: any) => c.id);
+                    let pageTagsQuery = supabase
+                        .from('chat_tags')
+                        .select('chat_id, tag_id, tags(*)')
+                        .eq('project_id', currentProjectId)
+                        .in('chat_id', pageChatIds);
+
+                    if (currentServiceId && currentServiceId !== 'default_service' && !currentServiceId.includes(',')) {
+                        pageTagsQuery = pageTagsQuery.or(`service_id.eq.${currentServiceId},service_id.eq.default_service,service_id.is.null`);
+                    }
+
+                    const { data: allPageTags } = await pageTagsQuery;
+                    (allPageTags || []).forEach((ct: any) => {
+                        if (!tagMap.has(ct.chat_id)) tagMap.set(ct.chat_id, []);
+                        if (ct.tags) tagMap.get(ct.chat_id)!.push(ct.tags);
+                    });
+                }
+
                 let finalChats = (data || []).map((chat: any) => ({
                     ...chat,
-                    tags: chat.chat_tags ? chat.chat_tags.map((ct: any) => ct.tags).filter((t: any) => t !== null) : []
+                    tags: (tagId && tagMap.has(chat.id))
+                        ? tagMap.get(chat.id)
+                        : (chat.chat_tags ? chat.chat_tags.map((ct: any) => ct.tags).filter((t: any) => t !== null) : [])
                 }));
 
                 // --- LÓGICA DE ANCLAJE (PINNED CHATS) ---
