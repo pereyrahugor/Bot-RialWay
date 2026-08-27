@@ -345,9 +345,9 @@ async function processSheetById(SHEET_ID: string, projectId: string, serviceId: 
                 if (error) {
                     console.error(`❌ Error uploading to Supabase table '${tableName}':`, error.message);
                     
-                    // Si el error es por columnas diferentes o no existentes (ej. code 42703 o palabra 'column')
-                    if (error.code === '42703' || (error.message && error.message.toLowerCase().includes('column'))) {
-                        console.log(`⚠️ Detectado conflicto de esquema (columnas diferentes o no existentes) en '${tableName}'. Recreando tabla...`);
+                    // Si el error es por columnas diferentes, no existentes o tipo UUID incompatible (ej. code 42703, 22P02 o palabra 'column'/'uuid')
+                    if (error.code === '42703' || error.code === '22P02' || (error.message && (error.message.toLowerCase().includes('column') || error.message.toLowerCase().includes('uuid')))) {
+                        console.log(`⚠️ Detectado conflicto de esquema o tipos (ej: UUID vs numérico) en '${tableName}'. Recreando tabla...`);
                         
                         // 1. Eliminar la tabla existente
                         const dropRes = await supabase.rpc('exec_sql', { query: `DROP TABLE IF EXISTS ${tableName}` });
