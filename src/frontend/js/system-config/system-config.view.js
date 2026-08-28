@@ -106,7 +106,7 @@ window.systemConfigView = {
                         </div>
                         <div class="variable-group">
                             <h3>ASSISTANT_ID_IMG</h3>
-                            <p class="description">ID del asistente de Vision (imagenes).</p>
+                            <p class="description">ID o Alias del asistente de Vision (imagenes).</p>
                             <input type="text" name="ASSISTANT_ID_IMG" id="ASSISTANT_ID_IMG">
                         </div>
                         <div class="variable-group">
@@ -115,10 +115,15 @@ window.systemConfigView = {
                             <input type="password" name="OPENAI_API_KEY_IMG" id="OPENAI_API_KEY_IMG" autocomplete="new-password">
                             <button type="button" class="toggle-password-inline" onclick="toggleFieldVisibility('OPENAI_API_KEY_IMG', this)"><i class="fas fa-eye"></i> Mostrar</button>
                         </div>
+                        <div class="variable-group variable-group-span2">
+                            <h3>ASSISTANT_PROMPT_IMG</h3>
+                            <p class="description">Prompt e instrucciones para el análisis visual general de imágenes y documentos.</p>
+                            <textarea name="ASSISTANT_PROMPT_IMG" id="ASSISTANT_PROMPT_IMG" rows="4" placeholder="Instrucciones para análisis de imágenes..."></textarea>
+                        </div>
                         <div class="variable-group">
-                            <h3>VECTOR_STORE_ID</h3>
-                            <p class="description">ID del Vector Store para busqueda semantica.</p>
-                            <input type="text" name="VECTOR_STORE_ID" id="VECTOR_STORE_ID">
+                            <h3>ASSISTANT_ID_MP_OCR</h3>
+                            <p class="description">ID o Alias del asistente de OCR (Mercado Pago).</p>
+                            <input type="text" name="ASSISTANT_ID_MP_OCR" id="ASSISTANT_ID_MP_OCR">
                         </div>
                         <div class="variable-group">
                             <h3>MERCADOPAGO_OCR_ENABLED</h3>
@@ -128,6 +133,16 @@ window.systemConfigView = {
                                 <input type="checkbox" onchange="_cfgToggle('MERCADOPAGO_OCR_ENABLED',this.checked)">
                                 <span class="slider"><i class="fas fa-times"></i><i class="fas fa-check"></i></span>
                             </label>
+                        </div>
+                        <div class="variable-group variable-group-span2">
+                            <h3>ASSISTANT_PROMPT_MP_OCR</h3>
+                            <p class="description">Prompt e instrucciones de extracción estricta JSON para comprobantes de transferencia.</p>
+                            <textarea name="ASSISTANT_PROMPT_MP_OCR" id="ASSISTANT_PROMPT_MP_OCR" rows="5" placeholder="Instrucciones de extracción JSON para comprobantes..."></textarea>
+                        </div>
+                        <div class="variable-group">
+                            <h3>VECTOR_STORE_ID</h3>
+                            <p class="description">ID del Vector Store para busqueda semantica.</p>
+                            <input type="text" name="VECTOR_STORE_ID" id="VECTOR_STORE_ID">
                         </div>
                         <div class="variable-group">
                             <h3>EXTRA_SYSTEM_PROMPT</h3>

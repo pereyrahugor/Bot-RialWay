@@ -179,10 +179,10 @@ async function _initSystemConfigPage() {
             if (data.success && data.variables) {
                 initialVariables = data.variables;
                 Object.keys(initialVariables).forEach(key => {
-                    // Mapeo especial para prompts
+                    // Mapeo especial para prompts de los 5 asistentes del panel lateral
                     let elementId = key;
                     if (key === 'ASSISTANT_PROMPT') elementId = 'ASSISTANT_PROMPT_VAL';
-                    else if (key.startsWith('ASSISTANT_PROMPT_')) elementId = key + '_VAL';
+                    else if (/^ASSISTANT_PROMPT_[1-5]$/.test(key)) elementId = key + '_VAL';
 
                     const input = document.getElementById(elementId) || document.getElementsByName(key)[0];
                     if (input) {
