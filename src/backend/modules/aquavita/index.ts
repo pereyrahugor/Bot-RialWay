@@ -331,13 +331,21 @@ export const aquavitaModule = {
     // 7. crearIncidencia
     crearIncidencia: async (args: any, context: any) => {
       const { state } = context;
-      const payload = {
-        ...args,
+      const payload: any = {
         centroDistribucion_id: 1,
         usuarioResponsable_id: getUsuarioId() || null,
         fechaCierreEstimado: getFechaCierreEstimado(),
-        estadoIncidente_ids: 1
+        estadoIncidente_ids: 1,
+        tipoIncidente_ids: args.tipoIncidente_ids ?? args.tipoIncidente_id ?? args.tipo ?? 8,
+        subTipoIncidente_ids: args.subTipoIncidente_ids ?? args.subTipoIncidente_id ?? args.subtipo ?? 74,
+        descripcion: args.descripcion ?? args.observaciones ?? ''
       };
+
+      const cId = args.cliente_id ?? args.clienteId ?? args.cliente;
+      if (cId) {
+        payload.cliente_id = Number(cId);
+      }
+
       const apiResponse = await IncidentesApi.crearTicket(payload);
       logApiResponse('CREAR_INCIDENCIA', apiResponse);
       const incidenteId = apiResponse.data?.incidente?.id || apiResponse.data?.id;
@@ -378,13 +386,17 @@ export const aquavitaModule = {
         const facturacion = Number(datos.saldos.saldoCuentaFacturacion || 0);
         const saldoReal = consumo + facturacion;
         
-        const contextData = state.get('datosClienteContext') || {};
+        const formatCurrency = (val: number) => {
+          return `$ ${val.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        };
+        
+        const contextData = (state && typeof state.get === 'function') ? (state.get('datosClienteContext') || {}) : {};
         const esFamilia = String(contextData.tipoCliente || '').toLowerCase() === 'familia';
         
         if (esFamilia) {
-          return `Saldo total: ${saldoReal}. Saldo Consumo: ${consumo}`;
+          return `Saldo total: ${formatCurrency(saldoReal)}. Saldo Consumo: ${formatCurrency(consumo)}`;
         } else {
-          return `Saldo total: ${saldoReal}`;
+          return `Saldo total: ${formatCurrency(saldoReal)}`;
         }
       } else {
         return "No se pudieron obtener los saldos.";
@@ -767,11 +779,12 @@ export const aquavitaModule = {
         "parameters": {
           "type": "object",
           "properties": {
-            "cliente_id": { "type": "integer", "description": "ID numérico del cliente." },
-            "tipoIncidente_id": { "type": "integer", "description": "ID del tipo de incidente (ej: 1 para rotura de dispenser)." },
+            "cliente_id": { "type": "integer", "description": "ID numérico del cliente (opcional para incidencias generales)." },
+            "tipoIncidente_id": { "type": "integer", "description": "ID del tipo de incidente (ej: 1 para pedidos/reclamos, 2 para servicio técnico, 8 para otras gestiones)." },
+            "subTipoIncidente_id": { "type": "integer", "description": "ID del subtipo de incidente (ej: 1 para solicitud de artículos, 74 para otras gestiones)." },
             "observaciones": { "type": "string", "description": "Detalles u observaciones de la incidencia." }
           },
-          "required": ["cliente_id", "tipoIncidente_id", "observaciones"]
+          "required": ["tipoIncidente_id", "observaciones"]
         }
       }
     },

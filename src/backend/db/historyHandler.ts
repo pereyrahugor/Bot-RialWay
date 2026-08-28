@@ -1567,7 +1567,29 @@ export class HistoryHandler {
     static async getAssignedAgent(rawChatId: string, forcedProjectId?: string, forcedServiceId?: string): Promise<string> {
         try {
             const chat = await this.getChat(rawChatId, forcedProjectId, forcedServiceId);
-            return chat && chat.assigned_agent ? chat.assigned_agent : 'asistente1';
+            const defaultAgent = 'asistente1';
+            
+            if (chat) {
+                // Si el agente asignado ya está en base de datos y no es el default, lo respetamos
+                if (chat.assigned_agent && chat.assigned_agent !== 'asistente1') {
+                    return chat.assigned_agent;
+                }
+                
+                // Si el agente asignado es asistente1 (o no hay) y tiene CUIT/DNI, ver si hay asistente3
+                const meta = chat.metadata || {};
+                const hasDniCuit = meta.dni_cuit || meta.numCliente || chat.cuit_dni;
+                if (hasDniCuit) {
+                    const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+                    const currentServiceId = forcedServiceId || this.SERVICE_IDENTIFIER;
+                    const assistant3 = await this.getConfig('ASSISTANT_3', currentProjectId, currentServiceId);
+                    if (assistant3) {
+                        console.log(`[HistoryHandler] 🔄 Cliente activo detectado por contexto (DNI/CUIT: ${hasDniCuit}). Reasignando dinámicamente a asistente3.`);
+                        await this.setAssignedAgent(rawChatId, 'asistente3', forcedProjectId, forcedServiceId);
+                        return 'asistente3';
+                    }
+                }
+            }
+            return chat && chat.assigned_agent ? chat.assigned_agent : defaultAgent;
         } catch (err) {
             console.error('[HistoryHandler] Error en getAssignedAgent:', err);
             return 'asistente1';
