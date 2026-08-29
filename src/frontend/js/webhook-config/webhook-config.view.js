@@ -41,53 +41,88 @@ window.webhookConfigView = (() => {
                     </div>
 
                     <!-- Lista de Checkboxes -->
+                    <style>
+                        .webhook-event-label {
+                            display: flex !important;
+                            align-items: flex-start !important;
+                            gap: 14px !important;
+                            cursor: pointer !important;
+                            padding: 10px 4px !important;
+                        }
+                        .webhook-event-label input[type="checkbox"] {
+                            appearance: checkbox !important;
+                            -webkit-appearance: checkbox !important;
+                            width: 18px !important;
+                            height: 18px !important;
+                            min-width: 18px !important;
+                            max-width: 18px !important;
+                            padding: 0 !important;
+                            margin: 3px 0 0 0 !important;
+                            flex-shrink: 0 !important;
+                            border: none !important;
+                            background: transparent !important;
+                            box-shadow: none !important;
+                            display: inline-block !important;
+                            cursor: pointer !important;
+                            accent-color: #8b5cf6 !important;
+                        }
+                    </style>
                     <div class="variable-group" style="padding:0; background:none; border:none; display:flex; flex-direction:column; gap:10px;">
                         <h3 style="margin:0; font-size:0.95rem; font-weight:700; color:var(--text-main);">Eventos Suscritos</h3>
                         <p class="description" style="margin:0 0 6px 0; font-size:0.82rem; color:var(--text-muted);">Selecciona exactamente los eventos que deseas despachar:</p>
                         
-                        <div style="display:flex; flex-direction:column; gap:12px; background:var(--bg-header); padding:1.25rem; border-radius:12px; border:1px solid var(--border);">
+                        <div style="display:flex; flex-direction:column; background:var(--bg-header); padding:1.25rem; border-radius:12px; border:1px solid var(--border);">
                             <!-- Evento 1 -->
-                            <label style="display:flex; align-items:flex-start; gap:12px; cursor:pointer;">
-                                <input type="checkbox" name="webhook-event" value="contact.updated" style="margin-top:4px; transform:scale(1.15);">
-                                <div>
-                                    <span style="font-weight:600; font-size:0.9rem; color:var(--text-main);">👤 contact.updated</span>
-                                    <span style="display:block; font-size:0.8rem; color:var(--text-muted);">Se dispara cuando se actualizan datos del cliente (nombre, teléfono, email, dirección, etc.).</span>
+                            <label class="webhook-event-label">
+                                <input type="checkbox" name="webhook-event" value="contact.updated">
+                                <div style="flex:1;">
+                                    <span style="font-weight:600; font-size:0.9rem; color:var(--text-main); display:block; margin-bottom:2px;">👤 contact.updated</span>
+                                    <span style="display:block; font-size:0.8rem; color:var(--text-muted); line-height:1.4;">Se dispara cuando se actualizan datos del cliente (nombre, teléfono, email, dirección, etc.).</span>
                                 </div>
                             </label>
 
                             <!-- Evento 2 -->
-                            <label style="display:flex; align-items:flex-start; gap:12px; cursor:pointer; border-top:1px solid var(--border); padding-top:10px;">
-                                <input type="checkbox" name="webhook-event" value="lead.created" style="margin-top:4px; transform:scale(1.15);">
-                                <div>
-                                    <span style="font-weight:600; font-size:0.9rem; color:var(--text-main);">🌟 lead.created</span>
-                                    <span style="display:block; font-size:0.8rem; color:var(--text-muted);">Se dispara cuando un nuevo contacto fue registrado o detectado por el bot.</span>
+                            <label class="webhook-event-label" style="border-top:1px solid var(--border);">
+                                <input type="checkbox" name="webhook-event" value="lead.created">
+                                <div style="flex:1;">
+                                    <span style="font-weight:600; font-size:0.9rem; color:var(--text-main); display:block; margin-bottom:2px;">🌟 lead.created</span>
+                                    <span style="display:block; font-size:0.8rem; color:var(--text-muted); line-height:1.4;">Se dispara cuando un nuevo contacto fue registrado o detectado por el bot.</span>
                                 </div>
                             </label>
 
                             <!-- Evento 3 -->
-                            <label style="display:flex; align-items:flex-start; gap:12px; cursor:pointer; border-top:1px solid var(--border); padding-top:10px;">
-                                <input type="checkbox" name="webhook-event" value="lead.expired" style="margin-top:4px; transform:scale(1.15);">
-                                <div>
-                                    <span style="font-weight:600; font-size:0.9rem; color:var(--text-main);">⏰ lead.expired</span>
-                                    <span style="display:block; font-size:0.8rem; color:var(--text-muted);">Se dispara cuando se alcanza la fecha y hora de la alerta/seguimiento del lead.</span>
+                            <label class="webhook-event-label" style="border-top:1px solid var(--border);">
+                                <input type="checkbox" name="webhook-event" value="lead.expired">
+                                <div style="flex:1;">
+                                    <span style="font-weight:600; font-size:0.9rem; color:var(--text-main); display:block; margin-bottom:2px;">⏰ lead.expired</span>
+                                    <span style="display:block; font-size:0.8rem; color:var(--text-muted); line-height:1.4;">Se dispara cuando se alcanza la fecha y hora de la alerta/seguimiento del lead.</span>
                                 </div>
                             </label>
 
                             <!-- Evento 4 -->
-                            <label style="display:flex; align-items:flex-start; gap:12px; cursor:pointer; border-top:1px solid var(--border); padding-top:10px;">
-                                <input type="checkbox" name="webhook-event" value="lead.status_moved" style="margin-top:4px; transform:scale(1.15);">
-                                <div>
-                                    <span style="font-weight:600; font-size:0.9rem; color:var(--text-main);">📊 lead.status_moved</span>
-                                    <span style="display:block; font-size:0.8rem; color:var(--text-muted);">Se dispara cuando el estado o la columna del CRM cambia de lugar.</span>
+                            <label class="webhook-event-label" style="border-top:1px solid var(--border);">
+                                <input type="checkbox" name="webhook-event" value="lead.status_moved">
+                                <div style="flex:1;">
+                                    <span style="font-weight:600; font-size:0.9rem; color:var(--text-main); display:block; margin-bottom:2px;">📊 lead.status_moved</span>
+                                    <span style="display:block; font-size:0.8rem; color:var(--text-muted); line-height:1.4;">Se dispara cuando el estado o la columna del CRM cambia de lugar.</span>
                                 </div>
                             </label>
 
                             <!-- Evento 5 -->
-                            <label style="display:flex; align-items:flex-start; gap:12px; cursor:pointer; border-top:1px solid var(--border); padding-top:10px;">
-                                <input type="checkbox" name="webhook-event" value="message.received" style="margin-top:4px; transform:scale(1.15);">
-                                <div>
-                                    <span style="font-weight:600; font-size:0.9rem; color:var(--text-main);">💬 message.received</span>
-                                    <span style="display:block; font-size:0.8rem; color:var(--text-muted);">Se dispara al recibir un nuevo mensaje entrante del usuario.</span>
+                            <label class="webhook-event-label" style="border-top:1px solid var(--border);">
+                                <input type="checkbox" name="webhook-event" value="message.received">
+                                <div style="flex:1;">
+                                    <span style="font-weight:600; font-size:0.9rem; color:var(--text-main); display:block; margin-bottom:2px;">💬 message.received</span>
+                                    <span style="display:block; font-size:0.8rem; color:var(--text-muted); line-height:1.4;">Se dispara al recibir un nuevo mensaje entrante del usuario.</span>
+                                </div>
+                            </label>
+
+                            <!-- Evento 6 -->
+                            <label class="webhook-event-label" style="border-top:1px solid var(--border);">
+                                <input type="checkbox" name="webhook-event" value="message.failed">
+                                <div style="flex:1;">
+                                    <span style="font-weight:600; font-size:0.9rem; color:var(--text-main); display:block; margin-bottom:2px;">⚠️ message.failed</span>
+                                    <span style="display:block; font-size:0.8rem; color:var(--text-muted); line-height:1.4;">Se dispara cuando ocurre un error en el envío o entrega de un mensaje o plantilla de Meta (ventana 24h, plantilla o parámetros inválidos, falta de saldo, etc.).</span>
                                 </div>
                             </label>
                         </div>

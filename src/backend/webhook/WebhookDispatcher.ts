@@ -97,7 +97,32 @@ export class WebhookDispatcher {
             }
         });
 
-        // 4. Iniciar chequeo periódico de alertas expiradas (cada 2 minutos)
+        // 4. Escuchar errores de envío de mensajes o plantillas en Meta (meta_error)
+        historyEvents.on('meta_error', async (errorPayload: any) => {
+            try {
+                if (!errorPayload) return;
+                const projectId = errorPayload.projectId || HistoryHandler.PROJECT_IDENTIFIER;
+                const serviceId = errorPayload.serviceId || HistoryHandler.SERVICE_IDENTIFIER;
+
+                await this.dispatch(projectId, 'message.failed', async () => {
+                    return {
+                        chat_id: errorPayload.chatId || (errorPayload.recipient ? String(errorPayload.recipient).replace(/\D/g, '') : null),
+                        recipient: errorPayload.recipient || null,
+                        error_code: errorPayload.errorCode || errorPayload.code || 'META_ERR',
+                        error_type: 'meta_error',
+                        title: errorPayload.title || 'Error de envío Meta',
+                        description: errorPayload.description || errorPayload.rawMessage || '',
+                        raw_message: errorPayload.rawMessage || null,
+                        external_id: errorPayload.externalId || null,
+                        is_bulk: !!errorPayload.isBulk
+                    };
+                }, serviceId);
+            } catch (err: any) {
+                console.error('❌ [WebhookDispatcher] Error en listener meta_error:', err.message);
+            }
+        });
+
+        // 5. Iniciar chequeo periódico de alertas expiradas (cada 2 minutos)
         if (this.intervalId) clearInterval(this.intervalId);
         this.intervalId = setInterval(() => this.checkExpiredLeads(), 120000);
     }
@@ -187,14 +212,15 @@ export class WebhookDispatcher {
     /**
      * Valida la suscripción del proyecto y despacha el webhook
      */
-    public static async dispatch(projectId: string, eventType: string, payloadResolver: () => Promise<any> | any) {
+    public static async dispatch(projectId: string, eventType: string, payloadResolver: () => Promise<any> | any, serviceId?: string) {
         try {
-            const webhookUrl = await HistoryHandler.getSetting('WEBHOOK_URL', projectId);
+            const currentServiceId = serviceId || HistoryHandler.SERVICE_IDENTIFIER;
+            const webhookUrl = await HistoryHandler.getSetting('WEBHOOK_URL', projectId, currentServiceId);
             if (!webhookUrl || !webhookUrl.startsWith('http')) {
                 return; 
             }
 
-            const webhookEventsRaw = await HistoryHandler.getSetting('WEBHOOK_EVENTS', projectId);
+            const webhookEventsRaw = await HistoryHandler.getSetting('WEBHOOK_EVENTS', projectId, currentServiceId);
             let subscribedEvents: string[] = [];
             
             if (webhookEventsRaw) {
@@ -211,7 +237,15 @@ export class WebhookDispatcher {
 
             subscribedEvents = subscribedEvents.map(e => e.toLowerCase());
 
-            if (!subscribedEvents.includes(eventType.toLowerCase())) {
+            const isSubscribed = subscribedEvents.some(e => {
+                const lowerE = e.toLowerCase();
+                const lowerType = eventType.toLowerCase();
+                if (lowerE === lowerType) return true;
+                if (lowerType === 'message.failed' && (lowerE === 'meta.error' || lowerE === 'message_failed' || lowerE === 'meta_error')) return true;
+                return false;
+            });
+
+            if (!isSubscribed) {
                 return; 
             }
 
@@ -222,7 +256,7 @@ export class WebhookDispatcher {
                 event: eventType,
                 timestamp: new Date().toISOString(),
                 project_id: projectId,
-                service_id: HistoryHandler.SERVICE_IDENTIFIER,
+                service_id: currentServiceId,
                 data: eventData
             };
 
@@ -232,7 +266,7 @@ export class WebhookDispatcher {
             };
 
             // Firma HMAC SHA256 si hay secreto configurado
-            const secret = await HistoryHandler.getSetting('WEBHOOK_SECRET', projectId);
+            const secret = await HistoryHandler.getSetting('WEBHOOK_SECRET', projectId, currentServiceId);
             if (secret && secret.trim() !== '') {
                 const hmac = crypto.createHmac('sha256', secret);
                 hmac.update(bodyStr);

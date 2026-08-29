@@ -820,6 +820,7 @@ class MetaCloudProvider extends ProviderClass {
                             return res.data;
                         } catch (err: any) {
                             console.error('❌ [MetaCloudProvider] Error enviando mensaje con mediaId:', err.response?.data || err.message);
+                            await this.handleMetaError(err, toFormat, sendOptions);
                         }
                     } else {
                         console.error(`❌ [MetaCloudProvider] No se pudo obtener mediaId para: ${finalPath}`);
@@ -1427,6 +1428,22 @@ class MetaCloudProvider extends ProviderClass {
                 raw_message: message,
                 recipient,
                 is_bulk: isBulk,
+                timestamp: new Date().toISOString()
+            });
+
+            // Emitir evento para webhook y otros observadores
+            const { historyEvents } = await import('../db/historyHandler.js');
+            historyEvents.emit('meta_error', {
+                projectId,
+                serviceId,
+                recipient,
+                chatId: recipient ? recipient.replace(/\D/g, '') : null,
+                title,
+                description,
+                errorCode: code,
+                rawMessage: message,
+                externalId: options.externalId || null,
+                isBulk,
                 timestamp: new Date().toISOString()
             });
         } catch (e: any) {

@@ -102,6 +102,23 @@ Se genera cada vez que entra un mensaje directo de un cliente a la plataforma.
     }
     ```
 
+### 6. `message.failed`
+Se dispara cuando ocurre un error en el envío o entrega de un mensaje o plantilla a través de la API oficial de Meta (por ejemplo, transcurridas 24 horas sin ventana de conversación, falta de fondos en la cuenta de Meta, variables/parámetros inválidos en la plantilla, restricción de la cuenta comercial, o falla de entrega devuelta por el webhook de estado de Meta).
+*   **Payload `data`:**
+    ```json
+    {
+      "chat_id": "5491130792788",
+      "recipient": "5491130792788",
+      "error_code": 131047,
+      "error_type": "meta_error",
+      "title": "Ventana de 24 horas excedida",
+      "description": "No se pudo enviar el mensaje a Hugo Pereyra (5491130792788) porque transcurrieron más de 24 horas desde su último mensaje...",
+      "raw_message": "Re-engagement message message type is not allowed for outside 24h window",
+      "external_id": "wamid.HBgMNTQ5MTEzMDc5Mjc4O...",
+      "is_bulk": false
+    }
+    ```
+
 ---
 
 ## 🔒 Seguridad: Validación de Firmas HMAC
