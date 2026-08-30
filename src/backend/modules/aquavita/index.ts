@@ -565,10 +565,10 @@ export const aquavitaModule = {
 
     // 19. reparto
     reparto: async (args: any, context: any) => {
-      const { state } = context;
-      let resumen = "No se encuentra en zona habitual de reparto.";
+      const { state, ctx } = context;
+      let resumen = "❌ SIN COBERTURA: La dirección no se encuentra dentro de la zona habitual de reparto.";
       
-      let calleYAltura = args.calleYAltura || `${args.calle ?? ''} ${args.numero ?? ''}`;
+      let calleYAltura = args.calleYAltura || `${args.calle ?? ''} ${args.numero ?? ''}`.trim();
       if (calleYAltura && !calleYAltura.toLowerCase().includes("córdoba capital")) {
         calleYAltura = `Córdoba Capital, ${calleYAltura}`;
       }
@@ -600,22 +600,52 @@ export const aquavitaModule = {
         const dias = Array.isArray(clienteSeleccionado.visitas) 
           ? [...new Set(clienteSeleccionado.visitas.map((v: any) => v.dia).filter(Boolean))] 
           : [];
-        const diasStr = dias.length > 0 ? dias.join(', ') : 'Sin especificar';
-        resumen = `La dirección está dentro de la zona de cobertura.\nCliente más cercano: ${clienteSeleccionado.cliente_id}, Día de reparto: ${diasStr}`;
+        const diasStr = dias.length > 0 ? dias.join(', ') : 'A coordinar';
+        const repartoId = clienteSeleccionado.reparto_id || clienteSeleccionado.repartoId || 1;
+
+        resumen = `✅ COBERTURA CONFIRMADA: La dirección está dentro de la zona de reparto.\nDías de visita/reparto: ${diasStr}.\nReparto ID: ${repartoId}.`;
+        
         const datosCliente = {
           cliente_id: clienteSeleccionado.cliente_id,
           nombreReparto: clienteSeleccionado.nombreReparto,
           visitas: clienteSeleccionado.visitas,
           proximaVisita: clienteSeleccionado.proximaVisita,
           diasProximaVisita: clienteSeleccionado.diasProximaVisita,
-          precios: preciosCliente
+          precios: preciosCliente,
+          direccion: calleYAltura,
+          domicilio: calleYAltura,
+          reparto_id: repartoId
         };
         state.datosClienteReparto = datosCliente;
-        resumen += `\nPrecios: ${JSON.stringify(preciosCliente)}`;
+
+        if (ctx?.from) {
+          await AssistantResponseProcessor.actualizarContextoCliente(state, {
+            direccion: calleYAltura,
+            domicilio: calleYAltura,
+            reparto_id: repartoId
+          }, ctx.from);
+        }
+
+        if (preciosCliente) {
+          resumen += `\nPrecios asignados a la zona: ${JSON.stringify(preciosCliente)}`;
+        }
       } else if (resData.diasHorarios && resData.diasHorarios.length > 0) {
-        resumen = resData.diasHorarios.map((dh: any) => `Día: ${dh.dia}, Horario: ${dh.horario}`).join(" | ");
+        const diasStr = resData.diasHorarios.map((dh: any) => `Día: ${dh.dia}, Horario: ${dh.horario}`).join(" | ");
+        resumen = `✅ COBERTURA CONFIRMADA: Se encuentra en zona habitual de reparto. ${diasStr}`;
+        if (ctx?.from && calleYAltura) {
+          await AssistantResponseProcessor.actualizarContextoCliente(state, {
+            direccion: calleYAltura,
+            domicilio: calleYAltura
+          }, ctx.from);
+        }
       } else if (resData.error === 0 || resData.success === true) {
-        resumen = "Se encuentra en zona habitual de reparto.";
+        resumen = "✅ COBERTURA CONFIRMADA: Se encuentra en zona habitual de reparto.";
+        if (ctx?.from && calleYAltura) {
+          await AssistantResponseProcessor.actualizarContextoCliente(state, {
+            direccion: calleYAltura,
+            domicilio: calleYAltura
+          }, ctx.from);
+        }
       }
       
       return resumen;
