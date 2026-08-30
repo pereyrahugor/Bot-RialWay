@@ -174,15 +174,30 @@ export const initSocketIO = (serverInstance: any, { processUserMessage }: any) =
                         else if (typeof arr === 'string') replyText = arr;
                     };
 
-                    if (msg.trim().toLowerCase() === "#reset") {
+                    const cleanMsg = msg.trim().toUpperCase();
+                    const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(null) || HistoryHandler.PROJECT_IDENTIFIER;
+                    const dynamicServiceId = await HistoryHandler.getServiceIdByRecipient(null) || HistoryHandler.SERVICE_IDENTIFIER;
+
+                    if (cleanMsg === "#RESET#" || cleanMsg === "#RESET" || cleanMsg === "RESET") {
                         await state.clear();
-                        replyText = "🔄 Chat reiniciado.";
-                    } else if (msg.trim().toUpperCase() === "#HILO_NUEVO#") {
+                        await HistoryHandler.setAssignedAgent(ip, 'asistente1', dynamicProjectId, dynamicServiceId);
+                        await HistoryHandler.saveThreadId(ip, '', dynamicProjectId, dynamicServiceId);
+                        replyText = "🔄 Sesión y asistente reiniciados.";
+                    } else if (cleanMsg === "#HILO_NUEVO#" || cleanMsg === "#HILO_NUEVO" || cleanMsg === "HILO_NUEVO") {
                         await state.clear();
-                        const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(null) || HistoryHandler.PROJECT_IDENTIFIER;
-                        await HistoryHandler.clearChatHistory(ip, dynamicProjectId);
-                        await HistoryHandler.setAssignedAgent(ip, 'asistente1', dynamicProjectId);
+                        await HistoryHandler.clearChatHistory(ip, dynamicProjectId, dynamicServiceId);
+                        await HistoryHandler.setAssignedAgent(ip, 'asistente1', dynamicProjectId, dynamicServiceId);
+                        await HistoryHandler.saveThreadId(ip, '', dynamicProjectId, dynamicServiceId);
                         replyText = "✅ Se ha borrado todo el historial de conversación de este contacto y se ha iniciado un nuevo hilo de chat.";
+                    } else if (cleanMsg === "#CLEAR_CONTEXT#" || cleanMsg === "#CLEAR_CONTEXT" || cleanMsg === "CLEAR_CONTEXT" || cleanMsg === "#ELIMINAR_CONTEXTO#" || cleanMsg === "ELIMINAR_CONTEXTO") {
+                        await state.clear();
+                        await HistoryHandler.clearClientContext(ip, dynamicProjectId, dynamicServiceId);
+                        await HistoryHandler.saveThreadId(ip, '', dynamicProjectId, dynamicServiceId);
+                        replyText = "🧹 Contexto de cliente y memoria eliminados.";
+                    } else if (cleanMsg === "#ACTUALIZAR#" || cleanMsg === "#ACTUALIZAR" || cleanMsg === "ACTUALIZAR") {
+                        const { updateMain } = await import("../apis/google/updateMain");
+                        await updateMain(dynamicProjectId, dynamicServiceId);
+                        replyText = "🔄 Sincronización de Sheets, RAG y tools completada.";
                     } else {
                         // Llamar al procesador de mensajes centralizado
                         await processUserMessage(

@@ -364,7 +364,8 @@ const main = async () => {
     registerProcessCallback(async (item: any) => {
         const { ctx, flowDynamic, state, provider, gotoFlow } = item;
 
-        if (ctx.body && ctx.body.trim() === '#GRUPO_TEST#') {
+        const normalizedCmd = String(ctx.body || '').trim().toUpperCase();
+        if (normalizedCmd === '#GRUPO_TEST#' || normalizedCmd === '#GRUPO_TEST') {
             try {
                 const botPhoneNumber = provider?.globalVendorArgs?.phone_number_id || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
                 const projectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || state.get('dynamicProjectId') || process.env.RAILWAY_PROJECT_ID;

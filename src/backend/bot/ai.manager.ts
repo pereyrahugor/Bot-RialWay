@@ -12,10 +12,10 @@ export class AiManager {
     private readonly DEFAULT_TIMEOUT_MS = 60000;
 
     constructor(
-        private openaiMain: any, // Objeto OpenAI (ahora dinámico vía openaiHelper)
-        private assistantId: string, // Mantenemos por compatibilidad
-        private errorReporter: any,
-        private flows: any
+        public openaiMain: any, // Objeto OpenAI (ahora dinámico vía openaiHelper)
+        public assistantId: string, // Mantenemos por compatibilidad
+        public errorReporter: any,
+        public flows: any
     ) {}
 
     /**
@@ -40,9 +40,9 @@ export class AiManager {
     /**
      * Retorna el Assistant ID asignado al usuario
      */
-    public async getAssignedAssistantId(userId: string, forcedProjectId?: string): Promise<string> {
-        const assigned = await HistoryHandler.getAssignedAgent(userId, forcedProjectId) || 'asistente1';
-        const map = await this.getAssistantMap(forcedProjectId || null);
+    public async getAssignedAssistantId(userId: string, forcedProjectId?: string, forcedServiceId?: string): Promise<string> {
+        const assigned = await HistoryHandler.getAssignedAgent(userId, forcedProjectId, forcedServiceId) || 'asistente1';
+        const map = await this.getAssistantMap(forcedProjectId || null, forcedServiceId || null);
         
         const assistantId = map[assigned];
         if (!assistantId) {
@@ -158,74 +158,108 @@ export class AiManager {
 
         console.log(`[AiManager] 📥 Procesando: ${ctx.from} | Proyecto: ${dynamicProjectId} | Agente: ${assigned}`);
         
-        // --- COMANDO DE REINICIO ---
-        if (ctx.body && ctx.body.trim().toUpperCase() === '#RESET#') {
-            const chatId = ctx.from;
+        const rawBody = String(ctx.body || '').trim();
+        const normalizedBody = rawBody.toUpperCase();
+        const chatId = ctx.from;
+
+        // --- COMANDOS DE SISTEMA (#xxxx# / #xxxx) ---
+
+        // 1. Reset de Asistente y Memoria
+        if (normalizedBody === '#RESET#' || normalizedBody === '#RESET') {
             console.log(`[AiManager] ♻️ Reiniciando historial y agente para ${chatId}`);
             await HistoryHandler.setAssignedAgent(chatId, 'asistente1', dynamicProjectId, dynamicServiceId);
-            await state.update({ assignedAgent: 'asistente1' });
+            await HistoryHandler.saveThreadId(chatId, '', dynamicProjectId, dynamicServiceId);
+            await state.update({ assignedAgent: 'asistente1', thread_id: null });
             return await flowDynamic("✅ Historial de conversación y asignación de asistente reiniciados.");
         }
 
-        // --- COMANDO DE HILO NUEVO (BORRAR HISTORIAL COMPLETO DE MENSAJES) ---
-        if (ctx.body && ctx.body.trim().toUpperCase() === '#HILO_NUEVO#') {
-            const chatId = ctx.from;
+        // 2. Hilo Nuevo (Borrar historial de mensajes y memoria)
+        if (normalizedBody === '#HILO_NUEVO#' || normalizedBody === '#HILO_NUEVO') {
             console.log(`[AiManager] 🗑️ Borrando todo el historial de chat para el contacto ${chatId}`);
-            
-            // Borrar el historial de la base de datos (mensajes)
             await HistoryHandler.clearChatHistory(chatId, dynamicProjectId, dynamicServiceId);
-            
-            // Resetear el agente asignado a asistente1
             await HistoryHandler.setAssignedAgent(chatId, 'asistente1', dynamicProjectId, dynamicServiceId);
-            await state.update({ assignedAgent: 'asistente1' });
-            
+            await HistoryHandler.saveThreadId(chatId, '', dynamicProjectId, dynamicServiceId);
+            await state.update({ assignedAgent: 'asistente1', thread_id: null });
             return await flowDynamic("✅ Se ha borrado todo el historial de conversación de este contacto y se ha iniciado un nuevo hilo de chat.");
         }
-        
-        try {
-            const body = ctx.body && ctx.body.trim();
 
-            // COMANDOS DE CONTROL (WhatsApp Admin)
-            if (body === "#ON#") {
-                const isBlocked = await HistoryHandler.isContactBlacklisted(ctx.from, dynamicProjectId, dynamicServiceId);
-                if (isBlocked) {
-                    const msg = "⛔ No se puede activar el bot: este contacto está en la LISTA NEGRA. Quítalo de la lista negra desde el panel para reactivarlo.";
-                    await flowDynamic([{ body: msg }]);
-                    return state;
+        // 3. Eliminar Contexto de Cliente
+        if (normalizedBody === '#CLEAR_CONTEXT#' || normalizedBody === '#CLEAR_CONTEXT' || normalizedBody === '#ELIMINAR_CONTEXTO#' || normalizedBody === '#ELIMINAR_CONTEXTO') {
+            console.log(`[AiManager] 🧹 Limpiando contexto de cliente y memoria para ${chatId}`);
+            await HistoryHandler.clearClientContext(chatId, dynamicProjectId, dynamicServiceId);
+            await HistoryHandler.saveThreadId(chatId, '', dynamicProjectId, dynamicServiceId);
+            await state.update({ thread_id: null, datosClienteContext: null });
+            return await flowDynamic("✅ Contexto de cliente y memoria de sesión eliminados.");
+        }
+
+        // 4. Activar Bot para este Chat
+        if (normalizedBody === "#ON#" || normalizedBody === "#ON") {
+            const isBlocked = await HistoryHandler.isContactBlacklisted(chatId, dynamicProjectId, dynamicServiceId);
+            if (isBlocked) {
+                const msg = "⛔ No se puede activar el bot: este contacto está en la LISTA NEGRA. Quítalo de la lista negra desde el panel para reactivarlo.";
+                await flowDynamic([{ body: msg }]);
+                return state;
+            }
+            await HistoryHandler.toggleBot(chatId, true, dynamicProjectId, dynamicServiceId);
+            if (ctx.pushName) await HistoryHandler.getOrCreateChat(chatId, 'whatsapp', ctx.pushName, ctx.userId, dynamicProjectId, dynamicServiceId);
+            const msg = "🤖 Bot activado para este chat.";
+            await flowDynamic([{ body: msg }]);
+            await HistoryHandler.saveMessage(chatId, 'assistant', msg, 'text', null, ctx.userId, null, ctx.platform, dynamicProjectId, dynamicServiceId);
+            return state;
+        }
+
+        // 5. Desactivar Bot para este Chat
+        if (normalizedBody === "#OFF#" || normalizedBody === "#OFF") {
+            await HistoryHandler.toggleBot(chatId, false, dynamicProjectId, dynamicServiceId);
+            if (ctx.pushName) await HistoryHandler.getOrCreateChat(chatId, 'whatsapp', ctx.pushName, ctx.userId, dynamicProjectId, dynamicServiceId);
+            const msg = "🛑 Bot desactivado. (Intervención humana activa)";
+            await flowDynamic([{ body: msg }]);
+            await HistoryHandler.saveMessage(chatId, 'assistant', msg, 'text', null, ctx.userId, null, ctx.platform, dynamicProjectId, dynamicServiceId);
+            return state;
+        }
+
+        // 6. Desactivar Bot Globalmente
+        if (normalizedBody === "#FULL_OFF#" || normalizedBody === "#FULL_OFF") {
+            await HistoryHandler.saveSetting('GLOBAL_BOT_ENABLED', 'false', dynamicProjectId, dynamicServiceId);
+            const msg = "🛑 Bot desactivado GLOBALMENTE para todas las conversaciones.";
+            await flowDynamic([{ body: msg }]);
+            await HistoryHandler.saveMessage(chatId, 'assistant', msg, 'text', null, ctx.userId, null, ctx.platform, dynamicProjectId, dynamicServiceId);
+            return state;
+        }
+
+        // 7. Activar Bot Globalmente
+        if (normalizedBody === "#FULL_ON#" || normalizedBody === "#FULL_ON") {
+            await HistoryHandler.saveSetting('GLOBAL_BOT_ENABLED', 'true', dynamicProjectId, dynamicServiceId);
+            const msg = "🤖 Bot activado GLOBALMENTE para todas las conversaciones.";
+            await flowDynamic([{ body: msg }]);
+            await HistoryHandler.saveMessage(chatId, 'assistant', msg, 'text', null, ctx.userId, null, ctx.platform, dynamicProjectId, dynamicServiceId);
+            return state;
+        }
+
+        // 8. Sincronización Global (Google Sheets, RAG y OpenAI Tools)
+        if (normalizedBody === "#ACTUALIZAR#" || normalizedBody === "#ACTUALIZAR") {
+            try {
+                console.log(`📡 [SYNC] Sincronizando hojas de Google, base de datos RAG y herramientas para proyecto: ${dynamicProjectId}, servicio: ${dynamicServiceId}...`);
+                await updateMain(dynamicProjectId, dynamicServiceId);
+                
+                const currentAssistantMap = await this.getAssistantMap(dynamicProjectId, dynamicServiceId);
+                const currentAssistantId = currentAssistantMap[assigned] || this.assistantId;
+
+                if (currentAssistantId) {
+                    console.log(`📡 [SYNC] Sincronizando herramientas con el asistente de OpenAI (${currentAssistantId})...`);
+                    await syncAssistantTools(currentAssistantId, dynamicProjectId, dynamicServiceId);
                 }
-                await HistoryHandler.toggleBot(ctx.from, true, dynamicProjectId, dynamicServiceId);
-                if (ctx.pushName) await HistoryHandler.getOrCreateChat(ctx.from, 'whatsapp', ctx.pushName, ctx.userId, dynamicProjectId, dynamicServiceId);
-                const msg = "🤖 Bot activado para este chat.";
-                await flowDynamic([{ body: msg }]);
-                await HistoryHandler.saveMessage(ctx.from, 'assistant', msg, 'text', null, ctx.userId, null, ctx.platform, dynamicProjectId, dynamicServiceId);
-                return state;
-            }
 
-            if (body === "#OFF#") {
-                await HistoryHandler.toggleBot(ctx.from, false, dynamicProjectId, dynamicServiceId);
-                if (ctx.pushName) await HistoryHandler.getOrCreateChat(ctx.from, 'whatsapp', ctx.pushName, ctx.userId, dynamicProjectId, dynamicServiceId);
-                const msg = "🛑 Bot desactivado. (Intervención humana activa)";
-                await flowDynamic([{ body: msg }]);
-                await HistoryHandler.saveMessage(ctx.from, 'assistant', msg, 'text', null, ctx.userId, null, ctx.platform, dynamicProjectId, dynamicServiceId);
-                return state;
+                console.log('✅ [SYNC] Todo actualizado correctamente.');
+                await flowDynamic([{ body: "🔄 Sincronización completada con éxito:\n1. Base de datos de Google Sheets actualizada.\n2. Documentos RAG re-indexados.\n3. Herramientas y funciones del asistente de OpenAI actualizadas." }]);
+            } catch (err: any) {
+                console.error("[AiManager] Error en #ACTUALIZAR#:", err.message);
+                await flowDynamic([{ body: "❌ Error al actualizar los datos operativos y el RAG." }]);
             }
+            return state;
+        }
 
-            if (body === "#FULL_OFF#") {
-                await HistoryHandler.saveSetting('GLOBAL_BOT_ENABLED', 'false', dynamicProjectId, dynamicServiceId);
-                const msg = "🛑 Bot desactivado GLOBALMENTE para todas las conversaciones.";
-                await flowDynamic([{ body: msg }]);
-                await HistoryHandler.saveMessage(ctx.from, 'assistant', msg, 'text', null, ctx.userId, null, ctx.platform, dynamicProjectId, dynamicServiceId);
-                return state;
-            }
-
-            if (body === "#FULL_ON#") {
-                await HistoryHandler.saveSetting('GLOBAL_BOT_ENABLED', 'true', dynamicProjectId, dynamicServiceId);
-                const msg = "🤖 Bot activado GLOBALMENTE para todas las conversaciones.";
-                await flowDynamic([{ body: msg }]);
-                await HistoryHandler.saveMessage(ctx.from, 'assistant', msg, 'text', null, ctx.userId, null, ctx.platform, dynamicProjectId, dynamicServiceId);
-                return state;
-            }
-
+        try {
             // Filtro de Eco (Mejorado para BSUID)
             if (ctx.key?.fromMe) {
                 stop(ctx);
@@ -233,9 +267,6 @@ export class AiManager {
             }
 
             stop(ctx);
-
-            // ELIMINADO: Duplicado con provider.manager.ts
-            // await HistoryHandler.saveMessage( ... );
 
             // --- FILTRO DE BOT GLOBAL ---
             const isGlobalBotEnabledSetting = await HistoryHandler.getSetting('GLOBAL_BOT_ENABLED', dynamicProjectId, dynamicServiceId);
@@ -263,30 +294,6 @@ export class AiManager {
                     await HistoryHandler.toggleBot(ctx.from, false, dynamicProjectId, dynamicServiceId);
                 }
                 stop(ctx);
-                return state;
-            }
-
-
-            // Comandos Globales y Sheet Update
-            if (body === "#ACTUALIZAR#") {
-                try {
-                    console.log(`📡 [SYNC] Sincronizando hojas de Google, base de datos RAG y herramientas para proyecto: ${dynamicProjectId}, servicio: ${dynamicServiceId}...`);
-                    await updateMain(dynamicProjectId, dynamicServiceId);
-                    
-                    const currentAssistantMap = await this.getAssistantMap(dynamicProjectId);
-                    const currentAssistantId = currentAssistantMap[assigned] || this.assistantId;
-
-                    if (currentAssistantId) {
-                        console.log(`📡 [SYNC] Sincronizando herramientas con el asistente de OpenAI (${currentAssistantId})...`);
-                        await syncAssistantTools(currentAssistantId, dynamicProjectId, dynamicServiceId);
-                    }
-
-                    console.log('✅ [SYNC] Todo actualizado correctamente.');
-                    await flowDynamic([{ body: "🔄 Sincronización completada con éxito:\n1. Base de datos de Google Sheets actualizada.\n2. Documentos RAG re-indexados.\n3. Herramientas y funciones del asistente de OpenAI actualizadas." }]);
-                } catch (err: any) {
-                    console.error("[AiManager] Error en #ACTUALIZAR#:", err.message);
-                    await flowDynamic([{ body: "❌ Error al actualizar los datos operativos y el RAG." }]);
-                }
                 return state;
             }
 

@@ -832,10 +832,13 @@ export class HistoryHandler {
         return Array.from(new Set(list)).filter(Boolean);
     }
 
-    static async getClientContext(rawChatId: string): Promise<any | null> {
+    static async getClientContext(rawChatId: string, forcedProjectId?: string, forcedServiceId?: string): Promise<any | null> {
         const chatId = this.normalizeId(rawChatId);
+        const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+        const currentServiceId = forcedServiceId || this.SERVICE_IDENTIFIER;
+
         if (process.env.STORAGE_MODE === "local") {
-            const chat = await LocalHistoryStore.getChat(chatId, this.PROJECT_IDENTIFIER);
+            const chat = await LocalHistoryStore.getChat(chatId, currentProjectId);
             if (!chat) return null;
             const meta = chat.metadata || {};
             return {
@@ -851,7 +854,7 @@ export class HistoryHandler {
         }
 
         try {
-            const chat = await this.getChat(chatId);
+            const chat = await this.getChat(chatId, currentProjectId, currentServiceId);
             if (!chat) return null;
 
             const meta = chat.metadata || {};
@@ -870,11 +873,13 @@ export class HistoryHandler {
         }
     }
 
-    static async saveClientContext(rawChatId: string, contextData: any) {
+    static async saveClientContext(rawChatId: string, contextData: any, forcedProjectId?: string, forcedServiceId?: string) {
         const chatId = this.normalizeId(rawChatId);
+        const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+        const currentServiceId = forcedServiceId || this.SERVICE_IDENTIFIER;
 
         if (process.env.STORAGE_MODE === "local") {
-            const chat = await LocalHistoryStore.getChat(chatId, this.PROJECT_IDENTIFIER);
+            const chat = await LocalHistoryStore.getChat(chatId, currentProjectId);
             const currentMeta = chat?.metadata || {};
             const updatedMeta = {
                 ...currentMeta,
@@ -893,12 +898,12 @@ export class HistoryHandler {
             if (contextData.nombre) {
                 updatePayload.name = contextData.nombre;
             }
-            await LocalHistoryStore.updateContactDetails(chatId, updatePayload, this.PROJECT_IDENTIFIER);
+            await LocalHistoryStore.updateContactDetails(chatId, updatePayload, currentProjectId);
             return;
         }
 
         try {
-            const chat = await this.getChat(chatId);
+            const chat = await this.getChat(chatId, currentProjectId, currentServiceId);
             const currentMeta = chat?.metadata || {};
             const updatedMeta = {
                 ...currentMeta,
@@ -919,15 +924,55 @@ export class HistoryHandler {
                 updatePayload.name = contextData.nombre;
             }
 
-            this.invalidateChatCache(chatId, this.PROJECT_IDENTIFIER);
+            this.invalidateChatCache(chatId, currentProjectId);
 
-            await supabase
+            let query = supabase
                 .from('chats')
                 .update(updatePayload)
                 .eq('id', chatId)
-                .eq('project_id', this.PROJECT_IDENTIFIER);
+                .eq('project_id', currentProjectId);
+
+            if (currentServiceId && currentServiceId !== 'default_service') {
+                query = query.eq('service_id', currentServiceId);
+            }
+
+            await query;
         } catch (err) {
             console.error('[HistoryHandler] Error en saveClientContext:', err);
+        }
+    }
+
+    static async clearClientContext(rawChatId: string, forcedProjectId?: string, forcedServiceId?: string) {
+        const chatId = this.normalizeId(rawChatId);
+        const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+        const currentServiceId = forcedServiceId || this.SERVICE_IDENTIFIER;
+
+        try {
+            const chat = await this.getChat(chatId, currentProjectId, currentServiceId);
+            const currentMeta = chat?.metadata || {};
+            const cleanMeta: any = {};
+            // Mantener solo keys que no sean datos del cliente
+            for (const key of Object.keys(currentMeta)) {
+                if (!['nombre', 'direccion', 'email', 'dni_cuit', 'tax_status', 'offered_product', 'tipoCliente', 'incidencias_ids', 'thread_id'].includes(key)) {
+                    cleanMeta[key] = currentMeta[key];
+                }
+            }
+
+            this.invalidateChatCache(chatId, currentProjectId);
+
+            let query = supabase
+                .from('chats')
+                .update({ metadata: cleanMeta })
+                .eq('id', chatId)
+                .eq('project_id', currentProjectId);
+
+            if (currentServiceId && currentServiceId !== 'default_service') {
+                query = query.eq('service_id', currentServiceId);
+            }
+
+            await query;
+        } catch (err) {
+            console.error('[HistoryHandler] Error en clearClientContext:', err);
         }
     }
 
@@ -2662,29 +2707,41 @@ export class HistoryHandler {
 
 
 
-    static async saveThreadId(chatId: string, threadId: string, forcedProjectId?: string) {
+    static async saveThreadId(chatId: string, threadId: string, forcedProjectId?: string, forcedServiceId?: string) {
         const currentProjectId = forcedProjectId || this.PROJECT_IDENTIFIER;
+        const currentServiceId = forcedServiceId || this.SERVICE_IDENTIFIER;
 
         // Invalidar cache
         this.invalidateChatCache(chatId, currentProjectId);
 
         try {
             // Primero obtenemos metadata actual
-            const { data } = await supabase
+            let query = supabase
                 .from('chats')
                 .select('metadata')
                 .eq('id', chatId)
-                .eq('project_id', currentProjectId)
-                .maybeSingle();
+                .eq('project_id', currentProjectId);
+
+            if (currentServiceId && currentServiceId !== 'default_service') {
+                query = query.eq('service_id', currentServiceId);
+            }
+
+            const { data } = await query.maybeSingle();
 
             const currentMetadata = data?.metadata || {};
             const updatedMetadata = { ...currentMetadata, thread_id: threadId };
 
-            await supabase
+            let updateQuery = supabase
                 .from('chats')
                 .update({ metadata: updatedMetadata })
                 .eq('id', chatId)
                 .eq('project_id', currentProjectId);
+
+            if (currentServiceId && currentServiceId !== 'default_service') {
+                updateQuery = updateQuery.eq('service_id', currentServiceId);
+            }
+
+            await updateQuery;
         } catch (err) {
             console.error('[HistoryHandler] Error en saveThreadId:', err);
         }
@@ -2693,9 +2750,9 @@ export class HistoryHandler {
     /**
      * Obtiene el thread_id de OpenAI del metadata del chat
      */
-    static async getThreadId(chatId: string, forcedProjectId?: string): Promise<string | null> {
+    static async getThreadId(chatId: string, forcedProjectId?: string, forcedServiceId?: string): Promise<string | null> {
         try {
-            const chat = await this.getChat(chatId, forcedProjectId);
+            const chat = await this.getChat(chatId, forcedProjectId, forcedServiceId);
             return chat?.metadata?.thread_id || null;
         } catch (err) {
             console.error('[HistoryHandler] Error en getThreadId:', err);

@@ -2240,7 +2240,7 @@ export const registerBackofficeRoutes = (app: any) => {
         const serviceId = resolveServiceId(req) || depsHistoryHandler.SERVICE_IDENTIFIER;
 
         try {
-            if (command === '#ACTUALIZAR#') {
+            if (command === '#ACTUALIZAR#' || command === '#ACTUALIZAR' || command === 'ACTUALIZAR') {
                 await updateMain(projectId, serviceId);
 
                 const { syncAssistantTools } = await import("../../apis/openai/openaiHelper");
@@ -2265,18 +2265,26 @@ export const registerBackofficeRoutes = (app: any) => {
                 return res.status(400).json({ success: false, error: 'chatId is required' });
             }
 
-            if (command === '#RESET#') {
+            if (command === '#RESET#' || command === '#RESET' || command === 'RESET') {
                 await depsHistoryHandler.setAssignedAgent(chatId, 'asistente1', projectId, serviceId);
-                return res.json({ success: true, message: 'Asistente reiniciado a asistente1.' });
+                await depsHistoryHandler.saveThreadId(chatId, '', projectId, serviceId);
+                return res.json({ success: true, message: 'Asistente y memoria reiniciados a asistente1.' });
             }
 
-            if (command === '#HILO_NUEVO#') {
+            if (command === '#HILO_NUEVO#' || command === '#HILO_NUEVO' || command === 'HILO_NUEVO') {
                 const cleared = await depsHistoryHandler.clearChatHistory(chatId, projectId, serviceId);
                 if (!cleared) {
                     return res.status(500).json({ success: false, error: 'No se pudo limpiar el historial.' });
                 }
                 await depsHistoryHandler.setAssignedAgent(chatId, 'asistente1', projectId, serviceId);
-                return res.json({ success: true, message: 'Historial borrado y asistente reiniciado.' });
+                await depsHistoryHandler.saveThreadId(chatId, '', projectId, serviceId);
+                return res.json({ success: true, message: 'Historial borrado, hilo nuevo y asistente reiniciado.' });
+            }
+
+            if (command === '#CLEAR_CONTEXT#' || command === '#CLEAR_CONTEXT' || command === 'CLEAR_CONTEXT' || command === '#ELIMINAR_CONTEXTO#' || command === 'ELIMINAR_CONTEXTO') {
+                await depsHistoryHandler.clearClientContext(chatId, projectId, serviceId);
+                await depsHistoryHandler.saveThreadId(chatId, '', projectId, serviceId);
+                return res.json({ success: true, message: 'Contexto de cliente y memoria eliminados.' });
             }
 
             return res.status(400).json({ success: false, error: 'Comando no soportado.' });
@@ -5269,6 +5277,8 @@ Hemos recibido tu pago con Ã©xito.
                 docType = 'INSTRUCCIONES_WEBHOOK.md';
             } else if (req.query.type === 'connect' || req.query.type === 'connet' || req.query.type === 'api_connect') {
                 docType = 'INSTRUCCIONES_CONNECT.md';
+            } else if (req.query.type === 'comandos' || req.query.type === 'commands' || req.query.type === 'instrucciones_comandos') {
+                docType = 'INSTRUCCIONES_COMANDOS.md';
             }
             const rootDir = process.cwd();
             const docsPath = path.join(rootDir, 'docs', docType);
