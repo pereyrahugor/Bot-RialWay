@@ -3,18 +3,24 @@
 // --- Lógica de Configuración CRM ---
 window.crmConfig = [
     { id: 'crm-ticket-title', label: 'Titulo del Ticket', visible: true, order: 0 },
-    { id: 'crm-name', label: 'Nombre del Contacto', visible: true, order: 1 },
-    { id: 'crm-phone', label: 'Teléfono', visible: true, order: 2 },
-    { id: 'crm-cuit', label: 'Cuil / Cuit / DNI', visible: true, order: 3 },
-    { id: 'crm-email', label: 'Correo Electrónico', visible: true, order: 4 },
-    { id: 'crm-address', label: 'Domicilio', visible: true, order: 5 },
-    { id: 'crm-tax-status', label: 'Situación Impositiva', visible: true, order: 6 },
-    { id: 'crm-product', label: 'Producto Ofrecido', visible: true, order: 7 },
-    { id: 'crm-source', label: 'Fuente / Canal', visible: true, order: 8 },
-    { id: 'crm-notes', label: 'Historial de Notas', visible: true, order: 9 },
-    { id: 'crm-due-date', label: 'Fecha Alerta / Seguimiento', visible: true, order: 10 },
-    { id: 'crm-priority', label: 'Prioridad', visible: true, order: 11 },
-    { id: 'crm-status', label: 'Estado del Lead (CRM)', visible: true, order: 12 }
+    { id: 'crm-name', label: 'Nombre', visible: true, order: 1 },
+    { id: 'crm-last-name', label: 'Apellido', visible: true, order: 2 },
+    { id: 'crm-phone', label: 'Teléfono', visible: true, order: 3 },
+    { id: 'crm-cuit', label: 'Cuil / Cuit / DNI', visible: true, order: 4 },
+    { id: 'crm-company', label: 'Empresa / Razón Social', visible: true, order: 5 },
+    { id: 'crm-email', label: 'Correo Electrónico', visible: true, order: 6 },
+    { id: 'crm-address', label: 'Domicilio', visible: true, order: 7 },
+    { id: 'crm-city', label: 'Localidad', visible: true, order: 8 },
+    { id: 'crm-province', label: 'Provincia', visible: true, order: 9 },
+    { id: 'crm-transport', label: 'Transporte / Logística', visible: true, order: 10 },
+    { id: 'crm-tax-status', label: 'Situación Impositiva', visible: true, order: 11 },
+    { id: 'crm-product', label: 'Producto Ofrecido', visible: true, order: 12 },
+    { id: 'crm-source', label: 'Fuente / Canal', visible: true, order: 13 },
+    { id: 'crm-notes', label: 'Notas 1 (Locales)', visible: true, order: 14 },
+    { id: 'crm-shared-notes', label: 'Notas 2 (Compartidas Empresa)', visible: true, order: 15 },
+    { id: 'crm-due-date', label: 'Fecha Alerta / Seguimiento', visible: true, order: 16 },
+    { id: 'crm-priority', label: 'Prioridad', visible: true, order: 17 },
+    { id: 'crm-status', label: 'Estado del Lead (CRM)', visible: true, order: 18 }
 ];
 
 window.fetchCRMConfig = async () => {

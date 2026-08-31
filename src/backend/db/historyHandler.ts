@@ -1699,7 +1699,13 @@ export class HistoryHandler {
         crm_due_date?: string | null,
         metadata?: any,
         ticket_title?: string,
-        ticket_description?: string
+        ticket_description?: string,
+        apellido?: string,
+        empresa?: string,
+        localidad?: string,
+        provincia?: string,
+        transporte?: string,
+        shared_notes?: string
     }, forcedProjectId?: string, forcedServiceId?: string | null) {
         const chatId = this.normalizeId(rawChatId);
         let currentProjectId = forcedProjectId;
@@ -1737,7 +1743,7 @@ export class HistoryHandler {
             return { success };
         }
         if (details.name === '[-]') details.name = undefined;
-        const { ticket_title: ticketTitle, ticket_description: _ticketDescription, newPhone: rawNewPhone, phone: rawPhone, ...chatDetails } = details as any;
+        const { ticket_title: ticketTitle, ticket_description: _ticketDescription, newPhone: rawNewPhone, phone: rawPhone, apellido, empresa, localidad, provincia, transporte, shared_notes, ...chatDetails } = details as any;
         const targetNewPhone = rawNewPhone || rawPhone;
         let updatedPhoneId: string | null = null;
 
@@ -1758,10 +1764,7 @@ export class HistoryHandler {
 
             // Si se especificó un nuevo teléfono de contacto, actualizar el ID del chat en la base de datos (con ON UPDATE CASCADE)
             if (targetNewPhone && typeof targetNewPhone === 'string') {
-                let cleanPhone = targetNewPhone.replace(/\D/g, '').trim();
-                if (cleanPhone.startsWith('0')) cleanPhone = cleanPhone.slice(1);
-                if (cleanPhone.length === 10) cleanPhone = `549${cleanPhone}`;
-
+                const cleanPhone = this.normalizeId(targetNewPhone);
                 if (cleanPhone && cleanPhone !== chatId) {
                     console.log(`📌 [updateContactDetails] Actualizando teléfono de chat: ${chatId} -> ${cleanPhone} para el proyecto ${currentProjectId}`);
                     const { error: phoneErr } = await supabase
@@ -1780,6 +1783,27 @@ export class HistoryHandler {
 
             const activeId = updatedPhoneId || chatId;
 
+            // Obtener metadata actual para fusionar los campos nuevos
+            const { data: currentChatRow } = await supabase
+                .from('chats')
+                .select('metadata, cuit_dni')
+                .eq('id', activeId)
+                .eq('project_id', currentProjectId)
+                .maybeSingle();
+
+            const existingMeta = currentChatRow?.metadata || {};
+            const mergedMeta = {
+                ...existingMeta,
+                ...(chatDetails.metadata || {}),
+                ...(apellido !== undefined ? { apellido } : {}),
+                ...(empresa !== undefined ? { empresa } : {}),
+                ...(localidad !== undefined ? { localidad } : {}),
+                ...(provincia !== undefined ? { provincia } : {}),
+                ...(transporte !== undefined ? { transporte } : {}),
+                ...(shared_notes !== undefined ? { shared_notes } : {})
+            };
+            chatDetails.metadata = mergedMeta;
+
             // Invalidar cache
             this.invalidateChatCache(activeId, currentProjectId);
 
@@ -1796,6 +1820,13 @@ export class HistoryHandler {
 
                 const { error } = await query;
                 if (error) throw error;
+            }
+
+            // Sincronizar Notas 2 compartidas de empresa por CUIT o Empresa a nivel de proyecto
+            const targetCuit = chatDetails.cuit_dni || currentChatRow?.cuit_dni;
+            const targetEmpresa = empresa || mergedMeta.empresa;
+            if (shared_notes !== undefined && currentProjectId && (targetCuit || targetEmpresa)) {
+                await this.syncCompanySharedNotes(currentProjectId, targetCuit, targetEmpresa, shared_notes);
             }
 
             // --- SINCRONIZACIÓN DUAL DE INSTANCIAS (LID <-> Teléfono) ---
@@ -1958,6 +1989,73 @@ export class HistoryHandler {
         } catch (err: any) {
             console.error('[HistoryHandler] Error en updateContactDetails:', err);
             return { success: false, error: err.message };
+        }
+    }
+
+    /**
+     * Sincroniza Notas 2 (Notas Compartidas de Empresa) para todos los chats con el mismo CUIT o Empresa dentro del mismo proyecto.
+     */
+    static async syncCompanySharedNotes(projectId: string, cuitDni?: string | null, empresa?: string | null, sharedNotes?: string | null) {
+        if (!projectId || (!cuitDni && !empresa) || sharedNotes === undefined) return;
+        try {
+            const { data: matchingChats, error } = await supabase
+                .from('chats')
+                .select('id, metadata, cuit_dni')
+                .eq('project_id', projectId);
+
+            if (error || !matchingChats) return;
+
+            const cleanCuit = cuitDni ? String(cuitDni).trim().toLowerCase() : null;
+            const cleanEmpresa = empresa ? String(empresa).trim().toLowerCase() : null;
+
+            for (const c of matchingChats) {
+                const cCuit = c.cuit_dni ? String(c.cuit_dni).trim().toLowerCase() : null;
+                const cEmpresa = c.metadata?.empresa ? String(c.metadata.empresa).trim().toLowerCase() : null;
+                
+                const matches = (cleanCuit && cCuit === cleanCuit) || (cleanEmpresa && cEmpresa === cleanEmpresa);
+                if (matches) {
+                    const newMeta = { ...(c.metadata || {}), shared_notes: sharedNotes };
+                    if (cleanEmpresa && !c.metadata?.empresa) newMeta.empresa = empresa;
+                    await supabase
+                        .from('chats')
+                        .update({ metadata: newMeta })
+                        .eq('id', c.id)
+                        .eq('project_id', projectId);
+                }
+            }
+        } catch (e: any) {
+            console.error('[HistoryHandler] Error syncing company shared notes:', e.message);
+        }
+    }
+
+    /**
+     * Obtiene las Notas 2 (Notas Compartidas de Empresa) por CUIT o Empresa dentro del mismo proyecto.
+     */
+    static async getCompanySharedNotes(projectId: string, cuitDni?: string | null, empresa?: string | null): Promise<string | null> {
+        if (!projectId || (!cuitDni && !empresa)) return null;
+        try {
+            const cleanCuit = cuitDni ? String(cuitDni).trim().toLowerCase() : null;
+            const cleanEmpresa = empresa ? String(empresa).trim().toLowerCase() : null;
+
+            const { data: matchingChats } = await supabase
+                .from('chats')
+                .select('metadata, cuit_dni')
+                .eq('project_id', projectId);
+
+            if (!matchingChats) return null;
+
+            for (const c of matchingChats) {
+                const cCuit = c.cuit_dni ? String(c.cuit_dni).trim().toLowerCase() : null;
+                const cEmpresa = c.metadata?.empresa ? String(c.metadata.empresa).trim().toLowerCase() : null;
+                const matches = (cleanCuit && cCuit === cleanCuit) || (cleanEmpresa && cEmpresa === cleanEmpresa);
+                if (matches && c.metadata?.shared_notes) {
+                    return c.metadata.shared_notes;
+                }
+            }
+            return null;
+        } catch (e: any) {
+            console.error('[HistoryHandler] Error getting company shared notes:', e.message);
+            return null;
         }
     }
 
@@ -3079,6 +3177,8 @@ export class HistoryHandler {
 
             if ((hasContactDetails || ticketUpdate.estado === 'Cerrado') && activeChatTargetId) {
                 const chatUpdate: any = {};
+                let currentChatRow: any = null;
+
                 if (hasContactDetails) {
                     if (details.contact.name !== undefined) chatUpdate.name = details.contact.name;
                     if (details.contact.email !== undefined) chatUpdate.email = details.contact.email;
@@ -3090,6 +3190,27 @@ export class HistoryHandler {
                     if (details.contact.crm_due_date !== undefined) chatUpdate.crm_due_date = details.contact.crm_due_date;
                     if (notesVal !== undefined) chatUpdate.notes = notesVal;
                     if (details.contact.source !== undefined) chatUpdate.source = details.contact.source;
+
+                    const { data: cRow } = await supabase
+                        .from('chats')
+                        .select('metadata, cuit_dni')
+                        .eq('id', activeChatTargetId)
+                        .eq('project_id', currentProjectId)
+                        .maybeSingle();
+                    currentChatRow = cRow;
+
+                    const existingMeta = currentChatRow?.metadata || {};
+                    const mergedMeta = {
+                        ...existingMeta,
+                        ...(details.contact.metadata || {}),
+                        ...(details.contact.apellido !== undefined ? { apellido: details.contact.apellido } : {}),
+                        ...(details.contact.empresa !== undefined ? { empresa: details.contact.empresa } : {}),
+                        ...(details.contact.localidad !== undefined ? { localidad: details.contact.localidad } : {}),
+                        ...(details.contact.provincia !== undefined ? { provincia: details.contact.provincia } : {}),
+                        ...(details.contact.transporte !== undefined ? { transporte: details.contact.transporte } : {}),
+                        ...(details.contact.shared_notes !== undefined ? { shared_notes: details.contact.shared_notes } : {})
+                    };
+                    chatUpdate.metadata = mergedMeta;
                 }
 
                 // Si el estado es cerrado, aplicar lógica de reset de bot y de-clasificación de lead
@@ -3110,6 +3231,15 @@ export class HistoryHandler {
                         .eq('project_id', currentProjectId);
 
                     if (upChatErr) throw upChatErr;
+
+                    // Sincronizar Notas 2 compartidas de empresa por CUIT o Empresa a nivel de proyecto
+                    if (hasContactDetails && details.contact.shared_notes !== undefined && currentProjectId) {
+                        const targetCuit = details.contact.cuit_dni || currentChatRow?.cuit_dni;
+                        const targetEmpresa = details.contact.empresa || chatUpdate.metadata?.empresa;
+                        if (targetCuit || targetEmpresa) {
+                            await this.syncCompanySharedNotes(currentProjectId, targetCuit, targetEmpresa, details.contact.shared_notes);
+                        }
+                    }
 
                     // --- SINCRONIZACIÓN DUAL DE INSTANCIAS (LID <-> Teléfono) ---
                     try {
@@ -4609,7 +4739,13 @@ export class HistoryHandler {
                     metadata: c.metadata || (existing ? existing.metadata : {}),
                     is_lead: c.is_lead !== undefined ? c.is_lead : (existing ? existing.is_lead : false),
                     bot_enabled: c.bot_enabled !== undefined ? c.bot_enabled : (existing ? existing.bot_enabled : true),
-                    assigned_agent: c.assigned_agent || (existing ? existing.assigned_agent : 'asistente1')
+                    assigned_agent: c.assigned_agent || (existing ? existing.assigned_agent : 'asistente1'),
+                    cuit_dni: c.cuit_dni !== undefined ? c.cuit_dni : (existing ? existing.cuit_dni : undefined),
+                    email: c.email !== undefined ? c.email : (existing ? existing.email : undefined),
+                    address: c.address !== undefined ? c.address : (existing ? existing.address : undefined),
+                    notes: c.notes !== undefined ? c.notes : (existing ? existing.notes : undefined),
+                    crm_status: c.crm_status !== undefined ? c.crm_status : (existing ? existing.crm_status : undefined),
+                    assigned_to: c.assigned_to !== undefined ? c.assigned_to : (existing ? existing.assigned_to : undefined)
                 };
                 if (targetServiceId && targetServiceId !== 'default' && targetServiceId !== 'default_service') {
                     upsertData.service_id = targetServiceId;

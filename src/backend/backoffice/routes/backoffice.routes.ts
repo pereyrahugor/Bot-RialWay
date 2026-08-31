@@ -1213,8 +1213,40 @@ export const registerBackofficeRoutes = (app: any) => {
     app.get('/api/backoffice/chats/import-template', backofficeAuth, (req: any, res: any) => {
         try {
             const data = [
-                { phone: '5491122334455', name: 'Juan Perez', tags: 'Cliente, Interesado' },
-                { phone: '5491166778899', name: 'Maria Lopez', tags: 'Soporte' }
+                { 
+                    nombre: 'Juan', 
+                    apellido: 'Perez', 
+                    telefono: '5491122334455', 
+                    emails: 'juan.perez@empresa.com', 
+                    cuit: '20-30405060-7', 
+                    empresa: 'Distribuidora Central SA', 
+                    direccion: 'Av. Colon 1234', 
+                    localidad: 'Cordoba Capital', 
+                    provincia: 'Cordoba', 
+                    transporte: 'Expreso Brio', 
+                    estado: 'Nuevo', 
+                    asignado_a: 'Asistente 1', 
+                    etiquetas: 'Cliente, Mayorista', 
+                    notas_1: 'Interesado en abonos mensuales', 
+                    notas_2: 'Cuenta corporativa con 3 sucursales' 
+                },
+                { 
+                    nombre: 'Maria', 
+                    apellido: 'Lopez', 
+                    telefono: '5493516677889', 
+                    emails: 'm.lopez@comercial.com', 
+                    cuit: '27-25123456-4', 
+                    empresa: 'Lopez & Hnos', 
+                    direccion: 'San Martin 450', 
+                    localidad: 'Villa Maria', 
+                    provincia: 'Cordoba', 
+                    transporte: 'Transporte Pedrito', 
+                    estado: 'Contactado', 
+                    asignado_a: 'Operador 2', 
+                    etiquetas: 'Familia', 
+                    notas_1: 'Llamar despues de las 14hs', 
+                    notas_2: 'Entrega por la tarde' 
+                }
             ];
             const ws = XLSX.utils.json_to_sheet(data);
             const wb = XLSX.utils.book_new();
@@ -2320,7 +2352,11 @@ export const registerBackofficeRoutes = (app: any) => {
     app.put('/api/backoffice/chat/:id/contact', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         try {
             const { id } = req.params;
-            const { name, email, notes, source, cuit_dni, tax_status, address, offered_product, crm_status, crm_due_date, ticket_title } = req.body;
+            const { 
+                name, email, notes, source, cuit_dni, tax_status, address, offered_product, 
+                crm_status, crm_due_date, ticket_title,
+                apellido, empresa, localidad, provincia, transporte, shared_notes, metadata
+            } = req.body;
             const projectId = resolveProjectId(req);
             const serviceId = resolveServiceId(req);
             const result = await depsHistoryHandler.updateContactDetails(id, {
@@ -2328,9 +2364,27 @@ export const registerBackofficeRoutes = (app: any) => {
                 cuit_dni, tax_status, address, offered_product,
                 crm_status, crm_due_date,
                 is_lead: true,
-                ticket_title
+                ticket_title,
+                apellido, empresa, localidad, provincia, transporte, shared_notes, metadata
             }, projectId || undefined, serviceId || undefined);
             res.json(result);
+        } catch (err: any) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
+    app.get('/api/backoffice/company-notes', backofficeAuth, async (req: any, res: any) => {
+        try {
+            const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
+            const cuit = req.query.cuit ? String(req.query.cuit).trim() : null;
+            const empresa = req.query.empresa ? String(req.query.empresa).trim() : null;
+
+            if (!cuit && !empresa) {
+                return res.json({ success: true, notes: null });
+            }
+
+            const notes = await depsHistoryHandler.getCompanySharedNotes(projectId, cuit, empresa);
+            res.json({ success: true, notes });
         } catch (err: any) {
             res.status(500).json({ success: false, error: err.message });
         }
@@ -6514,30 +6568,72 @@ export const processImportExcel = async (req: any, res: any) => {
         for (const row of data) {
             let rawPhone = '';
             let name = '';
+            let apellido = '';
+            let crmStatus = '';
+            let assignedTo = '';
+            let email = '';
+            let notes = '';
+            let sharedNotes = '';
+            let empresa = '';
             let tagsStr = '';
+            let direccion = '';
+            let localidad = '';
+            let provincia = '';
+            let transporte = '';
+            let cuit = '';
 
             for (const key of Object.keys(row)) {
                 const cleanKey = key.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
                 const val = String(row[key] ?? '').trim();
 
-                if (!rawPhone && (cleanKey.includes('phone') || cleanKey.includes('telefono') || cleanKey.includes('celular') || cleanKey.includes('mobile') || cleanKey.includes('numero') || cleanKey.includes('jid'))) {
+                if (!rawPhone && (cleanKey === 'phone' || cleanKey === 'telefono' || cleanKey === 'celular' || cleanKey.includes('telefono') || cleanKey.includes('celular') || cleanKey.includes('numero') || cleanKey.includes('jid'))) {
                     rawPhone = val;
-                } else if (!name && (cleanKey.includes('name') || cleanKey.includes('nombre') || cleanKey.includes('cliente'))) {
+                } else if (!name && (cleanKey === 'name' || cleanKey === 'nombre' || cleanKey === 'first name' || cleanKey === 'firstname')) {
                     name = val;
+                } else if (!apellido && (cleanKey === 'apellido' || cleanKey === 'last name' || cleanKey === 'lastname')) {
+                    apellido = val;
+                } else if (!crmStatus && (cleanKey === 'estado' || cleanKey === 'status' || cleanKey === 'crm_status' || cleanKey === 'etapa')) {
+                    crmStatus = val;
+                } else if (!assignedTo && (cleanKey.includes('asignado') || cleanKey.includes('assigned'))) {
+                    assignedTo = val;
+                } else if (!email && (cleanKey.includes('email') || cleanKey.includes('correo'))) {
+                    email = val;
+                } else if (!notes && (cleanKey === 'notas 1' || cleanKey === 'notas1' || cleanKey === 'nota' || cleanKey === 'notas' || cleanKey === 'notes')) {
+                    notes = val;
+                } else if (!sharedNotes && (cleanKey === 'notas 2' || cleanKey === 'notas2' || cleanKey.includes('compartid') || cleanKey === 'shared_notes')) {
+                    sharedNotes = val;
+                } else if (!empresa && (cleanKey === 'empresa' || cleanKey === 'company' || cleanKey.includes('razon social') || cleanKey.includes('razonsocial'))) {
+                    empresa = val;
                 } else if (!tagsStr && (cleanKey.includes('tag') || cleanKey.includes('etiqueta'))) {
                     tagsStr = val;
+                } else if (!direccion && (cleanKey === 'direccion' || cleanKey === 'address' || cleanKey === 'domicilio' || cleanKey.includes('calle'))) {
+                    direccion = val;
+                } else if (!localidad && (cleanKey === 'localidad' || cleanKey === 'city' || cleanKey === 'ciudad')) {
+                    localidad = val;
+                } else if (!provincia && (cleanKey === 'provincia' || cleanKey === 'state' || cleanKey === 'departamento')) {
+                    provincia = val;
+                } else if (!transporte && (cleanKey === 'transporte' || cleanKey === 'expreso' || cleanKey === 'logistica')) {
+                    transporte = val;
+                } else if (!cuit && (cleanKey === 'cuit' || cleanKey === 'dni' || cleanKey === 'cuit_dni' || cleanKey === 'cuil' || cleanKey === 'documento')) {
+                    cuit = val;
                 }
+            }
+
+            // Normalización de Nombre completo si viene separado
+            let fullName = name;
+            if (apellido) {
+                fullName = name ? `${name} ${apellido}`.trim() : apellido;
             }
 
             // Fallback directo por nombres de propiedad comunes
             if (!rawPhone) {
                 rawPhone = String(row.phone || row.Phone || row.telefono || row.Telefono || row.celular || row.Celular || row.contacto || row.Contacto || '').trim();
             }
-            if (!name) {
-                name = String(row.name || row.Name || row.nombre || row.Nombre || '').trim();
+            if (!fullName) {
+                fullName = String(row.name || row.Name || row.nombre || row.Nombre || '').trim();
             }
 
-            // NORMALIZACIÃ“N Y FORMATO INTERNACIONAL: Quitar caracteres no numÃ©ricos y formatear (ej: 2914464733 -> 5492914464733)
+            // NORMALIZACIÓN Y FORMATO INTERNACIONAL
             let phone = rawPhone.replace(/\D/g, '');
             if (!phone) continue;
 
@@ -6549,17 +6645,34 @@ export const processImportExcel = async (req: any, res: any) => {
                 phone = `549${phone.slice(2)}`;
             }
 
-            // DeduplicaciÃ³n en memoria para el archivo importado
+            const metadataObj: any = {
+                apellido: apellido || undefined,
+                empresa: empresa || undefined,
+                localidad: localidad || undefined,
+                provincia: provincia || undefined,
+                transporte: transporte || undefined,
+                shared_notes: sharedNotes || undefined
+            };
+
+            // Deduplicación en memoria para el archivo importado
             const existing = uniqueChatsMap.get(phone);
-            if (!existing || (!existing.name && name)) {
-                uniqueChatsMap.set(phone, {
-                    id: phone,
-                    name: name || null,
-                    type: 'whatsapp',
-                    bot_enabled: true,
-                    assigned_agent: 'asistente1'
-                });
-            }
+            uniqueChatsMap.set(phone, {
+                id: phone,
+                name: fullName || (existing ? existing.name : null),
+                type: 'whatsapp',
+                bot_enabled: true,
+                assigned_agent: 'asistente1',
+                cuit_dni: cuit || (existing ? existing.cuit_dni : undefined),
+                email: email || (existing ? existing.email : undefined),
+                address: direccion || (existing ? existing.address : undefined),
+                notes: notes || (existing ? existing.notes : undefined),
+                crm_status: crmStatus || (existing ? existing.crm_status : 'Nuevo'),
+                assigned_to: assignedTo || (existing ? existing.assigned_to : undefined),
+                metadata: {
+                    ...(existing?.metadata || {}),
+                    ...metadataObj
+                }
+            });
 
             if (tagsStr) {
                 const tagList = tagsStr.split(',').map((t: string) => t.trim()).filter((t: string) => t.length > 0);

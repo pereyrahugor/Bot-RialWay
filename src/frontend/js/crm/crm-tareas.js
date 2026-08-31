@@ -479,13 +479,24 @@ function openCardModal(ticketId) {
     
     // Campos del Lead Expandidos
     document.getElementById('edit-lead-name').value = lead?.name || '';
+    if (document.getElementById('edit-lead-last-name')) document.getElementById('edit-lead-last-name').value = lead?.metadata?.apellido || '';
     document.getElementById('edit-lead-email').value = lead?.email || '';
     document.getElementById('edit-lead-source').value = lead?.source || '';
     document.getElementById('edit-lead-phone').value = ticket.chat_id ? ticket.chat_id.split('@')[0] : 'Desconocido';
     document.getElementById('edit-lead-cuit').value = lead?.cuit_dni || '';
+    if (document.getElementById('edit-lead-company')) document.getElementById('edit-lead-company').value = lead?.metadata?.empresa || '';
     document.getElementById('edit-lead-address').value = lead?.address || '';
+    if (document.getElementById('edit-lead-city')) document.getElementById('edit-lead-city').value = lead?.metadata?.localidad || '';
+    if (document.getElementById('edit-lead-province')) document.getElementById('edit-lead-province').value = lead?.metadata?.provincia || '';
+    if (document.getElementById('edit-lead-transport')) document.getElementById('edit-lead-transport').value = lead?.metadata?.transporte || '';
     document.getElementById('edit-lead-tax-status').value = lead?.tax_status || 'Cons. Final';
     document.getElementById('edit-lead-offered-product').value = lead?.offered_product || ticket.tipo || '';
+    if (document.getElementById('edit-company-shared-notes')) document.getElementById('edit-company-shared-notes').value = lead?.metadata?.shared_notes || '';
+
+    // Cargar notas compartidas vinculadas por CUIT o Empresa
+    if (typeof window.checkAndFetchSharedNotes === 'function') {
+        window.checkAndFetchSharedNotes();
+    }
 
     // Carga de asignación
     const selectAssign = document.getElementById('edit-lead-assignee');
@@ -536,16 +547,22 @@ function _setupCRMTareasFormHandlers() {
 
         const leadData = {
             name: document.getElementById('edit-lead-name').value,
+            apellido: document.getElementById('edit-lead-last-name') ? document.getElementById('edit-lead-last-name').value : '',
             email: document.getElementById('edit-lead-email').value,
             source: document.getElementById('edit-lead-source').value,
             cuit_dni: document.getElementById('edit-lead-cuit').value,
+            empresa: document.getElementById('edit-lead-company') ? document.getElementById('edit-lead-company').value : '',
             address: document.getElementById('edit-lead-address').value,
+            localidad: document.getElementById('edit-lead-city') ? document.getElementById('edit-lead-city').value : '',
+            provincia: document.getElementById('edit-lead-province') ? document.getElementById('edit-lead-province').value : '',
+            transporte: document.getElementById('edit-lead-transport') ? document.getElementById('edit-lead-transport').value : '',
             tax_status: document.getElementById('edit-lead-tax-status').value,
             offered_product: document.getElementById('edit-lead-offered-product').value,
             crm_status: document.getElementById('edit-lead-status').value,
             crm_due_date: document.getElementById('edit-alert-date').value || null,
             priority: document.getElementById('edit-priority').value || 'Media',
-            notes: mainNotes
+            notes: mainNotes,
+            shared_notes: document.getElementById('edit-company-shared-notes') ? document.getElementById('edit-company-shared-notes').value : ''
         };
 
         metadata.alertDate = document.getElementById('edit-alert-date').value;

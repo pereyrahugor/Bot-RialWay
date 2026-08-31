@@ -243,8 +243,12 @@ function _getCRMModals() {
                             <input type="text" id="edit-ticket-title" class="crm-input" placeholder="Ej: Consulta por preventa">
                         </div>
                         <div class="modal-section" data-field="crm-name">
-                            <label><i class="fas fa-user"></i> Nombre / Razon Social</label>
-                            <input type="text" id="edit-lead-name" class="crm-input" placeholder="Nombre completo...">
+                            <label><i class="fas fa-user"></i> Nombre</label>
+                            <input type="text" id="edit-lead-name" class="crm-input" placeholder="Nombre...">
+                        </div>
+                        <div class="modal-section" data-field="crm-last-name">
+                            <label><i class="fas fa-user-tag"></i> Apellido</label>
+                            <input type="text" id="edit-lead-last-name" class="crm-input" placeholder="Apellido...">
                         </div>
                         <div class="modal-section" data-field="crm-phone">
                             <label><i class="fas fa-phone"></i> Telefono</label>
@@ -257,15 +261,31 @@ function _getCRMModals() {
                         </div>
                         <div class="modal-section" data-field="crm-cuit">
                             <label><i class="fas fa-id-card"></i> Cuil / Cuit / DNI</label>
-                            <input type="text" id="edit-lead-cuit" class="crm-input" placeholder="00-00000000-0">
+                            <input type="text" id="edit-lead-cuit" class="crm-input" placeholder="00-00000000-0" onblur="checkAndFetchSharedNotes && checkAndFetchSharedNotes()">
+                        </div>
+                        <div class="modal-section" data-field="crm-company">
+                            <label><i class="fas fa-building"></i> Empresa / Razon Social</label>
+                            <input type="text" id="edit-lead-company" class="crm-input" placeholder="Nombre de la empresa..." onblur="checkAndFetchSharedNotes && checkAndFetchSharedNotes()">
                         </div>
                         <div class="modal-section" data-field="crm-email">
                             <label><i class="fas fa-envelope"></i> Email</label>
                             <input type="email" id="edit-lead-email" class="crm-input" placeholder="email@ejemplo.com">
                         </div>
                         <div class="modal-section" data-field="crm-address">
-                            <label><i class="fas fa-map-marker-alt"></i> Domicilio</label>
-                            <input type="text" id="edit-lead-address" class="crm-input" placeholder="Calle, Nro, Localidad...">
+                            <label><i class="fas fa-map-marker-alt"></i> Domicilio / Direccion</label>
+                            <input type="text" id="edit-lead-address" class="crm-input" placeholder="Calle y altura...">
+                        </div>
+                        <div class="modal-section" data-field="crm-city">
+                            <label><i class="fas fa-city"></i> Localidad</label>
+                            <input type="text" id="edit-lead-city" class="crm-input" placeholder="Localidad / Ciudad...">
+                        </div>
+                        <div class="modal-section" data-field="crm-province">
+                            <label><i class="fas fa-map"></i> Provincia</label>
+                            <input type="text" id="edit-lead-province" class="crm-input" placeholder="Provincia...">
+                        </div>
+                        <div class="modal-section" data-field="crm-transport">
+                            <label><i class="fas fa-truck"></i> Transporte / Logistica</label>
+                            <input type="text" id="edit-lead-transport" class="crm-input" placeholder="Expreso o transporte asignado...">
                         </div>
                         <div class="modal-section" data-field="crm-tax-status">
                             <label><i class="fas fa-file-invoice-dollar"></i> Situacion Impositiva</label>
@@ -320,8 +340,15 @@ function _getCRMModals() {
                             </div>
                         </div>
                         <div class="modal-section" data-field="crm-notes">
-                            <label><i class="fas fa-sticky-note"></i> Historial de Notas / Comentarios</label>
-                            <textarea id="edit-custom-notes" class="crm-input" rows="4" placeholder="Observaciones generales..."></textarea>
+                            <label><i class="fas fa-sticky-note"></i> Notas 1 (Locales de este chat)</label>
+                            <textarea id="edit-custom-notes" class="crm-input" rows="3" placeholder="Observaciones locales de esta conversación..."></textarea>
+                        </div>
+                        <div class="modal-section" data-field="crm-shared-notes" style="background:rgba(56, 189, 248, 0.05); padding:10px; border-radius:10px; border:1px solid rgba(56, 189, 248, 0.2);">
+                            <label style="color:var(--accent-bright, #38bdf8); display:flex; justify-content:space-between; align-items:center;">
+                                <span><i class="fas fa-network-wired"></i> Notas 2 (Compartidas de Empresa - Multi-CRM)</span>
+                                <span id="shared-notes-indicator" style="font-size:0.75rem; font-weight:normal; opacity:0.85;">Vinculadas por CUIT/Empresa</span>
+                            </label>
+                            <textarea id="edit-company-shared-notes" class="crm-input" rows="3" placeholder="Notas corporativas compartidas entre todos los CRM vinculados por CUIT o Empresa..."></textarea>
                         </div>
                         <div class="modal-section" data-field="crm-due-date">
                             <label><i class="fas fa-bell"></i> Fecha Alerta / Seguimiento</label>

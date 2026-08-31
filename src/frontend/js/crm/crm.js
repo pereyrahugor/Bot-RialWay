@@ -605,13 +605,24 @@ function openCardModal(ticketId) {
     
     // Campos del Lead Expandidos
     document.getElementById('edit-lead-name').value = lead?.name || '';
+    document.getElementById('edit-lead-last-name').value = lead?.metadata?.apellido || '';
     document.getElementById('edit-lead-email').value = lead?.email || '';
     document.getElementById('edit-lead-source').value = lead?.source || '';
     document.getElementById('edit-lead-phone').value = ticket.chat_id ? ticket.chat_id.split('@')[0] : 'Desconocido';
     document.getElementById('edit-lead-cuit').value = lead?.cuit_dni || '';
+    document.getElementById('edit-lead-company').value = lead?.metadata?.empresa || '';
     document.getElementById('edit-lead-address').value = lead?.address || '';
+    document.getElementById('edit-lead-city').value = lead?.metadata?.localidad || '';
+    document.getElementById('edit-lead-province').value = lead?.metadata?.provincia || '';
+    document.getElementById('edit-lead-transport').value = lead?.metadata?.transporte || '';
     document.getElementById('edit-lead-tax-status').value = lead?.tax_status || 'Cons. Final';
     document.getElementById('edit-lead-offered-product').value = lead?.offered_product || ticket.tipo || '';
+    document.getElementById('edit-company-shared-notes').value = lead?.metadata?.shared_notes || '';
+
+    // Cargar notas compartidas vinculadas por CUIT o Empresa
+    if (typeof window.checkAndFetchSharedNotes === 'function') {
+        window.checkAndFetchSharedNotes();
+    }
 
     // Carga de asignación
     const selectAssign = document.getElementById('edit-lead-assignee');
@@ -1056,16 +1067,22 @@ function _setupCRMFormHandlers() {
 
         const leadData = {
             name: document.getElementById('edit-lead-name').value,
+            apellido: document.getElementById('edit-lead-last-name').value,
             email: document.getElementById('edit-lead-email').value,
             source: document.getElementById('edit-lead-source').value,
             cuit_dni: document.getElementById('edit-lead-cuit').value,
+            empresa: document.getElementById('edit-lead-company').value,
             address: document.getElementById('edit-lead-address').value,
+            localidad: document.getElementById('edit-lead-city').value,
+            provincia: document.getElementById('edit-lead-province').value,
+            transporte: document.getElementById('edit-lead-transport').value,
             tax_status: document.getElementById('edit-lead-tax-status').value,
             offered_product: document.getElementById('edit-lead-offered-product').value,
             crm_status: document.getElementById('edit-lead-status').value,
             crm_due_date: document.getElementById('edit-alert-date').value || null,
             priority: document.getElementById('edit-priority').value || 'Media',
-            notes: mainNotes
+            notes: mainNotes,
+            shared_notes: document.getElementById('edit-company-shared-notes').value
         };
 
         metadata.alertDate = document.getElementById('edit-alert-date').value;
@@ -1103,6 +1120,34 @@ function _setupCRMFormHandlers() {
         } catch (e) {
             console.error('Error al guardar:', e);
             showToast('Error al guardar ficha', 'error');
+        }
+    };
+
+    window.checkAndFetchSharedNotes = async () => {
+        const cuit = (document.getElementById('edit-lead-cuit')?.value || '').trim();
+        const empresa = (document.getElementById('edit-lead-company')?.value || '').trim();
+        const indicator = document.getElementById('shared-notes-indicator');
+
+        if (!cuit && !empresa) {
+            if (indicator) indicator.textContent = 'Vinculadas por CUIT/Empresa';
+            return;
+        }
+
+        try {
+            const token = activeToken || localStorage.getItem('backoffice_token');
+            const res = await fetch(`/api/backoffice/company-notes?token=${token}&cuit=${encodeURIComponent(cuit)}&empresa=${encodeURIComponent(empresa)}`);
+            const data = await res.json();
+            if (data.success && data.notes) {
+                const currentText = document.getElementById('edit-company-shared-notes')?.value || '';
+                if (!currentText.trim()) {
+                    document.getElementById('edit-company-shared-notes').value = data.notes;
+                }
+                if (indicator) indicator.textContent = '✅ Sincronizado con Empresa';
+            } else {
+                if (indicator) indicator.textContent = 'Sin notas previas de empresa';
+            }
+        } catch (err) {
+            console.error('[CRM] Error fetching shared notes:', err);
         }
     };
 
