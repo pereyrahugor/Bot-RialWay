@@ -301,8 +301,12 @@ window.backofficeView = {
                         <input type="text" id="crm-ticket-title" class="crm-input" placeholder="Titulo...">
                     </div>
                     <div data-field="crm-name">
-                        <label>Nombre del Contacto</label>
-                        <input type="text" id="crm-name" class="crm-input" placeholder="Nombre completo">
+                        <label><i class="fas fa-user"></i> Nombre</label>
+                        <input type="text" id="crm-name" class="crm-input" placeholder="Nombre...">
+                    </div>
+                    <div data-field="crm-last-name">
+                        <label><i class="fas fa-user-tag"></i> Apellido</label>
+                        <input type="text" id="crm-last-name-side" class="crm-input" placeholder="Apellido...">
                     </div>
                     <div data-field="crm-phone">
                         <label><i class="fas fa-phone"></i> Telefono</label>
@@ -313,17 +317,33 @@ window.backofficeView = {
                             </button>
                         </div>
                     </div>
-                    <div data-field="crm-email">
-                        <label>Correo Electronico</label>
-                        <input type="email" id="crm-email" class="crm-input" placeholder="ejemplo@correo.com">
-                    </div>
                     <div data-field="crm-cuit">
                         <label><i class="fas fa-id-card"></i> Cuil / Cuit / DNI</label>
-                        <input type="text" id="crm-cuit" class="crm-input" placeholder="00-00000000-0">
+                        <input type="text" id="crm-cuit" class="crm-input" placeholder="00-00000000-0" onblur="checkAndFetchSharedNotesSide && checkAndFetchSharedNotesSide()">
+                    </div>
+                    <div data-field="crm-company">
+                        <label><i class="fas fa-building"></i> Empresa / Razon Social</label>
+                        <input type="text" id="crm-company-side" class="crm-input" placeholder="Nombre de empresa..." onblur="checkAndFetchSharedNotesSide && checkAndFetchSharedNotesSide()">
+                    </div>
+                    <div data-field="crm-email">
+                        <label><i class="fas fa-envelope"></i> Correo Electronico</label>
+                        <input type="email" id="crm-email" class="crm-input" placeholder="ejemplo@correo.com">
                     </div>
                     <div data-field="crm-address">
-                        <label><i class="fas fa-map-marker-alt"></i> Domicilio</label>
-                        <input type="text" id="crm-address" class="crm-input" placeholder="Calle, Nro, Localidad...">
+                        <label><i class="fas fa-map-marker-alt"></i> Domicilio / Direccion</label>
+                        <input type="text" id="crm-address" class="crm-input" placeholder="Calle, Nro...">
+                    </div>
+                    <div data-field="crm-city">
+                        <label><i class="fas fa-city"></i> Localidad</label>
+                        <input type="text" id="crm-city-side" class="crm-input" placeholder="Localidad / Ciudad...">
+                    </div>
+                    <div data-field="crm-province">
+                        <label><i class="fas fa-map"></i> Provincia</label>
+                        <input type="text" id="crm-province-side" class="crm-input" placeholder="Provincia...">
+                    </div>
+                    <div data-field="crm-transport">
+                        <label><i class="fas fa-truck"></i> Transporte / Logistica</label>
+                        <input type="text" id="crm-transport-side" class="crm-input" placeholder="Expreso o transporte...">
                     </div>
                     <div data-field="crm-tax-status">
                         <label><i class="fas fa-file-invoice-dollar"></i> Situacion Impositiva</label>
@@ -378,8 +398,15 @@ window.backofficeView = {
                         </div>
                     </div>
                     <div data-field="crm-notes">
-                        <label><i class="fas fa-sticky-note"></i> Notas / Observaciones</label>
-                        <textarea id="crm-notes" class="crm-input" rows="4" placeholder="Observaciones..."></textarea>
+                        <label><i class="fas fa-sticky-note"></i> Notas 1 (Locales)</label>
+                        <textarea id="crm-notes" class="crm-input" rows="3" placeholder="Observaciones locales..."></textarea>
+                    </div>
+                    <div data-field="crm-shared-notes" style="background:rgba(56, 189, 248, 0.05); padding:10px; border-radius:10px; border:1px solid rgba(56, 189, 248, 0.2);">
+                        <label style="color:var(--accent-bright, #38bdf8); display:flex; justify-content:space-between; align-items:center;">
+                            <span><i class="fas fa-network-wired"></i> Notas 2 (Compartidas Empresa)</span>
+                            <span id="crm-shared-notes-side-indicator" style="font-size:0.72rem; font-weight:normal; opacity:0.85;">Multi-CRM</span>
+                        </label>
+                        <textarea id="crm-shared-notes-side" class="crm-input" rows="3" placeholder="Notas corporativas compartidas entre CRMs del mismo cliente/empresa..."></textarea>
                     </div>
                     <div data-field="crm-due-date">
                         <label><i class="fas fa-calendar-alt"></i> Fecha de Seguimiento</label>
@@ -636,6 +663,15 @@ window.backofficeView = {
                         }
                     });
             };
+        }
+
+        // Cargar crm-common.js si no esta cargado
+        if (!window._crmCommonLoaded) {
+            await loadViewScript('/js/crm/crm-common.js');
+            window._crmCommonLoaded = true;
+        }
+        if (typeof window.fetchCRMConfig === 'function') {
+            await window.fetchCRMConfig();
         }
 
         // Cargar backoffice.js si no esta cargado (primera visita)

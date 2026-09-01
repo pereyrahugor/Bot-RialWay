@@ -1,7 +1,6 @@
 /* global Sortable */
 
-// --- Lógica de Configuración CRM ---
-window.crmConfig = [
+window.defaultCRMConfig = [
     { id: 'crm-ticket-title', label: 'Titulo del Ticket', visible: true, order: 0 },
     { id: 'crm-name', label: 'Nombre', visible: true, order: 1 },
     { id: 'crm-last-name', label: 'Apellido', visible: true, order: 2 },
@@ -23,6 +22,8 @@ window.crmConfig = [
     { id: 'crm-status', label: 'Estado del Lead (CRM)', visible: true, order: 18 }
 ];
 
+window.crmConfig = [...window.defaultCRMConfig];
+
 window.fetchCRMConfig = async () => {
     const token = localStorage.getItem('backoffice_token');
     if (!token) return;
@@ -30,7 +31,27 @@ window.fetchCRMConfig = async () => {
         const res = await fetch(`/api/backoffice/get-setting?key=CRM_FIELDS_CONFIG&token=${token}`);
         const data = await res.json();
         if (data.success && data.value) {
-            window.crmConfig = JSON.parse(data.value);
+            const saved = JSON.parse(data.value);
+            if (Array.isArray(saved)) {
+                // Conservar visibilidad y orden de los guardados, actualizando labels y agregando campos nuevos faltantes
+                const merged = [];
+                saved.forEach((sf, idx) => {
+                    const defMatch = window.defaultCRMConfig.find(d => d.id === sf.id);
+                    if (defMatch) {
+                        merged.push({
+                            ...defMatch,
+                            visible: sf.visible !== undefined ? sf.visible : defMatch.visible,
+                            order: sf.order !== undefined ? sf.order : idx
+                        });
+                    }
+                });
+                window.defaultCRMConfig.forEach(df => {
+                    if (!merged.some(m => m.id === df.id)) {
+                        merged.push({ ...df, order: merged.length });
+                    }
+                });
+                window.crmConfig = merged;
+            }
         }
     } catch (e) {
         console.error('[CRM Config] Error fetching:', e);
@@ -38,15 +59,17 @@ window.fetchCRMConfig = async () => {
 };
 
 window.applyCRMConfig = () => {
-    const container = document.getElementById('crm-fields-container');
-    if (!container) return;
+    const containers = document.querySelectorAll('#crm-fields-container, .crm-fields-container');
+    if (!containers || containers.length === 0) return;
 
-    window.crmConfig.forEach(f => {
-        const el = container.querySelector(`[data-field="${f.id}"]`);
-        if (el) {
-            el.style.order = f.order;
-            el.style.display = f.visible ? 'flex' : 'none';
-        }
+    containers.forEach(container => {
+        window.crmConfig.forEach(f => {
+            const el = container.querySelector(`[data-field="${f.id}"]`);
+            if (el) {
+                el.style.order = f.order;
+                el.style.display = f.visible ? 'flex' : 'none';
+            }
+        });
     });
 };
 

@@ -2360,15 +2360,24 @@ function jumpToCRM() {
 function populateCRMFields(chat) {
     if (!chat) return;
     document.getElementById('crm-name').value = (chat.name && chat.name !== '[-]') ? chat.name : '';
+    if (document.getElementById('crm-last-name-side')) document.getElementById('crm-last-name-side').value = chat.metadata?.apellido || '';
     document.getElementById('crm-email').value = chat.email || '';
     document.getElementById('crm-source').value = chat.source || '';
     document.getElementById('crm-notes').value = chat.notes || '';
     document.getElementById('crm-cuit').value = chat.cuit_dni || '';
+    if (document.getElementById('crm-company-side')) document.getElementById('crm-company-side').value = chat.metadata?.empresa || '';
     document.getElementById('crm-address').value = chat.address || '';
+    if (document.getElementById('crm-city-side')) document.getElementById('crm-city-side').value = chat.metadata?.localidad || '';
+    if (document.getElementById('crm-province-side')) document.getElementById('crm-province-side').value = chat.metadata?.provincia || '';
+    if (document.getElementById('crm-transport-side')) document.getElementById('crm-transport-side').value = chat.metadata?.transporte || '';
     document.getElementById('crm-tax-status').value = chat.tax_status || 'Cons. Final';
     document.getElementById('crm-product').value = chat.offered_product || '';
+    if (document.getElementById('crm-shared-notes-side')) document.getElementById('crm-shared-notes-side').value = chat.metadata?.shared_notes || '';
     _csdSync('crm-source');
     _csdSync('crm-tax-status');
+
+    // Cargar notas de empresa compartidas si existen
+    checkAndFetchSharedNotesSide(chat);
 
     // Nuevos campos sincronizados con CRM
     const ticketTitleEl = document.getElementById('crm-ticket-title');
@@ -2414,6 +2423,33 @@ function populateCRMFields(chat) {
     if (typeof window.applyCRMConfig === 'function') window.applyCRMConfig();
 }
 
+async function checkAndFetchSharedNotesSide(chat) {
+    const cuit = (document.getElementById('crm-cuit')?.value || chat?.cuit_dni || '').trim();
+    const empresa = (document.getElementById('crm-company-side')?.value || chat?.metadata?.empresa || '').trim();
+    const indicator = document.getElementById('crm-shared-notes-side-indicator');
+
+    if (!cuit && !empresa) {
+        if (indicator) indicator.textContent = 'Multi-CRM';
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/backoffice/company-notes?token=${token}&cuit=${encodeURIComponent(cuit)}&empresa=${encodeURIComponent(empresa)}`);
+        const data = await res.json();
+        if (data.success && data.notes) {
+            const currentText = document.getElementById('crm-shared-notes-side')?.value || '';
+            if (!currentText.trim()) {
+                document.getElementById('crm-shared-notes-side').value = data.notes;
+            }
+            if (indicator) indicator.textContent = '✅ Sincronizado';
+        } else {
+            if (indicator) indicator.textContent = 'Sin notas previas';
+        }
+    } catch (err) {
+        console.error('[CRM Side] Error fetching shared notes:', err);
+    }
+}
+
 function openWhatsAppDirectSide() {
     const phone = document.getElementById('crm-phone-side').value;
     if (phone) window.open(`https://wa.me/${phone.replace(/\D/g, '')}`, '_blank');
@@ -2426,14 +2462,20 @@ async function saveCRMDetails() {
 
     const details = {
         name: document.getElementById('crm-name').value,
+        apellido: document.getElementById('crm-last-name-side')?.value || '',
         phone: phoneInputVal,
         email: document.getElementById('crm-email').value,
         source: document.getElementById('crm-source').value,
         notes: document.getElementById('crm-notes').value,
         cuit_dni: document.getElementById('crm-cuit').value,
+        empresa: document.getElementById('crm-company-side')?.value || '',
         address: document.getElementById('crm-address').value,
+        localidad: document.getElementById('crm-city-side')?.value || '',
+        provincia: document.getElementById('crm-province-side')?.value || '',
+        transporte: document.getElementById('crm-transport-side')?.value || '',
         tax_status: document.getElementById('crm-tax-status').value,
         offered_product: document.getElementById('crm-product').value,
+        shared_notes: document.getElementById('crm-shared-notes-side')?.value || '',
         ticket_title: document.getElementById('crm-ticket-title')?.value || '',
         priority: document.getElementById('crm-priority')?.value || 'Baja',
         crm_status: document.getElementById('crm-status-select-side')?.value || 'UNASSIGNED',
@@ -2513,6 +2555,15 @@ async function saveCRMDetails() {
             const chat = chats.find(c => c.id === activeChatId);
             if (chat) {
                 Object.assign(chat, details);
+                chat.metadata = {
+                    ...(chat.metadata || {}),
+                    apellido: details.apellido,
+                    empresa: details.empresa,
+                    localidad: details.localidad,
+                    provincia: details.provincia,
+                    transporte: details.transporte,
+                    shared_notes: details.shared_notes
+                };
                 const updatedName = (chat.name && chat.name !== '[-]') ? chat.name : 'Lead sin nombre';
                 document.getElementById('active-chat-name').innerText = updatedName;
                 renderChatList();
