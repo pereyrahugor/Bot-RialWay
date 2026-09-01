@@ -397,16 +397,16 @@ window.backofficeView = {
                             </div>
                         </div>
                     </div>
-                    <div data-field="crm-notes">
+                    <div data-field="crm-notes" style="grid-column: 1 / -1; width: 100%;">
                         <label><i class="fas fa-sticky-note"></i> Notas 1 (Locales)</label>
-                        <textarea id="crm-notes" class="crm-input" rows="3" placeholder="Observaciones locales..."></textarea>
+                        <textarea id="crm-notes" class="crm-input" rows="3" style="width: 100%; min-height: 80px; resize: vertical; box-sizing: border-box;" placeholder="Observaciones locales..."></textarea>
                     </div>
-                    <div data-field="crm-shared-notes" style="background:rgba(56, 189, 248, 0.05); padding:10px; border-radius:10px; border:1px solid rgba(56, 189, 248, 0.2);">
-                        <label style="color:var(--accent-bright, #38bdf8); display:flex; justify-content:space-between; align-items:center;">
+                    <div data-field="crm-shared-notes" style="background:rgba(56, 189, 248, 0.05); padding:12px; border-radius:12px; border:1px solid rgba(56, 189, 248, 0.25); grid-column: 1 / -1; width: 100%; box-sizing: border-box;">
+                        <label style="color:var(--accent-bright, #38bdf8); display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
                             <span><i class="fas fa-network-wired"></i> Notas 2 (Compartidas Empresa)</span>
                             <span id="crm-shared-notes-side-indicator" style="font-size:0.72rem; font-weight:normal; opacity:0.85;">Multi-CRM</span>
                         </label>
-                        <textarea id="crm-shared-notes-side" class="crm-input" rows="3" placeholder="Notas corporativas compartidas entre CRMs del mismo cliente/empresa..."></textarea>
+                        <textarea id="crm-shared-notes-side" class="crm-input" rows="3" style="width: 100%; min-height: 80px; resize: vertical; box-sizing: border-box;" placeholder="Notas corporativas compartidas entre CRMs del mismo cliente/empresa..."></textarea>
                     </div>
                     <div data-field="crm-due-date">
                         <label><i class="fas fa-calendar-alt"></i> Fecha de Seguimiento</label>

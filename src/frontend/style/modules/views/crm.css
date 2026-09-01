@@ -1739,8 +1739,20 @@
 
   #crm-fields-container [data-field="crm-ticket-title"],
   #crm-fields-container [data-field="crm-notes"],
+  #crm-fields-container [data-field="crm-shared-notes"],
   #crm-fields-container [data-field="crm-status"] {
-    grid-column: 1 / -1;
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+  }
+
+  #crm-fields-container textarea,
+  #crm-fields-container .crm-input[rows],
+  [data-field="crm-notes"] textarea,
+  [data-field="crm-shared-notes"] textarea {
+    width: 100% !important;
+    min-height: 80px;
+    resize: vertical !important;
+    box-sizing: border-box;
   }
 
   /* CRM action button (phone etc.) */

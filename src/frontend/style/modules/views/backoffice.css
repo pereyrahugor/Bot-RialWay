@@ -2673,3 +2673,32 @@
   line-height: 1.2;
   opacity: 0.72;
 }
+
+/* CRM Sidebar Panel Form Fields */
+#crm-panel #crm-fields-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+#crm-panel #crm-fields-container [data-field] {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#crm-panel #crm-fields-container [data-field="crm-notes"],
+#crm-panel #crm-fields-container [data-field="crm-shared-notes"] {
+  width: 100% !important;
+}
+
+#crm-panel #crm-fields-container textarea,
+#crm-panel #crm-fields-container .crm-input[rows] {
+  width: 100% !important;
+  min-height: 80px;
+  resize: vertical !important;
+  box-sizing: border-box;
+}
+
