@@ -150,9 +150,11 @@ async function syncCRM(options = {}) {
 
     isSyncingCRM = true;
     try {
+        const serviceParam = window.railwayServiceId ? `&serviceId=${encodeURIComponent(window.railwayServiceId)}` : '';
+        const projectParam = window.railwayProjectId ? `&projectId=${encodeURIComponent(window.railwayProjectId)}` : '';
         const [resLeads, resTickets] = await Promise.all([
-            fetch(`/api/backoffice/leads?token=${activeToken}&limit=300`),
-            fetch(`/api/backoffice/tickets?token=${activeToken}&estado=all_active`)
+            fetch(`/api/backoffice/leads?token=${activeToken}&limit=300${serviceParam}${projectParam}`),
+            fetch(`/api/backoffice/tickets?token=${activeToken}&estado=all_active${serviceParam}${projectParam}`)
         ]);
 
         const leadsData = await resLeads.json();

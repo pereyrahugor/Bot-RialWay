@@ -2488,7 +2488,9 @@ export const registerBackofficeRoutes = (app: any) => {
     app.put('/api/backoffice/tickets/:id', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         try {
             const { id } = req.params;
-            const result = await depsHistoryHandler.updateTicket(id, req.body);
+            const projectId = resolveProjectId(req);
+            const serviceId = resolveServiceId(req);
+            const result = await depsHistoryHandler.updateTicket(id, { ...req.body, service_id: serviceId });
             res.json(result);
         } catch (err: any) {
             res.status(500).json({ success: false, error: err.message });

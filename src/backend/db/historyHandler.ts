@@ -2397,12 +2397,12 @@ export class HistoryHandler {
                 query = query.eq('project_id', currentProjectId);
                 // Prefer explicitly passed serviceId, then fall back to process.env
                 const currentServiceId = serviceId || process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || this.SERVICE_IDENTIFIER;
-                if (currentServiceId && currentServiceId !== 'default_service') {
+                if (currentServiceId && currentServiceId !== 'all') {
                     if (currentServiceId.includes(',')) {
                         const servicesList = currentServiceId.split(',').map(s => s.trim()).filter(Boolean);
-                        query = query.in('service_id', [...servicesList, 'default_service']);
-                    } else {
-                        query = query.or(`service_id.eq.${currentServiceId},service_id.eq.default_service,service_id.is.null`);
+                        query = query.in('service_id', servicesList);
+                    } else if (currentServiceId !== 'default_service') {
+                        query = query.eq('service_id', currentServiceId);
                     }
                 }
 
@@ -3053,12 +3053,12 @@ export class HistoryHandler {
                 .eq('project_id', currentProjectId);
 
             const currentServiceId = serviceId || process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || this.SERVICE_IDENTIFIER;
-            if (currentServiceId && currentServiceId !== 'default_service') {
+            if (currentServiceId && currentServiceId !== 'all') {
                 if (currentServiceId.includes(',')) {
                     const servicesList = currentServiceId.split(',').map(s => s.trim()).filter(Boolean);
-                    query = query.in('service_id', [...servicesList, 'default_service']);
-                } else {
-                    query = query.or(`service_id.eq.${currentServiceId},service_id.eq.default_service,service_id.is.null`);
+                    query = query.in('service_id', servicesList);
+                } else if (currentServiceId !== 'default_service') {
+                    query = query.eq('service_id', currentServiceId);
                 }
             }
 
@@ -3224,12 +3224,17 @@ export class HistoryHandler {
                 }
 
                 if (Object.keys(chatUpdate).length > 0) {
-                    const { error: upChatErr } = await supabase
+                    let query = supabase
                         .from('chats')
                         .update(chatUpdate)
                         .eq('id', activeChatTargetId)
                         .eq('project_id', currentProjectId);
 
+                    if (currentServiceId && currentServiceId !== 'default' && currentServiceId !== 'default_service') {
+                        query = query.eq('service_id', currentServiceId);
+                    }
+
+                    const { error: upChatErr } = await query;
                     if (upChatErr) throw upChatErr;
 
                     // Sincronizar Notas 2 compartidas de empresa por CUIT o Empresa a nivel de proyecto
@@ -3382,12 +3387,12 @@ export class HistoryHandler {
                 .select('*, chat_tags(tag_id, tags(*))')
                 .eq('project_id', currentProjectId);
 
-            if (currentServiceId && currentServiceId !== 'default_service') {
+            if (currentServiceId && currentServiceId !== 'all') {
                 if (currentServiceId.includes(',')) {
                     const servicesList = currentServiceId.split(',').map(s => s.trim()).filter(Boolean);
-                    query = query.in('service_id', [...servicesList, 'default_service']);
-                } else {
-                    query = query.or(`service_id.eq.${currentServiceId},service_id.eq.default_service,service_id.is.null`);
+                    query = query.in('service_id', servicesList);
+                } else if (currentServiceId !== 'default_service') {
+                    query = query.eq('service_id', currentServiceId);
                 }
             }
 
@@ -3445,12 +3450,12 @@ export class HistoryHandler {
                 .eq('project_id', currentProjectId)
                 .eq('is_lead', true);
 
-            if (currentServiceId && currentServiceId !== 'default_service') {
+            if (currentServiceId && currentServiceId !== 'all') {
                 if (currentServiceId.includes(',')) {
                     const servicesList = currentServiceId.split(',').map(s => s.trim()).filter(Boolean);
-                    query = query.in('service_id', [...servicesList, 'default_service']);
-                } else {
-                    query = query.or(`service_id.eq.${currentServiceId},service_id.eq.default_service,service_id.is.null`);
+                    query = query.in('service_id', servicesList);
+                } else if (currentServiceId !== 'default_service') {
+                    query = query.eq('service_id', currentServiceId);
                 }
             }
             const { data, error } = await query

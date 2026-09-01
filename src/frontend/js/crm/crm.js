@@ -201,9 +201,11 @@ async function syncCRM(options = {}) {
 
     isSyncingCRM = true;
     try {
+        const serviceParam = window.railwayServiceId ? `&serviceId=${encodeURIComponent(window.railwayServiceId)}` : '';
+        const projectParam = window.railwayProjectId ? `&projectId=${encodeURIComponent(window.railwayProjectId)}` : '';
         const [resLeads, resTickets] = await Promise.all([
-            fetch(`/api/backoffice/leads?token=${activeToken}&limit=300`),
-            fetch(`/api/backoffice/tickets?token=${activeToken}&estado=all_active`) // Traer todos los tickets activos para el tablero
+            fetch(`/api/backoffice/leads?token=${activeToken}&limit=300${serviceParam}${projectParam}`),
+            fetch(`/api/backoffice/tickets?token=${activeToken}&estado=all_active${serviceParam}${projectParam}`) // Traer todos los tickets activos para el tablero
         ]);
 
         const leadsData = await resLeads.json();
@@ -1422,7 +1424,9 @@ async function loadTasksDashboard() {
     if (!container) return;
 
     try {
-        const res = await fetch(`/api/backoffice/crm/tasks?token=${activeToken}`);
+        const serviceParam = window.railwayServiceId ? `&serviceId=${encodeURIComponent(window.railwayServiceId)}` : '';
+        const projectParam = window.railwayProjectId ? `&projectId=${encodeURIComponent(window.railwayProjectId)}` : '';
+        const res = await fetch(`/api/backoffice/crm/tasks?token=${activeToken}${serviceParam}${projectParam}`);
         const tasks = await res.json();
 
         if (!tasks || tasks.length === 0) {

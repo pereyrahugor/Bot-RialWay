@@ -59,7 +59,13 @@ export const initSocketIO = (serverInstance: any, { processUserMessage }: any) =
         });
 
         historyEvents.on('chat_updated', (payload) => {
-            io.emit('chat_updated', payload);
+            const projId = payload.project_id || payload.projectId;
+            const servId = payload.service_id || payload.serviceId;
+            if (projId && servId) {
+                io.to(`${projId}:${servId}`).emit('chat_updated', payload);
+            } else if (projId) {
+                io.to(`${projId}:*`).emit('chat_updated', payload);
+            }
         });
 
         historyEvents.on('ticket_updated', (payload) => {
@@ -142,7 +148,9 @@ export const initSocketIO = (serverInstance: any, { processUserMessage }: any) =
             
             const room = `${projectId}:${serviceId}`;
             socket.join(room);
-            socket.join(`${projectId}:*`);
+            if (serviceId === 'all' || serviceId === 'default_service') {
+                socket.join(`${projectId}:*`);
+            }
             
             // console.log(`💬 Cliente web conectado a sala: ${room}`);
             socket.on('message', async (msg) => {

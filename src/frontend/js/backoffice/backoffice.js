@@ -641,6 +641,11 @@ async function syncActiveChatMessages(reason = 'sync') {
 }
 
 socket.on('new_message', (msg) => {
+    if (msg.projectId && window.railwayProjectId && msg.projectId !== window.railwayProjectId) return;
+    if (msg.project_id && window.railwayProjectId && msg.project_id !== window.railwayProjectId) return;
+    if (msg.serviceId && window.railwayServiceId && msg.serviceId !== window.railwayServiceId && window.railwayServiceId !== 'default_service') return;
+    if (msg.service_id && window.railwayServiceId && msg.service_id !== window.railwayServiceId && window.railwayServiceId !== 'default_service') return;
+
     console.log('📩 Nuevo mensaje recibido por socket:', msg);
     const cid = msg.chat_id || msg.chatId;
     if (!msg.chat_id) msg.chat_id = cid;
@@ -714,6 +719,11 @@ socket.on('new_message', (msg) => {
 });
 
 socket.on('chat_updated', (payload) => {
+    if (payload.projectId && window.railwayProjectId && payload.projectId !== window.railwayProjectId) return;
+    if (payload.project_id && window.railwayProjectId && payload.project_id !== window.railwayProjectId) return;
+    if (payload.serviceId && window.railwayServiceId && payload.serviceId !== window.railwayServiceId && window.railwayServiceId !== 'default_service') return;
+    if (payload.service_id && window.railwayServiceId && payload.service_id !== window.railwayServiceId && window.railwayServiceId !== 'default_service') return;
+
     const cid = payload.chatId || payload.id;
     if (!cid) return;
     const chatIdx = chats.findIndex(c => normChatId(c.id) === normChatId(cid));
@@ -2989,7 +2999,9 @@ async function fetchLeads() {
     list.innerHTML = '<div style="text-align:center; padding:20px; opacity:0.5;">Cargando leads editados...</div>';
 
     try {
-        const res = await fetch(`/api/backoffice/leads?token=${token}`);
+        const serviceParam = window.railwayServiceId ? `&serviceId=${encodeURIComponent(window.railwayServiceId)}` : '';
+        const projectParam = window.railwayProjectId ? `&projectId=${encodeURIComponent(window.railwayProjectId)}` : '';
+        const res = await fetch(`/api/backoffice/leads?token=${token}${serviceParam}${projectParam}`);
         const leads = await res.json();
 
         if (!Array.isArray(leads) || leads.length === 0) {
