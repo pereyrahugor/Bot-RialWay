@@ -269,6 +269,15 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
                 - Si el prompt pide JSON, responde JSON. Si pide texto plano, responde texto plano.
                 - Responde únicamente con la información solicitada en el bloque GET_RESUMEN.`
             });
+        } else {
+            messages.push({
+                role: "system",
+                content: `INSTRUCCIÓN CRÍTICA DE COMUNICACIÓN CON EL USUARIO:
+                - Estás en un turno de conversación directo con el usuario.
+                - NUNCA generes ni emitas plantillas de reporte interno, resúmenes técnicos ni bloques que comiencen con 'Tipo: SI_RESUMEN', 'Tipo: NO_REPORTAR_SEGUIR' o similares en tus respuestas directas al usuario.
+                - Esos bloques técnicos están reservados exclusivamente para comandos de sistema internos cuando se solicita expresamente 'GET_RESUMEN'.
+                - Responde siempre de forma natural, cordial y conversacional.`
+            });
         }
 
         // Agregar el mensaje actual del usuario solo si NO está ya en el historial

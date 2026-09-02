@@ -71,8 +71,14 @@ function limpiarBloquesJSON(texto: string): string {
     // 2d. Filtrar SYSTEM_DB_RESULT o SYSTEM_API_RESULT filtrados por error del asistente
     limpio = limpio.replace(/\[?\s*SYSTEM_(DB|API)_RESULT[\s\S]*?(?:\]|$)/gi, "");
 
-    // 2e. Filtrar bloques técnicos de derivación y resumen (procedentes de AiManager)
-    limpio = limpio.replace(/GET_RESUMEN[\s\S]+/gi, "");
+    // 2e. Filtrar bloques técnicos de derivación y resumen (procedentes de AiManager o fugas del modelo)
+    limpio = limpio.replace(/(?:###\s*)?(?:BLOQUE:\s*)?["']?GET_RESUMEN["']?[\s\S]+/gi, "");
+    // Filtrar bloques de reporte técnico iniciados por "Tipo: SI_RESUMEN / NO_REPORTAR..." aún si omiten "GET_RESUMEN"
+    limpio = limpio.replace(/(?:^|\n)\s*Tipo:\s*(?:SI_RESUMEN|NO_REPORTAR_SEGUIR|NO_REPORTAR_BAJA|SI_REPORTAR_SEGUIR)[\s\S]*?(?=(?:\n\s*\n[A-ZÁÉÍÓÚ¿¡]|$))/gi, "");
+    // Si la respuesta completa es solo la plantilla técnica de reporte, vaciarla por completo
+    if (/^\s*Tipo:\s*(?:SI_RESUMEN|NO_REPORTAR_SEGUIR|NO_REPORTAR_BAJA|SI_REPORTAR_SEGUIR)/i.test(limpio)) {
+        limpio = "";
+    }
     // Regex más flexible: busca "derivar a asistente X" o "derivar a asesor humano" en cualquier parte, opcionalmente con punto final.
     // Sincronizado con AiManager.ts para consistencia total.
     limpio = limpio.replace(/(?:derivar|derivando|derivo)(?:\s+(?:a|al|el|a\s+la))?\s+(?:asistente\s*[1-5]|asesor\s+humano|agente\s+humano|atencion\s+humano|soporte\s+humano)(?:\.|\b|$)/gim, "");
@@ -377,20 +383,20 @@ export class AssistantResponseProcessor {
             }
         }
 
-        const hasSummary = /GET_RESUMEN/i.test(sanitizedTextResponse);
+        const hasSummary = /(?:GET_RESUMEN|Tipo:\s*(?:SI_RESUMEN|NO_REPORTAR_SEGUIR|NO_REPORTAR_BAJA|SI_REPORTAR_SEGUIR))/i.test(sanitizedTextResponse);
         
         if (hasSummary) {
-            console.log(`[AssistantProcessor] 📋 Resumen detectado en la respuesta. (Longitud limpia: ${cleanTextResponse.length})`);
+            console.log(`[AssistantProcessor] 📋 Resumen técnico detectado en la respuesta cruda. (Longitud limpia para usuario: ${cleanTextResponse.length})`);
         }
 
-        if (cleanTextResponse.length > 0 || pdfPaths.length > 0 || hasSummary) {
-            // GUARDAR RESPUESTA DEL ASISTENTE EN EL HISTORIAL
+        // GUARDAR RESPUESTA DEL ASISTENTE EN EL HISTORIAL Y ENVIAR SOLO SI HAY TEXTO LIMPIO REAL
+        if (cleanTextResponse.length > 0) {
             if (ctx && ctx.from) {
                 const platform = ctx.platform || 'whatsapp';
                 await HistoryHandler.saveMessage(
                     ctx.from, 
                     'assistant', 
-                    cleanTextResponse.length > 0 ? cleanTextResponse : sanitizedTextResponse, 
+                    cleanTextResponse, 
                     'text', 
                     null, 
                     ctx.userId, 
@@ -499,7 +505,7 @@ export class AssistantResponseProcessor {
             nextAgentName = 'asistente_humano';
         }
 
-        const matchResumen = response.match(/GET_RESUMEN[\s\S]+/i);
+        const matchResumen = response.match(/(?:GET_RESUMEN|Tipo:\s*(?:SI_RESUMEN|NO_REPORTAR_SEGUIR|NO_REPORTAR_BAJA|SI_REPORTAR_SEGUIR))[\s\S]+/i);
         const resumen = matchResumen ? matchResumen[0].trim() : "Continúa con la atención del cliente.";
 
         if (nextAgentName) {
