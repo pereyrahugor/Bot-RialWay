@@ -4076,7 +4076,9 @@ async function confirmClearContacts() {
         });
 
         try {
-            const res = await fetch(`/api/backoffice/chats/vaciar?token=${token}`, { method: 'DELETE' });
+            const serviceParam = window.railwayServiceId ? `&serviceId=${encodeURIComponent(window.railwayServiceId)}` : '';
+            const projectParam = window.railwayProjectId ? `&projectId=${encodeURIComponent(window.railwayProjectId)}` : '';
+            const res = await fetch(`/api/backoffice/chats/vaciar?token=${token}${serviceParam}${projectParam}`, { method: 'DELETE' });
             const data = await res.json();
 
             if (data.success) {

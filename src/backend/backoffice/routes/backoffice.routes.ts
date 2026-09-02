@@ -1307,17 +1307,51 @@ export const registerBackofficeRoutes = (app: any) => {
 
     app.delete('/api/backoffice/chats/vaciar', backofficeAuth, async (req: any, res: any) => {
         const projectId = resolveProjectId(req);
+        const serviceId = resolveServiceId(req);
         if (!projectId) return res.status(400).json({ success: false, error: 'Se requiere ID de proyecto' });
 
         try {
-            console.log(`[VACIAR] Iniciando eliminación secuencial para project_id: ${projectId}...`);
-            await supabase.from("chat_tags").delete().eq("project_id", projectId);
-            await supabase.from("messages").delete().eq("project_id", projectId);
-            await supabase.from("tickets").delete().eq("project_id", projectId);
-            await supabase.from("chats").delete().eq("project_id", projectId);
-            await supabase.from("tags").delete().eq("project_id", projectId);
+            console.log(`[VACIAR] Iniciando eliminación para project_id: ${projectId}, service_id: ${serviceId}...`);
+            
+            // 1. Obtener los IDs de los chats que pertenecen a este service_id y project_id
+            let chatsQuery = supabase.from("chats").select("id").eq("project_id", projectId);
+            if (serviceId && serviceId !== 'default' && serviceId !== 'default_service') {
+                chatsQuery = chatsQuery.eq("service_id", serviceId);
+            }
+            const { data: targetChats } = await chatsQuery;
+            const chatIds = (targetChats || []).map(c => c.id);
 
-            console.log(`[VACIAR] Éxito: Base de datos vaciada para el proyecto.`);
+            // 2. Eliminar chat_tags asociados únicamente a este servicio
+            if (chatIds.length > 0) {
+                await supabase.from("chat_tags").delete().eq("project_id", projectId).in("chat_id", chatIds);
+            }
+
+            // 3. Eliminar mensajes asociados a este servicio
+            let msgQuery = supabase.from("messages").delete().eq("project_id", projectId);
+            if (serviceId && serviceId !== 'default' && serviceId !== 'default_service') {
+                msgQuery = msgQuery.eq("service_id", serviceId);
+            } else if (chatIds.length > 0) {
+                msgQuery = msgQuery.in("chat_id", chatIds);
+            }
+            await msgQuery;
+
+            // 4. Eliminar tickets asociados a este servicio
+            let ticketQuery = supabase.from("tickets").delete().eq("project_id", projectId);
+            if (serviceId && serviceId !== 'default' && serviceId !== 'default_service') {
+                ticketQuery = ticketQuery.eq("service_id", serviceId);
+            } else if (chatIds.length > 0) {
+                ticketQuery = ticketQuery.in("chat_id", chatIds);
+            }
+            await ticketQuery;
+
+            // 5. Eliminar chats asociados a este servicio
+            let delChatsQuery = supabase.from("chats").delete().eq("project_id", projectId);
+            if (serviceId && serviceId !== 'default' && serviceId !== 'default_service') {
+                delChatsQuery = delChatsQuery.eq("service_id", serviceId);
+            }
+            await delChatsQuery;
+
+            console.log(`[VACIAR] Éxito: Base de datos vaciada exclusivamente para el servicio ${serviceId} del proyecto ${projectId}.`);
             res.json({ success: true });
         } catch (e: any) {
             console.error(`[VACIAR] Error:`, e);
@@ -6835,6 +6869,7 @@ export const processDeleteChat = async (req: any, res: any) => {
     try {
         const { chatId } = req.params;
         const targetProjectId = req.query.projectId || resolveProjectId(req) || (HistoryHandlerClass as any).PROJECT_ID || 'default';
+        const targetServiceId = req.query.serviceId || resolveServiceId(req);
 
         if (!chatId) {
             return res.status(400).json({ success: false, error: 'Se requiere el ID del chat a eliminar.' });
@@ -6845,41 +6880,56 @@ export const processDeleteChat = async (req: any, res: any) => {
             return res.status(500).json({ success: false, error: 'Base de datos no disponible.' });
         }
 
-        console.log(`ðŸ—‘ï¸ [DeleteChat] Solicitando eliminaciÃ³n del chat ${chatId} exclusivamente para el proyecto ${targetProjectId}...`);
+        console.log(`🗑️ [DeleteChat] Solicitando eliminación del chat ${chatId} para proyecto ${targetProjectId} y servicio ${targetServiceId}...`);
 
-        // 1. Eliminar mensajes pertenecientes Ãºnicamente a este chat y proyecto
-        const { error: msgErr } = await supabase
+        // 1. Eliminar mensajes pertenecientes a este chat, proyecto y servicio
+        let msgQuery = supabase
             .from('messages')
             .delete()
             .eq('chat_id', chatId)
             .eq('project_id', targetProjectId);
 
+        if (targetServiceId && targetServiceId !== 'default' && targetServiceId !== 'default_service') {
+            msgQuery = msgQuery.eq('service_id', targetServiceId);
+        }
+        const { error: msgErr } = await msgQuery;
+
         if (msgErr) {
-            console.error('[DeleteChat] Error eliminando mensajes del proyecto:', msgErr.message);
+            console.error('[DeleteChat] Error eliminando mensajes:', msgErr.message);
         }
 
-        // 2. Eliminar tickets asociados a este chat y proyecto
+        // 2. Eliminar tickets asociados a este chat, proyecto y servicio
         try {
-            await supabase
+            let tQuery = supabase
                 .from('tickets')
                 .delete()
                 .eq('chat_id', chatId)
                 .eq('project_id', targetProjectId);
+
+            if (targetServiceId && targetServiceId !== 'default' && targetServiceId !== 'default_service') {
+                tQuery = tQuery.eq('service_id', targetServiceId);
+            }
+            await tQuery;
         } catch (tErr) { /* ignore */ }
 
-        // 3. Eliminar chat Ãºnicamente para ESTE project_id (aislamiento estricto por proyecto)
-        const { error: chatErr } = await supabase
+        // 3. Eliminar chat para este project_id y service_id
+        let chatQuery = supabase
             .from('chats')
             .delete()
             .eq('id', chatId)
             .eq('project_id', targetProjectId);
+
+        if (targetServiceId && targetServiceId !== 'default' && targetServiceId !== 'default_service') {
+            chatQuery = chatQuery.eq('service_id', targetServiceId);
+        }
+        const { error: chatErr } = await chatQuery;
 
         if (chatErr) {
             console.error('[DeleteChat] Error eliminando registro de chat:', chatErr);
             return res.status(500).json({ success: false, error: chatErr.message });
         }
 
-        console.log(`âœ… [DeleteChat] Chat ${chatId} borrado con Ã©xito del proyecto ${targetProjectId}.`);
+        console.log(`✅ [DeleteChat] Chat ${chatId} borrado con éxito del servicio ${targetServiceId}.`);
 
         return res.json({
             success: true,
