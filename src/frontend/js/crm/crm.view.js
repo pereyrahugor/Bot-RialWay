@@ -261,11 +261,11 @@ function _getCRMModals() {
                         </div>
                         <div class="modal-section" data-field="crm-cuit">
                             <label><i class="fas fa-id-card"></i> Cuil / Cuit / DNI</label>
-                            <input type="text" id="edit-lead-cuit" class="crm-input" placeholder="00-00000000-0" onblur="checkAndFetchSharedNotes && checkAndFetchSharedNotes()">
+                            <input type="text" id="edit-lead-cuit" class="crm-input" placeholder="00-00000000-0" oninput="checkAndFetchSharedNotes && checkAndFetchSharedNotes()" onblur="checkAndFetchSharedNotes && checkAndFetchSharedNotes()">
                         </div>
                         <div class="modal-section" data-field="crm-company">
                             <label><i class="fas fa-building"></i> Empresa / Razon Social</label>
-                            <input type="text" id="edit-lead-company" class="crm-input" placeholder="Nombre de la empresa..." onblur="checkAndFetchSharedNotes && checkAndFetchSharedNotes()">
+                            <input type="text" id="edit-lead-company" class="crm-input" placeholder="Nombre de la empresa..." oninput="checkAndFetchSharedNotes && checkAndFetchSharedNotes()" onblur="checkAndFetchSharedNotes && checkAndFetchSharedNotes()">
                         </div>
                         <div class="modal-section" data-field="crm-email">
                             <label><i class="fas fa-envelope"></i> Email</label>
@@ -343,12 +343,13 @@ function _getCRMModals() {
                             <label><i class="fas fa-sticky-note"></i> Notas 1 (Locales de este chat)</label>
                             <textarea id="edit-custom-notes" class="crm-input" rows="3" style="width: 100%; min-height: 80px; resize: vertical; box-sizing: border-box;" placeholder="Observaciones locales de esta conversación..."></textarea>
                         </div>
-                        <div class="modal-section" data-field="crm-shared-notes" style="background:rgba(56, 189, 248, 0.05); padding:12px; border-radius:12px; border:1px solid rgba(56, 189, 248, 0.25); grid-column: 1 / -1; width: 100%; box-sizing: border-box;">
+                        <div class="modal-section" data-field="crm-shared-notes" id="edit-shared-notes-container" style="background:rgba(56, 189, 248, 0.05); padding:12px; border-radius:12px; border:1px solid rgba(56, 189, 248, 0.25); grid-column: 1 / -1; width: 100%; box-sizing: border-box;">
                             <label style="color:var(--accent-bright, #38bdf8); display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
                                 <span><i class="fas fa-network-wired"></i> Notas 2 (Compartidas de Empresa - Multi-CRM)</span>
                                 <span id="shared-notes-indicator" style="font-size:0.75rem; font-weight:normal; opacity:0.85;">Vinculadas por CUIT/Empresa</span>
                             </label>
                             <textarea id="edit-company-shared-notes" class="crm-input" rows="3" style="width: 100%; min-height: 80px; resize: vertical; box-sizing: border-box;" placeholder="Notas corporativas compartidas entre todos los CRM vinculados por CUIT o Empresa..."></textarea>
+                            <div id="shared-notes-hint" style="font-size:0.75rem; opacity:0.7; margin-top:4px; display:none;"><i class="fas fa-info-circle"></i> Ingrese un CUIT o Empresa para habilitar y sincronizar Notas 2.</div>
                         </div>
                         <div class="modal-section" data-field="crm-due-date">
                             <label><i class="fas fa-bell"></i> Fecha Alerta / Seguimiento</label>

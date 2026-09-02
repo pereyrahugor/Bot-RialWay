@@ -2434,29 +2434,66 @@ function populateCRMFields(chat) {
 }
 
 async function checkAndFetchSharedNotesSide(chat) {
-    const cuit = (document.getElementById('crm-cuit')?.value || chat?.cuit_dni || '').trim();
-    const empresa = (document.getElementById('crm-company-side')?.value || chat?.metadata?.empresa || '').trim();
+    const cuitInput = document.getElementById('crm-cuit');
+    const empresaInput = document.getElementById('crm-company-side');
+    const notesTextarea = document.getElementById('crm-shared-notes-side');
     const indicator = document.getElementById('crm-shared-notes-side-indicator');
+    const hint = document.getElementById('crm-shared-notes-side-hint');
 
+    if (!notesTextarea) return;
+
+    const cuit = (cuitInput?.value || chat?.cuit_dni || '').trim();
+    const empresa = (empresaInput?.value || chat?.metadata?.empresa || '').trim();
+
+    // Solo habilitar si hay Empresa o CUIT asignado
     if (!cuit && !empresa) {
-        if (indicator) indicator.textContent = 'Multi-CRM';
+        notesTextarea.disabled = true;
+        notesTextarea.style.opacity = '0.6';
+        notesTextarea.style.cursor = 'not-allowed';
+        notesTextarea.placeholder = 'Asigne Empresa o CUIT arriba para habilitar y sincronizar Notas 2...';
+        if (indicator) {
+            indicator.textContent = '🔒 Requiere CUIT o Empresa';
+            indicator.style.color = '#f59e0b';
+        }
+        if (hint) hint.style.display = 'block';
         return;
+    }
+
+    // Habilitar edición
+    notesTextarea.disabled = false;
+    notesTextarea.style.opacity = '1';
+    notesTextarea.style.cursor = 'text';
+    notesTextarea.placeholder = 'Notas corporativas compartidas entre CRMs del mismo cliente/empresa...';
+    if (hint) hint.style.display = 'none';
+
+    if (indicator) {
+        indicator.textContent = '⏳ Buscando notas...';
+        indicator.style.color = '#38bdf8';
     }
 
     try {
         const res = await fetch(`/api/backoffice/company-notes?token=${token}&cuit=${encodeURIComponent(cuit)}&empresa=${encodeURIComponent(empresa)}`);
         const data = await res.json();
         if (data.success && data.notes) {
-            const currentText = document.getElementById('crm-shared-notes-side')?.value || '';
-            if (!currentText.trim()) {
-                document.getElementById('crm-shared-notes-side').value = data.notes;
+            if (!notesTextarea.value.trim()) {
+                notesTextarea.value = data.notes;
             }
-            if (indicator) indicator.textContent = '✅ Sincronizado';
+            if (indicator) {
+                indicator.textContent = '✅ Sincronizado';
+                indicator.style.color = '#10b981';
+            }
         } else {
-            if (indicator) indicator.textContent = 'Sin notas previas';
+            if (indicator) {
+                indicator.textContent = '⚡ Habilitado (Sin notas previas)';
+                indicator.style.color = '#38bdf8';
+            }
         }
     } catch (err) {
         console.error('[CRM Side] Error fetching shared notes:', err);
+        if (indicator) {
+            indicator.textContent = '⚡ Habilitado para editar';
+            indicator.style.color = '#38bdf8';
+        }
     }
 }
 

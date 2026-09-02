@@ -193,4 +193,70 @@ window.resetColumnWidth = (colId, e) => {
     }
     if (typeof window.showToast === 'function') window.showToast('Tamaño de columna restaurado', 'success');
 };
+
+window.checkAndFetchSharedNotes = async () => {
+    const cuitInput = document.getElementById('edit-lead-cuit');
+    const empresaInput = document.getElementById('edit-lead-company');
+    const notesTextarea = document.getElementById('edit-company-shared-notes');
+    const indicator = document.getElementById('shared-notes-indicator');
+    const hint = document.getElementById('shared-notes-hint');
+
+    if (!notesTextarea) return;
+
+    const cuit = (cuitInput?.value || '').trim();
+    const empresa = (empresaInput?.value || '').trim();
+
+    // Solo habilitar si hay Empresa o CUIT asignado
+    if (!cuit && !empresa) {
+        notesTextarea.disabled = true;
+        notesTextarea.style.opacity = '0.6';
+        notesTextarea.style.cursor = 'not-allowed';
+        notesTextarea.placeholder = 'Asigne Empresa o CUIT arriba para habilitar y sincronizar Notas 2...';
+        if (indicator) {
+            indicator.textContent = '🔒 Requiere CUIT o Empresa';
+            indicator.style.color = '#f59e0b';
+        }
+        if (hint) hint.style.display = 'block';
+        return;
+    }
+
+    // Habilitar edición
+    notesTextarea.disabled = false;
+    notesTextarea.style.opacity = '1';
+    notesTextarea.style.cursor = 'text';
+    notesTextarea.placeholder = 'Notas corporativas compartidas entre todos los CRM vinculados por CUIT o Empresa...';
+    if (hint) hint.style.display = 'none';
+
+    if (indicator) {
+        indicator.textContent = '⏳ Buscando notas de empresa...';
+        indicator.style.color = '#38bdf8';
+    }
+
+    try {
+        const token = localStorage.getItem('backoffice_token');
+        const res = await fetch(`/api/backoffice/company-notes?token=${token}&cuit=${encodeURIComponent(cuit)}&empresa=${encodeURIComponent(empresa)}`);
+        const data = await res.json();
+        if (data.success && data.notes) {
+            // Si el textarea está vacío o no tiene la nota corporativa existente, cargarla
+            if (!notesTextarea.value.trim()) {
+                notesTextarea.value = data.notes;
+            }
+            if (indicator) {
+                indicator.textContent = '✅ Sincronizado con Empresa';
+                indicator.style.color = '#10b981';
+            }
+        } else {
+            if (indicator) {
+                indicator.textContent = '⚡ Habilitado (Sin notas previas)';
+                indicator.style.color = '#38bdf8';
+            }
+        }
+    } catch (err) {
+        console.error('[CRM] Error fetching shared notes:', err);
+        if (indicator) {
+            indicator.textContent = '⚡ Habilitado para editar';
+            indicator.style.color = '#38bdf8';
+        }
+    }
+};
 

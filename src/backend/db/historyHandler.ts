@@ -1792,6 +1792,19 @@ export class HistoryHandler {
                 .maybeSingle();
 
             const existingMeta = currentChatRow?.metadata || {};
+            // Sincronizar / Heredar Notas 2 compartidas de empresa por CUIT o Empresa a nivel de proyecto
+            const targetCuit = chatDetails.cuit_dni !== undefined ? chatDetails.cuit_dni : currentChatRow?.cuit_dni;
+            const targetEmpresa = empresa !== undefined ? empresa : (existingMeta.empresa || currentChatRow?.metadata?.empresa);
+
+            let effectiveSharedNotes = shared_notes;
+            if (currentProjectId && (targetCuit || targetEmpresa)) {
+                const existingCompanyNotes = await this.getCompanySharedNotes(currentProjectId, targetCuit, targetEmpresa);
+                if (existingCompanyNotes && (!effectiveSharedNotes || !String(effectiveSharedNotes).trim())) {
+                    // El contacto se asigna a una empresa existente sin notas locales cargadas -> heredar notas existentes
+                    effectiveSharedNotes = existingCompanyNotes;
+                }
+            }
+
             const mergedMeta = {
                 ...existingMeta,
                 ...(chatDetails.metadata || {}),
@@ -1800,7 +1813,7 @@ export class HistoryHandler {
                 ...(localidad !== undefined ? { localidad } : {}),
                 ...(provincia !== undefined ? { provincia } : {}),
                 ...(transporte !== undefined ? { transporte } : {}),
-                ...(shared_notes !== undefined ? { shared_notes } : {})
+                ...(effectiveSharedNotes !== undefined ? { shared_notes: effectiveSharedNotes } : {})
             };
             chatDetails.metadata = mergedMeta;
 
@@ -1822,11 +1835,8 @@ export class HistoryHandler {
                 if (error) throw error;
             }
 
-            // Sincronizar Notas 2 compartidas de empresa por CUIT o Empresa a nivel de proyecto
-            const targetCuit = chatDetails.cuit_dni || currentChatRow?.cuit_dni;
-            const targetEmpresa = empresa || mergedMeta.empresa;
-            if (shared_notes !== undefined && currentProjectId && (targetCuit || targetEmpresa)) {
-                await this.syncCompanySharedNotes(currentProjectId, targetCuit, targetEmpresa, shared_notes);
+            if (effectiveSharedNotes !== undefined && currentProjectId && (targetCuit || targetEmpresa)) {
+                await this.syncCompanySharedNotes(currentProjectId, targetCuit, targetEmpresa, effectiveSharedNotes);
             }
 
             // --- SINCRONIZACIÓN DUAL DE INSTANCIAS (LID <-> Teléfono) ---
@@ -1998,15 +2008,26 @@ export class HistoryHandler {
     static async syncCompanySharedNotes(projectId: string, cuitDni?: string | null, empresa?: string | null, sharedNotes?: string | null) {
         if (!projectId || (!cuitDni && !empresa) || sharedNotes === undefined) return;
         try {
+            const cleanCuit = cuitDni ? String(cuitDni).trim().toLowerCase() : null;
+            const cleanEmpresa = empresa ? String(empresa).trim().toLowerCase() : null;
+            if (!cleanCuit && !cleanEmpresa) return;
+
+            const trimmedNotes = sharedNotes !== null && sharedNotes !== undefined ? String(sharedNotes).trim() : '';
+
+            // Si las notas enviadas están vacías, no pisar notas corporativas existentes si ya hay una nota guardada
+            if (!trimmedNotes) {
+                const existingNotes = await this.getCompanySharedNotes(projectId, cuitDni, empresa);
+                if (existingNotes && existingNotes.trim()) {
+                    return;
+                }
+            }
+
             const { data: matchingChats, error } = await supabase
                 .from('chats')
                 .select('id, metadata, cuit_dni')
                 .eq('project_id', projectId);
 
             if (error || !matchingChats) return;
-
-            const cleanCuit = cuitDni ? String(cuitDni).trim().toLowerCase() : null;
-            const cleanEmpresa = empresa ? String(empresa).trim().toLowerCase() : null;
 
             for (const c of matchingChats) {
                 const cCuit = c.cuit_dni ? String(c.cuit_dni).trim().toLowerCase() : null;
@@ -3200,6 +3221,17 @@ export class HistoryHandler {
                     currentChatRow = cRow;
 
                     const existingMeta = currentChatRow?.metadata || {};
+                    const targetCuit = details.contact.cuit_dni !== undefined ? details.contact.cuit_dni : currentChatRow?.cuit_dni;
+                    const targetEmpresa = details.contact.empresa !== undefined ? details.contact.empresa : (existingMeta.empresa || currentChatRow?.metadata?.empresa);
+
+                    let effectiveSharedNotes = details.contact.shared_notes;
+                    if (currentProjectId && (targetCuit || targetEmpresa)) {
+                        const existingCompanyNotes = await this.getCompanySharedNotes(currentProjectId, targetCuit, targetEmpresa);
+                        if (existingCompanyNotes && (!effectiveSharedNotes || !String(effectiveSharedNotes).trim())) {
+                            effectiveSharedNotes = existingCompanyNotes;
+                        }
+                    }
+
                     const mergedMeta = {
                         ...existingMeta,
                         ...(details.contact.metadata || {}),
@@ -3208,7 +3240,7 @@ export class HistoryHandler {
                         ...(details.contact.localidad !== undefined ? { localidad: details.contact.localidad } : {}),
                         ...(details.contact.provincia !== undefined ? { provincia: details.contact.provincia } : {}),
                         ...(details.contact.transporte !== undefined ? { transporte: details.contact.transporte } : {}),
-                        ...(details.contact.shared_notes !== undefined ? { shared_notes: details.contact.shared_notes } : {})
+                        ...(effectiveSharedNotes !== undefined ? { shared_notes: effectiveSharedNotes } : {})
                     };
                     chatUpdate.metadata = mergedMeta;
                 }
@@ -3238,11 +3270,12 @@ export class HistoryHandler {
                     if (upChatErr) throw upChatErr;
 
                     // Sincronizar Notas 2 compartidas de empresa por CUIT o Empresa a nivel de proyecto
-                    if (hasContactDetails && details.contact.shared_notes !== undefined && currentProjectId) {
-                        const targetCuit = details.contact.cuit_dni || currentChatRow?.cuit_dni;
-                        const targetEmpresa = details.contact.empresa || chatUpdate.metadata?.empresa;
-                        if (targetCuit || targetEmpresa) {
-                            await this.syncCompanySharedNotes(currentProjectId, targetCuit, targetEmpresa, details.contact.shared_notes);
+                    const targetCuit = details.contact.cuit_dni !== undefined ? details.contact.cuit_dni : currentChatRow?.cuit_dni;
+                    const targetEmpresa = details.contact.empresa || chatUpdate.metadata?.empresa;
+                    if (hasContactDetails && (targetCuit || targetEmpresa)) {
+                        const notesToSync = chatUpdate.metadata?.shared_notes;
+                        if (notesToSync !== undefined) {
+                            await this.syncCompanySharedNotes(currentProjectId, targetCuit, targetEmpresa, notesToSync);
                         }
                     }
 
