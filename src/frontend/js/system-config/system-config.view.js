@@ -238,6 +238,7 @@ window.systemConfigView = {
                                     <option value="aquavita">Aquavita (SWS API)</option>
                                     <option value="ganemos-net">Ganemosnet.org (AGENT)</option>
                                     <option value="cas-epc">Cas - EPC (Selenium)</option>
+                                    <option value="trust">Trust (Tango Gestión)</option>
                                 </select>
                                 <button class="csd-btn" type="button" onclick="_csdToggle(this)">
                                     <span class="csd-label">(Ninguno / Base)</span>
@@ -248,6 +249,7 @@ window.systemConfigView = {
                                     <button class="csd-item" type="button" data-val="aquavita" onclick="_csdSelect(this,'aquavita')">Aquavita (SWS API)</button>
                                     <button class="csd-item" type="button" data-val="ganemos-net" onclick="_csdSelect(this,'ganemos-net')">Ganemosnet.org (AGENT)</button>
                                     <button class="csd-item" type="button" data-val="cas-epc" onclick="_csdSelect(this,'cas-epc')">Cas - EPC (Selenium)</button>
+                                    <button class="csd-item" type="button" data-val="trust" onclick="_csdSelect(this,'trust')">Trust (Tango Gestión)</button>
                                 </div>
                             </div>
                         </div>
@@ -330,6 +332,27 @@ window.systemConfigView = {
                                             <input type="password" name="AQUAVITA_SWS_PASSWORD" id="AQUAVITA_SWS_PASSWORD" autocomplete="new-password" style="width:100%;">
                                             <button type="button" class="toggle-password-inline" onclick="toggleFieldVisibility('AQUAVITA_SWS_PASSWORD', this)"><i class="fas fa-eye"></i> Mostrar</button>
                                         </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Credenciales dinámicas del módulo Trust (Tango Gestión) -->
+                        <div id="trust-credentials-container" style="display:none; grid-column:1/-1; gap:16px; background:var(--bg-header); border:1.5px solid var(--border); border-radius:14px; padding:20px; margin-bottom:14px;">
+                            <h3 style="margin-top:0; color:var(--text-main);"><i class="fas fa-key"></i> Credenciales de Trust (Tango Gestión)</h3>
+                            <p class="description" style="margin-bottom:14px;">Configura las credenciales de acceso para la integración con la API de Tango Gestión.</p>
+                            <div style="display:grid; grid-template-columns:1fr; gap:14px;">
+                                <div class="variable-group" style="padding:0; background:none; border:none;">
+                                    <h3>TRUST_TANGO_BASE_URL</h3>
+                                    <p class="description">URL base de la API (ej: https://tiendas.axoft.com/api o servidor Tango Delta)</p>
+                                    <input type="text" name="TRUST_TANGO_BASE_URL" id="TRUST_TANGO_BASE_URL" style="width:100%;" placeholder="https://tiendas.axoft.com/api">
+                                </div>
+                                <div class="variable-group" style="padding:0; background:none; border:none;">
+                                    <h3>TRUST_TANGO_API_TOKEN</h3>
+                                    <p class="description">Access Token / Clave de API generada en Tango</p>
+                                    <div class="input-wrapper" style="position:relative; width:100%;">
+                                        <input type="password" name="TRUST_TANGO_API_TOKEN" id="TRUST_TANGO_API_TOKEN" autocomplete="new-password" style="width:100%;">
+                                        <button type="button" class="toggle-password-inline" onclick="toggleFieldVisibility('TRUST_TANGO_API_TOKEN', this)"><i class="fas fa-eye"></i> Mostrar</button>
                                     </div>
                                 </div>
                             </div>

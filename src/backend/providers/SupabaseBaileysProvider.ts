@@ -580,6 +580,18 @@ export class SupabaseBaileysProvider extends BaileysProvider {
                         }
                     }
 
+                    if (msg.message?.reactionMessage) {
+                        const reactionObj = msg.message.reactionMessage;
+                        const targetMsgId = reactionObj?.key?.id;
+                        const emoji = reactionObj?.text || null;
+                        console.log(`👍 [SupabaseBaileysProvider] Reacción detectada: "${emoji || '(eliminada)'}" en mensaje ${targetMsgId}`);
+                        if (targetMsgId) {
+                            const { HistoryHandler } = await import('../db/historyHandler');
+                            HistoryHandler.updateMessageReaction(targetMsgId, emoji).catch(console.error);
+                        }
+                        continue;
+                    }
+
                     const messageType = Object.keys(msg.message || {})[0] || 'text';
                     let finalType = 'text';
                     let finalBody = body || '';

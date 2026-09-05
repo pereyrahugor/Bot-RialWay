@@ -266,6 +266,12 @@ export class AiManager {
                 return;
             }
 
+            // Filtro de Reacciones (no enviar a OpenAI)
+            if (ctx.type === 'reaction' || ctx.body === '_event_reaction_' || String(ctx.body || '').startsWith('_event_reaction_')) {
+                stop(ctx);
+                return state;
+            }
+
             stop(ctx);
 
             // --- FILTRO DE BOT GLOBAL ---

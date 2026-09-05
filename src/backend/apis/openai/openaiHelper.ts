@@ -241,6 +241,8 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
         const formattedHistory = history
             .filter(m => m.role === 'user' || m.role === 'assistant')
             .filter(m => m.content && m.content.trim() !== "")
+            .filter(m => m.content !== '_event_reaction_' && !m.content.startsWith('_event_reaction_'))
+            .filter(m => !/\{["']reaction["']\s*:/i.test(m.content))
             .map(m => ({
                 role: m.role as "user" | "assistant",
                 content: m.content
@@ -275,6 +277,7 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
                 content: `INSTRUCCIÓN CRÍTICA DE COMUNICACIÓN CON EL USUARIO:
                 - Estás en un turno de conversación directo con el usuario.
                 - NUNCA generes ni emitas plantillas de reporte interno, resúmenes técnicos ni bloques que comiencen con 'Tipo: SI_RESUMEN', 'Tipo: NO_REPORTAR_SEGUIR' o similares en tus respuestas directas al usuario.
+                - NUNCA respondas con objetos JSON de reacción como '{"reaction": "..."}' ni códigos JSON sueltos dirigidos al usuario.
                 - Esos bloques técnicos están reservados exclusivamente para comandos de sistema internos cuando se solicita expresamente 'GET_RESUMEN'.
                 - Responde siempre de forma natural, cordial y conversacional.`
             });

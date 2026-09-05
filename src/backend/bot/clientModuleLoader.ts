@@ -22,6 +22,9 @@ export async function loadActiveClientModule(projectId?: string | null, serviceI
   } else if (clientSlug === 'ganemos' || clientSlug === 'ganemos-net') {
     const mod = await import("../modules/ganemos-net/index");
     activeModule = mod.ganemosModule;
+  } else if (clientSlug === 'trust') {
+    const mod = await import("../modules/trust/index");
+    activeModule = mod.trustModule;
   }
 
   if (!activeModule) {

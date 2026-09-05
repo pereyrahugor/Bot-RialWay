@@ -254,6 +254,7 @@ export class HistoryHandler {
         'ADMIN_USER', 'ADMIN_PASS', 'WHATSAPP_VISIBLE', 'INSTAGRAM_VISIBLE', 'MESSENGER_VISIBLE', 'CRM_FIELDS_CONFIG',
         'CLIENT_SLUG', 'AQUAVITA_SWS_BASE_URL', 'AQUAVITA_SWS_USERNAME', 'AQUAVITA_SWS_PASSWORD',
         'GANAMOSNET_USER', 'GANAMOSNET_PASS', 'CASEPC_USER', 'CASEPC_PASS',
+        'TRUST_TANGO_API_TOKEN', 'TRUST_TANGO_BASE_URL',
         'SUPER_ADMIN_MODE', 'SUPER_ADMIN_VISIBLE_SERVICES'
     ];
 
@@ -1489,6 +1490,53 @@ export class HistoryHandler {
             return false;
         }
     }
+
+    /**
+     * Actualiza la reacción (emoji) de un mensaje en base a su external_id
+     */
+    static async updateMessageReaction(externalId: string, reaction: string | null, projectId?: string, serviceId?: string): Promise<boolean> {
+        if (!externalId) return false;
+        const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
+        if (process.env.STORAGE_MODE === "local") {
+            return true;
+        }
+        try {
+            let query = supabase
+                .from('messages')
+                .update({ reaction: reaction || null })
+                .eq('external_id', externalId);
+            
+            if (currentProjectId) {
+                query = query.eq('project_id', currentProjectId);
+            }
+            if (serviceId && serviceId !== 'default' && serviceId !== 'default_service') {
+                query = query.eq('service_id', serviceId);
+            }
+
+            const { data, error } = await query.select();
+            if (error) {
+                console.error('[HistoryHandler] Error actualizando reacción:', error.message);
+                return false;
+            }
+
+            if (data && data.length > 0) {
+                const row = data[0];
+                historyEvents.emit('message_reaction', {
+                    messageId: row.id,
+                    externalId,
+                    reaction: reaction || null,
+                    chatId: row.chat_id,
+                    projectId: row.project_id,
+                    serviceId: row.service_id
+                });
+            }
+            return true;
+        } catch (err: any) {
+            console.error('[HistoryHandler] Error en updateMessageReaction:', err.message);
+            return false;
+        }
+    }
+
 
     /**
      * Elimina un mensaje por su ID o ID externo de la base de datos

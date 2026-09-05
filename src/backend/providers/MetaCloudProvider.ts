@@ -1170,8 +1170,28 @@ class MetaCloudProvider extends ProviderClass {
                         const bsuid = contact?.user_id || messages[0]?.from_user_id;
 
                         for (const msg of messages) {
-                            const mediaObj = msg.image || msg.video || msg.audio || msg.document || msg.voice || msg[msg.type];
                             let type = msg.type;
+
+                            // MANEJO EXCLUSIVO DE REACCIONES (no es mensaje conversacional, no debe disparar al bot ni IA)
+                            if (type === 'reaction') {
+                                const reactionObj = msg.reaction;
+                                const targetMsgId = reactionObj?.message_id;
+                                const emoji = reactionObj?.emoji || null;
+                                console.log(`👍 [MetaCloudProvider] Reacción detectada: "${emoji || '(eliminada)'}" en mensaje ${targetMsgId}`);
+
+                                if (targetMsgId) {
+                                    const { HistoryHandler } = await import('../db/historyHandler');
+                                    const resolvedProject = await HistoryHandler.getProjectIdByRecipient(String(value.metadata?.phone_number_id)) || HistoryHandler.PROJECT_IDENTIFIER;
+                                    const resolvedService = await HistoryHandler.getServiceIdByRecipient(String(value.metadata?.phone_number_id)) || HistoryHandler.SERVICE_IDENTIFIER;
+                                    HistoryHandler.updateMessageReaction(targetMsgId, emoji, resolvedProject, resolvedService).catch(err => {
+                                        console.error('[MetaCloudProvider] Error actualizando reacción en DB:', err);
+                                    });
+                                }
+                                // No continuar para evitar generar falsos mensajes de texto hacia Builderbot / OpenAI
+                                continue;
+                            }
+
+                            const mediaObj = msg.image || msg.video || msg.audio || msg.document || msg.voice || msg[msg.type];
 
                             // Mapeo de tipos para eventos de Builderbot
                             if (type === 'audio') type = 'voice';

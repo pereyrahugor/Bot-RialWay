@@ -76,12 +76,14 @@ function limpiarBloquesJSON(texto: string): string {
     // Filtrar bloques de reporte técnico iniciados por "Tipo: SI_RESUMEN / NO_REPORTAR..." aún si omiten "GET_RESUMEN"
     limpio = limpio.replace(/(?:^|\n)\s*Tipo:\s*(?:SI_RESUMEN|NO_REPORTAR_SEGUIR|NO_REPORTAR_BAJA|SI_REPORTAR_SEGUIR)[\s\S]*?(?=(?:\n\s*\n[A-ZÁÉÍÓÚ¿¡]|$))/gi, "");
     // Si la respuesta completa es solo la plantilla técnica de reporte, vaciarla por completo
-    if (/^\s*Tipo:\s*(?:SI_RESUMEN|NO_REPORTAR_SEGUIR|NO_REPORTAR_BAJA|SI_REPORTAR_SEGUIR)/i.test(limpio)) {
-        limpio = "";
-    }
     // Regex más flexible: busca "derivar a asistente X" o "derivar a asesor humano" en cualquier parte, opcionalmente con punto final.
     // Sincronizado con AiManager.ts para consistencia total.
     limpio = limpio.replace(/(?:derivar|derivando|derivo)(?:\s+(?:a|al|el|a\s+la))?\s+(?:asistente\s*[1-5]|asesor\s+humano|agente\s+humano|atencion\s+humano|soporte\s+humano)(?:\.|\b|$)/gim, "");
+
+    // 2f. Filtrar bloques JSON de reacciones (ej: ```json {"reaction": "..."} ``` o {"reaction": "..."})
+    limpio = limpio.replace(/(?:```(?:json)?\s*)?\{\s*["']reaction["']\s*:\s*["'][^"']*["']\s*\}(?:\s*```)?/gi, "");
+    limpio = limpio.replace(/```(?:json)?\s*\{\s*["']reaction["'][\s\S]*?(?:```|$)/gi, "");
+
     limpio = limpio.replace(/\[Enviando.*$/gim, "");
 
 

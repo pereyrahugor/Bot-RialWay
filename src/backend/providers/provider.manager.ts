@@ -221,6 +221,11 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
                 return; // El proveedor de grupos ignora chats privados para evitar colisiones
             }
 
+            // Ignorar eventos de reacción (no son mensajes conversacionales)
+            if (ctx.type === 'reaction' || ctx.body === '_event_reaction_' || String(ctx.body || '').startsWith('_event_reaction_')) {
+                return;
+            }
+
             if (isGroup) {
                 // Filtro estricto: solo procedemos si es uno de los grupos de reportes oficiales
                 const { HistoryHandler } = await import('../db/historyHandler');
@@ -448,6 +453,11 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
             if (isBotSent) {
                 console.log(`${prefix} 🤖 Eco de mensaje enviado por el bot detectado (no es manual): "${ctx.body.substring(0, 40)}..."`);
                 return; // Evitar duplicar en la base de datos y en el Backoffice ya que el procesador del bot ya guardó la respuesta completa
+            }
+
+            // Ignorar eventos de reacción en ecos de mensajes salientes
+            if (ctx.type === 'reaction' || ctx.body === '_event_reaction_' || String(ctx.body || '').startsWith('_event_reaction_')) {
+                return;
             }
 
             const isManual = ctx.isManualIntervention;

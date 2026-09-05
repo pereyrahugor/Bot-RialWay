@@ -246,6 +246,7 @@ async function _initSystemConfigPage() {
         const aquavitaContainer = document.getElementById('aquavita-credentials-container');
         const ganemosNetContainer = document.getElementById('ganemos-net-credentials-container');
         const casEpcContainer = document.getElementById('cas-epc-credentials-container');
+        const trustContainer = document.getElementById('trust-credentials-container');
         if (!clientSlugSel) return;
         
         const val = clientSlugSel.value;
@@ -257,6 +258,9 @@ async function _initSystemConfigPage() {
         }
         if (casEpcContainer) {
             casEpcContainer.style.display = val === 'cas-epc' ? 'grid' : 'none';
+        }
+        if (trustContainer) {
+            trustContainer.style.display = val === 'trust' ? 'grid' : 'none';
         }
     }
 

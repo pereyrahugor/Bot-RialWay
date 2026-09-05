@@ -19,6 +19,11 @@ export const welcomeFlowTxt = addKeyword<BaileysProvider, MemoryDB>(EVENTS.WELCO
             return;
         }
 
+        // --- FILTRO DE EVENTOS DE REACCIÓN ---
+        if (ctx.type === 'reaction' || ctx.body === '_event_reaction_' || String(ctx.body || '').startsWith('_event_reaction_')) {
+            return;
+        }
+
         // --- FILTRO DE ECO / MENSAJES PROPIOS ---
         if (ctx.key?.fromMe) {
             return;
