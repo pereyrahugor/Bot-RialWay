@@ -226,8 +226,11 @@ async function initSuperAdminMode(settings) {
             if (selectEl) {
                 const currentValue = selectEl.value || 'all';
                 selectEl.innerHTML = '<option value="all">Ver Todos los CRMs</option>' +
-                    _projectServices.map(s => `<option value="${s.id}">${s.name} (${s.phone || 'Sin línea'})</option>`).join('');
+                    _projectServices.map(s => `<option value="${s.id}">${s.assistantName || s.name} (${s.phone || 'Sin línea'})</option>`).join('');
                 selectEl.value = currentValue;
+            }
+            if (typeof renderChatList === 'function') {
+                renderChatList();
             }
         }
     } catch (e) {
@@ -1116,10 +1119,11 @@ function renderChatList(listToRender = chats) {
         }
 
         let serviceBadgeHtml = '';
-        if (_isSuperAdminMode && _projectServices.length > 0) {
-            const svc = _projectServices.find(s => s.id === chat.service_id);
-            if (svc) {
-                serviceBadgeHtml = `<span class="service-badge" style="font-size:0.65rem; background:rgba(0,153,255,0.1); color:#0099ff; padding:2px 6px; border-radius:6px; font-weight:700; margin-top:4px; display:inline-block; border:1px solid rgba(0,153,255,0.2); line-height:1.2; margin-right:4px;">${svc.name}</span>`;
+        if (_isSuperAdminMode && (_activeServiceFilter === 'all' || !_activeServiceFilter) && _projectServices.length > 0) {
+            const svc = _projectServices.find(s => s.id === chat.service_id || (!chat.service_id && s.id === 'default_service'));
+            const crmName = svc ? (svc.assistantName || svc.name) : (chat.service_id ? chat.service_id.substring(0, 8) : '');
+            if (crmName) {
+                serviceBadgeHtml = `<span class="service-badge" title="CRM: ${crmName}" style="font-size: 0.62rem; background: rgba(99, 102, 241, 0.12); color: #6366f1; border: 1px solid rgba(99, 102, 241, 0.25); padding: 1px 5px; border-radius: 4px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; display: inline-flex; align-items: center; gap: 3px; line-height: 1.2;"><i class="fas fa-robot" style="font-size: 0.55rem; opacity: 0.85;"></i><span>${crmName}</span></span>`;
             }
         }
 
@@ -1136,12 +1140,12 @@ function renderChatList(listToRender = chats) {
                             <div style="display:flex; align-items:center; gap:4px; overflow:hidden;">
                                 <span class="chat-name" style="flex-shrink:0; max-width:120px;">${(chat.name && chat.name !== '[-]') ? chat.name : chat.id.split('@')[0]}</span>
                             </div>
-                            <span class="chat-phone">${chat.id.split('@')[0]}</span>
-                            ${tagsHtml}
-                            <div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:4px;">
+                            <div style="display:flex; align-items:center; gap:6px; min-width:0; overflow:hidden; margin-top:1px;">
+                                <span class="chat-phone" style="white-space:nowrap;">${chat.id.split('@')[0]}</span>
                                 ${serviceBadgeHtml}
-                                ${crmStatusHtml}
                             </div>
+                            ${tagsHtml}
+                            ${crmStatusHtml ? `<div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:4px;">${crmStatusHtml}</div>` : ''}
                         </div>
                         <div style="display:flex; flex-direction:column; align-items:flex-end; justify-content:center; flex-shrink:0; min-width: 45px; gap: 2px;">
                             ${timeHtml}

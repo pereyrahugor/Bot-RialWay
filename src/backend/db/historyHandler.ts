@@ -2455,8 +2455,8 @@ export class HistoryHandler {
         for (let _attempt = 0; _attempt < 2; _attempt++) {
             try {
                 const selectString = tagId
-                    ? 'id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, crm_status, crm_due_date, notes, email, source, is_lead, cuit_dni, tax_status, address, offered_product, unread_count, metadata, chat_tags!inner(tag_id, tags(*))'
-                    : 'id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, crm_status, crm_due_date, notes, email, source, is_lead, cuit_dni, tax_status, address, offered_product, unread_count, metadata, chat_tags(tag_id, tags(*))';
+                    ? 'id, service_id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, crm_status, crm_due_date, notes, email, source, is_lead, cuit_dni, tax_status, address, offered_product, unread_count, metadata, chat_tags!inner(tag_id, tags(*))'
+                    : 'id, service_id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, crm_status, crm_due_date, notes, email, source, is_lead, cuit_dni, tax_status, address, offered_product, unread_count, metadata, chat_tags(tag_id, tags(*))';
 
                 let query = supabase
                     .from('chats')

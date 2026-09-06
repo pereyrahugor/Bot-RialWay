@@ -5119,13 +5119,14 @@ Hemos recibido tu pago con Ã©xito.
                 .from('settings')
                 .select('service_id, key, value')
                 .eq('project_id', projectId)
-                .in('key', ['CLIENT_SLUG', 'BOT_NAME', 'PHONE_NUMBER_ID']);
+                .in('key', ['CLIENT_SLUG', 'BOT_NAME', 'PHONE_NUMBER_ID', 'ASSISTANT_NAME']);
             
             const serviceMetadata: Record<string, any> = {};
             services.forEach(s => {
                 serviceMetadata[s] = {
                     id: s,
                     name: s === 'default_service' ? 'Servicio Principal' : s,
+                    assistantName: '',
                     phone: ''
                 };
             });
@@ -5133,12 +5134,20 @@ Hemos recibido tu pago con Ã©xito.
             slugData?.forEach((item: any) => {
                 const sId = item.service_id || 'default_service';
                 if (!serviceMetadata[sId]) {
-                    serviceMetadata[sId] = { id: sId, name: sId, phone: '' };
+                    serviceMetadata[sId] = { id: sId, name: sId, assistantName: '', phone: '' };
                 }
-                if (item.key === 'CLIENT_SLUG' || item.key === 'BOT_NAME') {
+                if (item.key === 'ASSISTANT_NAME') {
+                    serviceMetadata[sId].assistantName = item.value;
+                } else if (item.key === 'CLIENT_SLUG' || item.key === 'BOT_NAME') {
                     serviceMetadata[sId].name = item.value;
                 } else if (item.key === 'PHONE_NUMBER_ID') {
                     serviceMetadata[sId].phone = item.value;
+                }
+            });
+
+            Object.values(serviceMetadata).forEach((s: any) => {
+                if (!s.assistantName) {
+                    s.assistantName = s.name || s.id;
                 }
             });
             
