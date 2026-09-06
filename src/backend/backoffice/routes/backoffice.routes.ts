@@ -589,62 +589,22 @@ export const processBulkTemplate = async (req: any, res: any) => {
                         if (!baseUrl.startsWith('http')) baseUrl = `https://${baseUrl}`;
                         let finalUrl = `${baseUrl.replace(/\/$/, '')}/uploads/${filename}`;
 
-                        // --- LÃ“GICA DE COMPRESIÃ“N AUTOMÃTICA ---
+                        // --- LÓGICA DE COMPRESIÓN AUTOMÁTICA DE VIDEO Y PDF ---
                         try {
-                            const stats = fs.statSync(dest);
-                            const sizeMB = stats.size / (1024 * 1024);
-
-                            if (sizeMB > 15.5 && ext === 'mp4') {
-                                console.log(`âš ï¸ [BULK] Video muy pesado (${sizeMB.toFixed(2)}MB). Iniciando compresiÃ³n...`);
-                                const compressedFilename = `compressed-${filename}`;
-                                const compressedDest = path.join(uploadsDir, compressedFilename);
-
-                                // 1. Obtener duraciÃ³n (intentamos con ffprobe, fallback a ffmpeg)
-                                let durationStr = '';
-                                try {
-                                    durationStr = execSync(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${dest}"`).toString().trim();
-                                } catch (e) {
-                                    try {
-                                        const output = execSync(`ffmpeg -i "${dest}" 2>&1 | grep Duration`).toString();
-                                        const match = output.match(/Duration: (\d+):(\d+):(\d+\.\d+)/);
-                                        if (match) {
-                                            const hours = parseFloat(match[1]);
-                                            const mins = parseFloat(match[2]);
-                                            const secs = parseFloat(match[3]);
-                                            durationStr = (hours * 3600 + mins * 60 + secs).toString();
-                                        }
-                                    } catch (e2) {
-                                        console.warn('âš ï¸ [BULK] Ni ffprobe ni ffmpeg estÃ¡n disponibles para obtener duraciÃ³n.');
-                                    }
+                            const { compressVideoIfNeeded, compressPdfIfNeeded } = await import('../../utils/mediaCompressor');
+                            if (ext === 'mp4') {
+                                const videoRes = await compressVideoIfNeeded(dest, 15.0);
+                                if (videoRes.isCompressed) {
+                                    finalUrl = `${baseUrl.replace(/\/$/, '')}/uploads/${path.basename(videoRes.outputPath)}`;
                                 }
-                                const duration = parseFloat(durationStr);
-
-                                if (!isNaN(duration) && duration > 0) {
-                                    // 2. Calcular bitrate contemplando video + audio + margen de seguridad (14MB total)
-                                    const maxTotalSizeBytes = 14.0 * 1024 * 1024; // 14MB para estar seguros bajo los 16MB
-                                    const totalTargetBitrate = Math.floor((maxTotalSizeBytes * 8) / duration);
-
-                                    const audioBitrate = 64000; // 64 kbps es ideal y de excelente calidad para audio comprimido en WhatsApp
-                                    let videoBitrate = totalTargetBitrate - audioBitrate;
-                                    if (videoBitrate < 150000) {
-                                        videoBitrate = 150000; // Bitrate mÃ­nimo de video de seguridad para evitar mala calidad extrema
-                                    }
-
-                                    // 3. Ejecutar ffmpeg especificando bitrates de video y audio
-                                    console.log(`ðŸŽ¬ [BULK] Comprimiendo: Video a ${videoBitrate} bps, Audio a ${audioBitrate} bps (DuraciÃ³n: ${durationStr}s)`);
-                                    execSync(`ffmpeg -i "${dest}" -b:v ${videoBitrate} -vcodec libx264 -preset fast -acodec aac -b:a ${audioBitrate} -movflags +faststart -y "${compressedDest}"`);
-
-                                    // 4. Cambiar a la versiÃ³n comprimida
-                                    finalUrl = `${baseUrl.replace(/\/$/, '')}/uploads/${compressedFilename}`;
-                                    console.log(`âœ… [BULK] Video comprimido con Ã©xito: ${finalUrl}`);
+                            } else if (ext === 'pdf') {
+                                const pdfRes = await compressPdfIfNeeded(dest, 95.0);
+                                if (pdfRes.isCompressed) {
+                                    finalUrl = `${baseUrl.replace(/\/$/, '')}/uploads/${path.basename(pdfRes.outputPath)}`;
                                 }
                             }
                         } catch (compressError: any) {
-                            console.error(`âŒ [BULK] Error en compresiÃ³n automÃ¡tica:`, compressError.message);
-                            if (compressError.stderr) {
-                                console.error(`ðŸ” [BULK] Detalle tÃ©cnico (stderr):`, compressError.stderr.toString());
-                            }
-                            // Si falla la compresiÃ³n, seguimos con el original como fallback
+                            console.error(`❌ [BULK] Error en compresión automática de multimedia:`, compressError.message);
                         }
                         // ---------------------------------------
 
@@ -3274,57 +3234,29 @@ export const registerBackofficeRoutes = (app: any) => {
                                     const downloadedPath = path.join(uploadsDir, filename);
                                     fs.writeFileSync(downloadedPath, response.data);
 
-                                    // --- LÓGICA DE COMPRESIÓN AUTOMÁTICA DE VIDEO ---
+                                    // --- LÓGICA DE COMPRESIÓN AUTOMÁTICA DE VIDEO Y PDF ---
                                     let finalLocalPath = downloadedPath;
                                     let finalLocalFilename = filename;
 
                                     try {
-                                        const stats = fs.statSync(downloadedPath);
-                                        const sizeMB = stats.size / (1024 * 1024);
-
-                                        if (sizeMB > 15.0 && (ext === 'mp4' || formatType === 'video' || contentType.includes('video'))) {
-                                            console.log(`⚠️ [SINGLE-TEMPLATE] Video pesado (${sizeMB.toFixed(2)}MB). Comprimiendo para cumplir límite de 16MB de Meta...`);
-                                            const compressedFilename = `compressed-${filename}`;
-                                            const compressedDest = path.join(uploadsDir, compressedFilename);
-
-                                            let durationStr = '';
-                                            try {
-                                                durationStr = execSync(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${downloadedPath}"`).toString().trim();
-                                            } catch (e) {
-                                                try {
-                                                    const output = execSync(`ffmpeg -i "${downloadedPath}" 2>&1 | grep Duration`).toString();
-                                                    const match = output.match(/Duration: (\d+):(\d+):(\d+\.\d+)/);
-                                                    if (match) {
-                                                        const hours = parseFloat(match[1]);
-                                                        const mins = parseFloat(match[2]);
-                                                        const secs = parseFloat(match[3]);
-                                                        durationStr = (hours * 3600 + mins * 60 + secs).toString();
-                                                    }
-                                                } catch (e2) {
-                                                    console.warn('⚠️ [SINGLE-TEMPLATE] Ni ffprobe ni ffmpeg disponibles para duración.');
-                                                }
+                                        const { compressVideoIfNeeded, compressPdfIfNeeded } = await import('../../utils/mediaCompressor');
+                                        if (ext === 'mp4' || formatType === 'video' || contentType.includes('video')) {
+                                            const videoRes = await compressVideoIfNeeded(downloadedPath, 15.0);
+                                            if (videoRes.isCompressed) {
+                                                finalLocalPath = videoRes.outputPath;
+                                                finalLocalFilename = path.basename(videoRes.outputPath);
+                                                console.log(`✅ [SINGLE-TEMPLATE] Video comprimido con éxito para Meta: ${finalLocalFilename}`);
                                             }
-                                            const duration = parseFloat(durationStr);
-
-                                            if (!isNaN(duration) && duration > 0) {
-                                                const maxTotalSizeBytes = 14.0 * 1024 * 1024; // 14MB para margen seguro bajo 16MB
-                                                const totalTargetBitrate = Math.floor((maxTotalSizeBytes * 8) / duration);
-                                                const audioBitrate = 64000;
-                                                let videoBitrate = totalTargetBitrate - audioBitrate;
-                                                if (videoBitrate < 150000) videoBitrate = 150000;
-
-                                                console.log(`🎬 [SINGLE-TEMPLATE] Comprimiendo a ${videoBitrate} bps (Duración: ${durationStr}s)...`);
-                                                execSync(`ffmpeg -i "${downloadedPath}" -b:v ${videoBitrate} -vcodec libx264 -preset fast -acodec aac -b:a ${audioBitrate} -movflags +faststart -y "${compressedDest}"`);
-
-                                                if (fs.existsSync(compressedDest)) {
-                                                    finalLocalPath = compressedDest;
-                                                    finalLocalFilename = compressedFilename;
-                                                    console.log(`✅ [SINGLE-TEMPLATE] Video comprimido con éxito para Meta: ${compressedFilename}`);
-                                                }
+                                        } else if (ext === 'pdf' || formatType === 'document' || contentType.includes('pdf')) {
+                                            const pdfRes = await compressPdfIfNeeded(downloadedPath, 95.0);
+                                            if (pdfRes.isCompressed) {
+                                                finalLocalPath = pdfRes.outputPath;
+                                                finalLocalFilename = path.basename(pdfRes.outputPath);
+                                                console.log(`✅ [SINGLE-TEMPLATE] PDF comprimido con éxito para Meta: ${finalLocalFilename}`);
                                             }
                                         }
                                     } catch (compressErr: any) {
-                                        console.error(`❌ [SINGLE-TEMPLATE] Error en compresión automática de video:`, compressErr.message);
+                                        console.error(`❌ [SINGLE-TEMPLATE] Error en compresión automática de multimedia:`, compressErr.message);
                                     }
 
                                     // Resolver credenciales del tenant para subida directa
@@ -3564,9 +3496,33 @@ export const registerBackofficeRoutes = (app: any) => {
                                 const downloadedPath = path.join(uploadsDir, filename);
                                 fs.writeFileSync(downloadedPath, response.data);
 
+                                let finalUploadPath = downloadedPath;
+                                let finalFilename = filename;
+
+                                try {
+                                    const { compressVideoIfNeeded, compressPdfIfNeeded } = await import('../../utils/mediaCompressor');
+                                    if (ext === 'mp4' || lowFormat === 'video' || contentType.includes('video')) {
+                                        const videoRes = await compressVideoIfNeeded(downloadedPath, 15.0);
+                                        if (videoRes.isCompressed) {
+                                            finalUploadPath = videoRes.outputPath;
+                                            finalFilename = path.basename(videoRes.outputPath);
+                                            console.log(`✅ [QUICK BULK] Video comprimido con éxito para Meta: ${finalFilename}`);
+                                        }
+                                    } else if (ext === 'pdf' || lowFormat === 'document' || contentType.includes('pdf')) {
+                                        const pdfRes = await compressPdfIfNeeded(downloadedPath, 95.0);
+                                        if (pdfRes.isCompressed) {
+                                            finalUploadPath = pdfRes.outputPath;
+                                            finalFilename = path.basename(pdfRes.outputPath);
+                                            console.log(`✅ [QUICK BULK] PDF comprimido con éxito para Meta: ${finalFilename}`);
+                                        }
+                                    }
+                                } catch (compErr: any) {
+                                    console.error(`❌ [QUICK BULK] Error en compresión automática de multimedia:`, compErr.message);
+                                }
+
                                 // Intentar subir directamente a Meta para obtener media_id
                                 if (typeof (provider as any).uploadMedia === 'function') {
-                                    const uploadedMediaId = await (provider as any).uploadMedia(downloadedPath);
+                                    const uploadedMediaId = await (provider as any).uploadMedia(finalUploadPath);
                                     if (uploadedMediaId) {
                                         headerParamPayload = { id: uploadedMediaId };
                                         console.log(`✅ [QUICK BULK] Multimedia subida a Meta con éxito. Media ID: ${uploadedMediaId}`);
@@ -3584,7 +3540,7 @@ export const registerBackofficeRoutes = (app: any) => {
                                         }
                                     }
                                     if (!baseUrl.startsWith('http')) baseUrl = `https://${baseUrl}`;
-                                    const publicUrl = `${baseUrl.replace(/\/$/, '')}/uploads/${filename}`;
+                                    const publicUrl = `${baseUrl.replace(/\/$/, '')}/uploads/${finalFilename}`;
                                     headerParamPayload = { link: publicUrl };
                                     console.log(`✅ [QUICK BULK] Multimedia servida localmente en: ${publicUrl}`);
                                 }
@@ -5146,6 +5102,17 @@ Hemos recibido tu pago con Ã©xito.
     app.get('/api/backoffice/project-services', backofficeAuth, async (req: any, res: any) => {
         try {
             const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
+            const serviceId = resolveServiceId(req);
+
+            const isSuperAdminSetting = await depsHistoryHandler.getSetting('SUPER_ADMIN_MODE', projectId, serviceId, true);
+            const supervisorApiKey = await depsHistoryHandler.getSetting('SUPERVISOR_API_KEY', projectId, serviceId, true);
+            const realApiKey = await depsHistoryHandler.getProjectApiKey(projectId, serviceId);
+            const isAuthorizedSupervisor = (isSuperAdminSetting === 'true' && !!supervisorApiKey && !!realApiKey && supervisorApiKey.trim() === realApiKey.trim());
+
+            if (!isAuthorizedSupervisor) {
+                return res.json({ success: true, services: [], isSupervisorActive: false });
+            }
+
             const services = await depsHistoryHandler.getAllProjectServices(projectId);
             
             const { data: slugData } = await supabase
@@ -5768,13 +5735,16 @@ Hemos recibido tu pago con Ã©xito.
                 }
             }
 
-            const isSuperAdmin = await depsHistoryHandler.getSetting('SUPER_ADMIN_MODE', projectId, serviceId, true);
+            const isSuperAdminSetting = await depsHistoryHandler.getSetting('SUPER_ADMIN_MODE', projectId, serviceId, true);
+            const supervisorApiKey = await depsHistoryHandler.getSetting('SUPERVISOR_API_KEY', projectId, serviceId, true);
+            const realApiKey = await depsHistoryHandler.getProjectApiKey(projectId, serviceId);
+            const isSuperAdmin = (isSuperAdminSetting === 'true' && !!supervisorApiKey && !!realApiKey && supervisorApiKey.trim() === realApiKey.trim());
 
             res.json({
                 success: true,
                 hasTables,
                 hasRag,
-                isSuperAdmin: isSuperAdmin === 'true'
+                isSuperAdmin
             });
         } catch (e: any) {
             res.status(500).json({ success: false, error: e.message });

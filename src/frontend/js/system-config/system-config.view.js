@@ -467,13 +467,21 @@ window.systemConfigView = {
                             </label>
                         </div>
                         <div class="variable-group">
-                            <h3>SUPER_ADMIN_MODE</h3>
-                            <p class="description">Habilitar consola Super-Administrador (Multi-CRM para este proyecto).</p>
+                            <h3>MODO SUPERVISOR</h3>
+                            <p class="description">Habilitar consola Modo Supervisor (Multi-CRM para este proyecto).</p>
                             <input type="hidden" name="SUPER_ADMIN_MODE" id="SUPER_ADMIN_MODE" value="false">
                             <label class="switch mt-1">
                                 <input type="checkbox" onchange="_cfgToggle('SUPER_ADMIN_MODE',this.checked)">
                                 <span class="slider"><i class="fas fa-times"></i><i class="fas fa-check"></i></span>
                             </label>
+                            <div style="margin-top: 14px; border-top: 1px dashed var(--card-border-color); padding-top: 12px;">
+                                <label for="SUPERVISOR_API_KEY" style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 4px;">API_KEY del CRM (Instancia)</label>
+                                <div class="input-password-wrapper" style="position: relative; display: flex; align-items: center;">
+                                    <input type="password" name="SUPERVISOR_API_KEY" id="SUPERVISOR_API_KEY" autocomplete="new-password" placeholder="sk_rialway_..." style="width: 100%;">
+                                    <button type="button" class="toggle-password-inline" onclick="toggleFieldVisibility('SUPERVISOR_API_KEY', this)"><i class="fas fa-eye"></i> Mostrar</button>
+                                </div>
+                                <small style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-top: 4px;">Por defecto vacío. Ingrese el API_KEY de la instancia para desbloquear el supervisor.</small>
+                            </div>
                         </div>
                     </div>
 

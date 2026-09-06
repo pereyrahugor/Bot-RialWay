@@ -33,7 +33,7 @@ FROM node:22-slim AS deploy
 
 # Instalar dependencias de runtime necesarias, Chromium y Chromium Driver
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    poppler-utils ffmpeg curl ca-certificates gnupg wget \
+    ghostscript poppler-utils ffmpeg curl ca-certificates gnupg wget \
     chromium chromium-driver && \
     rm -rf /var/lib/apt/lists/*
 

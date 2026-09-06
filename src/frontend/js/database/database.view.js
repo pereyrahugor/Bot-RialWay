@@ -45,7 +45,7 @@ window.databaseView = (() => {
                         <i class="fas fa-brain"></i> Documentos RAG
                     </button>
                     <button onclick="databaseView._switchTab('multicrm')" id="btn-tab-multicrm" class="filter-pill" style="border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; display: none; align-items: center; gap: 8px;">
-                        <i class="fas fa-network-wired"></i> Multi-CRM
+                        <i class="fas fa-user-shield"></i> Modo Supervisor
                     </button>
                 </div>
             </div>
@@ -121,7 +121,7 @@ window.databaseView = (() => {
                     <div id="panel-multicrm" style="display: none; flex-direction: column; height: 100%; width: 100%;">
                         <div style="padding: 16px; border-bottom: 1px solid var(--card-border-color); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; flex-wrap: wrap; gap: 12px;">
                             <div>
-                                <h2 style="margin: 0; font-size: 1.1rem; font-weight: 700; color: var(--text-main);">Configuración de Consola Unificada (Multi-CRM)</h2>
+                                <h2 style="margin: 0; font-size: 1.1rem; font-weight: 700; color: var(--text-main);">Configuración de Consola Modo Supervisor (Multi-CRM)</h2>
                                 <p style="margin: 2px 0 0; font-size: 0.75rem; color: var(--text-muted);">Seleccioná qué instancias de CRM/Servicios deseas visualizar y administrar en este panel consolidado</p>
                             </div>
                             <button onclick="databaseView._saveMultiCrmConfig()" id="btn-save-multicrm" class="filter-pill active" style="cursor: pointer; padding: 8px 16px; border-radius: 10px; font-weight: bold; background: var(--accent); color: white;">

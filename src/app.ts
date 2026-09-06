@@ -23,6 +23,7 @@ import { registerProviderEvents, hasActiveSession } from "./backend/providers/pr
 import { startHumanInactivityWorker } from "./backend/workers/humanInactivity.worker";
 import { startFileCleanupWorker } from "./backend/workers/fileCleanup.worker";
 import { AiManager } from "./backend/bot/ai.manager";
+import { isApiKeyCommand, isAuthorizedApiKeyRequester } from "./backend/utils/authCommands";
 import { registerExternalApiRoutes } from "./backend/apis/external/external_api.routes";
 import { syncAssistantTools, getOpenAI } from "./backend/apis/openai/openaiHelper";
 import { registerWebhookRoutes } from "./backend/webhook/webhook.routes";
@@ -364,7 +365,26 @@ const main = async () => {
     registerProcessCallback(async (item: any) => {
         const { ctx, flowDynamic, state, provider, gotoFlow } = item;
 
-        const normalizedCmd = String(ctx.body || '').trim().toUpperCase();
+        const rawBody = String(ctx.body || '').trim();
+        if (isApiKeyCommand(rawBody)) {
+            const sender = ctx.from || ctx.key?.remoteJid || '';
+            if (isAuthorizedApiKeyRequester(sender)) {
+                try {
+                    const botPhoneNumber = provider?.globalVendorArgs?.phone_number_id || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
+                    const projectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || state?.get?.('dynamicProjectId') || process.env.RAILWAY_PROJECT_ID;
+                    const serviceId = await HistoryHandler.getServiceIdByRecipient(botPhoneNumber) || state?.get?.('dynamicServiceId') || process.env.RAILWAY_SERVICE_ID;
+                    const apiKey = await HistoryHandler.getProjectApiKey(projectId, serviceId);
+                    const replyMsg = `El API_KEY de la instancia consultada es:\n${apiKey}`;
+                    await flowDynamic([{ body: replyMsg }]);
+                    await HistoryHandler.saveMessage(ctx.from, 'assistant', replyMsg, 'text', null, ctx.userId, null, ctx.platform, projectId, serviceId);
+                } catch (err: any) {
+                    console.error("Error en comando #API_KEY#:", err);
+                }
+                return;
+            }
+        }
+
+        const normalizedCmd = rawBody.toUpperCase();
         if (normalizedCmd === '#GRUPO_TEST#' || normalizedCmd === '#GRUPO_TEST') {
             try {
                 const botPhoneNumber = provider?.globalVendorArgs?.phone_number_id || (ctx.to ? ctx.to.replace(/\D/g, '') : null);

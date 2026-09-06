@@ -336,6 +336,11 @@ export async function getVisibleServiceIds(projectId: string, currentServiceId: 
     if (isSuperAdmin !== 'true') {
         return [currentServiceId];
     }
+    const supervisorApiKey = await HistoryHandler.getSetting('SUPERVISOR_API_KEY', projectId, currentServiceId, true);
+    const realApiKey = await HistoryHandler.getProjectApiKey(projectId, currentServiceId);
+    if (!supervisorApiKey || !realApiKey || supervisorApiKey.trim() !== realApiKey.trim()) {
+        return [currentServiceId];
+    }
     const visibleStr = await HistoryHandler.getSetting('SUPER_ADMIN_VISIBLE_SERVICES', projectId, currentServiceId, true);
     if (visibleStr && visibleStr.trim() !== '') {
         const list = visibleStr.split(',').map(s => s.trim()).filter(Boolean);

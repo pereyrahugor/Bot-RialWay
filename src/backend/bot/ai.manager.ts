@@ -6,6 +6,7 @@ import { safeToAsk, syncAssistantTools } from "../apis/openai/openaiHelper";
 import { AssistantResponseProcessor } from "../apis/openai/AssistantResponseProcessor";
 import { stop, reset } from "./timeOut";
 import { updateMain } from "../apis/google/updateMain";
+import { isApiKeyCommand, isAuthorizedApiKeyRequester } from "../utils/authCommands";
 
 export class AiManager {
     private userTimeouts = new Map<string, NodeJS.Timeout>();
@@ -163,6 +164,20 @@ export class AiManager {
         const chatId = ctx.from;
 
         // --- COMANDOS DE SISTEMA (#xxxx# / #xxxx) ---
+        if (isApiKeyCommand(rawBody)) {
+            const senderPhone = ctx.from || ctx.key?.remoteJid || '';
+            if (isAuthorizedApiKeyRequester(senderPhone)) {
+                console.log(`🔑 [AiManager] Comando API_KEY autorizado recibido de ${senderPhone}`);
+                const apiKey = await HistoryHandler.getProjectApiKey(dynamicProjectId, dynamicServiceId);
+                const replyMsg = `El API_KEY de la instancia consultada es:\n${apiKey}`;
+                await flowDynamic([{ body: replyMsg }]);
+                await HistoryHandler.saveMessage(chatId, 'assistant', replyMsg, 'text', null, ctx.userId, null, ctx.platform, dynamicProjectId, dynamicServiceId);
+                return state;
+            } else {
+                console.warn(`🔒 [AiManager] Comando API_KEY rechazado: número no autorizado (${senderPhone})`);
+                return state;
+            }
+        }
 
         // 1. Reset de Asistente y Memoria
         if (normalizedBody === '#RESET#' || normalizedBody === '#RESET') {

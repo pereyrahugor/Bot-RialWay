@@ -636,6 +636,33 @@ class MetaCloudProvider extends ProviderClass {
             console.error(`⚠️ [MetaCloudProvider] Error durante transcodificación, usando archivo original:`, transcodeErr.message);
         }
 
+        // Compresión automática de PDFs y Videos si se acercan o exceden los límites de Meta
+        try {
+            const { compressPdfIfNeeded, compressVideoIfNeeded } = await import('../utils/mediaCompressor');
+            const lowerPath = uploadPath.toLowerCase();
+            if (lowerPath.endsWith('.pdf') || (mimeType && mimeType.includes('pdf'))) {
+                const pdfResult = await compressPdfIfNeeded(uploadPath, 95.0);
+                if (pdfResult.isCompressed) {
+                    if (isTemp && fs.existsSync(uploadPath)) {
+                        try { fs.unlinkSync(uploadPath); } catch (_) {}
+                    }
+                    uploadPath = pdfResult.outputPath;
+                    isTemp = true;
+                }
+            } else if (lowerPath.endsWith('.mp4') || (mimeType && mimeType.includes('video'))) {
+                const videoResult = await compressVideoIfNeeded(uploadPath, 15.0);
+                if (videoResult.isCompressed) {
+                    if (isTemp && fs.existsSync(uploadPath)) {
+                        try { fs.unlinkSync(uploadPath); } catch (_) {}
+                    }
+                    uploadPath = videoResult.outputPath;
+                    isTemp = true;
+                }
+            }
+        } catch (compressErr: any) {
+            console.error(`⚠️ [MetaCloudProvider] Error en compresión automática de media:`, compressErr.message);
+        }
+
         const apiVersion = process.env.META_API_VERSION || 'v25.0';
         const url = `https://graph.facebook.com/${apiVersion}/${phone_number_id}/media`;
 
@@ -669,10 +696,22 @@ class MetaCloudProvider extends ProviderClass {
                 contentType = 'audio/mpeg';
             }
 
-            // Validar que el archivo no esté vacío
+            // Validar que el archivo no esté vacío y no supere el límite máximo de Meta
             const fileStats = fs.statSync(uploadPath);
             if (fileStats.size === 0) {
                 console.error(`❌ [MetaCloudProvider] uploadMedia: Archivo vacío (0 bytes) en ${uploadPath}`);
+                if (isTemp && fs.existsSync(uploadPath)) {
+                    try { fs.unlinkSync(uploadPath); } catch (_) {}
+                }
+                return null;
+            }
+
+            const sizeMB = fileStats.size / (1024 * 1024);
+            const isDoc = contentType === 'application/pdf' || actualLowerPath.endsWith('.pdf');
+            const maxAllowedMB = isDoc ? 100.0 : 16.0;
+
+            if (sizeMB > maxAllowedMB) {
+                console.error(`❌ [MetaCloudProvider] uploadMedia: El archivo ${uploadPath} (${sizeMB.toFixed(2)}MB) supera el límite máximo de ${maxAllowedMB}MB soportado por Meta.`);
                 if (isTemp && fs.existsSync(uploadPath)) {
                     try { fs.unlinkSync(uploadPath); } catch (_) {}
                 }

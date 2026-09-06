@@ -255,7 +255,7 @@ export class HistoryHandler {
         'CLIENT_SLUG', 'AQUAVITA_SWS_BASE_URL', 'AQUAVITA_SWS_USERNAME', 'AQUAVITA_SWS_PASSWORD',
         'GANAMOSNET_USER', 'GANAMOSNET_PASS', 'CASEPC_USER', 'CASEPC_PASS',
         'TRUST_TANGO_API_TOKEN', 'TRUST_TANGO_BASE_URL',
-        'SUPER_ADMIN_MODE', 'SUPER_ADMIN_VISIBLE_SERVICES'
+        'SUPER_ADMIN_MODE', 'SUPERVISOR_API_KEY', 'SUPER_ADMIN_VISIBLE_SERVICES'
     ];
 
     static readonly FIXED_KEYS = [
@@ -4189,6 +4189,56 @@ export class HistoryHandler {
         // Si lo encontramos en Railway pero no estaba en DB, lo retornamos pero NO lo persistimos automáticamente
         // para evitar sobreescrituras accidentales de la configuración base.
         return envValue;
+    }
+
+    /**
+     * Obtiene el API_KEY oficial de la instancia consultada.
+     * Si no existe en settings, la genera automáticamente con formato seguro sk_rialway_...
+     */
+    static async getProjectApiKey(projectId: string | null = null, serviceId: string | null = null): Promise<string> {
+        if (!supabase) return '';
+        const targetProjectId = projectId || HistoryHandler.PROJECT_IDENTIFIER;
+        const targetServiceId = serviceId || HistoryHandler.SERVICE_IDENTIFIER;
+
+        try {
+            // Buscar filtrando rigurosamente por project_id y service_id
+            const { data } = await supabase
+                .from('settings')
+                .select('value')
+                .eq('project_id', targetProjectId)
+                .eq('service_id', targetServiceId)
+                .eq('key', 'api_key')
+                .maybeSingle();
+
+            if (data?.value) return data.value;
+
+            // Fallback: si el serviceId consultado era distinto de SERVICE_IDENTIFIER, probar con el identificador principal
+            if (targetServiceId !== HistoryHandler.SERVICE_IDENTIFIER) {
+                const { data: defData } = await supabase
+                    .from('settings')
+                    .select('value')
+                    .eq('project_id', targetProjectId)
+                    .eq('service_id', HistoryHandler.SERVICE_IDENTIFIER)
+                    .eq('key', 'api_key')
+                    .maybeSingle();
+                if (defData?.value) return defData.value;
+            }
+
+            // Si aún no existe, generarlo
+            const crypto = await import('crypto');
+            const uniqueKey = `sk_rialway_${crypto.randomBytes(16).toString('hex')}`;
+            await supabase.from('settings').insert({
+                project_id: targetProjectId,
+                service_id: targetServiceId,
+                key: 'api_key',
+                value: uniqueKey,
+                updated_at: new Date().toISOString()
+            });
+            return uniqueKey;
+        } catch (e: any) {
+            console.error('❌ [HistoryHandler] Error obteniendo getProjectApiKey:', e.message);
+            return '';
+        }
     }
 
     /**

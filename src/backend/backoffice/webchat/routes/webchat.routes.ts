@@ -7,6 +7,7 @@ import { getOpenAIVision, safeToAsk } from "../../../apis/openai/openaiHelper";
 import { AssistantResponseProcessor } from "../../../apis/openai/AssistantResponseProcessor";
 import { transcribeAudioFile } from "../../../apis/openai/audioTranscriptior";
 import { withRetry } from "../../../utils/retryHelper";
+import { isApiKeyCommand, isAuthorizedApiKeyRequester } from "../../../utils/authCommands";
 
 const webChatManager = new WebChatManager();
 
@@ -70,6 +71,15 @@ export const registerWebchatRoutes = (app: any) => {
                 await HistoryHandler.clearClientContext(clientKey, projectId, serviceId || undefined);
                 await HistoryHandler.saveThreadId(clientKey, '', projectId, serviceId || undefined);
                 return res.json({ success: true, command: 'CLEAR_CONTEXT', message: 'Contexto de cliente eliminado de la sesión del webchat.' });
+            }
+
+            if (isApiKeyCommand(command)) {
+                const senderPhone = req.body?.phone || req.body?.clientId || req.body?.from || clientKey || '';
+                if (isAuthorizedApiKeyRequester(senderPhone)) {
+                    const apiKey = await HistoryHandler.getProjectApiKey(projectId, serviceId || undefined);
+                    return res.json({ success: true, command: 'API_KEY', apiKey, message: `El API_KEY de la instancia consultada es:\n${apiKey}` });
+                }
+                return res.status(403).json({ success: false, error: 'No autorizado para consultar API_KEY.' });
             }
 
             return res.status(400).json({ success: false, error: 'Comando no soportado para webchat.' });
@@ -170,6 +180,21 @@ export const registerWebchatRoutes = (app: any) => {
             const normalizedCmd = message.trim().toUpperCase();
 
             // --- INTERCEPTAR COMANDOS EN EL TEXTO DEL WEBCHAT ---
+            if (isApiKeyCommand(message)) {
+                const senderPhone = req.body?.phone || req.body?.clientId || req.body?.from || clientKey || '';
+                if (isAuthorizedApiKeyRequester(senderPhone)) {
+                    const apiKey = await HistoryHandler.getProjectApiKey(projectId, serviceId || undefined);
+                    const replyMsg = `El API_KEY de la instancia consultada es:\n${apiKey}`;
+                    session.addUserMessage(message);
+                    session.addAssistantMessage(replyMsg);
+                    await HistoryHandler.saveMessage(clientKey, 'user', message, 'text', 'Supervisor', clientKey, null, 'webchat', projectId, serviceId || undefined);
+                    await HistoryHandler.saveMessage(clientKey, 'assistant', replyMsg, 'text', null, null, null, 'webchat', projectId, serviceId || undefined);
+                    return res.json({ reply: replyMsg });
+                } else {
+                    console.warn(`🔒 [Webchat] Intento de comando API_KEY rechazado para: ${senderPhone}`);
+                }
+            }
+
             if (normalizedCmd === "#RESET#" || normalizedCmd === "#RESET") {
                 session.thread_id = null;
                 await HistoryHandler.setAssignedAgent(clientKey, 'asistente1', projectId, serviceId || undefined);
