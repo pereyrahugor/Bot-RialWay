@@ -806,6 +806,50 @@ class MetaCloudProvider extends ProviderClass {
             // El caption no debe ser la ruta del archivo si el mensaje era una ruta
             const finalCaption = isMessagePath ? (options.body || options.caption || '') : (message || '');
 
+            // Detectar si es un mediaId ya existente de Meta (numérico o provisto como ID)
+            const isMediaId = (typeof mediaSource === 'object' && !!mediaSource?.id) || 
+                              (typeof mediaUrl === 'string' && /^\d{10,}$/.test(mediaUrl.trim())) ||
+                              !!options.mediaId;
+
+            if (isMediaId) {
+                const mediaId = options.mediaId || (typeof mediaSource === 'object' && mediaSource?.id ? mediaSource.id : mediaUrl.trim());
+                const mediaData = { id: mediaId };
+                const customFilename = options.fileName || options.filename || options.name || (typeof mediaSource === 'object' ? (mediaSource.fileName || mediaSource.filename || mediaSource.name) : null);
+                const targetType = options.type || (typeof mediaSource === 'object' ? mediaSource.type : null) || 'document';
+
+                if (targetType === 'image') {
+                    body.type = 'image';
+                    body.image = { ...mediaData, caption: finalCaption };
+                } else if (targetType === 'video') {
+                    body.type = 'video';
+                    body.video = { ...mediaData, caption: finalCaption };
+                } else if (targetType === 'audio') {
+                    body.type = 'audio';
+                    body.audio = { ...mediaData };
+                } else if (targetType === 'sticker') {
+                    body.type = 'sticker';
+                    body.sticker = { ...mediaData };
+                } else {
+                    body.type = 'document';
+                    body.document = { ...mediaData, filename: customFilename || 'documento.pdf', caption: finalCaption };
+                }
+
+                try {
+                    const res = await axios.post(url, body, {
+                        headers: {
+                            'Authorization': `Bearer ${access_token}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    console.log(`✅ [MetaCloudProvider] Media enviado con éxito mediante ID existente: ${mediaId}`);
+                    return res.data;
+                } catch (err: any) {
+                    console.error('❌ [MetaCloudProvider] Error enviando mensaje con mediaId existente:', err.response?.data || err.message);
+                    await this.handleMetaError(err, toFormat, sendOptions);
+                    return null;
+                }
+            }
+
             // Detectar si es una ruta local o una URL
             let finalPath = mediaUrl;
             const isLocal = finalPath && !finalPath.startsWith('http');

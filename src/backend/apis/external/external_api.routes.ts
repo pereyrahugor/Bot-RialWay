@@ -434,7 +434,7 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
                 if (!media) {
                     return res.status(400).json({ success: false, error: "Falta el campo image.link o image.id para mensajes de tipo image." });
                 }
-                providerResponse = await provider.sendMessage(targetJid, caption, { media, projectId: resolvedProjectId, serviceId: resolvedServiceId });
+                providerResponse = await provider.sendMessage(targetJid, caption, { media, type: 'image', projectId: resolvedProjectId, serviceId: resolvedServiceId });
                 historyContent = media;
             } else if (type === 'video') {
                 const caption = req.body.video?.caption || '';
@@ -442,7 +442,7 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
                 if (!media) {
                     return res.status(400).json({ success: false, error: "Falta el campo video.link o video.id para mensajes de tipo video." });
                 }
-                providerResponse = await provider.sendMessage(targetJid, caption, { media, projectId: resolvedProjectId, serviceId: resolvedServiceId });
+                providerResponse = await provider.sendMessage(targetJid, caption, { media, type: 'video', projectId: resolvedProjectId, serviceId: resolvedServiceId });
                 historyContent = media;
             } else if (type === 'document') {
                 const caption = req.body.document?.caption || '';
@@ -451,14 +451,14 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
                 if (!media) {
                     return res.status(400).json({ success: false, error: "Falta el campo document.link o document.id para mensajes de tipo document." });
                 }
-                providerResponse = await provider.sendMessage(targetJid, caption, { media, fileName: filename, projectId: resolvedProjectId, serviceId: resolvedServiceId });
+                providerResponse = await provider.sendMessage(targetJid, caption, { media, fileName: filename, type: 'document', projectId: resolvedProjectId, serviceId: resolvedServiceId });
                 historyContent = media;
             } else if (type === 'audio') {
                 const media = req.body.audio?.link || req.body.audio?.id;
                 if (!media) {
                     return res.status(400).json({ success: false, error: "Falta el campo audio.link o audio.id para mensajes de tipo audio." });
                 }
-                providerResponse = await provider.sendMessage(targetJid, '', { media, projectId: resolvedProjectId, serviceId: resolvedServiceId });
+                providerResponse = await provider.sendMessage(targetJid, '', { media, type: 'audio', projectId: resolvedProjectId, serviceId: resolvedServiceId });
                 historyContent = media;
             } else {
                 return res.status(400).json({ success: false, error: `Tipo de message no soportado: ${type}` });

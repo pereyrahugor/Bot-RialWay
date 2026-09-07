@@ -67,6 +67,11 @@ Envía un mensaje estándar a un cliente específico utilizando la misma estruct
 ```
 
 ##### 4. Mensaje de Documento (PDF, XLSX, etc.)
+
+Los documentos pueden enviarse por dos métodos según la arquitectura de tu sistema:
+
+###### 4.a. Por URL pública (`link`)
+Utiliza este método cuando el documento ya se encuentra alojado en un servidor web o bucket cloud público accesible por Meta.
 ```json
 {
     "token": "TU_TOKEN_TEMPORAL",
@@ -75,9 +80,35 @@ Envía un mensaje estándar a un cliente específico utilizando la misma estruct
     "to": "5491122334455",
     "type": "document",
     "document": {
-        "link": "https://url-publica-de-tu-documento.xlsx",
-        "filename": "reporte.xlsx",
+        "link": "https://url-publica-de-tu-documento.pdf",
+        "filename": "reporte.pdf",
         "caption": "Adjunto el reporte mensual"
+    }
+}
+```
+
+###### 4.b. Por Media ID de Meta (`id`)
+Utiliza este método cuando el archivo es privado o confidencial (ej. facturas, recibos o comprobantes generados localmente por un ERP como Tango o SAP) y **no se desea publicar en internet**:
+1. **Subida del archivo (Upload)**: Tu sistema sube el binario directamente a Meta Cloud API:
+   * **Endpoint:** `POST https://graph.facebook.com/v25.0/{phone_number_id}/media`
+   * **Headers:** `Authorization: Bearer <META_ACCESS_TOKEN>`
+   * **Body (form-data):**
+     * `messaging_product`: `whatsapp`
+     * `type`: `application/pdf`
+     * `file`: `@archivo.pdf`
+   * **Respuesta de Meta:** `{ "id": "1234567890123456" }`
+2. **Envío del mensaje con el ID**: Con el ID obtenido, envías el mensaje al CRM sin requerir ninguna URL:
+```json
+{
+    "token": "TU_TOKEN_TEMPORAL",
+    "messaging_product": "whatsapp",
+    "recipient_type": "individual",
+    "to": "5491122334455",
+    "type": "document",
+    "document": {
+        "id": "1234567890123456",
+        "filename": "20259062293_0001_00008457.pdf",
+        "caption": "Adjunto su comprobante"
     }
 }
 ```
