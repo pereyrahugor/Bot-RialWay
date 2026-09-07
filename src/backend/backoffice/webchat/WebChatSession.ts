@@ -18,6 +18,8 @@ export class WebChatSession {
   clear() {
     this.history = [];
     this.thread_id = null;
+    delete this.awaitingApiKeyVerification;
+    delete this.apiKeyVerificationRequestedAt;
     // Do not wipe other context keys to keep continuity of client info
   }
 }

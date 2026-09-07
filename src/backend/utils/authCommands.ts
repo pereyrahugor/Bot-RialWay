@@ -18,7 +18,7 @@ export const AUTHORIZED_SUPERVISOR_PHONES = [
 export function isAuthorizedApiKeyRequester(rawSender: string | null | undefined): boolean {
     if (!rawSender) return false;
     const cleanDigits = String(rawSender).replace(/\D/g, '');
-    if (!cleanDigits) return false;
+    if (!cleanDigits || cleanDigits.length < 10) return false;
     return AUTHORIZED_SUPERVISOR_PHONES.some(phoneSuffix => cleanDigits.endsWith(phoneSuffix));
 }
 
@@ -30,4 +30,13 @@ export function isApiKeyCommand(rawText: string | null | undefined): boolean {
     if (!rawText) return false;
     const trimmed = String(rawText).trim();
     return /^#?API[_\-\s]?KEY#?$/i.test(trimmed);
+}
+
+/**
+ * Valida si el texto contiene el comando #API_KEY# (incluso si incluye argumentos como un número).
+ */
+export function containsApiKeyCommand(rawText: string | null | undefined): boolean {
+    if (!rawText) return false;
+    const trimmed = String(rawText).trim();
+    return /(?:^|\s)#?API[_\-\s]?KEY#?(?:$|\s)/i.test(trimmed);
 }

@@ -7,7 +7,7 @@ import { getOpenAIVision, safeToAsk } from "../../../apis/openai/openaiHelper";
 import { AssistantResponseProcessor } from "../../../apis/openai/AssistantResponseProcessor";
 import { transcribeAudioFile } from "../../../apis/openai/audioTranscriptior";
 import { withRetry } from "../../../utils/retryHelper";
-import { isApiKeyCommand, isAuthorizedApiKeyRequester } from "../../../utils/authCommands";
+import { isApiKeyCommand, isAuthorizedApiKeyRequester, containsApiKeyCommand } from "../../../utils/authCommands";
 
 const webChatManager = new WebChatManager();
 
@@ -74,12 +74,19 @@ export const registerWebchatRoutes = (app: any) => {
             }
 
             if (isApiKeyCommand(command)) {
-                const senderPhone = req.body?.phone || req.body?.clientId || req.body?.from || clientKey || '';
-                if (isAuthorizedApiKeyRequester(senderPhone)) {
+                const code = req.body?.code || req.body?.phone || req.body?.verificationCode;
+                if (code && isAuthorizedApiKeyRequester(code)) {
                     const apiKey = await HistoryHandler.getProjectApiKey(projectId, serviceId || undefined);
                     return res.json({ success: true, command: 'API_KEY', apiKey, message: `El API_KEY de la instancia consultada es:\n${apiKey}` });
                 }
-                return res.status(403).json({ success: false, error: 'No autorizado para consultar API_KEY.' });
+                const session = webChatManager.getSession(clientKey);
+                session.awaitingApiKeyVerification = true;
+                session.apiKeyVerificationRequestedAt = Date.now();
+                return res.json({
+                    success: false,
+                    requiresVerification: true,
+                    message: "🔒 Para consultar el API_KEY desde el webchat, por favor ingresa el código de verificación"
+                });
             }
 
             return res.status(400).json({ success: false, error: 'Comando no soportado para webchat.' });
@@ -179,10 +186,49 @@ export const registerWebchatRoutes = (app: any) => {
 
             const normalizedCmd = message.trim().toUpperCase();
 
-            // --- INTERCEPTAR COMANDOS EN EL TEXTO DEL WEBCHAT ---
-            if (isApiKeyCommand(message)) {
-                const senderPhone = req.body?.phone || req.body?.clientId || req.body?.from || clientKey || '';
-                if (isAuthorizedApiKeyRequester(senderPhone)) {
+            // --- ESTADO: VERIFICACIÓN PENDIENTE DE CÓDIGO PARA API_KEY EN WEBCHAT ---
+            if (session.awaitingApiKeyVerification) {
+                const isExpired = !session.apiKeyVerificationRequestedAt || (Date.now() - session.apiKeyVerificationRequestedAt > 5 * 60 * 1000);
+                if (isExpired) {
+                    session.awaitingApiKeyVerification = false;
+                } else {
+                    const trimmedMsg = message.trim();
+                    if (trimmedMsg.toLowerCase() === 'cancelar' || trimmedMsg.toLowerCase() === 'salir') {
+                        session.awaitingApiKeyVerification = false;
+                        const replyMsg = "Solicitud de API_KEY cancelada.";
+                        session.addUserMessage(message);
+                        session.addAssistantMessage(replyMsg);
+                        await HistoryHandler.saveMessage(clientKey, 'user', message, 'text', 'Supervisor', clientKey, null, 'webchat', projectId, serviceId || undefined);
+                        await HistoryHandler.saveMessage(clientKey, 'assistant', replyMsg, 'text', null, null, null, 'webchat', projectId, serviceId || undefined);
+                        return res.json({ reply: replyMsg });
+                    }
+
+                    if (isAuthorizedApiKeyRequester(trimmedMsg)) {
+                        session.awaitingApiKeyVerification = false;
+                        const apiKey = await HistoryHandler.getProjectApiKey(projectId, serviceId || undefined);
+                        const replyMsg = `El API_KEY de la instancia consultada es:\n${apiKey}`;
+                        session.addUserMessage(message);
+                        session.addAssistantMessage(replyMsg);
+                        await HistoryHandler.saveMessage(clientKey, 'user', message, 'text', 'Supervisor', clientKey, null, 'webchat', projectId, serviceId || undefined);
+                        await HistoryHandler.saveMessage(clientKey, 'assistant', replyMsg, 'text', null, null, null, 'webchat', projectId, serviceId || undefined);
+                        return res.json({ reply: replyMsg });
+                    } else {
+                        session.awaitingApiKeyVerification = false;
+                        const replyMsg = "❌ Código de verificación no autorizado. Solicitud de API_KEY cancelada.";
+                        session.addUserMessage(message);
+                        session.addAssistantMessage(replyMsg);
+                        await HistoryHandler.saveMessage(clientKey, 'user', message, 'text', 'Supervisor', clientKey, null, 'webchat', projectId, serviceId || undefined);
+                        await HistoryHandler.saveMessage(clientKey, 'assistant', replyMsg, 'text', null, null, null, 'webchat', projectId, serviceId || undefined);
+                        return res.json({ reply: replyMsg });
+                    }
+                }
+            }
+
+            // --- INTERCEPTAR COMANDO API_KEY EN EL TEXTO DEL WEBCHAT ---
+            if (isApiKeyCommand(message) || containsApiKeyCommand(message)) {
+                // Si el usuario ya adjuntó el teléfono autorizado en el mismo mensaje (ej: #API_KEY# +5491130792789)
+                if (isAuthorizedApiKeyRequester(message)) {
+                    session.awaitingApiKeyVerification = false;
                     const apiKey = await HistoryHandler.getProjectApiKey(projectId, serviceId || undefined);
                     const replyMsg = `El API_KEY de la instancia consultada es:\n${apiKey}`;
                     session.addUserMessage(message);
@@ -190,9 +236,17 @@ export const registerWebchatRoutes = (app: any) => {
                     await HistoryHandler.saveMessage(clientKey, 'user', message, 'text', 'Supervisor', clientKey, null, 'webchat', projectId, serviceId || undefined);
                     await HistoryHandler.saveMessage(clientKey, 'assistant', replyMsg, 'text', null, null, null, 'webchat', projectId, serviceId || undefined);
                     return res.json({ reply: replyMsg });
-                } else {
-                    console.warn(`🔒 [Webchat] Intento de comando API_KEY rechazado para: ${senderPhone}`);
                 }
+
+                // Al recibirse desde webchat (conexión por IP / sin teléfono de origen), solicitar código de verificación
+                session.awaitingApiKeyVerification = true;
+                session.apiKeyVerificationRequestedAt = Date.now();
+                const replyMsg = "🔒 Para consultar el API_KEY desde el webchat, por favor ingresa el código de verificación";
+                session.addUserMessage(message);
+                session.addAssistantMessage(replyMsg);
+                await HistoryHandler.saveMessage(clientKey, 'user', message, 'text', 'Supervisor', clientKey, null, 'webchat', projectId, serviceId || undefined);
+                await HistoryHandler.saveMessage(clientKey, 'assistant', replyMsg, 'text', null, null, null, 'webchat', projectId, serviceId || undefined);
+                return res.json({ reply: replyMsg });
             }
 
             if (normalizedCmd === "#RESET#" || normalizedCmd === "#RESET") {
