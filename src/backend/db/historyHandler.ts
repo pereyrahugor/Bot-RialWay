@@ -2335,10 +2335,10 @@ export class HistoryHandler {
                     return false;
                 }
 
-                // Obtener timeout en minutos configurado para este proyecto/servicio (default: 30 min)
+                // Obtener timeout en minutos configurado para este proyecto/servicio (default: 30 min, máx: 720 min / 12 hs)
                 const settingVal = await this.getSetting('HUMAN_INACTIVITY_TIMEOUT_MINUTES', projectId, serviceId);
                 const parsedMin = settingVal ? parseInt(settingVal, 10) : NaN;
-                const timeoutMinutes = (!isNaN(parsedMin) && parsedMin >= 1 && parsedMin <= 60) ? parsedMin : 30;
+                const timeoutMinutes = (!isNaN(parsedMin) && parsedMin >= 1 && parsedMin <= 720) ? parsedMin : 30;
 
                 if ((now - lastHumanTime) >= (timeoutMinutes * 60 * 1000)) {
                     console.log(`[HistoryHandler] ⏰ Reactivando bot para ${rawChatId}: inactividad humana (${Math.round((now - lastHumanTime) / 60000)} min) superó timeout configurado (${timeoutMinutes} min).`);

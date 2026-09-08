@@ -137,12 +137,12 @@ export const startHumanInactivityWorker = (defaultTimeoutMinutes = 30, intervalM
                         continue; // No reactivar aún porque no ha pasado la ventana de 24 horas
                     }
                 } else {
-                    // 6. Obtener tiempo de reactivación en minutos para este proyecto y servicio
+                    // 6. Obtener tiempo de reactivación en minutos para este proyecto y servicio (máx: 720 min / 12 hs)
                     let chatTimeoutMinutes = timeoutMinutesCache.get(settingKey);
                     if (chatTimeoutMinutes === undefined) {
                         const settingValue = await HistoryHandler.getSetting('HUMAN_INACTIVITY_TIMEOUT_MINUTES', projectId, chat.service_id);
                         const parsed = settingValue ? parseInt(settingValue, 10) : NaN;
-                        chatTimeoutMinutes = (!isNaN(parsed) && parsed >= 1 && parsed <= 60) ? parsed : defaultTimeoutMinutes;
+                        chatTimeoutMinutes = (!isNaN(parsed) && parsed >= 1 && parsed <= 720) ? parsed : defaultTimeoutMinutes;
                         timeoutMinutesCache.set(settingKey, chatTimeoutMinutes);
                     }
 

@@ -729,6 +729,27 @@ async function fetchBotStatus() {
     } catch (e) { console.error("Error fetching bot status", e); }
 }
 
+let _currentTimeoutUnit = 'min'; // 'min' | 'hs'
+
+function updateTimeoutUnitUI(unit) {
+    _currentTimeoutUnit = unit;
+    const btnMin = document.getElementById('human-timeout-unit-min');
+    const btnHs = document.getElementById('human-timeout-unit-hs');
+    if (btnMin && btnHs) {
+        if (unit === 'hs') {
+            btnMin.style.background = 'transparent';
+            btnMin.style.color = 'var(--text-muted)';
+            btnHs.style.background = '#0099FF';
+            btnHs.style.color = '#ffffff';
+        } else {
+            btnMin.style.background = '#0099FF';
+            btnMin.style.color = '#ffffff';
+            btnHs.style.background = 'transparent';
+            btnHs.style.color = 'var(--text-muted)';
+        }
+    }
+}
+
 async function fetchHumanTimeoutSetting() {
     const timeoutSlider = document.getElementById('human-timeout-slider');
     const timeoutBadge = document.getElementById('human-timeout-badge');
@@ -739,10 +760,23 @@ async function fetchHumanTimeoutSetting() {
         const res = await fetch(`/api/backoffice/get-setting?key=HUMAN_INACTIVITY_TIMEOUT_MINUTES&projectId=${currentProjectId}${serviceParam}&token=${token}`);
         const data = await res.json();
         if (data.success && data.value) {
-            const val = parseInt(data.value, 10);
-            if (!isNaN(val) && val >= 1 && val <= 60) {
-                timeoutSlider.value = String(val);
-                if (timeoutBadge) timeoutBadge.textContent = `${val} min`;
+            const totalMinutes = parseInt(data.value, 10);
+            if (!isNaN(totalMinutes) && totalMinutes >= 1 && totalMinutes <= 720) {
+                if (totalMinutes >= 60 && totalMinutes % 60 === 0) {
+                    updateTimeoutUnitUI('hs');
+                    timeoutSlider.min = '1';
+                    timeoutSlider.max = '12';
+                    timeoutSlider.step = '1';
+                    timeoutSlider.value = String(totalMinutes / 60);
+                    if (timeoutBadge) timeoutBadge.textContent = `${totalMinutes / 60} hs`;
+                } else {
+                    updateTimeoutUnitUI('min');
+                    timeoutSlider.min = '1';
+                    timeoutSlider.max = '60';
+                    timeoutSlider.step = '1';
+                    timeoutSlider.value = String(Math.min(60, totalMinutes));
+                    if (timeoutBadge) timeoutBadge.textContent = `${timeoutSlider.value} min`;
+                }
             }
         }
     } catch (e) { console.error("Error fetching human inactivity timeout", e); }
@@ -786,40 +820,74 @@ window.initConexionView = function () {
         });
     }
 
-    // --- Slider Tiempo de Reactivación (Modo Humano a Bot) ---
+    // --- Selector de Unidad y Slider Tiempo de Reactivación ---
     const timeoutSlider = document.getElementById('human-timeout-slider');
     const timeoutBadge = document.getElementById('human-timeout-badge');
-    if (timeoutSlider) {
-        timeoutSlider.addEventListener('input', () => {
-            if (timeoutBadge) timeoutBadge.textContent = `${timeoutSlider.value} min`;
+    const btnMin = document.getElementById('human-timeout-unit-min');
+    const btnHs = document.getElementById('human-timeout-unit-hs');
+
+    const saveTimeoutSetting = async (totalMinutes, displayText) => {
+        try {
+            const token = localStorage.getItem('backoffice_token');
+            const serviceId = window.railwayServiceId || undefined;
+            const res = await fetch(`/api/backoffice/save-setting?token=${token}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    key: 'HUMAN_INACTIVITY_TIMEOUT_MINUTES',
+                    value: String(totalMinutes),
+                    projectId: currentProjectId,
+                    serviceId
+                })
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(data.error || 'Server error');
+            if (typeof showToast === 'function') {
+                showToast(`Reactivación a modo bot configurada en ${displayText}`, 'success');
+            }
+        } catch (e) {
+            console.error("Error al guardar tiempo de reactivación", e);
+            if (window.swalAlert) {
+                window.swalAlert("Error", "Error al guardar el tiempo de reactivación", "error");
+            }
+        }
+    };
+
+    if (btnMin && btnHs && timeoutSlider) {
+        btnMin.addEventListener('click', () => {
+            if (_currentTimeoutUnit === 'min') return;
+            updateTimeoutUnitUI('min');
+            timeoutSlider.min = '1';
+            timeoutSlider.max = '60';
+            timeoutSlider.step = '1';
+            timeoutSlider.value = '30';
+            if (timeoutBadge) timeoutBadge.textContent = '30 min';
+            saveTimeoutSetting(30, '30 min');
         });
 
-        timeoutSlider.addEventListener('change', async () => {
-            const minutes = timeoutSlider.value;
-            try {
-                const token = localStorage.getItem('backoffice_token');
-                const serviceId = window.railwayServiceId || undefined;
-                const res = await fetch(`/api/backoffice/save-setting?token=${token}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        key: 'HUMAN_INACTIVITY_TIMEOUT_MINUTES',
-                        value: String(minutes),
-                        projectId: currentProjectId,
-                        serviceId
-                    })
-                });
-                const data = await res.json();
-                if (!res.ok || !data.success) throw new Error(data.error || 'Server error');
-                if (typeof showToast === 'function') {
-                    showToast(`Reactivación a modo bot configurada en ${minutes} min`, 'success');
-                }
-            } catch (e) {
-                console.error("Error al guardar tiempo de reactivación", e);
-                if (window.swalAlert) {
-                    window.swalAlert("Error", "Error al guardar el tiempo de reactivación", "error");
-                }
+        btnHs.addEventListener('click', () => {
+            if (_currentTimeoutUnit === 'hs') return;
+            updateTimeoutUnitUI('hs');
+            timeoutSlider.min = '1';
+            timeoutSlider.max = '12';
+            timeoutSlider.step = '1';
+            timeoutSlider.value = '1';
+            if (timeoutBadge) timeoutBadge.textContent = '1 hs';
+            saveTimeoutSetting(60, '1 hs');
+        });
+
+        timeoutSlider.addEventListener('input', () => {
+            const val = timeoutSlider.value;
+            if (timeoutBadge) {
+                timeoutBadge.textContent = _currentTimeoutUnit === 'hs' ? `${val} hs` : `${val} min`;
             }
+        });
+
+        timeoutSlider.addEventListener('change', () => {
+            const val = parseInt(timeoutSlider.value, 10);
+            const totalMinutes = _currentTimeoutUnit === 'hs' ? val * 60 : val;
+            const displayText = _currentTimeoutUnit === 'hs' ? `${val} hs` : `${val} min`;
+            saveTimeoutSetting(totalMinutes, displayText);
         });
     }
 
