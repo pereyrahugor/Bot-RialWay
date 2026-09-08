@@ -32,6 +32,9 @@ users_search_result.png
 scripts/meta-tools/
 briefing_unificacion_servicios.md
 manual_migracion_multiproyecto.md
+trust_credentials.md
+trust_implementation_required.md
+trust_*.md
 
 API_EXTERNAL_DOCUMENTATION.md
 *.cjs

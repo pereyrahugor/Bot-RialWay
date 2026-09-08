@@ -117,6 +117,19 @@ window.conexionView = {
                                 </div>
                                 <div class="conexion-action-row">
                                     <div>
+                                        <div class="conexion-action-title">Reactivación a modo bot</div>
+                                        <div class="conexion-action-desc">Tiempo de inactividad tras atención humana antes de que el bot vuelva a responder.</div>
+                                    </div>
+                                    <div class="flex items-center gap-3 flex-shrink-0 self-end sm:self-center">
+                                        <input type="range" id="human-timeout-slider" min="1" max="60" value="30" step="1"
+                                            class="cursor-pointer"
+                                            style="accent-color: #0099FF; width: 110px;">
+                                        <span id="human-timeout-badge" class="status"
+                                            style="font-family: 'Montserrat', sans-serif; font-weight: 800; font-size: 0.75rem; padding: 0.25rem 0.6rem; border-radius: 6px; background: rgba(0, 153, 255, 0.12); border: 1px solid rgba(0, 153, 255, 0.25); color: #0099FF; min-width: 58px; text-align: center; display: inline-block;">30 min</span>
+                                    </div>
+                                </div>
+                                <div class="conexion-action-row">
+                                    <div>
                                         <div class="conexion-action-title">Recargar motor del bot</div>
                                         <div class="conexion-action-desc">Aplica cambios de Meta o Google Sheets sin entrar a Railway.</div>
                                     </div>

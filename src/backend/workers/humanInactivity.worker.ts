@@ -1,19 +1,23 @@
 import { HistoryHandler, supabase } from "../db/historyHandler";
 
 /**
- * Inicia un worker que verifica cada 12 horas los chats con intervención humana (bot desactivado).
- * Si no han recibido un mensaje humano en 12 horas (o 24 horas si fue manual de la app), reactiva el bot automáticamente.
+ * Inicia un worker que verifica periódicamente los chats con intervención humana (bot desactivado).
+ * Toma el tiempo de reactivación (en minutos) desde la configuración (HUMAN_INACTIVITY_TIMEOUT_MINUTES)
+ * de cada proyecto y servicio. Si no está configurado, usa el valor por defecto (30 minutos).
+ * Si no han recibido un mensaje humano en ese tiempo (o 24 horas si fue manual de la app), reactiva el bot automáticamente.
  * Excluye contactos en lista negra (sin_bot o bloqueado_crm) que deben permanecer en atención humana.
  */
-export const startHumanInactivityWorker = (timeoutHours = 12, intervalHours = 12) => {
-    console.log(`🤖 [Worker] Iniciando worker de inactividad humana multitenant (Revisión cada ${intervalHours}h | Inactividad > ${timeoutHours}h)...`);
+export const startHumanInactivityWorker = (defaultTimeoutMinutes = 30, intervalMinutes = 1) => {
+    console.log(`🤖 [Worker] Iniciando worker de inactividad humana multitenant (Revisión cada ${intervalMinutes} min | Default > ${defaultTimeoutMinutes} min)...`);
 
     const checkInactivity = async () => {
         try {
             if (!supabase) return;
             const now = new Date();
-            const threshold = new Date(now.getTime() - timeoutHours * 60 * 60 * 1000);
-            const minThreshold = new Date(now.getTime() - 48 * 60 * 60 * 1000); // Ventana extendida a 48 horas para contemplar desactivaciones de 24 horas
+            // Ventana máxima: comprobamos chats con actividad humana en las últimas 48 horas
+            const minThreshold = new Date(now.getTime() - 48 * 60 * 60 * 1000);
+            // Umbral inmediato mínimo (al menos 1 minuto de inactividad)
+            const maxImmediateThreshold = new Date(now.getTime() - 1 * 60 * 1000);
             
             // 1. Obtener chats con bot desactivado y actividad humana reciente (filtrando por la instancia actual si no es master)
             let query = supabase
@@ -22,7 +26,7 @@ export const startHumanInactivityWorker = (timeoutHours = 12, intervalHours = 12
                 .eq('bot_enabled', false)
                 .not('last_human_message_at', 'is', null)
                 .gte('last_human_message_at', minThreshold.toISOString())
-                .lte('last_human_message_at', threshold.toISOString());
+                .lte('last_human_message_at', maxImmediateThreshold.toISOString());
 
             const currentProjectId = HistoryHandler.PROJECT_IDENTIFIER;
             const currentServiceId = HistoryHandler.SERVICE_IDENTIFIER;
@@ -94,6 +98,7 @@ export const startHumanInactivityWorker = (timeoutHours = 12, intervalHours = 12
 
             // Caché en memoria durante este tick para no consultar la misma configuración del mismo proyecto/servicio varias veces
             const globalBotSettingsCache = new Map<string, boolean>();
+            const timeoutMinutesCache = new Map<string, number>();
 
             for (const chat of inactiveChats) {
                 const projectId = chat.project_id;
@@ -123,16 +128,32 @@ export const startHumanInactivityWorker = (timeoutHours = 12, intervalHours = 12
                     continue; // Saltar si está en lista negra
                 }
 
+                const lastHuman = new Date(chat.last_human_message_at);
+
                 // 5. Si fue una intervención manual desde la app móvil, el bot debe permanecer desactivado por 24 horas.
                 if ((chat.metadata as any)?.manual_app_interacted) {
                     const manualThreshold = new Date(now.getTime() - 24 * 60 * 60 * 1000); // 24 horas de inactividad requeridas
-                    const lastHuman = new Date(chat.last_human_message_at);
                     if (lastHuman > manualThreshold) {
                         continue; // No reactivar aún porque no ha pasado la ventana de 24 horas
                     }
+                } else {
+                    // 6. Obtener tiempo de reactivación en minutos para este proyecto y servicio
+                    let chatTimeoutMinutes = timeoutMinutesCache.get(settingKey);
+                    if (chatTimeoutMinutes === undefined) {
+                        const settingValue = await HistoryHandler.getSetting('HUMAN_INACTIVITY_TIMEOUT_MINUTES', projectId, chat.service_id);
+                        const parsed = settingValue ? parseInt(settingValue, 10) : NaN;
+                        chatTimeoutMinutes = (!isNaN(parsed) && parsed >= 1 && parsed <= 60) ? parsed : defaultTimeoutMinutes;
+                        timeoutMinutesCache.set(settingKey, chatTimeoutMinutes);
+                    }
+
+                    const dynamicThreshold = new Date(now.getTime() - chatTimeoutMinutes * 60 * 1000);
+                    if (lastHuman > dynamicThreshold) {
+                        continue; // Aún dentro de la ventana de espera del operador humano
+                    }
                 }
 
-                console.log(`[WORKER] [${new Date().toLocaleTimeString()}] Auto-activando bot para chat ${chat.id} en proyecto ${projectId} (Inactividad > ${timeoutHours}h)`);
+                const effectiveMinutes = (chat.metadata as any)?.manual_app_interacted ? 1440 : (timeoutMinutesCache.get(settingKey) || defaultTimeoutMinutes);
+                console.log(`[WORKER] [${new Date().toLocaleTimeString()}] Auto-activando bot para chat ${chat.id} en proyecto ${projectId} (Inactividad > ${effectiveMinutes} min)`);
                 await HistoryHandler.toggleBot(chat.id, true, projectId, chat.service_id);
             }
         } catch (e) {
@@ -140,7 +161,7 @@ export const startHumanInactivityWorker = (timeoutHours = 12, intervalHours = 12
         }
     };
 
-    // Ejecución inicial y luego periódica cada 12 horas
-    setTimeout(checkInactivity, 60 * 1000); // 1 minuto después del arranque para no saturar el inicio
-    setInterval(checkInactivity, intervalHours * 60 * 60 * 1000);
+    // Ejecución inicial (1 min tras arranque) y luego periódica cada intervalMinutes
+    setTimeout(checkInactivity, 60 * 1000);
+    setInterval(checkInactivity, intervalMinutes * 60 * 1000);
 };

@@ -4145,7 +4145,7 @@ export const registerBackofficeRoutes = (app: any) => {
             const projectId = resolveProjectId(req);
             const serviceId = resolveServiceId(req);
             await depsHistoryHandler.saveSetting(key, value, projectId, serviceId);
-            if (key === 'GLOBAL_BOT_ENABLED') {
+            if (key === 'GLOBAL_BOT_ENABLED' || key === 'HUMAN_INACTIVITY_TIMEOUT_MINUTES') {
                 historyEvents.emit('setting_changed', { key, value, projectId, serviceId });
             }
             res.json({ success: true });

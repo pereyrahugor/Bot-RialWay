@@ -729,6 +729,25 @@ async function fetchBotStatus() {
     } catch (e) { console.error("Error fetching bot status", e); }
 }
 
+async function fetchHumanTimeoutSetting() {
+    const timeoutSlider = document.getElementById('human-timeout-slider');
+    const timeoutBadge = document.getElementById('human-timeout-badge');
+    if (!timeoutSlider) return;
+    try {
+        const token = localStorage.getItem('backoffice_token');
+        const serviceParam = window.railwayServiceId ? `&serviceId=${encodeURIComponent(window.railwayServiceId)}` : '';
+        const res = await fetch(`/api/backoffice/get-setting?key=HUMAN_INACTIVITY_TIMEOUT_MINUTES&projectId=${currentProjectId}${serviceParam}&token=${token}`);
+        const data = await res.json();
+        if (data.success && data.value) {
+            const val = parseInt(data.value, 10);
+            if (!isNaN(val) && val >= 1 && val <= 60) {
+                timeoutSlider.value = String(val);
+                if (timeoutBadge) timeoutBadge.textContent = `${val} min`;
+            }
+        }
+    } catch (e) { console.error("Error fetching human inactivity timeout", e); }
+}
+
 // Funcion de inicializacion para SPA (se llama en cada visita)
 window.initConexionView = function () {
     // Limpiar intervalos anteriores
@@ -737,11 +756,13 @@ window.initConexionView = function () {
 
     // Carga inicial
     fetchBotStatus();
+    fetchHumanTimeoutSetting();
     fetchStatus();
 
     // Intervalos de polling
     _conexionIntervals.push(setInterval(fetchStatus, 5000));
     _conexionIntervals.push(setInterval(fetchBotStatus, 30000));
+    _conexionIntervals.push(setInterval(fetchHumanTimeoutSetting, 30000));
 
     // --- Toggle Bot Global ---
     const botToggle = document.getElementById('global-bot-toggle');
@@ -761,6 +782,43 @@ window.initConexionView = function () {
             } catch (e) {
                 window.swalAlert("Error", "Error al cambiar el estado del bot", "error");
                 botToggle.checked = !enabled;
+            }
+        });
+    }
+
+    // --- Slider Tiempo de Reactivación (Modo Humano a Bot) ---
+    const timeoutSlider = document.getElementById('human-timeout-slider');
+    const timeoutBadge = document.getElementById('human-timeout-badge');
+    if (timeoutSlider) {
+        timeoutSlider.addEventListener('input', () => {
+            if (timeoutBadge) timeoutBadge.textContent = `${timeoutSlider.value} min`;
+        });
+
+        timeoutSlider.addEventListener('change', async () => {
+            const minutes = timeoutSlider.value;
+            try {
+                const token = localStorage.getItem('backoffice_token');
+                const serviceId = window.railwayServiceId || undefined;
+                const res = await fetch(`/api/backoffice/save-setting?token=${token}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        key: 'HUMAN_INACTIVITY_TIMEOUT_MINUTES',
+                        value: String(minutes),
+                        projectId: currentProjectId,
+                        serviceId
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error(data.error || 'Server error');
+                if (typeof showToast === 'function') {
+                    showToast(`Reactivación a modo bot configurada en ${minutes} min`, 'success');
+                }
+            } catch (e) {
+                console.error("Error al guardar tiempo de reactivación", e);
+                if (window.swalAlert) {
+                    window.swalAlert("Error", "Error al guardar el tiempo de reactivación", "error");
+                }
             }
         });
     }
