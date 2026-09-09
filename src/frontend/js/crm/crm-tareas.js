@@ -381,17 +381,32 @@ function getLeadAssignedTags(lead, ticket) {
             
     if (!rawTags || rawTags.length === 0) return [];
 
-    return rawTags.map(t => {
-        if (!t) return null;
-        if (typeof t === 'object' && t.name) return t;
-        const tagId = typeof t === 'string' ? t : t.id;
-        const found = (botTags || []).find(bt => bt.id === tagId || bt.name === tagId);
-        if (found) return found;
-        if (typeof t === 'string' && t.trim()) {
-            return { id: t, name: t, color: '#6366f1' };
+    const seen = new Set();
+    const result = [];
+
+    for (const t of rawTags) {
+        if (!t) continue;
+        let tagObj = null;
+        if (typeof t === 'object' && t.name) {
+            tagObj = t;
+        } else {
+            const tagId = typeof t === 'string' ? t : t.id;
+            const found = (botTags || []).find(bt => bt.id === tagId || bt.name === tagId);
+            if (found) {
+                tagObj = found;
+            } else if (typeof t === 'string' && t.trim()) {
+                tagObj = { id: t, name: t, color: '#6366f1' };
+            }
         }
-        return null;
-    }).filter(Boolean);
+        if (tagObj && tagObj.name) {
+            const key = String(tagObj.id || tagObj.name).trim().toLowerCase();
+            if (!seen.has(key)) {
+                seen.add(key);
+                result.push(tagObj);
+            }
+        }
+    }
+    return result;
 }
 
 function createCardElement(ticket, lead, metadata) {
@@ -402,7 +417,7 @@ function createCardElement(ticket, lead, metadata) {
     card.id = `card-${ticket.id}`;
     
     card.onclick = (e) => {
-        if (e.target.closest('button') || e.target.closest('.card-tag-count-wrap') || e.target.closest('.card-tags')) return;
+        if (e.target.closest('button') || e.target.closest('.card-tag-count') || e.target.closest('.card-tags')) return;
         localStorage.setItem('activeChat', ticket.chat_id);
         if (typeof window.navigate === 'function') window.navigate('/conversaciones');
         else window.location.href = '/conversaciones';
@@ -453,11 +468,16 @@ function createCardElement(ticket, lead, metadata) {
     // Etiquetas visibles directamente en la tarjeta (área marcada por el usuario)
     const tagsHtml = (isVisible('crm-tags') && tagCount > 0) ? `
         <div class="card-tags" onclick="event.stopPropagation(); openCardModal('${ticket.id}')">
-            ${assignedTags.map(tag => `
-                <span class="card-tag" style="background:${tag.color || '#6366f1'}; cursor:pointer;" title="${escapeCRMText(tag.name)}">
-                    ${escapeCRMText(tag.name)}
-                </span>
-            `).join('')}
+            ${assignedTags.map(tag => {
+                const textColor = (typeof window.getTagTextColor === 'function') 
+                    ? window.getTagTextColor(tag.color) 
+                    : (tag.color === '#000' || tag.color === '#000000' || tag.color === 'black' ? '#ffffff' : '#ffffff');
+                return `
+                    <span class="card-tag" style="background:${tag.color || '#6366f1'} !important; color:${textColor} !important; cursor:pointer;" title="${escapeCRMText(tag.name)}">
+                        ${escapeCRMText(tag.name)}
+                    </span>
+                `;
+            }).join('')}
         </div>
     ` : '';
 
@@ -484,23 +504,9 @@ function createCardElement(ticket, lead, metadata) {
         <div class="card-footer">
             ${alertHtml}
             <div style="display:flex; gap:8px; align-items:center;">
-                <div class="card-tag-count-wrap">
-                    <span class="card-tag-count" title="${escapeCRMText(tagTooltipTitle)}" onclick="event.stopPropagation(); openCardModal('${ticket.id}')">
-                        <i class="fas fa-tags"></i> ${tagCount}
-                    </span>
-                    ${tagCount > 0 ? `
-                        <div class="card-tag-hover-tooltip" onclick="event.stopPropagation(); openCardModal('${ticket.id}')">
-                            <div class="card-tag-tooltip-header"><i class="fas fa-tags"></i> Etiquetas (${tagCount})</div>
-                            <div class="card-tag-tooltip-list">
-                                ${assignedTags.map(t => `
-                                    <span class="card-tag-tooltip-item" style="background:${t.color || '#6366f1'}">
-                                        ${escapeCRMText(t.name)}
-                                    </span>
-                                `).join('')}
-                            </div>
-                        </div>
-                    ` : ''}
-                </div>
+                <span class="card-tag-count" title="${escapeCRMText(tagTooltipTitle)}" onclick="event.stopPropagation(); openCardModal('${ticket.id}')">
+                    <i class="fas fa-tags"></i> ${tagCount}
+                </span>
                 <button class="btn-card-action" title="Cerrar Lead" onclick="event.stopPropagation(); confirmCloseTicket('${ticket.id}')">
                     <i class="fas fa-check"></i>
                 </button>

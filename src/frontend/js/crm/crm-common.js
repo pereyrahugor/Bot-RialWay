@@ -260,4 +260,24 @@ window.checkAndFetchSharedNotes = async () => {
         }
     }
 };
+
+window.getTagTextColor = function(bgColor) {
+    if (!bgColor) return '#ffffff';
+    const color = String(bgColor).trim().toLowerCase();
+    if (color === '#000' || color === '#000000' || color === 'black' || color === '#111' || color === '#111827' || color === '#1f2937') {
+        return '#ffffff';
+    }
+    if (color.startsWith('#')) {
+        let hex = color.slice(1);
+        if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+        if (hex.length === 6) {
+            const r = parseInt(hex.substring(0, 2), 16);
+            const g = parseInt(hex.substring(2, 4), 16);
+            const b = parseInt(hex.substring(4, 6), 16);
+            const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+            return yiq >= 165 ? '#0f172a' : '#ffffff';
+        }
+    }
+    return '#ffffff';
+};
 
