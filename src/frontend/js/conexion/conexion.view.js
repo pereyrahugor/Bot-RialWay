@@ -193,6 +193,9 @@ window.conexionView = {
                                 <button id="go-unlink-meta" class="btn-danger">
                                     <i class="fab fa-meta"></i> Desvincular Meta
                                 </button>
+                                <button id="go-clear-chats" class="btn-danger">
+                                    <i class="fas fa-trash-can"></i> Vaciar contactos y chats
+                                </button>
                             </div>
                         </section>
                     </div>
@@ -253,6 +256,21 @@ window.conexionView = {
                     <button id="confirmUnlinkNo" class="btn-outline px-5 py-2.5 text-sm">Cancelar</button>
                     <button id="confirmUnlinkSi" class="btn btn-danger px-5 py-2.5 text-sm">
                         <i class="fas fa-check"></i> Si, desvincular
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="clearChatsModal" class="hidden fixed inset-0 z-50 flex items-center justify-center"
+            style="background:rgba(5,10,20,0.8); backdrop-filter:blur(8px);">
+            <div class="glass-strong w-full max-w-sm mx-4 p-8 text-center animate-pop-in" style="border-top:3px solid #ef4444;">
+                <i class="fas fa-trash-can text-4xl text-red-400 mb-5 block"></i>
+                <h3 class="text-xl font-heading font-bold text-red-400 mb-3">¿Vaciar contactos y chats?</h3>
+                <p class="info-text text-sm mb-6">Estás a punto de eliminar todos los contactos, mensajes, tickets y etiquetas de este servicio. Esta acción es destructiva y no se puede deshacer.</p>
+                <div class="flex gap-3 justify-center">
+                    <button id="confirmClearChatsNo" class="btn-outline px-5 py-2.5 text-sm">Cancelar</button>
+                    <button id="confirmClearChatsSi" class="btn btn-danger px-5 py-2.5 text-sm">
+                        <i class="fas fa-check"></i> Sí, vaciar todo
                     </button>
                 </div>
             </div>

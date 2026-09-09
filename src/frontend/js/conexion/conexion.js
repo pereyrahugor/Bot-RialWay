@@ -1060,6 +1060,45 @@ window.initConexionView = function () {
         });
     }
 
+    // --- Modal Vaciar Contactos y Chats ---
+    const goClearChatsBtn = document.getElementById('go-clear-chats');
+    const clearChatsModal = document.getElementById('clearChatsModal');
+    const confirmClearChatsSi = document.getElementById('confirmClearChatsSi');
+    const confirmClearChatsNo = document.getElementById('confirmClearChatsNo');
+
+    if (goClearChatsBtn) goClearChatsBtn.addEventListener('click', (e) => { e.preventDefault(); if (clearChatsModal) clearChatsModal.classList.remove('hidden'); });
+    if (confirmClearChatsNo) confirmClearChatsNo.addEventListener('click', () => { if (clearChatsModal) clearChatsModal.classList.add('hidden'); });
+    if (confirmClearChatsSi) {
+        confirmClearChatsSi.addEventListener('click', async () => {
+            confirmClearChatsSi.disabled = true;
+            confirmClearChatsSi.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Vaciando...';
+            try {
+                const token = localStorage.getItem('backoffice_token');
+                const serviceParam = window.railwayServiceId ? `&serviceId=${encodeURIComponent(window.railwayServiceId)}` : '';
+                const pId = currentProjectId || window.railwayProjectId || '';
+                const projectParam = pId ? `&projectId=${encodeURIComponent(pId)}` : '';
+                const res = await fetch(`/api/backoffice/chats/vaciar?token=${encodeURIComponent(token || '')}${serviceParam}${projectParam}`, { method: 'DELETE' });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || data.success === false) {
+                    throw new Error(data.error || "Error al vaciar los contactos en el servidor");
+                }
+                if (clearChatsModal) {
+                    clearChatsModal.innerHTML = `<div class="glass-strong p-8 text-center" style="border-top:5px solid #25d366;"><i class="fas fa-check-circle" style="font-size:3rem;color:#25d366;display:block;margin-bottom:20px;"></i><h3 class="text-xl font-heading font-bold mb-3">Vaciado Completo</h3><p class="text-secondary-content text-sm">Se han eliminado todos los contactos, mensajes y tickets de este servicio. La página se recargará en 4 segundos.</p></div>`;
+                }
+                setTimeout(() => window.location.reload(), 4000);
+            } catch (err) {
+                console.error(err);
+                if (typeof window.swalAlert === 'function') {
+                    window.swalAlert("Error", "Hubo un error al vaciar los contactos: " + err.message, "error");
+                } else {
+                    alert("Hubo un error al vaciar los contactos: " + err.message);
+                }
+                confirmClearChatsSi.disabled = false;
+                confirmClearChatsSi.innerText = 'SÍ, VACIAR TODO';
+            }
+        });
+    }
+
     // --- Generar QR manual ---
     const generateQrBtn = document.getElementById('generate-qr-btn');
     if (generateQrBtn) {

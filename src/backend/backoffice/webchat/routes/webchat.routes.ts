@@ -399,8 +399,18 @@ export const registerWebchatRoutes = (app: any) => {
             const reply = await safeToAsk(currentAssistantId, message, state, clientKey, undefined, 5, true, projectId, true, assigned, serviceId || undefined);
 
             const flowDynamic = async (arr: any) => {
-                const text = Array.isArray(arr) ? arr.map(a => a.body).join('\n') : arr;
-                replyText = replyText ? replyText + "\n\n" + text : text;
+                if (Array.isArray(arr)) {
+                    for (const a of arr) {
+                        const img = a.mediaUrl || (typeof a.media === 'string' && a.media.startsWith('http') ? a.media : null);
+                        const caption = a.body ? a.body.trim() : '';
+                        const formatted = img ? `![Imagen](${img})\n\n${caption}`.trim() : caption;
+                        if (formatted) {
+                            replyText = replyText ? replyText + "\n\n" + formatted : formatted;
+                        }
+                    }
+                } else if (typeof arr === 'string' && arr.trim()) {
+                    replyText = replyText ? replyText + "\n\n" + arr.trim() : arr.trim();
+                }
             };
 
             await AssistantResponseProcessor.procesarHandoverYDerivacion(

@@ -109,21 +109,17 @@ export class ClientesApi {
       domicilio.latitud = (ubicacion && ubicacion.lat != null) ? String(ubicacion.lat) : '';
       domicilio.longitud = (ubicacion && ubicacion.lng != null) ? String(ubicacion.lng) : '';
       
-      if (ubicacion && ubicacion.formattedAddress) {
+      // Usar Google Maps únicamente para geolocalización (latitud y longitud).
+      // Preservar la calle, número y observaciones provistos por el cliente. Si la calle estaba vacía, usar como fallback Google.
+      if (ubicacion && ubicacion.formattedAddress && !domicilio.calle) {
         const partesGoogle = ubicacion.formattedAddress.split(',');
         const principal = partesGoogle[0].trim();
         const matchDirs = principal.match(/^(.+?)\s+(\d+)$/);
-        
         if (matchDirs) {
           domicilio.calle = matchDirs[1].trim();
-          domicilio.puerta = matchDirs[2].trim();
+          if (!domicilio.puerta) domicilio.puerta = matchDirs[2].trim();
         } else {
           domicilio.calle = principal;
-          domicilio.puerta = '';
-        }
-        
-        if (partesGoogle.length > 1) {
-          domicilio.observaciones = partesGoogle.slice(1).join(', ').trim();
         }
       }
 

@@ -924,6 +924,15 @@ export class HistoryHandler {
             if (contextData.nombre) {
                 updatePayload.name = contextData.nombre;
             }
+            if (contextData.direccion || contextData.address) {
+                updatePayload.address = contextData.direccion || contextData.address;
+            }
+            if (contextData.cuit_dni || contextData.numCliente) {
+                updatePayload.cuit_dni = String(contextData.cuit_dni || contextData.numCliente);
+            }
+            if (contextData.email) {
+                updatePayload.email = contextData.email;
+            }
 
             this.invalidateChatCache(chatId, currentProjectId);
 

@@ -156,22 +156,33 @@ export const aquavitaModule = {
         }
 
         countResultados = resultados.length;
-        if (resultados.length > 0) {
-          const clienteActivo = resultados.find((c: any) => c.estadoCliente?.trim().toLowerCase() !== 'baja');
-          datosCliente = clienteActivo || resultados[0];
+        if (countResultados === 1) {
+          datosCliente = resultados[0];
         }
       }
 
-      if (esRespuestaExitosa(respuestaApi) && datosCliente) {
-        await AssistantResponseProcessor.actualizarContextoCliente(state, datosCliente, ctx.from);
-        const esBaja = datosCliente.estadoCliente?.trim().toLowerCase() === 'baja';
-        const esMultiple = countResultados > 1;
-        const advertenciaMultiple = esMultiple ? "⚠️ ATENCIÓN: multiples resultados obtenidos, solicitar datos adicionales para obtener datos mas precisos o identificar un unico cliente\n\n" : "";
+      if (esRespuestaExitosa(respuestaApi)) {
+        if (countResultados > 1) {
+          return `⚠️ SE ENCONTRARON MÚLTIPLES COINCIDENCIAS (${countResultados} clientes con nombre/datos similares).
+NO se ha seleccionado ningún cliente automáticamente para evitar confusiones de cuenta.
+DEBES solicitar al usuario su DNI/CUIT, número de cliente o domicilio exacto para desempatar e identificar la cuenta unívoca antes de consultar saldos o generar tickets.
 
-        if (esBaja) {
-          return `${advertenciaMultiple}⚠️ ATENCIÓN: El cliente se encuentra en estado de "BAJA" (Inactivo). No se permiten realizar nuevos pedidos ni registrar incidencias para clientes en este estado.\n\nDatos completos:\n${JSON.stringify(datosCliente, null, 2)}`;
-        } else {
-          return `${advertenciaMultiple}Datos completos del cliente:\n${JSON.stringify(datosCliente, null, 2)}`;
+Coincidencias encontradas:
+${JSON.stringify(resultados.slice(0, 4).map((c: any) => ({
+  cliente_id: c.cliente_id,
+  nombre: c.nombreCliente || c.nombrePersona,
+  domicilio: c.DomicilioCompleto || `${c.calle || ''} ${c.numeroPuerta || ''}`.trim()
+})), null, 2)}`;
+        }
+
+        if (datosCliente) {
+          await AssistantResponseProcessor.actualizarContextoCliente(state, datosCliente, ctx.from);
+          const esBaja = datosCliente.estadoCliente?.trim().toLowerCase() === 'baja';
+          if (esBaja) {
+            return `⚠️ ATENCIÓN: El cliente se encuentra en estado de "BAJA" (Inactivo). No se permiten realizar nuevos pedidos ni registrar incidencias para clientes en este estado.\n\nDatos completos:\n${JSON.stringify(datosCliente, null, 2)}`;
+          } else {
+            return `Datos completos del cliente:\n${JSON.stringify(datosCliente, null, 2)}`;
+          }
         }
       } else {
         let resumen = "No se encuentra cliente coincidente con los datos enviados";
@@ -255,22 +266,8 @@ export const aquavitaModule = {
         nombreCompleto = String(clienteRaw.apellido).trim().toUpperCase();
       }
 
-      if (clienteRaw.direccion) {
-        try {
-          let dirToNormalize = clienteRaw.direccion;
-          if (!dirToNormalize.toLowerCase().includes("córdoba capital")) {
-            dirToNormalize = `Córdoba Capital, ${dirToNormalize}`;
-          }
-          const mapData = await getMapsUbication(dirToNormalize, "", "Córdoba Capital", "Córdoba", "Argentina");
-          if (mapData && mapData.formattedAddress) {
-            clienteRaw.direccion = mapData.formattedAddress;
-          } else {
-            clienteRaw.direccion = dirToNormalize;
-          }
-        } catch (error) {
-          console.error("[CREAR_CLIENTE] Error normalizando dirección con Google Maps:", error);
-        }
-      }
+      // Preservar la dirección literal ingresada por el usuario (calle, número, depto, piso, referencias)
+      // Google Maps es consultado internamente por ClientesApi solo para obtener latitud y longitud sin destruir la dirección.
 
       const cliente = {
         ...clienteRaw,
@@ -590,16 +587,59 @@ export const aquavitaModule = {
       const clientes = resData.clientesCercanos || resData.data;
       
       if (clientes && Array.isArray(clientes) && clientes.length > 0) {
-        clienteSeleccionado = clientes.reduce((min: any, c: any) => c.distanciaMetros < min.distanciaMetros ? c : min, clientes[0]);
+        const parseDist = (c: any) => {
+          const val = c?.distanciaMetros ?? c?.distancia ?? Infinity;
+          const num = typeof val === 'number' ? val : parseFloat(String(val).replace(',', '.'));
+          return isNaN(num) ? Infinity : num;
+        };
+        clienteSeleccionado = clientes.reduce((min: any, c: any) => parseDist(c) < parseDist(min) ? c : min, clientes[0]);
         try {
           const preciosResp = await ListaDePreciosApi.obtenerListaDePrecios(clienteSeleccionado.cliente_id);
           preciosCliente = preciosResp.data || {};
         } catch (err) {
           console.error('[API Debug] Error obteniendo lista de precios:', err);
         }
-        const dias = Array.isArray(clienteSeleccionado.visitas) 
-          ? [...new Set(clienteSeleccionado.visitas.map((v: any) => v.dia).filter(Boolean))] 
-          : [];
+
+        // Extracción exhaustiva de los días de visita del cliente más cercano
+        const diasEncontrados: string[] = [];
+        const parsearItemDia = (v: any) => {
+          if (!v) return;
+          if (typeof v === 'string') {
+            const trimmed = v.trim();
+            if (trimmed) diasEncontrados.push(trimmed);
+          } else if (typeof v === 'object') {
+            const d = v.dia || v.Dia || v.nombreDia || v.NombreDia || v.diaSemana || v.DiaSemana || v.nombre || v.Nombre;
+            if (d && typeof d === 'string') diasEncontrados.push(d.trim());
+          }
+        };
+
+        if (Array.isArray(clienteSeleccionado.visitas)) {
+          clienteSeleccionado.visitas.forEach(parsearItemDia);
+        } else if (typeof clienteSeleccionado.visitas === 'string') {
+          clienteSeleccionado.visitas.split(/[,;\-\/]+/).forEach((s: string) => parsearItemDia(s.trim()));
+        }
+
+        if (Array.isArray(clienteSeleccionado.diasVisita)) clienteSeleccionado.diasVisita.forEach(parsearItemDia);
+        else if (typeof clienteSeleccionado.diasVisita === 'string') clienteSeleccionado.diasVisita.split(/[,;\-\/]+/).forEach((s: string) => parsearItemDia(s.trim()));
+
+        if (Array.isArray(clienteSeleccionado.diasProximaVisita)) clienteSeleccionado.diasProximaVisita.forEach(parsearItemDia);
+        else if (typeof clienteSeleccionado.diasProximaVisita === 'string') clienteSeleccionado.diasProximaVisita.split(/[,;\-\/]+/).forEach((s: string) => parsearItemDia(s.trim()));
+
+        if (typeof clienteSeleccionado.dia === 'string' && clienteSeleccionado.dia.trim()) parsearItemDia(clienteSeleccionado.dia);
+        if (typeof clienteSeleccionado.Dia === 'string' && clienteSeleccionado.Dia.trim()) parsearItemDia(clienteSeleccionado.Dia);
+
+        // Si el cliente puntual no tiene visitas fijas asignadas en su ficha, inferir los días desde el nombre de su reparto
+        if (diasEncontrados.length === 0 && clienteSeleccionado.nombreReparto && typeof clienteSeleccionado.nombreReparto === 'string') {
+          const diasSemana = ['lunes', 'martes', 'miércoles', 'miercoles', 'jueves', 'viernes', 'sábado', 'sabado', 'domingo'];
+          const lowerReparto = clienteSeleccionado.nombreReparto.toLowerCase();
+          diasSemana.forEach(d => {
+            if (lowerReparto.includes(d)) {
+              diasEncontrados.push(d.charAt(0).toUpperCase() + d.slice(1));
+            }
+          });
+        }
+
+        const dias = [...new Set(diasEncontrados)];
         const diasStr = dias.length > 0 ? dias.join(', ') : 'A coordinar';
         const repartoId = clienteSeleccionado.reparto_id || clienteSeleccionado.repartoId || 1;
 

@@ -17,9 +17,6 @@ window.backofficeView = {
                         <input type="text" id="search-input" class="search-input" placeholder="Buscar conversaci&oacute;n..." oninput="handleSearch()">
                     </div>
                     <div class="sidebar-header-actions">
-                        <button class="btn-icon-wa" title="Vaciar Contactos" onclick="confirmClearContacts()" id="btn-clear-contacts">
-                            <i class="fas fa-trash-alt"></i>
-                        </button>
                         <button class="btn-icon-wa" title="Sincronizar Contactos" onclick="startContactSync()" id="btn-sync-baileys">
                             <i class="fas fa-sync-alt"></i>
                         </button>

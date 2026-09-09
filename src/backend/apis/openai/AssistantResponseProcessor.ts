@@ -576,21 +576,51 @@ export class AssistantResponseProcessor {
     }
 
     public static async sendResponseWithImages(flowDynamic: any, text: string) {
-        const imageRegex = /(https?:\/\/\S+\.(?:png|jpg|jpeg|gif|webp)(?:\?\S+)?)/gi;
+        // Regex ampliado: URLs de imágenes directas, Google Drive, o formato markdown ![alt](url)
+        const driveRegex = /https?:\/\/drive\.google\.com\/(?:file\/d\/[a-zA-Z0-9_-]+(?:\/[^\s\)]*)?|open\?[^\s\)]+|uc\?[^\s\)]+)/i;
+        const directImgRegex = /https?:\/\/\S+\.(?:png|jpe?g|gif|webp)(?:\?[^\s\)]*)?/i;
+        const markdownImgRegex = /!\[([^\]]*)\]\((https?:\/\/[^\)]+)\)/i;
+
         const chunks = text.split(/\n\n+/);
         
         for (const chunk of chunks) {
             const trimmed = chunk.trim();
             if (trimmed.length > 0) {
-                const match = trimmed.match(/(https?:\/\/\S+\.(?:png|jpg|jpeg|gif|webp)(?:\?\S+)?)/i);
+                let imageUrl: string | null = null;
+                let cleanBody = trimmed;
+
+                const mdMatch = trimmed.match(markdownImgRegex);
+                if (mdMatch) {
+                    imageUrl = mdMatch[2];
+                    cleanBody = trimmed.replace(mdMatch[0], '').trim();
+                } else {
+                    const driveMatch = trimmed.match(driveRegex);
+                    const imgMatch = trimmed.match(directImgRegex);
+                    const matchedUrl = driveMatch ? driveMatch[0] : (imgMatch ? imgMatch[0] : null);
+
+                    if (matchedUrl) {
+                        imageUrl = matchedUrl;
+                        const escapedUrl = imageUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        const replaceRegex = new RegExp(`(https?:\\/\\/\\s*)?${escapedUrl}`, 'gi');
+                        cleanBody = trimmed.replace(replaceRegex, '').trim();
+                    }
+                }
                 
-                if (match) {
-                    const imageUrl = match[1];
-                    const escapedUrl = imageUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                    const replaceRegex = new RegExp(`(https?:\\/\\/\\s*)?${escapedUrl}`, 'gi');
-                    const cleanBody = trimmed.replace(replaceRegex, '').trim();
-                    console.log(`[AssistantResponseProcessor] 📸 Enviando imagen parseada con caption: ${imageUrl}`);
-                    await flowDynamic([{ body: cleanBody, media: imageUrl }]);
+                if (imageUrl) {
+                    try {
+                        const { downloadMediaFile } = await import('../../utils/mediaDownloader');
+                        const downloaded = await downloadMediaFile(imageUrl);
+                        if (downloaded && downloaded.localPath) {
+                            console.log(`[AssistantResponseProcessor] 📸 Enviando imagen descargada: ${downloaded.localPath} (Original: ${imageUrl})`);
+                            await flowDynamic([{ body: cleanBody, media: downloaded.localPath, mediaUrl: imageUrl }]);
+                        } else {
+                            console.log(`[AssistantResponseProcessor] 📸 Fallback a URL original: ${imageUrl}`);
+                            await flowDynamic([{ body: cleanBody, media: imageUrl, mediaUrl: imageUrl }]);
+                        }
+                    } catch (err: any) {
+                        console.error('[AssistantResponseProcessor] Error procesando imagen:', err.message);
+                        await flowDynamic([{ body: cleanBody, media: imageUrl, mediaUrl: imageUrl }]);
+                    }
                 } else {
                     await flowDynamic([{ body: trimmed }]);
                 }

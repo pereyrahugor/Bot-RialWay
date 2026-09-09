@@ -178,8 +178,15 @@ export const initSocketIO = (serverInstance: any, { processUserMessage }: any) =
 
                     let replyText = '';
                     const flowDynamic = async (arr: any) => {
-                        if (Array.isArray(arr)) replyText = arr.map(a => a.body).join('\n');
-                        else if (typeof arr === 'string') replyText = arr;
+                        if (Array.isArray(arr)) {
+                            replyText = arr.map(a => {
+                                const img = a.mediaUrl || (typeof a.media === 'string' && a.media.startsWith('http') ? a.media : null);
+                                const caption = a.body ? a.body.trim() : '';
+                                return img ? `![Imagen](${img})\n\n${caption}`.trim() : caption;
+                            }).filter(Boolean).join('\n\n');
+                        } else if (typeof arr === 'string') {
+                            replyText = arr;
+                        }
                     };
 
                     const cleanMsg = msg.trim().toUpperCase();
