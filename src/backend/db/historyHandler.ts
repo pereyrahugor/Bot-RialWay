@@ -2333,24 +2333,15 @@ export class HistoryHandler {
                 const now = Date.now();
                 const lastHumanTime = new Date(chat.last_human_message_at).getTime();
 
-                // Si fue intervención manual desde la app móvil de WhatsApp, ventana de 24 horas
-                if ((chat.metadata as any)?.manual_app_interacted) {
-                    const isOver24h = (now - lastHumanTime) >= (24 * 60 * 60 * 1000);
-                    if (isOver24h) {
-                        console.log(`[HistoryHandler] ⏰ Reactivando bot para ${rawChatId}: ventana de 24h de app móvil cumplida.`);
-                        await this.toggleBot(rawChatId, true, projectId, serviceId);
-                        return true;
-                    }
-                    return false;
-                }
-
                 // Obtener timeout en minutos configurado para este proyecto/servicio (default: 30 min, máx: 720 min / 12 hs)
+                // Se aplica uniformemente tanto a intervención desde el backoffice como desde la app de WhatsApp del teléfono.
                 const settingVal = await this.getSetting('HUMAN_INACTIVITY_TIMEOUT_MINUTES', projectId, serviceId);
                 const parsedMin = settingVal ? parseInt(settingVal, 10) : NaN;
                 const timeoutMinutes = (!isNaN(parsedMin) && parsedMin >= 1 && parsedMin <= 720) ? parsedMin : 30;
 
                 if ((now - lastHumanTime) >= (timeoutMinutes * 60 * 1000)) {
-                    console.log(`[HistoryHandler] ⏰ Reactivando bot para ${rawChatId}: inactividad humana (${Math.round((now - lastHumanTime) / 60000)} min) superó timeout configurado (${timeoutMinutes} min).`);
+                    const origin = (chat.metadata as any)?.manual_app_interacted ? 'desde app de WhatsApp' : 'desde backoffice';
+                    console.log(`[HistoryHandler] ⏰ Reactivando bot para ${rawChatId}: inactividad humana (${origin}, ${Math.round((now - lastHumanTime) / 60000)} min) superó timeout configurado (${timeoutMinutes} min).`);
                     await this.toggleBot(rawChatId, true, projectId, serviceId);
                     return true;
                 }

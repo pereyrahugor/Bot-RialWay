@@ -130,30 +130,24 @@ export const startHumanInactivityWorker = (defaultTimeoutMinutes = 30, intervalM
 
                 const lastHuman = new Date(chat.last_human_message_at);
 
-                // 5. Si fue una intervención manual desde la app móvil, el bot debe permanecer desactivado por 24 horas.
-                if ((chat.metadata as any)?.manual_app_interacted) {
-                    const manualThreshold = new Date(now.getTime() - 24 * 60 * 60 * 1000); // 24 horas de inactividad requeridas
-                    if (lastHuman > manualThreshold) {
-                        continue; // No reactivar aún porque no ha pasado la ventana de 24 horas
-                    }
-                } else {
-                    // 6. Obtener tiempo de reactivación en minutos para este proyecto y servicio (máx: 720 min / 12 hs)
-                    let chatTimeoutMinutes = timeoutMinutesCache.get(settingKey);
-                    if (chatTimeoutMinutes === undefined) {
-                        const settingValue = await HistoryHandler.getSetting('HUMAN_INACTIVITY_TIMEOUT_MINUTES', projectId, chat.service_id);
-                        const parsed = settingValue ? parseInt(settingValue, 10) : NaN;
-                        chatTimeoutMinutes = (!isNaN(parsed) && parsed >= 1 && parsed <= 720) ? parsed : defaultTimeoutMinutes;
-                        timeoutMinutesCache.set(settingKey, chatTimeoutMinutes);
-                    }
-
-                    const dynamicThreshold = new Date(now.getTime() - chatTimeoutMinutes * 60 * 1000);
-                    if (lastHuman > dynamicThreshold) {
-                        continue; // Aún dentro de la ventana de espera del operador humano
-                    }
+                // 5. Obtener tiempo de reactivación en minutos para este proyecto y servicio (máx: 720 min / 12 hs)
+                // Se aplica el mismo tiempo configurable desde Conexión tanto para intervenciones desde el teléfono como desde el backoffice.
+                let chatTimeoutMinutes = timeoutMinutesCache.get(settingKey);
+                if (chatTimeoutMinutes === undefined) {
+                    const settingValue = await HistoryHandler.getSetting('HUMAN_INACTIVITY_TIMEOUT_MINUTES', projectId, chat.service_id);
+                    const parsed = settingValue ? parseInt(settingValue, 10) : NaN;
+                    chatTimeoutMinutes = (!isNaN(parsed) && parsed >= 1 && parsed <= 720) ? parsed : defaultTimeoutMinutes;
+                    timeoutMinutesCache.set(settingKey, chatTimeoutMinutes);
                 }
 
-                const effectiveMinutes = (chat.metadata as any)?.manual_app_interacted ? 1440 : (timeoutMinutesCache.get(settingKey) || defaultTimeoutMinutes);
-                console.log(`[WORKER] [${new Date().toLocaleTimeString()}] Auto-activando bot para chat ${chat.id} en proyecto ${projectId} (Inactividad > ${effectiveMinutes} min)`);
+                const dynamicThreshold = new Date(now.getTime() - chatTimeoutMinutes * 60 * 1000);
+                if (lastHuman > dynamicThreshold) {
+                    continue; // Aún dentro de la ventana de espera del operador humano
+                }
+
+                const effectiveMinutes = chatTimeoutMinutes;
+                const sourceMsg = (chat.metadata as any)?.manual_app_interacted ? 'desde app de WhatsApp' : 'desde backoffice';
+                console.log(`[WORKER] [${new Date().toLocaleTimeString()}] Auto-activando bot para chat ${chat.id} en proyecto ${projectId} (${sourceMsg}, inactividad > ${effectiveMinutes} min)`);
                 await HistoryHandler.toggleBot(chat.id, true, projectId, chat.service_id);
             }
         } catch (e) {
