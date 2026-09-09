@@ -243,18 +243,63 @@ export const askWithFunctions = async (assistantId: string, message: string, sta
             .filter(m => m.content && m.content.trim() !== "")
             .filter(m => m.content !== '_event_reaction_' && !m.content.startsWith('_event_reaction_'))
             .filter(m => !/\{["']reaction["']\s*:/i.test(m.content))
-            .map(m => ({
-                role: m.role as "user" | "assistant",
-                content: m.content
-            }));
+            .map(m => {
+                let text = m.content;
+                let raw: any = (m as any).raw_payload || (m as any).rawPayload;
+                if (typeof raw === 'string') {
+                    try { raw = JSON.parse(raw); } catch { raw = null; }
+                }
 
-        // 2.2 Evitar duplicar el mensaje actual si ya se guardó en el historial (común en este sistema)
+                if (m.role === 'user') {
+                    const isBtn = (m as any).type === 'button' || raw?.type === 'button' || !!raw?.button;
+                    const quoted = raw?.replyPreview?.content;
+                    const referral = raw?.referral;
+                    const extAd = raw?.context?.externalAdReply;
+
+                    if (isBtn) {
+                        if (quoted) {
+                            text = `[El usuario seleccionó el botón: "${text}" en respuesta a:\n"${quoted}"]`;
+                        } else {
+                            text = `[El usuario seleccionó el botón: "${text}"]`;
+                        }
+                    } else if (quoted && !text.includes(quoted)) {
+                        text = `[En respuesta a: "${quoted}"]\n${text}`;
+                    }
+
+                    if (referral || extAd) {
+                        const adTitle = referral?.headline || referral?.title || extAd?.title;
+                        const adBody = referral?.body || extAd?.body;
+                        if (adTitle || adBody) {
+                            const adInfo = [adTitle, adBody].filter(Boolean).join(' - ');
+                            if (!text.includes(adInfo)) {
+                                text = `[Contexto de Anuncio: "${adInfo}"]\n${text}`;
+                            }
+                        }
+                    }
+                }
+
+                return {
+                    role: m.role as "user" | "assistant",
+                    content: text,
+                    originalContent: m.content
+                };
+            });
+
+        // 2.2 Evitar duplicar el mensaje actual si ya se guardó en el historial
         const lastMsg = formattedHistory.length > 0 ? formattedHistory[formattedHistory.length - 1] : null;
-        const isAlreadyInHistory = lastMsg && lastMsg.role === 'user' && lastMsg.content.trim() === message.trim();
+        const isAlreadyInHistory = !!(lastMsg && lastMsg.role === 'user' && (
+            lastMsg.content.trim() === message.trim() || 
+            (lastMsg.originalContent && message.includes(lastMsg.originalContent.trim()))
+        ));
+
+        if (isAlreadyInHistory && lastMsg) {
+            // Asegurar que el último mensaje en historial tenga el contexto enriquecido actual
+            lastMsg.content = message;
+        }
 
         const messages: any[] = [
             { role: "system", content: systemPrompt },
-            ...formattedHistory
+            ...formattedHistory.map(({ role, content }) => ({ role, content }))
         ];
 
         // 2.5 Refuerzo para Resúmenes: Si es un resumen, inyectar una instrucción clara ANTES del comando

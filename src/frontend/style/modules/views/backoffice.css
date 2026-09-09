@@ -846,11 +846,98 @@
   .msg-reply-text {
     color: inherit;
     font-size: 0.82rem;
+    line-height: 1.35;
+    opacity: 0.88;
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+  }
+
+  /* Tarjeta de Anuncio de Meta Ads (CTWA) */
+  .msg-ad-card {
+    display: block;
+    min-width: 180px;
+    max-width: 100%;
+    margin: -2px -4px 6px;
+    padding: 7px 9px;
+    border-left: 4px solid #1877f2;
+    border-radius: 5px;
+    background: rgba(24, 119, 242, 0.08);
+    overflow: hidden;
+  }
+
+  [data-theme="dark"] .msg-ad-card {
+    background: rgba(24, 119, 242, 0.18);
+  }
+
+  .msg-ad-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 3px;
+  }
+
+  .msg-ad-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #1877f2;
+    letter-spacing: 0.5px;
+  }
+
+  .msg-ad-link {
+    font-size: 0.72rem;
+    color: #1877f2;
+    text-decoration: underline;
+    opacity: 0.9;
+  }
+  .msg-ad-link:hover {
+    opacity: 1;
+  }
+
+  .msg-ad-title {
+    color: inherit;
+    font-size: 0.82rem;
+    font-weight: 600;
+    line-height: 1.25;
+    margin-bottom: 2px;
+  }
+
+  .msg-ad-desc {
+    color: inherit;
+    font-size: 0.76rem;
     line-height: 1.3;
     opacity: 0.82;
-    white-space: nowrap;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
     overflow: hidden;
-    text-overflow: ellipsis;
+  }
+
+  /* Badge de opción de botón seleccionada */
+  .msg-button-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #00a884;
+    background: rgba(0, 168, 132, 0.12);
+    padding: 2px 7px;
+    border-radius: 12px;
+    margin-bottom: 4px;
+    width: fit-content;
+  }
+
+  [data-theme="dark"] .msg-button-tag {
+    color: #00d7a7;
+    background: rgba(0, 215, 167, 0.16);
   }
 
   .msg-time {

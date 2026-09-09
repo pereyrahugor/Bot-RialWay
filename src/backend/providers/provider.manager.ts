@@ -74,6 +74,9 @@ function getQuotedPreview(raw: any): { content: string; type: string } | null {
 
     if (quoted.conversation) return { content: quoted.conversation, type: 'text' };
     if (quoted.extendedTextMessage?.text) return { content: quoted.extendedTextMessage.text, type: 'text' };
+    if (quoted.buttonsMessage?.contentText) return { content: quoted.buttonsMessage.contentText, type: 'text' };
+    if (quoted.templateMessage?.hydratedTemplate?.hydratedContentText) return { content: quoted.templateMessage.hydratedTemplate.hydratedContentText, type: 'text' };
+    if (quoted.interactiveMessage?.body?.text) return { content: quoted.interactiveMessage.body.text, type: 'text' };
     if (quoted.imageMessage) return { content: quoted.imageMessage.caption || 'Imagen', type: 'image' };
     if (quoted.videoMessage) return { content: quoted.videoMessage.caption || 'Video', type: 'video' };
     if (quoted.audioMessage) return { content: 'Audio', type: 'audio' };
@@ -95,10 +98,46 @@ function normalizeReplyPreviewText(content: any, type: string): string {
         .replace(/<[^>]*>/g, ' ')
         .replace(/\s+/g, ' ')
         .trim()
-        .slice(0, 120) || 'Mensaje';
+        .slice(0, 500) || 'Mensaje';
+}
+
+function extractAdReferral(ctx: any, raw: any, contextInfo: any): any {
+    const ref = ctx?.referral || 
+                raw?.referral || 
+                ctx?.payload?.referral || 
+                raw?.payload?.referral || 
+                raw?.message?.referral ||
+                contextInfo?.referral ||
+                null;
+    
+    const extAd = contextInfo?.externalAdReply ||
+                  raw?.message?.extendedTextMessage?.contextInfo?.externalAdReply ||
+                  raw?.payload?.message?.extendedTextMessage?.contextInfo?.externalAdReply ||
+                  ctx?.payload?.message?.extendedTextMessage?.contextInfo?.externalAdReply ||
+                  null;
+
+    if (!ref && !extAd) return null;
+
+    const headline = ref?.headline || extAd?.title || ref?.title || null;
+    const body = ref?.body || extAd?.body || null;
+    const sourceUrl = ref?.source_url || extAd?.sourceUrl || null;
+    const mediaUrl = ref?.image_url || ref?.video_url || ref?.thumbnail_url || extAd?.mediaUrl || extAd?.thumbnailUrl || null;
+    const sourceType = ref?.source_type || (extAd ? 'ad' : null);
+
+    if (!headline && !body && !sourceUrl) return null;
+
+    return {
+        headline,
+        body,
+        sourceType,
+        sourceId: ref?.source_id || null,
+        sourceUrl,
+        mediaUrl
+    };
 }
 
 function buildCompactRawPayload(ctx: any, raw: any, contextInfo: any): any {
+    const adReferral = extractAdReferral(ctx, raw, contextInfo);
     return {
         id: ctx?.id || raw?.id || null,
         key: ctx?.key || raw?.key || null,
@@ -110,6 +149,7 @@ function buildCompactRawPayload(ctx: any, raw: any, contextInfo: any): any {
         userId: ctx?.userId || null,
         recipientPhoneId: ctx?.recipientPhoneId || null,
         context: contextInfo || ctx?.context || raw?.context || ctx?.payload?.context || raw?.payload?.context || null,
+        referral: adReferral || null,
         message: raw?.message ? unwrapBaileysMessage(raw.message) : null,
         payloadKeys: raw && typeof raw === 'object' ? Object.keys(raw).slice(0, 40) : []
     };
@@ -118,17 +158,28 @@ function buildCompactRawPayload(ctx: any, raw: any, contextInfo: any): any {
 async function buildReplyRawPayload(ctx: any, chatId: string, projectId: string, serviceId?: string | null): Promise<any> {
     const raw = ctx?.payload || ctx?.rawPayload || ctx || {};
     const contextInfo = getReplyContextInfo(ctx) || getReplyContextInfo(raw);
-    const replyId = getReplyIdFromContext(contextInfo);
+    let replyId = getReplyIdFromContext(contextInfo);
     const baseRawPayload = buildCompactRawPayload(ctx, raw, contextInfo);
 
-    if (!replyId) return baseRawPayload;
+    const isButton = ctx?.type === 'button' || raw?.type === 'button' || ctx?.button || raw?.button || raw?.message?.buttonsResponseMessage || raw?.message?.templateButtonReplyMessage;
 
-    console.log(`[ReplyTrace] Reply context detected. chat=${chatId} project=${projectId} service=${serviceId || 'none'} replyId=${replyId}`);
+    if (!replyId && !isButton) return baseRawPayload;
+
+    console.log(`[ReplyTrace] Reply/Button context detected. chat=${chatId} project=${projectId} service=${serviceId || 'none'} replyId=${replyId || 'none'} isButton=${!!isButton}`);
 
     let referenced: any = null;
     try {
-        const recentMessages = await HistoryHandler.getMessages(chatId, 1000, 0, projectId, serviceId || null);
-        referenced = recentMessages.find((m: any) => m.external_id === replyId || m.id === replyId);
+        const recentMessages = await HistoryHandler.getMessages(chatId, 50, 0, projectId, serviceId || null);
+        if (replyId) {
+            referenced = recentMessages.find((m: any) => m.external_id === replyId || m.id === replyId);
+        }
+        // Fallback genérico para botones: si no vino stanzaId o no hizo match, se asocia al último mensaje de asistente
+        if (!referenced && isButton) {
+            referenced = recentMessages.slice().reverse().find((m: any) => m.role === 'assistant');
+            if (referenced) {
+                replyId = referenced.external_id || referenced.id;
+            }
+        }
     } catch {
         referenced = null;
     }
@@ -148,9 +199,9 @@ async function buildReplyRawPayload(ctx: any, chatId: string, projectId: string,
 
     return {
         ...baseRawPayload,
-        replyTo: replyId,
+        replyTo: replyId || null,
         replyPreview: {
-            id: replyId,
+            id: replyId || null,
             localId: referenced?.id || null,
             role: referenced?.role || null,
             author: replyAuthor,

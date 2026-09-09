@@ -350,6 +350,50 @@ function distributeCards() {
     checkAlertsVisual();
 }
 
+function escapeCRMText(value = '') {
+    return String(value || '').replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    }[char]));
+}
+
+function findLeadForTicket(ticket) {
+    if (!ticket || !ticket.chat_id) return null;
+    const cleanChatId = String(ticket.chat_id).replace(/@.*$/, '').trim();
+    return (allLeads || []).find(l => {
+        if (!l) return false;
+        if (l.id === ticket.chat_id || l.chat_id === ticket.chat_id) return true;
+        const cleanLId = String(l.id || '').replace(/@.*$/, '').trim();
+        const cleanLChatId = String(l.chat_id || '').replace(/@.*$/, '').trim();
+        return (cleanLId && cleanLId === cleanChatId) || (cleanLChatId && cleanLChatId === cleanChatId);
+    }) || null;
+}
+
+function getLeadAssignedTags(lead, ticket) {
+    const rawTags = (lead && Array.isArray(lead.tags) && lead.tags.length > 0) 
+        ? lead.tags 
+        : (ticket && Array.isArray(ticket.tags) && ticket.tags.length > 0)
+            ? ticket.tags
+            : [];
+            
+    if (!rawTags || rawTags.length === 0) return [];
+
+    return rawTags.map(t => {
+        if (!t) return null;
+        if (typeof t === 'object' && t.name) return t;
+        const tagId = typeof t === 'string' ? t : t.id;
+        const found = (botTags || []).find(bt => bt.id === tagId || bt.name === tagId);
+        if (found) return found;
+        if (typeof t === 'string' && t.trim()) {
+            return { id: t, name: t, color: '#6366f1' };
+        }
+        return null;
+    }).filter(Boolean);
+}
+
 function createCardElement(ticket, lead, metadata) {
     const card = document.createElement('div');
     card.className = 'kanban-card';
@@ -358,20 +402,22 @@ function createCardElement(ticket, lead, metadata) {
     card.id = `card-${ticket.id}`;
     
     card.onclick = (e) => {
-        if (e.target.closest('button')) return;
+        if (e.target.closest('button') || e.target.closest('.card-tag-count-wrap') || e.target.closest('.card-tags')) return;
         localStorage.setItem('activeChat', ticket.chat_id);
         if (typeof window.navigate === 'function') window.navigate('/conversaciones');
         else window.location.href = '/conversaciones';
     };
     
-    const tagCount = Array.isArray(lead?.tags) ? lead.tags.filter(Boolean).length : 0;
+    const actualLead = lead || findLeadForTicket(ticket);
+    const assignedTags = getLeadAssignedTags(actualLead, ticket);
+    const tagCount = assignedTags.length;
 
     const phone = ticket.chat_id ? ticket.chat_id.split('@')[0] : 'Desconocido';
-    const email = lead?.email || '';
-    const cuit = lead?.cuit_dni || '';
-    const product = lead?.offered_product || ticket.tipo || '';
+    const email = actualLead?.email || '';
+    const cuit = actualLead?.cuit_dni || '';
+    const product = actualLead?.offered_product || ticket.tipo || '';
     
-    let alertDateStr = (lead?.crm_due_date ? lead.crm_due_date.split('T')[0] : null) || metadata.alertDate || null;
+    let alertDateStr = (actualLead?.crm_due_date ? actualLead.crm_due_date.split('T')[0] : null) || metadata.alertDate || null;
     const alertFormatted = alertDateStr ? formatDate(alertDateStr) : 'Sin alerta';
 
     // Helper para verificar visibilidad según configuración dinámica
@@ -394,7 +440,7 @@ function createCardElement(ticket, lead, metadata) {
     }
 
     const leadNameHtml = isVisible('crm-name')
-        ? `<div class="card-lead-main"><i class="fas fa-user-circle"></i> ${lead?.name || 'Lead sin nombre'}</div>`
+        ? `<div class="card-lead-main"><i class="fas fa-user-circle"></i> ${actualLead?.name || 'Lead sin nombre'}</div>`
         : '';
 
     let detailsHtml = '';
@@ -404,9 +450,24 @@ function createCardElement(ticket, lead, metadata) {
         detailsHtml = `<div class="card-lead-details">${phoneHtml}${emailHtml}</div>`;
     }
 
+    // Etiquetas visibles directamente en la tarjeta (área marcada por el usuario)
+    const tagsHtml = (isVisible('crm-tags') && tagCount > 0) ? `
+        <div class="card-tags" onclick="event.stopPropagation(); openCardModal('${ticket.id}')">
+            ${assignedTags.map(tag => `
+                <span class="card-tag" style="background:${tag.color || '#6366f1'}; cursor:pointer;" title="${escapeCRMText(tag.name)}">
+                    ${escapeCRMText(tag.name)}
+                </span>
+            `).join('')}
+        </div>
+    ` : '';
+
     const alertHtml = isVisible('crm-due-date')
         ? `<div class="card-alert ${getAlertClass(alertDateStr)}" id="alert-card-${ticket.id}" onclick="event.stopPropagation(); openCardModal('${ticket.id}'); setTimeout(() => { const inp = document.getElementById('edit-alert-date'); if(inp) inp.focus(); }, 100);"><i class="fas fa-bell"></i> ${alertFormatted}</div>`
         : '';
+
+    const tagTooltipTitle = tagCount > 0 
+        ? `Etiquetas:\n• ${assignedTags.map(t => t.name).join('\n• ')}`
+        : '0 etiquetas';
 
     card.innerHTML = `
         ${priorityIndicatorHtml}
@@ -419,10 +480,27 @@ function createCardElement(ticket, lead, metadata) {
         ${titleHtml}
         ${leadNameHtml}
         ${detailsHtml}
+        ${tagsHtml}
         <div class="card-footer">
             ${alertHtml}
             <div style="display:flex; gap:8px; align-items:center;">
-                <span class="card-tag-count" title="${tagCount} etiquetas" onclick="event.stopPropagation()"><i class="fas fa-tags"></i> ${tagCount}</span>
+                <div class="card-tag-count-wrap">
+                    <span class="card-tag-count" title="${escapeCRMText(tagTooltipTitle)}" onclick="event.stopPropagation(); openCardModal('${ticket.id}')">
+                        <i class="fas fa-tags"></i> ${tagCount}
+                    </span>
+                    ${tagCount > 0 ? `
+                        <div class="card-tag-hover-tooltip" onclick="event.stopPropagation(); openCardModal('${ticket.id}')">
+                            <div class="card-tag-tooltip-header"><i class="fas fa-tags"></i> Etiquetas (${tagCount})</div>
+                            <div class="card-tag-tooltip-list">
+                                ${assignedTags.map(t => `
+                                    <span class="card-tag-tooltip-item" style="background:${t.color || '#6366f1'}">
+                                        ${escapeCRMText(t.name)}
+                                    </span>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
                 <button class="btn-card-action" title="Cerrar Lead" onclick="event.stopPropagation(); confirmCloseTicket('${ticket.id}')">
                     <i class="fas fa-check"></i>
                 </button>

@@ -1352,24 +1352,48 @@
 
 
   .card-tags {
-    @apply flex flex-wrap gap-1.5 mb-3;
+    @apply flex flex-wrap gap-1.5 my-2;
   }
 
   .card-tag {
-    @apply text-[10px] px-2.5 py-0.5 rounded-full text-white font-heading font-bold uppercase;
+    @apply text-[10px] px-2.5 py-0.5 rounded-full text-white font-heading font-bold uppercase transition-transform duration-150;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+    max-width: 150px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  
+  .card-tag:hover {
+    transform: scale(1.05);
+  }
+
+  .card-tag-count-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+  }
+
   .card-tag-count {
-    @apply inline-flex items-center gap-1.5 text-xs font-heading font-semibold px-3 py-1.5 rounded-xl select-none;
+    @apply inline-flex items-center gap-1.5 text-xs font-heading font-semibold px-2.5 py-1.5 rounded-xl select-none cursor-pointer transition-all duration-150;
     background: rgba(255, 255, 255, 0.08);
     color: rgba(255, 255, 255, 0.7);
     border: 1px solid rgba(255, 255, 255, 0.12);
   }
 
+  .card-tag-count:hover {
+    background: rgba(0, 153, 255, 0.18);
+    border-color: rgba(0, 153, 255, 0.35);
+    color: white;
+  }
+
   .card-tag-count i {
     @apply text-[11px];
     color: rgba(255, 255, 255, 0.65);
+  }
+
+  .card-tag-count:hover i {
+    color: #3bb0ff;
   }
 
   [data-theme="light"] .card-tag-count {
@@ -1378,8 +1402,93 @@
     border-color: rgba(0, 0, 0, 0.1);
   }
 
+  [data-theme="light"] .card-tag-count:hover {
+    background: rgba(37, 99, 235, 0.12);
+    border-color: rgba(37, 99, 235, 0.28);
+    color: #1d4ed8;
+  }
+
   [data-theme="light"] .card-tag-count i {
     color: rgba(0, 0, 0, 0.55);
+  }
+
+  [data-theme="light"] .card-tag-count:hover i {
+    color: #1d4ed8;
+  }
+
+  /* Tooltip flotante al pasar el mouse por el icono de etiquetas */
+  .card-tag-hover-tooltip {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 8px);
+    right: 0;
+    min-width: 150px;
+    max-width: 240px;
+    background: rgba(15, 23, 42, 0.96);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+    padding: 8px 10px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.45);
+    z-index: 100;
+    pointer-events: auto;
+    cursor: pointer;
+    animation: fadeInTagTooltip 0.16s ease-out;
+  }
+
+  [data-theme="light"] .card-tag-hover-tooltip {
+    background: rgba(255, 255, 255, 0.98);
+    border-color: rgba(0, 0, 0, 0.12);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+  }
+
+  .card-tag-count-wrap:hover .card-tag-hover-tooltip {
+    display: block;
+  }
+
+  .card-tag-tooltip-header {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: rgba(255, 255, 255, 0.6);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  [data-theme="light"] .card-tag-tooltip-header {
+    color: rgba(0, 0, 0, 0.55);
+  }
+
+  .card-tag-tooltip-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .card-tag-tooltip-item {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: #ffffff;
+    padding: 2px 7px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  }
+
+  @keyframes fadeInTagTooltip {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   .card-title {

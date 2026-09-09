@@ -327,6 +327,55 @@ export class AiManager {
             const currentAssistantMap = await this.getAssistantMap(dynamicProjectId, dynamicServiceId);
             const currentAssistantId = currentAssistantMap[assigned] || this.assistantId;
 
+            // --- DETECCIÓN Y CONTEXTUALIZACIÓN DE BOTONES Y MENSAJES CITADOS ---
+            const isButton = ctx.type === 'button' || 
+                             ctx.payload?.type === 'button' || 
+                             !!ctx.payload?.button || 
+                             !!ctx.payload?.interactive || 
+                             !!ctx.payload?.message?.buttonsResponseMessage || 
+                             !!ctx.payload?.message?.templateButtonReplyMessage;
+
+            let quotedText: string | null = ctx.replyPreview?.content || ctx.rawPayload?.replyPreview?.content || null;
+
+            if (!quotedText) {
+                const contextInfo = ctx.context || ctx.payload?.context || ctx.payload?.message?.extendedTextMessage?.contextInfo || ctx.payload?.message?.buttonsResponseMessage?.contextInfo || ctx.payload?.message?.templateButtonReplyMessage?.contextInfo || null;
+                const quotedMsg = contextInfo?.quotedMessage;
+                if (quotedMsg) {
+                    quotedText = quotedMsg.conversation || 
+                                 quotedMsg.extendedTextMessage?.text || 
+                                 quotedMsg.buttonsMessage?.contentText || 
+                                 quotedMsg.templateMessage?.hydratedTemplate?.hydratedContentText || 
+                                 quotedMsg.interactiveMessage?.body?.text || null;
+                }
+            }
+
+            // Fallback genérico para botones: si no hay quotedText, buscar en DB el último mensaje del asistente
+            if (!quotedText && isButton) {
+                try {
+                    const recent = await HistoryHandler.getMessages(ctx.from, 15, 0, dynamicProjectId, dynamicServiceId);
+                    const lastAssistantMsg = recent.slice().reverse().find((m: any) => m.role === 'assistant');
+                    if (lastAssistantMsg && lastAssistantMsg.content) {
+                        quotedText = String(lastAssistantMsg.content).slice(0, 500);
+                    }
+                } catch (e) {
+                    // ignore
+                }
+            }
+
+            let messageForAI = ctx.body || '';
+
+            if (isButton) {
+                const buttonLabel = String(ctx.body || '').trim();
+                if (quotedText) {
+                    messageForAI = `[El usuario seleccionó el botón: "${buttonLabel}" en respuesta al siguiente mensaje o plantilla previa:\n"${quotedText}"]`;
+                    console.log(`[AiManager] 🔘 Inyectado contexto de botón interactivo para ${ctx.from}: "${buttonLabel}"`);
+                } else {
+                    messageForAI = `[El usuario seleccionó el botón: "${buttonLabel}"]`;
+                }
+            } else if (quotedText && !messageForAI.includes(quotedText)) {
+                messageForAI = `[En respuesta al mensaje previo: "${quotedText}"]\n${messageForAI}`;
+            }
+
             // --- DETECCIÓN Y CONTEXTUALIZACIÓN DE ANUNCIOS (CTWA - Facebook/Instagram) ---
             const referral = ctx.referral || ctx.payload?.referral || null;
             const externalAdReply = ctx.payload?.message?.extendedTextMessage?.contextInfo?.externalAdReply ||
@@ -335,10 +384,10 @@ export class AiManager {
             const adHeadline = referral?.headline || externalAdReply?.title || null;
             const adBody = referral?.body || externalAdReply?.body || null;
 
-            let messageForAI = ctx.body;
             if (adBody || adHeadline) {
-                const adContext = `[Contexto del Anuncio en Facebook/Instagram desde el que escribe el usuario: "${adHeadline || ''}" - "${adBody || ''}"]`;
-                if (!messageForAI.includes(adBody)) {
+                const adDetails = [adHeadline, adBody].filter(Boolean).join(' - ');
+                const adContext = `[Contexto del Anuncio en Facebook/Instagram desde el que escribe el usuario: "${adDetails}"]`;
+                if (!messageForAI.includes(adDetails)) {
                     messageForAI = `${adContext}\n\nMensaje del usuario: ${messageForAI}`;
                     console.log(`[AiManager] 🎯 Inyectado contexto de anuncio publicitario para ${ctx.from}: "${adHeadline || ''}"`);
                 }

@@ -498,7 +498,7 @@ function getMessagePreviewText(message) {
         .replace(/<[^>]*>/g, ' ')
         .replace(/\s+/g, ' ')
         .trim()
-        .slice(0, 120);
+        .slice(0, 500);
 }
 
 function escapeMsgHtml(value) {
@@ -581,7 +581,10 @@ function loadFileSizes() {
 
 function getReplyPreviewFromMessage(message) {
     if (!message) return null;
-    const raw = message.rawPayload || message.raw_payload || {};
+    let raw = message.rawPayload || message.raw_payload || {};
+    if (typeof raw === 'string') {
+        try { raw = JSON.parse(raw); } catch (e) { raw = {}; }
+    }
     const preview = message.replyPreview || message.reply_preview || raw.replyPreview || raw.reply_preview || null;
     if (preview) {
         return {
@@ -591,9 +594,52 @@ function getReplyPreviewFromMessage(message) {
     }
 
     const replyId = message.reply_to || raw.replyTo || raw.reply_to;
-    if (!replyId) return null;
-    const referenced = findMessageById(replyId);
-    return buildReplyPreview(referenced) || { id: replyId, author: getReplyAuthor(message), content: 'Mensaje', type: 'text' };
+    if (replyId) {
+        const referenced = findMessageById(replyId);
+        return buildReplyPreview(referenced) || { id: replyId, author: getReplyAuthor(message), content: 'Mensaje', type: 'text' };
+    }
+
+    // Fallback genérico para botones sin replyTo explícito:
+    // Si el usuario seleccionó un botón, asociar al último mensaje saliente de la empresa
+    const isButton = message.type === 'button' || raw?.type === 'button' || !!raw?.button || !!raw?.interactive;
+    if (isButton && Array.isArray(allMessages)) {
+        const msgIdx = allMessages.findIndex(m => (m.id && m.id === message.id) || (m.external_id && m.external_id === message.external_id));
+        const listToSearch = msgIdx > 0 ? allMessages.slice(0, msgIdx) : allMessages;
+        const lastAssistant = listToSearch.slice().reverse().find(m => m.role === 'assistant');
+        if (lastAssistant) {
+            return buildReplyPreview(lastAssistant);
+        }
+    }
+
+    return null;
+}
+
+function getAdReferralFromMessage(message) {
+    if (!message) return null;
+    let raw = message.rawPayload || message.raw_payload || {};
+    if (typeof raw === 'string') {
+        try { raw = JSON.parse(raw); } catch (e) { raw = {}; }
+    }
+    const referral = message.referral || raw.referral || null;
+    const externalAd = raw?.context?.externalAdReply || raw?.externalAdReply || null;
+
+    if (referral) {
+        return {
+            headline: referral.headline || referral.title || 'Anuncio en Facebook / Instagram',
+            body: referral.body || '',
+            sourceUrl: referral.source_url || referral.sourceUrl || '',
+            mediaUrl: referral.mediaUrl || referral.image_url || referral.video_url || referral.thumbnail_url || null
+        };
+    }
+    if (externalAd) {
+        return {
+            headline: externalAd.title || 'Anuncio en Facebook / Instagram',
+            body: externalAd.body || '',
+            sourceUrl: externalAd.sourceUrl || '',
+            mediaUrl: externalAd.mediaUrl || externalAd.thumbnailUrl || null
+        };
+    }
+    return null;
 }
 
 
@@ -1657,8 +1703,31 @@ function generateMessageHtml(m, isNew = false) {
     const date = new Date(m.created_at);
     const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
+    let raw = m.rawPayload || m.raw_payload || {};
+    if (typeof raw === 'string') {
+        try { raw = JSON.parse(raw); } catch (e) { raw = {}; }
+    }
+
     let contentHtml = m.content || '';
-    const type = m.type || 'text';
+    const type = m.type || raw.type || 'text';
+
+    const adReferral = getAdReferralFromMessage(m);
+    const adCardHtml = adReferral ? `
+            <div class="msg-ad-card" onclick="event.stopPropagation();">
+                <div class="msg-ad-header">
+                    <span class="msg-ad-badge"><i class="fab fa-facebook"></i> Anuncio</span>
+                    ${adReferral.sourceUrl ? `<a href="${escapeMsgHtml(adReferral.sourceUrl)}" target="_blank" rel="noopener" class="msg-ad-link"><i class="fas fa-external-link-alt"></i> Ver anuncio</a>` : ''}
+                </div>
+                <div class="msg-ad-title">${escapeMsgHtml(adReferral.headline)}</div>
+                ${adReferral.body ? `<div class="msg-ad-desc">${escapeMsgHtml(adReferral.body)}</div>` : ''}
+            </div>` : '';
+
+    const isButton = type === 'button' || raw?.type === 'button' || !!raw?.button || !!raw?.interactive;
+    const buttonTagHtml = isButton ? `
+            <div class="msg-button-tag">
+                <i class="fas fa-hand-pointer"></i> Opción seleccionada
+            </div>` : '';
+
     const replyPreview = getReplyPreviewFromMessage(m);
     const replyPreviewHtml = replyPreview ? `
             <div class="msg-reply-quote" onclick="event.stopPropagation();">
@@ -1787,7 +1856,9 @@ function generateMessageHtml(m, isNew = false) {
                 <input type="checkbox" class="msg-checkbox" id="checkbox-${externalId}" onchange="window.toggleDeleteSelection && window.toggleDeleteSelection('${externalId}')">
             </div>
             ${dropdownHtml}
+            ${adCardHtml}
             ${replyPreviewHtml}
+            ${buttonTagHtml}
             <div class="msg-content">${contentHtml}</div>
             <span class="msg-time">${time}${checkHtml}</span>
             ${reactionHtml}

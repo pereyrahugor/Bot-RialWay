@@ -19,7 +19,8 @@ window.defaultCRMConfig = [
     { id: 'crm-shared-notes', label: 'Notas 2 (Compartidas Empresa)', visible: true, order: 15 },
     { id: 'crm-due-date', label: 'Fecha Alerta / Seguimiento', visible: true, order: 16 },
     { id: 'crm-priority', label: 'Prioridad', visible: true, order: 17 },
-    { id: 'crm-status', label: 'Estado del Lead (CRM)', visible: true, order: 18 }
+    { id: 'crm-status', label: 'Estado del Lead (CRM)', visible: true, order: 18 },
+    { id: 'crm-tags', label: 'Etiquetas', visible: true, order: 19 }
 ];
 
 window.crmConfig = [...window.defaultCRMConfig];

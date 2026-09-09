@@ -35,6 +35,8 @@ manual_migracion_multiproyecto.md
 trust_credentials.md
 trust_implementation_required.md
 trust_*.md
+docs/clientes/
+docs/clientes/*
 
 API_EXTERNAL_DOCUMENTATION.md
 *.cjs
