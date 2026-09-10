@@ -1,6 +1,7 @@
 # Table of contents
 
 * [🚀 Introducción](README.md)
+* [🧭 Demostración y Test Guiado](INSTRUCCIONES_TEST_GUIADO.md)
 
 ## 🛠 Configuración
 * [Variables de Entorno](configuracion/variables-entorno.md)
@@ -18,6 +19,7 @@
 * [Ubicación y Google Maps](whatsapp/flujo-ubicacion.md)
 * [Inactividad (Idle)](whatsapp/flujo-inactividad.md)
 * [Comandos del Administrador](whatsapp/comandos.md)
+* [Instrucciones de Comandos Operativos](INSTRUCCIONES_COMANDOS.md)
 
 ## 📦 Módulos Internos
 * [Assistant Processor](modulos/assistant-processor.md)

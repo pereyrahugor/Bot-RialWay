@@ -46,6 +46,19 @@ function initLoginHelpers() {
             passInput.focus();
         });
     }
+
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('demo') === 'true') {
+        loginDemo();
+    }
+}
+
+function loginDemo() {
+    const userInput = document.getElementById('user');
+    const passInput = document.getElementById('pass');
+    if (userInput) userInput.value = 'TestIngMate';
+    if (passInput) passInput.value = 'IngMateUndav';
+    setTimeout(() => login(), 150);
 }
 
 async function login() {

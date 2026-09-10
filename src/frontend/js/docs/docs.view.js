@@ -34,6 +34,9 @@ window.docsView = {
                 <button class="docs-nav-tab" id="btn-connect-docs" onclick="switchDoc('connect')" role="tab">
                     <i class="fas fa-plug"></i><span>API Conexión Meta</span>
                 </button>
+                <button class="docs-nav-tab" id="btn-test-guiado-docs" onclick="switchDoc('test_guiado')" role="tab">
+                    <i class="fas fa-route"></i><span>Test Guiado / Demo</span>
+                </button>
             </nav>
 
             <div class="docs-content-area">

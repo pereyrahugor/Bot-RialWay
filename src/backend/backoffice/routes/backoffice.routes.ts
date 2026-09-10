@@ -2572,6 +2572,23 @@ export const registerBackofficeRoutes = (app: any) => {
         res.json(result);
     });
 
+    // --- RESET DE DEMO CRM ---
+    app.post('/api/backoffice/demo/reset', backofficeAuth, async (req: any, res: any) => {
+        try {
+            const serviceId = resolveServiceId(req);
+            const isSuperAdmin = req.auth?.isSuperAdmin === true;
+            if (serviceId !== '8f906621-de6d-441a-97bc-fa732cf36456' && !isSuperAdmin) {
+                return res.status(400).json({ success: false, error: 'El reseteo de demo solo está habilitado para el servicio de muestra.' });
+            }
+            const { DemoResetWorker } = await import('../../workers/demoReset.worker');
+            const result = await DemoResetWorker.resetDemo();
+            res.json(result);
+        } catch (error: any) {
+            console.error('[API] Error al restablecer demo:', error);
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
     // --- ONBOARDING META ---
 
     app.get('/api/backoffice/whatsapp/config', backofficeAuth, async (req: any, res: any) => {
@@ -4144,6 +4161,18 @@ export const registerBackofficeRoutes = (app: any) => {
             }
             const projectId = resolveProjectId(req);
             const serviceId = resolveServiceId(req);
+
+            // Protección de seguridad para el entorno de Demo (Sandbox)
+            if (serviceId === '8f906621-de6d-441a-97bc-fa732cf36456') {
+                const DEMO_IMMUTABLE_KEYS = ['ADMIN_PASS', 'ADMIN_USER', 'SUPABASE_KEY', 'SUPABASE_URL', 'RAILWAY_TOKEN', 'OPENAI_API_KEY'];
+                if (DEMO_IMMUTABLE_KEYS.includes(key) && !req.auth?.isSuperAdmin) {
+                    return res.status(403).json({ 
+                        success: false, 
+                        error: 'Esta credencial está protegida en el entorno de demostración para preservar la disponibilidad del sandbox.' 
+                    });
+                }
+            }
+
             await depsHistoryHandler.saveSetting(key, value, projectId, serviceId);
             if (key === 'GLOBAL_BOT_ENABLED' || key === 'HUMAN_INACTIVITY_TIMEOUT_MINUTES') {
                 historyEvents.emit('setting_changed', { key, value, projectId, serviceId });
@@ -5345,6 +5374,8 @@ Hemos recibido tu pago con Ã©xito.
                 docType = 'INSTRUCCIONES_CONNECT.md';
             } else if (req.query.type === 'comandos' || req.query.type === 'commands' || req.query.type === 'instrucciones_comandos') {
                 docType = 'INSTRUCCIONES_COMANDOS.md';
+            } else if (req.query.type === 'test_guiado' || req.query.type === 'demo' || req.query.type === 'instrucciones_test_guiado') {
+                docType = 'INSTRUCCIONES_TEST_GUIADO.md';
             }
             const rootDir = process.cwd();
             const docsPath = path.join(rootDir, 'docs', docType);

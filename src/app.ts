@@ -22,6 +22,7 @@ import { initSocketIO } from "./backend/sockets/socket.manager";
 import { registerProviderEvents, hasActiveSession } from "./backend/providers/provider.manager";
 import { startHumanInactivityWorker } from "./backend/workers/humanInactivity.worker";
 import { startFileCleanupWorker } from "./backend/workers/fileCleanup.worker";
+import { DemoResetWorker } from "./backend/workers/demoReset.worker";
 import { AiManager } from "./backend/bot/ai.manager";
 import { isApiKeyCommand, isAuthorizedApiKeyRequester } from "./backend/utils/authCommands";
 import { registerExternalApiRoutes } from "./backend/apis/external/external_api.routes";
@@ -637,6 +638,7 @@ const main = async () => {
     // Se ejecuta periódicamente verificando inactividad humana según el timeout configurado en minutos (default 30 min)
     startHumanInactivityWorker(30, 1);
     startFileCleanupWorker(5);
+    DemoResetWorker.initCron();
 
     // 11. Start Server and Sockets
     try {

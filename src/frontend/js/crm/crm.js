@@ -52,6 +52,12 @@ async function _initCRMPage() {
     }
     const assigneeSection = document.getElementById('assignee-section');
     if (assigneeSection) assigneeSection.style.display = 'block';
+
+    const isDemo = (window.railwayServiceId === '8f906621-de6d-441a-97bc-fa732cf36456');
+    const btnDemoReset = document.getElementById('btn-demo-reset');
+    const menuDemoReset = document.getElementById('menu-demo-reset');
+    if (btnDemoReset) btnDemoReset.style.display = isDemo ? 'inline-flex' : 'none';
+    if (menuDemoReset) menuDemoReset.style.display = isDemo ? 'block' : 'none';
     
     // Cargar equipo para los selects (para todos los usuarios)
     await loadTeam();
@@ -156,6 +162,58 @@ window.toggleBulkDeleteSelectAll = toggleBulkDeleteSelectAll;
 window.applyBulkDeleteFilters = applyBulkDeleteFilters;
 window.clearBulkDeleteFilters = clearBulkDeleteFilters;
 window.confirmBulkDeleteSelectedLeads = confirmBulkDeleteSelectedLeads;
+
+window.confirmResetDemo = async function() {
+    if (typeof Swal === 'undefined') {
+        if (!confirm('¿Restablecer datos de Demo a su estado inicial? Se restaurarán los 12 leads y etapas originales.')) return;
+    } else {
+        const res = await Swal.fire({
+            title: '¿Restablecer datos de Demo?',
+            text: 'Se limpiarán las modificaciones de prueba y se volverán a cargar los leads y etapas modelo originales.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, restablecer',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#f59e0b'
+        });
+        if (!res.isConfirmed) return;
+    }
+
+    try {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: 'Restableciendo datos...',
+                text: 'Por favor espere un momento',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading()
+            });
+        }
+        const serviceParam = window.railwayServiceId ? `&serviceId=${encodeURIComponent(window.railwayServiceId)}` : '';
+        const resp = await fetch(`/api/backoffice/demo/reset?token=${activeToken}${serviceParam}`, { method: 'POST' });
+        const json = await resp.json();
+        if (json.success) {
+            if (typeof Swal !== 'undefined') {
+                await Swal.fire('¡Listo!', 'El entorno de demo ha sido restablecido a su estado inicial.', 'success');
+            } else {
+                alert('¡Listo! Entorno de demo restablecido.');
+            }
+            await loadCRMState();
+            await syncCRM();
+        } else {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire('Error', json.error || 'No se pudo restablecer el demo', 'error');
+            } else {
+                alert('Error: ' + (json.error || 'No se pudo restablecer'));
+            }
+        }
+    } catch (e) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire('Error', 'Error de conexión con el servidor', 'error');
+        } else {
+            alert('Error de conexión');
+        }
+    }
+};
 
 async function loadCRMState() {
     // Intentar cargar el orden de las columnas desde el servidor

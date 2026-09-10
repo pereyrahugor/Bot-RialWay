@@ -24,6 +24,9 @@ window.crmView = {
                             <span class="nav-dot crm-subview-badge" data-dot-sync="dot-tareas" style="display:none;" aria-hidden="true"></span>
                         </button>
                     </div>
+                    <button id="btn-demo-reset" class="btn btn-sm" onclick="window.confirmResetDemo()" title="Restablecer datos de muestra del CRM" style="display:none; background:rgba(245,158,11,0.15); border:1px solid #f59e0b; color:#f59e0b; font-weight:600; padding:6px 12px; gap:6px; align-items:center;">
+                        <i class="fas fa-rotate-left"></i> Restablecer Demo
+                    </button>
                     <button class="btn btn-primary" onclick="window.openNewLeadModal()">
                         <i class="fas fa-plus"></i> Crear Lead
                     </button>
@@ -32,6 +35,9 @@ window.crmView = {
                             <i class="fas fa-ellipsis-vertical"></i>
                         </button>
                         <ul class="header-dropdown" id="crm-more-dropdown">
+                            <li id="menu-demo-reset" style="display:none; color:#f59e0b;" onclick="_closeCRMMenu(); window.confirmResetDemo()">
+                                <i class="fas fa-rotate-left"></i> Restablecer Demo
+                            </li>
                             <li onclick="_closeCRMMenu(); addNewColumn()">
                                 <i class="fas fa-plus"></i> Nuevo Estado
                             </li>
