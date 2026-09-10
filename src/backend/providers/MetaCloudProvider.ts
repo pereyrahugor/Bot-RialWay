@@ -1326,6 +1326,7 @@ class MetaCloudProvider extends ProviderClass {
                             const formatedMessage: any = {
                                 id: msg.id,
                                 from: actualIsEcho ? recipientId : (wa_id || msg.from),
+                                to: value.metadata?.phone_number_id || phone_number_id || null,
                                 body: bodyText,
                                 phoneNumber: actualIsEcho ? recipientId : msg.from,
                                 userId: bsuid, // Añadimos el BSUID al contexto
@@ -1352,11 +1353,7 @@ class MetaCloudProvider extends ProviderClass {
 
                                     if (localPath && localPath !== "no-file") {
                                         formatedMessage.localPath = localPath;
-                                        // Si el cuerpo era solo un evento que no sea de voz, lo actualizamos con la ruta para que el HistoryHandler lo guarde
-                                        if (formatedMessage.body && formatedMessage.body.startsWith('_event_') && formatedMessage.type !== 'voice') {
-                                            // Guardamos la ruta relativa para el CRM
-                                            formatedMessage.body = localPath;
-                                        }
+                                        // No sobreescribir formatedMessage.body para no romper el enrutamiento de BuilderBot (EVENTS.MEDIA / EVENTS.DOCUMENT)
                                     }
                                 } catch (err) {
                                     console.warn(`⚠️ [MetaCloudProvider] Media detectado pero no se pudo descargar a tiempo para el historial.`);
@@ -1427,9 +1424,6 @@ class MetaCloudProvider extends ProviderClass {
                             this.saveFile(formatedMessage).then(localPath => {
                                 if (localPath && localPath !== "no-file") {
                                     formatedMessage.localPath = localPath;
-                                    if (formatedMessage.body && formatedMessage.body.startsWith('_event_')) {
-                                        formatedMessage.body = localPath;
-                                    }
                                 }
                                 this.emit('message', formatedMessage);
                             }).catch(() => this.emit('message', formatedMessage));

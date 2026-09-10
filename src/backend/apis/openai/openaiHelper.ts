@@ -59,7 +59,9 @@ export async function getOpenAIVision(projectId?: string, serviceId?: string): P
     const targetServiceId = serviceId || HistoryHandler.SERVICE_IDENTIFIER;
     const key = await HistoryHandler.getConfig('OPENAI_API_KEY_IMG', targetProjectId, targetServiceId);
 
-    if (!key) return await getOpenAI(targetProjectId, targetServiceId); // Fallback al principal
+    if (!key || key.includes('*****') || key === 'tu_api_key_aqui' || key.trim() === '') {
+        return await getOpenAI(targetProjectId, targetServiceId); // Fallback al principal
+    }
 
     const cacheKey = `${targetProjectId}:${targetServiceId}:${key}`;
     if (!_openaiVisionMap.has(cacheKey)) {

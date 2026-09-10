@@ -77,8 +77,8 @@ export async function processImageWithVision(
       || DEFAULT_IMG_PROMPT;
   }
 
-  // 3. Obtener el modelo configurado o fallback a gpt-4o-mini
-  const model = await HistoryHandler.getConfig('OPENAI_MODEL', projectId, serviceId) || "gpt-4o-mini";
+  // 3. Obtener el modelo configurado o fallback a gpt-5.4-mini
+  const model = await HistoryHandler.getConfig('OPENAI_MODEL', projectId, serviceId) || "gpt-5.4-mini";
 
   const baseURL = getOpenAIBaseUrl();
   const openai = new OpenAI({ 

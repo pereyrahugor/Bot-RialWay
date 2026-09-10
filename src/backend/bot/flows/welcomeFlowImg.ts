@@ -30,7 +30,7 @@ import { userQueues, userLocks, handleQueue } from "../queueManager";
 const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
   async (ctx, { flowDynamic, provider, gotoFlow, state }) => {
     const { HistoryHandler } = await import("../../db/historyHandler");
-    const botPhoneNumber = provider?.globalVendorArgs?.phone_number_id || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
+    const botPhoneNumber = ctx.recipientPhoneId || provider?.globalVendorArgs?.phone_number_id || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
     const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || HistoryHandler.PROJECT_IDENTIFIER;
     const dynamicServiceId = await HistoryHandler.getServiceIdByRecipient(botPhoneNumber) || HistoryHandler.SERVICE_IDENTIFIER;
 
@@ -41,7 +41,7 @@ const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
       return;
     }
 
-    const { getOpenAIVision } = await import("../../apis/openai/openaiHelper");
+    const { getOpenAIVision, getOpenAI } = await import("../../apis/openai/openaiHelper");
     const openai = await getOpenAIVision(dynamicProjectId, dynamicServiceId);
     if (!openai) {
       console.warn("⚠️ IA Vision Desactivada: Saltando análisis de imagen en flujo.");
@@ -137,29 +137,61 @@ const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
           }
       }
 
-      // Cargar modelo dinámico de la base de datos para análisis convencional
-      let visionModel = await HistoryHandler.getConfig('OPENAI_MODEL', dynamicProjectId, dynamicServiceId) || "gpt-4o-mini";
-      // Si el modelo es de razonamiento (o1, o3, etc.), hacemos fallback a gpt-4o-mini porque no soportan entrada de visión en la llamada estándar
+      // Cargar prompt dinámico de imagen de la base de datos
+      const customPrompt = await HistoryHandler.getSetting('ASSISTANT_PROMPT_IMG', dynamicProjectId, dynamicServiceId)
+          || await HistoryHandler.getConfig('ASSISTANT_PROMPT_IMG', dynamicProjectId, dynamicServiceId);
+      const visionPrompt = (customPrompt && typeof customPrompt === 'string' && customPrompt.trim())
+          ? customPrompt.trim()
+          : "Describe esta imagen detalladamente para que el asistente pueda entender su contenido y responder al usuario.";
+
+      // Cargar modelo dinámico de la base de datos para análisis convencional (default gpt-5.4-mini)
+      let visionModel = await HistoryHandler.getConfig('OPENAI_MODEL', dynamicProjectId, dynamicServiceId) || "gpt-5.4-mini";
+      // Si el modelo es de razonamiento (o1, o3, etc.) sin visión estándar, fallback
       if (visionModel.startsWith('o1') || visionModel.startsWith('o3')) {
-        visionModel = "gpt-4o-mini";
+        visionModel = "gpt-5.4-mini";
       }
 
-      console.log(`Analizando imagen con modelo: ${visionModel}...`);
-      const response = await openai.chat.completions.create({
-        model: visionModel,
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: "Describe esta imagen detalladamente para que el asistente pueda entender su contenido y responder al usuario." },
+      console.log(`[welcomeFlowImg] Analizando imagen con modelo: ${visionModel} y prompt (${visionPrompt.length} chars)...`);
+      let response: any;
+      try {
+        response = await openai.chat.completions.create({
+          model: visionModel,
+          messages: [
+            { role: "system", content: visionPrompt },
+            {
+              role: "user",
+              content: [
+                {
+                  type: "image_url",
+                  image_url: { url: `data:image/jpeg;base64,${buffer.toString("base64")}`, detail: "high" },
+                },
+              ],
+            },
+          ],
+        });
+      } catch (apiErr: any) {
+        console.warn(`[welcomeFlowImg] ⚠️ Error con cliente de visión (${apiErr?.message}). Reintentando con OpenAI principal...`);
+        const fallbackOpenai = await getOpenAI(dynamicProjectId, dynamicServiceId);
+        if (fallbackOpenai) {
+          response = await fallbackOpenai.chat.completions.create({
+            model: visionModel,
+            messages: [
+              { role: "system", content: visionPrompt },
               {
-                type: "image_url",
-                image_url: { url: `data:image/jpeg;base64,${buffer.toString("base64")}` },
+                role: "user",
+                content: [
+                  {
+                    type: "image_url",
+                    image_url: { url: `data:image/jpeg;base64,${buffer.toString("base64")}`, detail: "high" },
+                  },
+                ],
               },
             ],
-          },
-        ],
-      });
+          });
+        } else {
+          throw apiErr;
+        }
+      }
 
       const result = response.choices[0].message.content || "No se pudo obtener una descripción de la imagen.";
 
