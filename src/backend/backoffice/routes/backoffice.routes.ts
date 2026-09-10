@@ -6618,6 +6618,22 @@ export const processImportExcel = async (req: any, res: any) => {
         const tagsToProcess = new Map<string, string[]>(); // phone -> [tagNames]
         const allUniqueTags = new Set<string>();
 
+        const userMap = new Map<string, string>(); // username -> uuid
+        try {
+            const { data: projectUsers } = await supabase
+                .from('users')
+                .select('id, username')
+                .eq('project_id', projectId);
+            if (projectUsers) {
+                for (const u of projectUsers) {
+                    if (u.username) userMap.set(u.username.toLowerCase().trim(), u.id);
+                    if (u.id) userMap.set(u.id.toLowerCase().trim(), u.id);
+                }
+            }
+        } catch (uErr) {
+            console.warn('[processImportExcel] No se pudieron precargar usuarios para asignación:', uErr);
+        }
+
         for (const row of data) {
             let rawPhone = '';
             let name = '';
@@ -6707,6 +6723,25 @@ export const processImportExcel = async (req: any, res: any) => {
                 shared_notes: sharedNotes || undefined
             };
 
+            let resolvedAssignedTo: string | null = null;
+            let resolvedAssignedAgent = 'asistente1';
+
+            if (assignedTo) {
+                const cleanAssigned = String(assignedTo).trim();
+                const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanAssigned);
+                if (isUuid) {
+                    resolvedAssignedTo = cleanAssigned;
+                } else if (userMap.has(cleanAssigned.toLowerCase())) {
+                    resolvedAssignedTo = userMap.get(cleanAssigned.toLowerCase())!;
+                } else {
+                    const normAgent = cleanAssigned.toLowerCase().replace(/\s+/g, '');
+                    if (normAgent.startsWith('asistente') || normAgent.startsWith('agent') || normAgent.startsWith('bot')) {
+                        resolvedAssignedAgent = normAgent;
+                    }
+                    metadataObj.assigned_to_name = cleanAssigned;
+                }
+            }
+
             // Deduplicación en memoria para el archivo importado
             const existing = uniqueChatsMap.get(phone);
             uniqueChatsMap.set(phone, {
@@ -6716,14 +6751,14 @@ export const processImportExcel = async (req: any, res: any) => {
                 name: fullName || (existing ? existing.name : null),
                 type: 'whatsapp',
                 bot_enabled: true,
-                assigned_agent: 'asistente1',
+                assigned_agent: resolvedAssignedAgent || (existing ? existing.assigned_agent : 'asistente1'),
                 last_message_at: new Date().toISOString(),
                 cuit_dni: cuit || (existing ? existing.cuit_dni : undefined),
                 email: email || (existing ? existing.email : undefined),
                 address: direccion || (existing ? existing.address : undefined),
                 notes: notes || (existing ? existing.notes : undefined),
                 crm_status: crmStatus || (existing ? existing.crm_status : 'Nuevo'),
-                assigned_to: assignedTo || (existing ? existing.assigned_to : undefined),
+                assigned_to: resolvedAssignedTo || (existing ? existing.assigned_to : undefined),
                 metadata: {
                     ...(existing?.metadata || {}),
                     ...metadataObj

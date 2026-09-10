@@ -4913,9 +4913,16 @@ export class HistoryHandler {
                     email: c.email !== undefined ? c.email : (existing ? existing.email : undefined),
                     address: c.address !== undefined ? c.address : (existing ? existing.address : undefined),
                     notes: c.notes !== undefined ? c.notes : (existing ? existing.notes : undefined),
-                    crm_status: c.crm_status !== undefined ? c.crm_status : (existing ? existing.crm_status : undefined),
-                    assigned_to: c.assigned_to !== undefined ? c.assigned_to : (existing ? existing.assigned_to : undefined)
+                    crm_status: c.crm_status !== undefined ? c.crm_status : (existing ? existing.crm_status : undefined)
                 };
+                let validAssignedTo: string | null | undefined = c.assigned_to !== undefined ? c.assigned_to : (existing ? existing.assigned_to : undefined);
+                if (validAssignedTo && typeof validAssignedTo === 'string') {
+                    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(validAssignedTo.trim());
+                    if (!isUuid) {
+                        validAssignedTo = null;
+                    }
+                }
+                upsertData.assigned_to = validAssignedTo;
                 if (targetRowServiceId && targetRowServiceId !== 'default' && targetRowServiceId !== 'default_service') {
                     upsertData.service_id = targetRowServiceId;
                 } else {
