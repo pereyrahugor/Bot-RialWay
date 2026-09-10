@@ -62,3 +62,6 @@ env's/.env*
 
 src/backend/scratch/
 
+# Archivos de medios y capturas de demostración
+demo_media/
+docs/demo_media/

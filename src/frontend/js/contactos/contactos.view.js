@@ -165,6 +165,8 @@ window.contactosView = (() => {
             const params = new URLSearchParams();
             params.set('token', state.token);
             params.set('limit', '200');
+            if (window.railwayProjectId) params.set('projectId', window.railwayProjectId);
+            if (window.railwayServiceId) params.set('serviceId', window.railwayServiceId);
             if (state.search) params.set('search', state.search);
             if (state.channelFilter) params.set('channel', state.channelFilter);
 
@@ -351,9 +353,16 @@ window.contactosView = (() => {
         let saved = 0;
         let failed = 0;
 
+        const targetProjectId = (typeof window !== 'undefined' && window.railwayProjectId) ? window.railwayProjectId : '';
+        const targetServiceId = (typeof window !== 'undefined' && window.railwayServiceId) ? window.railwayServiceId : '';
+
         for (const row of state.importRows) {
             try {
-                const res = await fetch(`/api/backoffice/contacts?token=${encodeURIComponent(state.token)}`, {
+                const params = new URLSearchParams({ token: state.token });
+                if (targetProjectId) params.set('projectId', targetProjectId);
+                if (targetServiceId) params.set('serviceId', targetServiceId);
+
+                const res = await fetch(`/api/backoffice/contacts?${params.toString()}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -364,6 +373,8 @@ window.contactosView = (() => {
                         phoneNormalized: row.phoneNormalized,
                         email: row.email,
                         source: 'import_file',
+                        projectId: targetProjectId,
+                        serviceId: targetServiceId,
                         metadata: {
                             file_name: state.selectedFileName,
                             original_row: row.originalIndex + 1

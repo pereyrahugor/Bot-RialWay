@@ -4262,7 +4262,16 @@ function toggleImportModal() {
 }
 
 function downloadImportTemplate() {
-    window.open(`/api/backoffice/chats/import-template?token=${encodeURIComponent(token)}`, '_blank');
+    const activeChat = chats.find(c => c.id === activeChatId);
+    const targetProjectId = activeChat?.project_id || window.railwayProjectId || '';
+    const targetServiceId = (_isSuperAdminMode && typeof _activeServiceFilter !== 'undefined' && _activeServiceFilter !== 'all')
+        ? _activeServiceFilter
+        : (activeChat?.service_id || window.railwayServiceId || '');
+
+    const params = new URLSearchParams({ token });
+    if (targetProjectId) params.set('projectId', targetProjectId);
+    if (targetServiceId) params.set('serviceId', targetServiceId);
+    window.open(`/api/backoffice/chats/import-template?${params.toString()}`, '_blank');
 }
 
 async function startImportExcel() {
@@ -4281,13 +4290,30 @@ async function startImportExcel() {
     const formData = new FormData();
     formData.append('file', file);
 
+    const activeChat = chats.find(c => c.id === activeChatId);
+    const targetProjectId = activeChat?.project_id || window.railwayProjectId || '';
+    const targetServiceId = (_isSuperAdminMode && typeof _activeServiceFilter !== 'undefined' && _activeServiceFilter !== 'all')
+        ? _activeServiceFilter
+        : (activeChat?.service_id || window.railwayServiceId || '');
+
+    if (targetProjectId) {
+        formData.append('projectId', targetProjectId);
+    }
+    if (targetServiceId) {
+        formData.append('serviceId', targetServiceId);
+    }
+
     btn.disabled = true;
     progressDiv.style.display = 'block';
     progressBar.style.width = '10%';
     statusText.innerText = 'Subiendo archivo...';
 
     try {
-        const res = await fetch(`/api/backoffice/chats/import?token=${token}`, {
+        const queryParams = new URLSearchParams({ token });
+        if (targetProjectId) queryParams.set('projectId', targetProjectId);
+        if (targetServiceId) queryParams.set('serviceId', targetServiceId);
+
+        const res = await fetch(`/api/backoffice/chats/import?${queryParams.toString()}`, {
             method: 'POST',
             body: formData
         });
@@ -4417,16 +4443,24 @@ async function saveIndividualContact() {
 
     try {
         const activeChat = chats.find(c => c.id === activeChatId);
-        const pId = activeChat?.project_id || '';
+        const pId = activeChat?.project_id || window.railwayProjectId || '';
+        const sId = (_isSuperAdminMode && typeof _activeServiceFilter !== 'undefined' && _activeServiceFilter !== 'all')
+            ? _activeServiceFilter
+            : (activeChat?.service_id || window.railwayServiceId || '');
 
-        const res = await fetch(`/api/backoffice/chats/create-individual?token=${token}&projectId=${pId}`, {
+        const queryParams = new URLSearchParams({ token });
+        if (pId) queryParams.set('projectId', pId);
+        if (sId) queryParams.set('serviceId', sId);
+
+        const res = await fetch(`/api/backoffice/chats/create-individual?${queryParams.toString()}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 rawPhone: phoneVal,
                 name: nameVal,
                 tagIds: selectedTagIds,
-                projectId: pId
+                projectId: pId,
+                serviceId: sId
             })
         });
 

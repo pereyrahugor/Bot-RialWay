@@ -4897,9 +4897,11 @@ export class HistoryHandler {
                 if (!cleanId || cleanId.trim() === '') continue;
 
                 const existing = chatsMap.get(cleanId);
+                const targetRowProjectId = c.project_id || targetProjectId;
+                const targetRowServiceId = c.service_id || targetServiceId;
                 const upsertData: any = {
                     id: cleanId,
-                    project_id: targetProjectId,
+                    project_id: targetRowProjectId,
                     name: c.name || (existing ? existing.name : null),
                     type: c.type || 'whatsapp',
                     last_message_at: c.last_message_at || new Date().toISOString(),
@@ -4914,8 +4916,8 @@ export class HistoryHandler {
                     crm_status: c.crm_status !== undefined ? c.crm_status : (existing ? existing.crm_status : undefined),
                     assigned_to: c.assigned_to !== undefined ? c.assigned_to : (existing ? existing.assigned_to : undefined)
                 };
-                if (targetServiceId && targetServiceId !== 'default' && targetServiceId !== 'default_service') {
-                    upsertData.service_id = targetServiceId;
+                if (targetRowServiceId && targetRowServiceId !== 'default' && targetRowServiceId !== 'default_service') {
+                    upsertData.service_id = targetRowServiceId;
                 } else {
                     upsertData.service_id = HistoryHandler.SERVICE_IDENTIFIER;
                 }

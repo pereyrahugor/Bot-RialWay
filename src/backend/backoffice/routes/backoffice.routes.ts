@@ -1223,7 +1223,13 @@ export const registerBackofficeRoutes = (app: any) => {
     });
 
     app.post('/api/backoffice/chats/import', backofficeAuth, (req: any, res: any) => {
-        return processImportExcel(req, res);
+        upload.single('file')(req, res, (err: any) => {
+            if (err) {
+                console.error("❌ [BACKOFFICE] Error de Multer al importar Excel:", err);
+                return res.status(400).json({ success: false, error: `Error de archivo: ${err.message}` });
+            }
+            return processImportExcel(req, res);
+        });
     });
 
     app.post('/api/backoffice/chats/create-individual', backofficeAuth, (req: any, res: any) => {
@@ -6592,10 +6598,11 @@ Hemos recibido tu pago con Ã©xito.
 export const processImportExcel = async (req: any, res: any) => {
     const depsHistoryHandler = HistoryHandlerClass;
 
-    if (!req.file) return res.status(400).json({ success: false, error: 'No se subiÃ³ ningÃºn archivo' });
+    if (!req.file) return res.status(400).json({ success: false, error: 'No se subió ningún archivo' });
 
-    const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
-    const serviceId = resolveServiceId(req) || depsHistoryHandler.SERVICE_IDENTIFIER;
+    const projectId = req.body?.projectId || req.query?.projectId || resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
+    const serviceId = req.body?.serviceId || req.query?.serviceId || resolveServiceId(req) || depsHistoryHandler.SERVICE_IDENTIFIER;
+    const effectiveServiceId = (serviceId && serviceId !== 'default' && serviceId !== 'default_service') ? serviceId : depsHistoryHandler.SERVICE_IDENTIFIER;
 
     try {
         const fileBuffer = fs.readFileSync(req.file.path);
@@ -6704,10 +6711,13 @@ export const processImportExcel = async (req: any, res: any) => {
             const existing = uniqueChatsMap.get(phone);
             uniqueChatsMap.set(phone, {
                 id: phone,
+                project_id: projectId,
+                service_id: effectiveServiceId,
                 name: fullName || (existing ? existing.name : null),
                 type: 'whatsapp',
                 bot_enabled: true,
                 assigned_agent: 'asistente1',
+                last_message_at: new Date().toISOString(),
                 cuit_dni: cuit || (existing ? existing.cuit_dni : undefined),
                 email: email || (existing ? existing.email : undefined),
                 address: direccion || (existing ? existing.address : undefined),
@@ -6734,17 +6744,17 @@ export const processImportExcel = async (req: any, res: any) => {
         const chatsToSync = Array.from(uniqueChatsMap.values());
 
         // 1. Upsert de Chats (Normalizados)
-        await depsHistoryHandler.syncChats(chatsToSync, projectId, serviceId);
+        await depsHistoryHandler.syncChats(chatsToSync, projectId, effectiveServiceId);
 
         // 2. Procesar Etiquetas
         if (allUniqueTags.size > 0) {
-            const existingTags = await depsHistoryHandler.getTags(projectId, serviceId);
+            const existingTags = await depsHistoryHandler.getTags(projectId, effectiveServiceId);
             const tagMap = new Map<string, string>(); // name -> id
             existingTags.forEach((t: any) => tagMap.set(t.name.toLowerCase(), t.id));
 
             for (const tagName of allUniqueTags) {
                 if (!tagMap.has(tagName.toLowerCase())) {
-                    const newTag = await depsHistoryHandler.createTag(tagName, '#6366f1', projectId, serviceId);
+                    const newTag = await depsHistoryHandler.createTag(tagName, '#6366f1', projectId, effectiveServiceId);
                     if (newTag.success && newTag.tag) {
                         tagMap.set(tagName.toLowerCase(), newTag.tag.id);
                     }
@@ -6756,13 +6766,18 @@ export const processImportExcel = async (req: any, res: any) => {
                 for (const name of tagNames) {
                     const tagId = tagMap.get(name.toLowerCase());
                     if (tagId) {
-                        associations.push({ chat_id: phone, tag_id: tagId });
+                        associations.push({
+                            chat_id: phone,
+                            tag_id: tagId,
+                            project_id: projectId,
+                            service_id: effectiveServiceId
+                        });
                     }
                 }
             }
 
             if (associations.length > 0) {
-                await depsHistoryHandler.syncChatTags(associations, projectId, serviceId);
+                await depsHistoryHandler.syncChatTags(associations, projectId, effectiveServiceId);
             }
         }
 
