@@ -1,3 +1,6 @@
+const DEMO_BASE_URL = 'https://crm-neurolinks-test-demo.up.railway.app';
+const DEMO_HOSTNAME = 'crm-neurolinks-test-demo.up.railway.app';
+
 const REMEMBER_LOGIN_KEY = 'backoffice_remember_login';
 const REMEMBER_USER_KEY = 'backoffice_remember_user';
 const REMEMBER_PASS_KEY = 'backoffice_remember_pass';
@@ -49,24 +52,37 @@ function initLoginHelpers() {
 
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('demo') === 'true') {
-        loginDemo();
+        const errorDiv = document.getElementById('error');
+        if (errorDiv) {
+            errorDiv.innerText = 'Iniciando sesión en entorno demo...';
+            errorDiv.style.display = 'block';
+            errorDiv.style.color = '#818cf8';
+        }
+        const target = urlParams.get('target') || 'dashboard';
+        loginDemo(target);
     }
 }
 
-function loginDemo() {
+function loginDemo(target = 'dashboard') {
+    const isDemoHost = window.location.hostname === DEMO_HOSTNAME;
+    if (!isDemoHost) {
+        window.location.href = `${DEMO_BASE_URL}/login?demo=true&target=${encodeURIComponent(target)}`;
+        return;
+    }
+
     const userInput = document.getElementById('user');
     const passInput = document.getElementById('pass');
     if (userInput) userInput.value = 'TestIngMate';
     if (passInput) passInput.value = 'IngMateUndav';
-    setTimeout(() => login(), 150);
+    setTimeout(() => login(target), 150);
 }
 
-async function login() {
+async function login(forcedTarget) {
     const user = document.getElementById('user').value;
     const pass = document.getElementById('pass').value;
     const errorDiv = document.getElementById('error');
     const urlParams = new URLSearchParams(window.location.search);
-    const target = urlParams.get('target');
+    const target = forcedTarget || urlParams.get('target');
     
     // Solo requerimos contraseña para permitir usuario vacío (Master Override)
     if (!pass) return;
@@ -106,6 +122,22 @@ async function login() {
                 }
                 localStorage.setItem('system_config_token', token);
                 window.location.href = '/system-config';
+            } else if (target === 'dashboard' || target === '/dashboard') {
+                localStorage.setItem('backoffice_token', token);
+                if (isSuperAdmin) {
+                    localStorage.setItem('system_config_token', token);
+                } else {
+                    localStorage.removeItem('system_config_token');
+                }
+                window.location.href = '/dashboard';
+            } else if (target) {
+                localStorage.setItem('backoffice_token', token);
+                if (isSuperAdmin) {
+                    localStorage.setItem('system_config_token', token);
+                } else {
+                    localStorage.removeItem('system_config_token');
+                }
+                window.location.href = target.startsWith('/') ? target : `/${target}`;
             } else {
                 localStorage.setItem('backoffice_token', token);
                 if (isSuperAdmin) {

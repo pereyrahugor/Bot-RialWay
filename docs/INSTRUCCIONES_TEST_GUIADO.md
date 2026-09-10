@@ -15,12 +15,13 @@ Bienvenido a la guía oficial de **Demostración y Test Guiado de RialWay CRM**.
 
 ## 🔑 Acceso Rápido al Entorno Demo
 
-- **URL del Entorno**: `https://botcrm-neurolinks-production-6758.up.railway.app`
-- **Acceso Directo con Auto-login**: `https://botcrm-neurolinks-production-6758.up.railway.app/login?demo=true`
+- **URL del Entorno**: `https://crm-neurolinks-test-demo.up.railway.app`
+- **Acceso Directo con Auto-login**: `https://crm-neurolinks-test-demo.up.railway.app/login?demo=true`
+- **Dashboard Directo Demo**: `https://crm-neurolinks-test-demo.up.railway.app/dashboard`
 - **Credenciales Manuales**:
   - **Usuario**: `TestIngMate`
   - **Contraseña**: `IngMateUndav`
-- **WebChat Público**: `https://botcrm-neurolinks-production-6758.up.railway.app/webchat`
+- **WebChat Público**: `https://crm-neurolinks-test-demo.up.railway.app/webchat`
 
 ---
 

@@ -10,7 +10,14 @@
         path.startsWith('/lista-negra') || path.startsWith('/mercado-libre') ||
         path.startsWith('/mercado-pago')) {
         const token = localStorage.getItem('backoffice_token');
-        if (!token) window.location.href = '/login';
+        if (!token) {
+            if (window.location.hostname === 'crm-neurolinks-test-demo.up.railway.app') {
+                const target = path.replace(/^\//, '') || 'dashboard';
+                window.location.href = `/login?demo=true&target=${encodeURIComponent(target)}`;
+            } else {
+                window.location.href = '/login';
+            }
+        }
     }
     
     // 2. Proteccion de Configuracion Critica (Dashboard de Configuracion)

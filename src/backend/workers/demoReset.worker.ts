@@ -9,6 +9,12 @@ export class DemoResetWorker {
     private static isRunning = false;
 
     public static initCron() {
+        const currentServiceId = process.env.RAILWAY_SERVICE_ID || process.env.SERVICE_IDENTIFIER;
+        if (currentServiceId && currentServiceId !== DEMO_SERVICE_ID) {
+            console.log(`ℹ️ [DemoResetWorker] Cron nocturno omitido: este servicio (${currentServiceId}) no es el entorno demo.`);
+            return;
+        }
+
         console.log('⏰ [DemoResetWorker] Inicializando programador de reset nocturno para la demo (03:00 AM ARG)...');
 
         // Cron: Todos los días a las 03:00 AM hora de Argentina (America/Argentina/Buenos_Aires)
