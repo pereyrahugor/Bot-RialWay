@@ -25,6 +25,11 @@ const welcomeFlowVideo = addKeyword(EVENTS.MEDIA).addAction(
       return;
     }
 
+    // --- FILTRO DE ECO / MENSAJES PROPIOS ---
+    if (ctx.key?.fromMe) {
+        return;
+    }
+
     const { HistoryHandler } = await import("../../db/historyHandler");
     const botPhoneNumber = provider?.globalVendorArgs?.phone_number_id || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
     const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || HistoryHandler.PROJECT_IDENTIFIER;
@@ -34,6 +39,18 @@ const welcomeFlowVideo = addKeyword(EVENTS.MEDIA).addAction(
     const isBlocked = await HistoryHandler.isContactBlacklisted(userId, dynamicProjectId, dynamicServiceId);
     if (isBlocked) {
       console.log(`[welcomeFlowVideo] ⛔ Contacto ${userId} en LISTA NEGRA. Omitiendo procesamiento.`);
+      return;
+    }
+
+    // --- VERIFICAR ESTADO DEL BOT (MODO CRM / BOT DESACTIVADO) ---
+    const isGlobalBotEnabledSetting = await HistoryHandler.getSetting('GLOBAL_BOT_ENABLED', dynamicProjectId, dynamicServiceId);
+    const isGlobalBotEnabled = isGlobalBotEnabledSetting !== 'false';
+    const isBotActiveForUser = await HistoryHandler.isBotEnabled(userId, dynamicProjectId, dynamicServiceId);
+    const assistantId = await HistoryHandler.getConfig('ASSISTANT_1', dynamicProjectId, dynamicServiceId)
+        || await HistoryHandler.getConfig('ASSISTANT_ID', dynamicProjectId, dynamicServiceId);
+
+    if (!isGlobalBotEnabled || !isBotActiveForUser || !assistantId) {
+      console.log(`[welcomeFlowVideo] ℹ️ Bot desactivado para ${userId} en servicio ${dynamicServiceId} (Modo CRM). Omitiendo.`);
       return;
     }
 
@@ -48,7 +65,7 @@ const welcomeFlowVideo = addKeyword(EVENTS.MEDIA).addAction(
 
     try {
       if (!provider) {
-        await flowDynamic("No se encontró el provider para descargar el video.");
+        console.warn("[welcomeFlowVideo] No se encontró el provider para descargar el video.");
         return;
       }
       
@@ -59,7 +76,7 @@ const welcomeFlowVideo = addKeyword(EVENTS.MEDIA).addAction(
       
       const localPath = await provider.saveFile(ctx, { path: "./tmp/" });
       if (!localPath) {
-        await flowDynamic("No se pudo guardar el video recibido.");
+        console.warn(`[welcomeFlowVideo] No se pudo guardar el video recibido de ${userId}`);
         return;
       }
 
@@ -107,9 +124,9 @@ const welcomeFlowVideo = addKeyword(EVENTS.MEDIA).addAction(
       }
       
       console.log(`💾 Video guardado: ${localPath}`);
-    } catch (err) {
-      console.error("Error procesando video:", err);
-      await flowDynamic("Ocurrió un error al procesar el video. Intenta más tarde.");
+    } catch (err: any) {
+      console.error("❌ [welcomeFlowVideo] Error procesando video:", err?.message || err);
+      // Silencioso para el usuario final
     }
   }
 );

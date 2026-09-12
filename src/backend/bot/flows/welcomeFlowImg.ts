@@ -29,36 +29,14 @@ import { userQueues, userLocks, handleQueue } from "../queueManager";
 
 const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
   async (ctx, { flowDynamic, provider, gotoFlow, state }) => {
-    const { HistoryHandler } = await import("../../db/historyHandler");
-    const botPhoneNumber = ctx.recipientPhoneId || provider?.globalVendorArgs?.phone_number_id || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
-    const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || HistoryHandler.PROJECT_IDENTIFIER;
-    const dynamicServiceId = await HistoryHandler.getServiceIdByRecipient(botPhoneNumber) || HistoryHandler.SERVICE_IDENTIFIER;
-
-    // --- FILTRO DE LISTA NEGRA TEMPRANO ---
-    const isBlocked = await HistoryHandler.isContactBlacklisted(ctx.from, dynamicProjectId, dynamicServiceId);
-    if (isBlocked) {
-      console.log(`[welcomeFlowImg] ⛔ Contacto ${ctx.from} en LISTA NEGRA. Omitiendo procesamiento.`);
-      return;
-    }
-
-    const { getOpenAIVision, getOpenAI } = await import("../../apis/openai/openaiHelper");
-    const openai = await getOpenAIVision(dynamicProjectId, dynamicServiceId);
-    if (!openai) {
-      console.warn("⚠️ IA Vision Desactivada: Saltando análisis de imagen en flujo.");
-      const caption = (ctx.body && !ctx.body.includes('_event_')) ? ctx.body : (ctx.payload?.message?.imageMessage?.caption || ctx.payload?.image?.caption || '');
-      ctx.body = `[Imagen recibida (Sin procesar para IA)]${caption ? ': ' + caption : ''}`;
-      // Continuar al flujo de texto para no romper la experiencia
-      return gotoFlow(welcomeFlowTxt);
-    }
     const userId = ctx.from;
 
-    // Verificar si es una imagen (y no un video)
-    const mimetype = ctx?.media?.mimetype || ctx?.message?.imageMessage?.mimetype || "";
-    if (mimetype.includes('video')) {
-        return gotoFlow(welcomeFlowVideo);
+    // --- FILTRO DE ECO / MENSAJES PROPIOS ---
+    if (ctx.key?.fromMe) {
+        return;
     }
 
-    // Filtrar contactos ignorados antes de agregar a la cola
+    // Filtrar contactos ignorados (difusión, newsletters, canales)
     if (
       /@broadcast$/.test(userId) ||
       /@newsletter$/.test(userId) ||
@@ -68,9 +46,48 @@ const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
       return;
     }
 
-    // --- FILTRO DE ECO / MENSAJES PROPIOS ---
-    if (ctx.key?.fromMe) {
-        return;
+    // Verificar si es una imagen (y no un video)
+    const mimetype = ctx?.media?.mimetype || ctx?.message?.imageMessage?.mimetype || "";
+    if (mimetype.includes('video')) {
+        return gotoFlow(welcomeFlowVideo);
+    }
+
+    const { HistoryHandler } = await import("../../db/historyHandler");
+    const botPhoneNumber = ctx.recipientPhoneId || provider?.globalVendorArgs?.phone_number_id || (ctx.to ? ctx.to.replace(/\D/g, '') : null);
+    const dynamicProjectId = await HistoryHandler.getProjectIdByRecipient(botPhoneNumber) || HistoryHandler.PROJECT_IDENTIFIER;
+    const dynamicServiceId = await HistoryHandler.getServiceIdByRecipient(botPhoneNumber) || HistoryHandler.SERVICE_IDENTIFIER;
+
+    // --- FILTRO DE LISTA NEGRA TEMPRANO ---
+    const isBlocked = await HistoryHandler.isContactBlacklisted(userId, dynamicProjectId, dynamicServiceId);
+    if (isBlocked) {
+      console.log(`[welcomeFlowImg] ⛔ Contacto ${userId} en LISTA NEGRA. Omitiendo procesamiento.`);
+      return;
+    }
+
+    // --- VERIFICAR ESTADO DEL BOT (MODO CRM / BOT DESACTIVADO) ---
+    const isGlobalBotEnabledSetting = await HistoryHandler.getSetting('GLOBAL_BOT_ENABLED', dynamicProjectId, dynamicServiceId);
+    const isGlobalBotEnabled = isGlobalBotEnabledSetting !== 'false';
+    const isBotActiveForUser = await HistoryHandler.isBotEnabled(userId, dynamicProjectId, dynamicServiceId);
+    const assistantId = await HistoryHandler.getConfig('ASSISTANT_1', dynamicProjectId, dynamicServiceId)
+        || await HistoryHandler.getConfig('ASSISTANT_ID', dynamicProjectId, dynamicServiceId);
+
+    if (!isGlobalBotEnabled || !isBotActiveForUser || !assistantId) {
+      console.log(`[welcomeFlowImg] ℹ️ Bot desactivado para ${userId} en servicio ${dynamicServiceId} (Modo CRM / Operador humano). Omitiendo análisis de imagen.`);
+      return;
+    }
+
+    // --- VERIFICAR SI EXISTE API KEY DE IMAGEN CONFIGURADA ---
+    const { getOpenAIVision } = await import("../../apis/openai/openaiHelper");
+    const openai = await getOpenAIVision(dynamicProjectId, dynamicServiceId);
+    if (!openai) {
+      console.log(`[welcomeFlowImg] ℹ️ Servicio ${dynamicServiceId} sin OPENAI_API_KEY_IMG. No se analiza la imagen.`);
+      const caption = (ctx.body && !ctx.body.includes('_event_')) ? ctx.body : (ctx.payload?.message?.imageMessage?.caption || ctx.payload?.image?.caption || '');
+      if (caption && caption.trim()) {
+        console.log(`[welcomeFlowImg] 📝 Reenviando subtítulo al flujo de texto para ${userId}: "${caption.trim()}"`);
+        ctx.body = caption.trim();
+        return gotoFlow(welcomeFlowTxt);
+      }
+      return; // Sin clave de imagen y sin subtítulo de texto: retorno silencioso
     }
 
     const timeoutCierreValue = await HistoryHandler.getConfig('timeOutCierre', dynamicProjectId, dynamicServiceId) || 45;
@@ -91,7 +108,7 @@ const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
     const fs = await import('fs');
     try {
       if (!provider) {
-        await flowDynamic("No se encontró el provider para descargar la imagen.");
+        console.warn("[welcomeFlowImg] No se encontró el provider para descargar la imagen.");
         return;
       }
       
@@ -103,7 +120,7 @@ const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
       // Usar ./tmp/ para consistencia
       const localPath = await provider.saveFile(ctx, { path: "./tmp/" });
       if (!localPath) {
-        await flowDynamic("No se pudo guardar la imagen recibida.");
+        console.warn(`[welcomeFlowImg] No se pudo guardar la imagen recibida de ${userId}`);
         return;
       }
 
@@ -170,30 +187,11 @@ const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
           ],
         });
       } catch (apiErr: any) {
-        console.warn(`[welcomeFlowImg] ⚠️ Error con cliente de visión (${apiErr?.message}). Reintentando con OpenAI principal...`);
-        const fallbackOpenai = await getOpenAI(dynamicProjectId, dynamicServiceId);
-        if (fallbackOpenai) {
-          response = await fallbackOpenai.chat.completions.create({
-            model: visionModel,
-            messages: [
-              { role: "system", content: visionPrompt },
-              {
-                role: "user",
-                content: [
-                  {
-                    type: "image_url",
-                    image_url: { url: `data:image/jpeg;base64,${buffer.toString("base64")}`, detail: "high" },
-                  },
-                ],
-              },
-            ],
-          });
-        } else {
-          throw apiErr;
-        }
+        console.warn(`[welcomeFlowImg] ⚠️ Error en análisis de visión con OpenAI: ${apiErr?.message}`);
+        return; // Retorno silencioso sin alertar error al cliente
       }
 
-      const result = response.choices[0].message.content || "No se pudo obtener una descripción de la imagen.";
+      const result = response?.choices?.[0]?.message?.content || "No se pudo obtener una descripción de la imagen.";
 
       // Enviar el mensaje al asistente principal para que lo procese y mantenga el contexto
       const caption = (ctx.body && !ctx.body.includes('_event_')) ? ctx.body : (ctx.payload?.message?.imageMessage?.caption || ctx.payload?.image?.caption || '');
@@ -227,11 +225,10 @@ const welcomeFlowImg = addKeyword(EVENTS.MEDIA).addAction(
         await handleQueue(userId);
       }
 
-      
       console.log(`💾 Imagen guardada para resumen: ${localPath}`);
-    } catch (err) {
-      console.error("Error procesando imagen:", err);
-      await flowDynamic("Ocurrió un error al analizar la imagen. Intenta más tarde.");
+    } catch (err: any) {
+      console.error("❌ [welcomeFlowImg] Error procesando imagen:", err?.message || err);
+      // Silencioso para el usuario final: no enviar "Ocurrió un error al analizar la imagen..."
     }
   }
 );

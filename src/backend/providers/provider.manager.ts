@@ -440,9 +440,30 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
     // --- CAPTURA DE MENSAJES SALIENTES ---
     provider.on('message_from_me', async (ctx: any) => {
         try {
-            // En ecos de mensajes salientes (message_from_me), el JID de la conversación es el destinatario.
-            // Para Baileys, ctx.from es el bot y ctx.to o remoteJid es el chat. Para Meta, ctx.from ya es el usuario.
-            const from = ctx.to || ctx.key?.remoteJid || ctx.from || '';
+            const rawJid = provider?.vendor?.authState?.creds?.me?.id || 
+                           provider?.vendor?.user?.id || 
+                           provider?.globalVendorArgs?.sock?.user?.id || '';
+            const botPhoneNumber = ctx.recipientPhoneId ||
+                                   rawJid.split(':')[0].split('@')[0] || 
+                                   provider?.globalVendorArgs?.phone_number_id || 
+                                   provider?.config?.phone_number_id ||
+                                   null;
+
+            const isBotId = (val: any) => {
+                if (!val) return false;
+                const clean = String(val).replace(/\D/g, '');
+                return clean === String(botPhoneNumber).replace(/\D/g, '') ||
+                       clean === String(ctx.recipientPhoneId).replace(/\D/g, '') ||
+                       clean === String(provider?.config?.phone_number_id).replace(/\D/g, '') ||
+                       clean === String(provider?.globalVendorArgs?.phone_number_id).replace(/\D/g, '');
+            };
+
+            // En ecos de mensajes salientes (message_from_me), el identificador de la conversación
+            // debe ser el número del cliente/contacto, NUNCA el ID de teléfono del propio bot.
+            let from = ctx.from || '';
+            if (!from || isBotId(from)) {
+                from = (!isBotId(ctx.to) && ctx.to) || ctx.key?.remoteJid || ctx.phoneNumber || '';
+            }
             const isGroup = from.includes('@g.us');
 
             if (isGroupProvider && !isGroup) {
@@ -452,14 +473,6 @@ export const registerProviderEvents = (provider: any, isGroupProvider: boolean =
             const { HistoryHandler, recentBotSentMessages, normalizeTextForCache } = await import('../db/historyHandler');
 
             // Resolver projectId dinámicamente
-            const rawJid = provider?.vendor?.authState?.creds?.me?.id || 
-                           provider?.vendor?.user?.id || 
-                           provider?.globalVendorArgs?.sock?.user?.id || '';
-            const botPhoneNumber = ctx.recipientPhoneId ||
-                                   rawJid.split(':')[0].split('@')[0] || 
-                                   provider?.globalVendorArgs?.phone_number_id || 
-                                   provider?.config?.phone_number_id ||
-                                   (ctx.to ? ctx.to.replace(/\D/g, '') : null);
             let dynamicProjectId = HistoryHandler.PROJECT_IDENTIFIER;
             let dynamicServiceId = HistoryHandler.SERVICE_IDENTIFIER;
             if (botPhoneNumber) {

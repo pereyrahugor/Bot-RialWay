@@ -57,10 +57,11 @@ export async function getOpenAIVision(projectId?: string, serviceId?: string): P
     const { HistoryHandler } = await import("../../db/historyHandler");
     const targetProjectId = projectId || HistoryHandler.PROJECT_IDENTIFIER;
     const targetServiceId = serviceId || HistoryHandler.SERVICE_IDENTIFIER;
-    const key = await HistoryHandler.getConfig('OPENAI_API_KEY_IMG', targetProjectId, targetServiceId);
+    const key = await HistoryHandler.getSetting('OPENAI_API_KEY_IMG', targetProjectId, targetServiceId)
+        || await HistoryHandler.getConfig('OPENAI_API_KEY_IMG', targetProjectId, targetServiceId);
 
     if (!key || key.includes('*****') || key === 'tu_api_key_aqui' || key.trim() === '') {
-        return await getOpenAI(targetProjectId, targetServiceId); // Fallback al principal
+        return null; // Sin clave de imagen configurada: no intentar visión
     }
 
     const cacheKey = `${targetProjectId}:${targetServiceId}:${key}`;

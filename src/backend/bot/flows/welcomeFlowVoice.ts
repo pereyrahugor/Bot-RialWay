@@ -43,10 +43,6 @@ export const welcomeFlowVoice = addKeyword<any, any>(EVENTS.VOICE_NOTE)
 
         console.log(`🎙️ Mensaje de voz recibido de ${userId}`);
 
-        const timeoutCierreValue = await HistoryHandler.getConfig('timeOutCierre', dynamicProjectId, dynamicServiceId) || 45;
-        const setTime = Number(timeoutCierreValue) * 60 * 1000;
-        reset(ctx, gotoFlow, setTime);
-
         // Asegurar que userQueues tenga un array inicializado para este usuario
         if (!userQueues.has(userId)) {
             userQueues.set(userId, []);
@@ -116,13 +112,19 @@ export const welcomeFlowVoice = addKeyword<any, any>(EVENTS.VOICE_NOTE)
         const isBotActiveForUser = await HistoryHandler.isBotEnabled(chatId, dynamicProjectId, dynamicServiceId);
         const isGlobalBotEnabledSetting = await HistoryHandler.getSetting('GLOBAL_BOT_ENABLED', dynamicProjectId, dynamicServiceId);
         const isGlobalBotEnabled = isGlobalBotEnabledSetting !== 'false';
-        const botEnabledForChat = isGlobalBotEnabled && isBotActiveForUser;
+        const assistantId = await HistoryHandler.getConfig('ASSISTANT_1', dynamicProjectId, dynamicServiceId)
+            || await HistoryHandler.getConfig('ASSISTANT_ID', dynamicProjectId, dynamicServiceId);
+        const botEnabledForChat = isGlobalBotEnabled && isBotActiveForUser && Boolean(assistantId);
 
         if (!botEnabledForChat) {
-            console.log(`[welcomeFlowVoice] Bot desactivado para el chat ${chatId} o globalmente. Omitiendo transcripción y respuesta del bot.`);
+            console.log(`[welcomeFlowVoice] Bot desactivado para el chat ${chatId} o globalmente (Modo CRM). Omitiendo transcripción y respuesta del bot.`);
             stop(ctx);
             return;
         }
+
+        const timeoutCierreValue = await HistoryHandler.getConfig('timeOutCierre', dynamicProjectId, dynamicServiceId) || 45;
+        const setTime = Number(timeoutCierreValue) * 60 * 1000;
+        reset(ctx, gotoFlow, setTime);
 
         // Verificar si la IA está activa (si existe OPENAI_API_KEY)
         const { getOpenAI } = await import("~/apis/openai/openaiHelper");

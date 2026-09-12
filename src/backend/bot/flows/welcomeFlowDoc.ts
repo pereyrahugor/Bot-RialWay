@@ -26,6 +26,11 @@ function extraerPaginasComoPNG(pdfPath: string, outputDir: string) {
 
 export const welcomeFlowDoc = addKeyword<BaileysProvider, MemoryDB>(EVENTS.DOCUMENT)
     .addAction(async (ctx, { gotoFlow, flowDynamic, provider, state }) => {
+        // --- FILTRO DE ECO / MENSAJES PROPIOS ---
+        if (ctx.key?.fromMe) {
+            return;
+        }
+
         const { HistoryHandler } = await import("~/db/historyHandler");
         let localPath = null;
         let outputDir = null;
@@ -41,6 +46,18 @@ export const welcomeFlowDoc = addKeyword<BaileysProvider, MemoryDB>(EVENTS.DOCUM
             return;
         }
 
+        // --- VERIFICAR ESTADO DEL BOT (MODO CRM / BOT DESACTIVADO) ---
+        const isGlobalBotEnabledSetting = await HistoryHandler.getSetting('GLOBAL_BOT_ENABLED', dynamicProjectId, dynamicServiceId);
+        const isGlobalBotEnabled = isGlobalBotEnabledSetting !== 'false';
+        const isBotActiveForUser = await HistoryHandler.isBotEnabled(ctx.from, dynamicProjectId, dynamicServiceId);
+        const assistantId = await HistoryHandler.getConfig('ASSISTANT_1', dynamicProjectId, dynamicServiceId)
+            || await HistoryHandler.getConfig('ASSISTANT_ID', dynamicProjectId, dynamicServiceId);
+
+        if (!isGlobalBotEnabled || !isBotActiveForUser || !assistantId) {
+            console.log(`[welcomeFlowDoc] ℹ️ Bot desactivado para ${ctx.from} en servicio ${dynamicServiceId} (Modo CRM). Omitiendo análisis de documento.`);
+            return;
+        }
+
         const timeoutCierreValue = await HistoryHandler.getConfig('timeOutCierre', dynamicProjectId, dynamicServiceId) || 45;
         const setTime = Number(timeoutCierreValue) * 60 * 1000;
         reset(ctx, gotoFlow, setTime);
@@ -51,7 +68,7 @@ export const welcomeFlowDoc = addKeyword<BaileysProvider, MemoryDB>(EVENTS.DOCUM
             const isPdf = mimetype.includes('pdf') || fileName.endsWith('.pdf') || mimetype === 'application/octet-stream' || mimetype === 'application/x-pdf' || !mimetype;
 
             if (!isPdf) {
-                await flowDynamic("Solo se aceptan comprobantes en formato PDF o Imagen en este flujo.");
+                console.log(`[welcomeFlowDoc] ℹ️ Documento recibido de ${ctx.from} no es PDF (${mimetype || fileName}). Omitiendo.`);
                 return;
             }
 
@@ -243,8 +260,8 @@ export const welcomeFlowDoc = addKeyword<BaileysProvider, MemoryDB>(EVENTS.DOCUM
             }
             imagenesGeneradas.push(...imagenes);
         } catch (err: any) {
-            console.error("Error procesando PDF:", err);
-            await flowDynamic("Ocurrió un error al procesar el PDF.");
+            console.error("❌ [welcomeFlowDoc] Error procesando PDF:", err?.message || err);
+            // Silencioso para el usuario final
         } finally {
             // Limpiar imágenes intermedias generadas para el OCR/Vision (mantener el documento original en tmp para descarga en CRM)
             if (imagenesGeneradas.length > 0) {

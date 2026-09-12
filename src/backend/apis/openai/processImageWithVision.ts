@@ -52,16 +52,12 @@ export async function processImageWithVision(
 ): Promise<string> {
   const { HistoryHandler } = await import("../../db/historyHandler");
   
-  // 1. Obtener la clave de OpenAI (prioridad: OPENAI_API_KEY_IMG -> OPENAI_API_KEY)
+  // 1. Obtener la clave de OpenAI exclusiva para imágenes
   const openaiKey = await HistoryHandler.getSetting('OPENAI_API_KEY_IMG', projectId, serviceId) 
-    || await HistoryHandler.getConfig('OPENAI_API_KEY_IMG', projectId, serviceId) 
-    || await HistoryHandler.getConfig('OPENAI_API_KEY', projectId, serviceId);
+    || await HistoryHandler.getConfig('OPENAI_API_KEY_IMG', projectId, serviceId);
   
-  if (!openaiKey || openaiKey.includes('*****') || openaiKey.trim() === '') {
-    console.warn("⚠️ OPENAI_API_KEY_IMG no detectada. Procesamiento de imágenes desactivado.");
-    if (!silent && flowDynamic) {
-      await flowDynamic("Lo siento, el análisis de imágenes no está configurado en este momento.");
-    }
+  if (!openaiKey || openaiKey.includes('*****') || openaiKey === 'tu_api_key_aqui' || openaiKey.trim() === '') {
+    console.log(`[processImageWithVision] ℹ️ OPENAI_API_KEY_IMG no configurada para servicio ${serviceId || 'default'}. Procesamiento de imagen omitido.`);
     return "";
   }
 
@@ -124,9 +120,6 @@ export async function processImageWithVision(
 
   } catch (error: any) {
     console.error("❌ [Vision] Error procesando imagen con OpenAI:", error.message);
-    if (!silent && flowDynamic) {
-      await flowDynamic("Ocurrió un inconveniente al procesar la imagen.");
-    }
     return "";
   }
 }

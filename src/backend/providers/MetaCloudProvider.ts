@@ -1326,7 +1326,7 @@ class MetaCloudProvider extends ProviderClass {
                             const formatedMessage: any = {
                                 id: msg.id,
                                 from: actualIsEcho ? recipientId : (wa_id || msg.from),
-                                to: value.metadata?.phone_number_id || phone_number_id || null,
+                                to: actualIsEcho ? recipientId : (value.metadata?.phone_number_id || phone_number_id || null),
                                 body: bodyText,
                                 phoneNumber: actualIsEcho ? recipientId : msg.from,
                                 userId: bsuid, // Añadimos el BSUID al contexto
