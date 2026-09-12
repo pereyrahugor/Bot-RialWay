@@ -68,15 +68,72 @@ Envía un mensaje estándar a un cliente específico utilizando la misma estruct
 
 ##### 4. Mensaje de Documento (PDF, XLSX, etc.)
 
-Los documentos pueden enviarse por dos métodos según la arquitectura de tu sistema:
+##### 4. Mensaje de Documento, Imagen, Video o Audio con Archivo Completo
 
-###### 4.a. Por URL pública (`link`)
-Utiliza este método cuando el documento ya se encuentra alojado en un servidor web o bucket cloud público accesible por Meta.
+Puedes enviar archivos completos directamente a través de nuestra API por cualquiera de estos métodos según lo que le resulte más conveniente a tu sistema:
+
+###### 4.a. Subida directa por archivo binario (`multipart/form-data`) ⭐ Recomendado
+Tu sistema no necesita tokens de Meta ni tener una URL pública. Simplemente envía una petición `multipart/form-data` con el archivo adjunto, y **RialWay se encarga de subirlo a la API oficial de Meta y enviarlo por WhatsApp**:
+
+* **Headers:** `Content-Type: multipart/form-data`
+* **Campos:**
+  * `token`: Token temporal obtenido en `/api/v1/auth` (requerido).
+  * `to`: Número destinatario con código de país, ej. `5491122334455` (requerido).
+  * `type`: Tipo de archivo: `document`, `image`, `video`, `audio` o `sticker` (opcional, si se omite se deduce del archivo).
+  * `caption`: Texto descriptivo que acompaña al archivo (opcional).
+  * `filename`: Nombre personalizado con el que el cliente verá el archivo (opcional).
+  * `file`: El archivo binario adjunto (requerido).
+
+**Ejemplo con cURL:**
+```bash
+curl -X POST https://TU-DOMINIO/api/v1/send-message \
+  -F "token=TU_TOKEN_TEMPORAL" \
+  -F "to=5491122334455" \
+  -F "type=document" \
+  -F "caption=Adjunto tu factura del mes" \
+  -F "filename=Factura_A001.pdf" \
+  -F "file=@/ruta/local/mi_factura.pdf"
+```
+
+**Ejemplo en JavaScript (Node.js / Browser):**
+```javascript
+const formData = new FormData();
+formData.append('token', token);
+formData.append('to', '5491122334455');
+formData.append('type', 'document');
+formData.append('caption', 'Adjunto tu factura');
+formData.append('filename', 'Factura.pdf');
+formData.append('file', fileBlobOrStream);
+
+const res = await fetch('https://TU-DOMINIO/api/v1/send-message', {
+    method: 'POST',
+    body: formData
+});
+const data = await res.json();
+```
+
+###### 4.b. Archivo codificado en Base64 (`application/json`)
+Si tu sistema ya opera 100% en JSON y no desea usar multipart, puede enviar el contenido del archivo codificado en `base64` directamente en el cuerpo JSON:
+
 ```json
 {
     "token": "TU_TOKEN_TEMPORAL",
-    "messaging_product": "whatsapp",
-    "recipient_type": "individual",
+    "to": "5491122334455",
+    "type": "document",
+    "document": {
+        "base64": "JVBERi0xLjQKJcTl8uXrp/Og0MTGCjQgMCBvYmoKPDwgL0xpbmVhcml6ZWQgMSAvT...",
+        "filename": "Factura_102.pdf",
+        "caption": "Adjunto tu comprobante"
+    }
+}
+```
+*(También aplica para `image`: `{"image": {"base64": "...", "caption": "..."}}`, `video` y `audio`).*
+
+###### 4.c. Por URL pública (`link`)
+Utiliza este método cuando el archivo ya se encuentra alojado en un servidor web o bucket cloud público accesible por Meta.
+```json
+{
+    "token": "TU_TOKEN_TEMPORAL",
     "to": "5491122334455",
     "type": "document",
     "document": {
@@ -87,22 +144,11 @@ Utiliza este método cuando el documento ya se encuentra alojado en un servidor 
 }
 ```
 
-###### 4.b. Por Media ID de Meta (`id`)
-Utiliza este método cuando el archivo es privado o confidencial (ej. facturas, recibos o comprobantes generados localmente por un ERP como Tango o SAP) y **no se desea publicar en internet**:
-1. **Subida del archivo (Upload)**: Tu sistema sube el binario directamente a Meta Cloud API:
-   * **Endpoint:** `POST https://graph.facebook.com/v25.0/{phone_number_id}/media`
-   * **Headers:** `Authorization: Bearer <META_ACCESS_TOKEN>`
-   * **Body (form-data):**
-     * `messaging_product`: `whatsapp`
-     * `type`: `application/pdf`
-     * `file`: `@archivo.pdf`
-   * **Respuesta de Meta:** `{ "id": "1234567890123456" }`
-2. **Envío del mensaje con el ID**: Con el ID obtenido, envías el mensaje al CRM sin requerir ninguna URL:
+###### 4.d. Por Media ID existente de Meta (`id`)
+Si tu sistema ya subió el archivo previamente a los servidores de Meta y dispone del `media_id` numérico devuelto por Meta Graph API:
 ```json
 {
     "token": "TU_TOKEN_TEMPORAL",
-    "messaging_product": "whatsapp",
-    "recipient_type": "individual",
     "to": "5491122334455",
     "type": "document",
     "document": {

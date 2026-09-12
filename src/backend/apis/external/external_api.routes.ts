@@ -2,6 +2,9 @@
 import { randomBytes } from 'crypto';
 import bodyParser from 'body-parser';
 import axios from 'axios';
+import fs from 'fs';
+import path from 'path';
+import { upload } from '../../middleware/upload';
 import { HistoryHandler, supabase } from "../../db/historyHandler";
 
 interface MetaConnectSession {
@@ -379,9 +382,84 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
         }
     });
 
+    /**
+     * Helper para decodificar y guardar archivos Base64 en uploads/
+     */
+    function saveBase64Media(base64Data: string, rawFilename?: string, fallbackType: string = 'document'): { filePath: string, filename: string, mimeType: string } {
+        let cleanBase64 = String(base64Data || '').trim();
+        let detectedMime = '';
+
+        if (cleanBase64.includes(';base64,')) {
+            const parts = cleanBase64.split(';base64,');
+            detectedMime = parts[0].replace(/^data:/, '').trim();
+            cleanBase64 = parts[1].trim();
+        }
+
+        const buffer = Buffer.from(cleanBase64, 'base64');
+        
+        let ext = '';
+        if (rawFilename && path.extname(rawFilename)) {
+            ext = path.extname(rawFilename);
+        } else if (detectedMime) {
+            if (detectedMime.includes('pdf')) ext = '.pdf';
+            else if (detectedMime.includes('jpeg') || detectedMime.includes('jpg')) ext = '.jpg';
+            else if (detectedMime.includes('png')) ext = '.png';
+            else if (detectedMime.includes('webp')) ext = '.webp';
+            else if (detectedMime.includes('mp4')) ext = '.mp4';
+            else if (detectedMime.includes('ogg')) ext = '.ogg';
+            else if (detectedMime.includes('mp3') || detectedMime.includes('mpeg')) ext = '.mp3';
+            else if (detectedMime.includes('excel') || detectedMime.includes('spreadsheet')) ext = '.xlsx';
+        }
+        if (!ext) {
+            if (fallbackType === 'image') ext = '.jpg';
+            else if (fallbackType === 'video') ext = '.mp4';
+            else if (fallbackType === 'audio') ext = '.mp3';
+            else ext = '.pdf';
+        }
+
+        const safeBaseName = rawFilename ? path.basename(rawFilename, path.extname(rawFilename)).replace(/[^a-zA-Z0-9_-]/g, '_') : `file_${Date.now()}`;
+        const filename = `${safeBaseName}${ext}`;
+        const uploadDir = path.join(process.cwd(), 'uploads');
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        const tempFileName = `${Date.now()}-${Math.round(Math.random() * 1E9)}-${filename}`;
+        const filePath = path.join(uploadDir, tempFileName);
+        fs.writeFileSync(filePath, buffer);
+
+        return { filePath, filename, mimeType: detectedMime };
+    }
+
+    /**
+     * Middleware dual para /api/v1/send-message (soporta JSON y multipart/form-data)
+     */
+    const handleSendMessageUpload = (req: any, res: any, next: any) => {
+        const contentType = req.headers['content-type'] || '';
+        if (contentType.includes('multipart/form-data')) {
+            return upload.any()(req, res, (err: any) => {
+                if (err) {
+                    console.error('❌ [API_EXTERNAL] Multer Error en /api/v1/send-message:', err);
+                    return res.status(400).json({ success: false, error: `Error procesando archivo: ${err.message}` });
+                }
+                next();
+            });
+        }
+        return bodyParser.json({ limit: '50mb' })(req, res, next);
+    };
+
     // --- 3. ENVÍO DE MENSAJES ESTÁNDAR (USA EL TOKEN) ---
-    app.post('/api/v1/send-message', bodyParser.json(), async (req: any, res: any) => {
-        const { token, to, type } = req.body;
+    app.post('/api/v1/send-message', handleSendMessageUpload, async (req: any, res: any) => {
+        const uploadedFile = (req.files && req.files.length > 0) ? req.files[0] : (req.file || null);
+        let { token, to, type } = req.body;
+
+        // Auto-inferir 'type' si se adjuntó un archivo y no se especificó el tipo
+        if (!type && uploadedFile) {
+            const m = (uploadedFile.mimetype || '').toLowerCase();
+            if (m.startsWith('image/')) type = 'image';
+            else if (m.startsWith('video/')) type = 'video';
+            else if (m.startsWith('audio/')) type = 'audio';
+            else type = 'document';
+        }
 
         try {
             if (!token || !to || !type) {
@@ -422,44 +500,54 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
             const targetJid = String(to).includes('@') ? to : `${cleanNumber}@s.whatsapp.net`;
 
             if (type === 'text') {
-                const bodyText = req.body.text?.body || '';
+                const bodyText = req.body.text?.body || req.body.message || req.body.body || '';
                 if (!bodyText) {
                     return res.status(400).json({ success: false, error: "Falta el campo text.body para mensajes de tipo text." });
                 }
                 providerResponse = await provider.sendMessage(targetJid, bodyText, { projectId: resolvedProjectId, serviceId: resolvedServiceId });
                 historyContent = bodyText;
-            } else if (type === 'image') {
-                const caption = req.body.image?.caption || '';
-                const media = req.body.image?.link || req.body.image?.id;
-                if (!media) {
-                    return res.status(400).json({ success: false, error: "Falta el campo image.link o image.id para mensajes de tipo image." });
+            } else if (['image', 'video', 'document', 'audio', 'sticker'].includes(type)) {
+                const typeObj = req.body[type] || {};
+                const caption = typeObj.caption || req.body.caption || req.body.message || '';
+                let customFilename = typeObj.filename || req.body.filename || req.body.fileName || '';
+                let mediaSource = typeObj.link || typeObj.id || req.body.link || req.body.id || null;
+                let localFilePath: string | null = null;
+                let mimeType: string = typeObj.mimetype || req.body.mimetype || '';
+
+                // Caso 1: Archivo binario adjunto vía multipart/form-data
+                if (uploadedFile) {
+                    localFilePath = path.resolve(uploadedFile.path);
+                    customFilename = customFilename || uploadedFile.originalname;
+                    mimeType = mimeType || uploadedFile.mimetype;
+                } 
+                // Caso 2: Archivo en Base64 en el cuerpo JSON
+                else if (typeObj.base64 || req.body.base64) {
+                    const base64Data = typeObj.base64 || req.body.base64;
+                    const saved = saveBase64Media(base64Data, customFilename, type);
+                    localFilePath = saved.filePath;
+                    customFilename = saved.filename;
+                    mimeType = mimeType || saved.mimeType;
                 }
-                providerResponse = await provider.sendMessage(targetJid, caption, { media, type: 'image', projectId: resolvedProjectId, serviceId: resolvedServiceId });
-                historyContent = media;
-            } else if (type === 'video') {
-                const caption = req.body.video?.caption || '';
-                const media = req.body.video?.link || req.body.video?.id;
-                if (!media) {
-                    return res.status(400).json({ success: false, error: "Falta el campo video.link o video.id para mensajes de tipo video." });
+
+                // Si no hay archivo local ni link ni ID, devolver error
+                if (!mediaSource && !localFilePath) {
+                    return res.status(400).json({ 
+                        success: false, 
+                        error: `Falta el archivo o identificador para mensajes de tipo ${type}. Se requiere adjuntar 'file' (form-data), '${type}.base64', '${type}.link' o '${type}.id'.` 
+                    });
                 }
-                providerResponse = await provider.sendMessage(targetJid, caption, { media, type: 'video', projectId: resolvedProjectId, serviceId: resolvedServiceId });
-                historyContent = media;
-            } else if (type === 'document') {
-                const caption = req.body.document?.caption || '';
-                const media = req.body.document?.link || req.body.document?.id;
-                const filename = req.body.document?.filename || 'document';
-                if (!media) {
-                    return res.status(400).json({ success: false, error: "Falta el campo document.link o document.id para mensajes de tipo document." });
-                }
-                providerResponse = await provider.sendMessage(targetJid, caption, { media, fileName: filename, type: 'document', projectId: resolvedProjectId, serviceId: resolvedServiceId });
-                historyContent = media;
-            } else if (type === 'audio') {
-                const media = req.body.audio?.link || req.body.audio?.id;
-                if (!media) {
-                    return res.status(400).json({ success: false, error: "Falta el campo audio.link o audio.id para mensajes de tipo audio." });
-                }
-                providerResponse = await provider.sendMessage(targetJid, '', { media, type: 'audio', projectId: resolvedProjectId, serviceId: resolvedServiceId });
-                historyContent = media;
+
+                const sendOptions: any = {
+                    media: localFilePath || mediaSource,
+                    fileName: customFilename || (type === 'document' ? 'documento.pdf' : undefined),
+                    type: type,
+                    projectId: resolvedProjectId,
+                    serviceId: resolvedServiceId
+                };
+                if (mimeType) sendOptions.mimetype = mimeType;
+
+                providerResponse = await provider.sendMessage(targetJid, caption, sendOptions);
+                historyContent = localFilePath ? `/uploads/${path.basename(localFilePath)}` : (mediaSource || `[${type}]`);
             } else {
                 return res.status(400).json({ success: false, error: `Tipo de message no soportado: ${type}` });
             }
