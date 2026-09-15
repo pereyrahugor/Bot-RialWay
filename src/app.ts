@@ -636,7 +636,12 @@ const main = async () => {
         
     // 10. Workers Initialization
     // Se ejecuta periódicamente verificando inactividad humana según el timeout configurado en minutos (default 30 min)
-    startHumanInactivityWorker(30, 1);
+    if (process.env.ENABLE_HUMAN_INACTIVITY_WORKER === 'true') {
+        console.log('🤖 [Worker] ENABLE_HUMAN_INACTIVITY_WORKER=true detectado. Iniciando worker de inactividad humana...');
+        startHumanInactivityWorker(30, 1);
+    } else {
+        console.log('⏸️ [Worker] Worker de inactividad humana desactivado en esta instancia (ENABLE_HUMAN_INACTIVITY_WORKER != true).');
+    }
     startFileCleanupWorker(5);
     DemoResetWorker.initCron();
 
