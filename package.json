@@ -17,7 +17,9 @@
     "meta_webhook_register": "tsx src/backend/backoffice/meta_webhook_register.ts",
     "tailwind:compose": "node scripts/compose-tailwind-input.mjs",
     "tailwind:build": "pnpm tailwind:compose && tailwindcss -c src/frontend/tailwind.config.js -i .codex/tailwind.composed.css -o src/frontend/style/tailwind.css --minify",
-    "tailwind:watch": "pnpm tailwind:compose && tailwindcss -c src/frontend/tailwind.config.js -i .codex/tailwind.composed.css -o src/frontend/style/tailwind.css --watch"
+    "tailwind:watch": "pnpm tailwind:compose && tailwindcss -c src/frontend/tailwind.config.js -i .codex/tailwind.composed.css -o src/frontend/style/tailwind.css --watch",
+    "railway:list": "tsx scripts/railway_mass_redeploy.ts",
+    "railway:redeploy": "tsx scripts/railway_mass_redeploy.ts --execute"
   },
   "keywords": [],
   "dependencies": {
