@@ -3848,28 +3848,43 @@ export class HistoryHandler {
     static subscribeToSettingsChanges() {
         if (!supabase) return;
         const projectId = this.PROJECT_IDENTIFIER;
+        const serviceId = this.SERVICE_IDENTIFIER;
+        const hasScopedService = serviceId && !['default_service', 'generic', 'null'].includes(serviceId);
+        const channelName = hasScopedService 
+            ? `settings-changes-${projectId}-${serviceId}` 
+            : `settings-changes-${projectId}`;
+        const filter = hasScopedService
+            ? `project_id=eq.${projectId},service_id=eq.${serviceId}`
+            : `project_id=eq.${projectId}`;
+
         supabase
-            .channel(`settings-changes-${projectId}`)
+            .channel(channelName)
             .on('postgres_changes', {
                 event: '*',
                 schema: 'public',
-                table: 'settings'
+                table: 'settings',
+                filter: filter
             }, (payload: any) => {
                 if (payload.new?.project_id !== projectId && payload.old?.project_id !== projectId) return;
+                if (hasScopedService) {
+                    const newSId = payload.new?.service_id;
+                    const oldSId = payload.old?.service_id;
+                    if (newSId !== serviceId && oldSId !== serviceId) return;
+                }
                 const key = payload.new?.key || payload.old?.key;
                 const value = payload.new?.value;
-                const serviceId = payload.new?.service_id || payload.old?.service_id;
+                const sId = payload.new?.service_id || payload.old?.service_id;
                 if (!key) return;
                 this.invalidateSettingCache(key);
                 const displayVal = (key.toUpperCase().includes('KEY') || key.toUpperCase().includes('TOKEN') || key.toUpperCase().includes('SECRET') || key.toUpperCase().includes('PASS') || key.toUpperCase().includes('PWD'))
                     ? 'OK'
                     : value;
-                console.log(`📡 [Realtime] Setting cambiado: ${key} = ${displayVal} (Service: ${serviceId})`);
-                historyEvents.emit('setting_changed', { key, value, projectId, serviceId });
+                console.log(`📡 [Realtime] Setting cambiado: ${key} = ${displayVal} (Service: ${sId})`);
+                historyEvents.emit('setting_changed', { key, value, projectId, serviceId: sId });
             })
             .subscribe((status: string) => {
                 if (status === 'SUBSCRIBED') {
-                    console.log(`✅ [Realtime] Suscrito a cambios de settings para proyecto ${projectId}`);
+                    console.log(`✅ [Realtime] Suscrito a cambios de settings para proyecto ${projectId} (Service: ${serviceId})`);
                 } else if (status === 'CHANNEL_ERROR') {
                     console.error(`❌ [Realtime] Error en suscripción de settings. Verifica que Realtime esté habilitado en la tabla 'settings' en Supabase.`);
                 }
@@ -3879,17 +3894,32 @@ export class HistoryHandler {
     static subscribeToTicketChanges() {
         if (!supabase) return;
         const projectId = this.PROJECT_IDENTIFIER;
+        const serviceId = this.SERVICE_IDENTIFIER;
+        const hasScopedService = serviceId && !['default_service', 'generic', 'null'].includes(serviceId);
+        const channelName = hasScopedService 
+            ? `tickets-changes-${projectId}-${serviceId}` 
+            : `tickets-changes-${projectId}`;
+        const filter = hasScopedService
+            ? `project_id=eq.${projectId},service_id=eq.${serviceId}`
+            : `project_id=eq.${projectId}`;
+
         supabase
-            .channel(`tickets-changes-${projectId}`)
+            .channel(channelName)
             .on('postgres_changes', {
                 event: '*',
                 schema: 'public',
-                table: 'tickets'
+                table: 'tickets',
+                filter: filter
             }, (payload: any) => {
                 if (payload.new?.project_id !== projectId && payload.old?.project_id !== projectId) return;
+                if (hasScopedService) {
+                    const newSId = payload.new?.service_id;
+                    const oldSId = payload.old?.service_id;
+                    if (newSId !== serviceId && oldSId !== serviceId) return;
+                }
                 if (payload.eventType === 'INSERT' && payload.new?.tipo === 'Nuevo Lead') {
                     console.log(`📡 [Realtime] Nuevo ticket Lead creado para ${payload.new?.chat_id}`);
-                    historyEvents.emit('reporte_created', { reporte: payload.new, projectId });
+                    historyEvents.emit('reporte_created', { reporte: payload.new, projectId, serviceId });
                 }
                 if (payload.eventType === 'UPDATE') {
                     historyEvents.emit('ticket_updated', payload.new);
@@ -3900,7 +3930,7 @@ export class HistoryHandler {
             })
             .subscribe((status: string) => {
                 if (status === 'SUBSCRIBED') {
-                    console.log(`✅ [Realtime] Suscrito a tabla tickets para proyecto ${projectId}`);
+                    console.log(`✅ [Realtime] Suscrito a tabla tickets para proyecto ${projectId} (Service: ${serviceId})`);
                 } else if (status === 'CHANNEL_ERROR') {
                     console.error(`❌ [Realtime] Error en suscripción de tickets. Verifica que Realtime esté habilitado en la tabla 'tickets' en Supabase.`);
                 }
@@ -3910,20 +3940,35 @@ export class HistoryHandler {
     static subscribeToUsersChanges() {
         if (!supabase) return;
         const projectId = this.PROJECT_IDENTIFIER;
+        const serviceId = this.SERVICE_IDENTIFIER;
+        const hasScopedService = serviceId && !['default_service', 'generic', 'null'].includes(serviceId);
+        const channelName = hasScopedService 
+            ? `users-changes-${projectId}-${serviceId}` 
+            : `users-changes-${projectId}`;
+        const filter = hasScopedService
+            ? `project_id=eq.${projectId},service_id=eq.${serviceId}`
+            : `project_id=eq.${projectId}`;
+
         supabase
-            .channel(`users-changes-${projectId}`)
+            .channel(channelName)
             .on('postgres_changes', {
                 event: '*',
                 schema: 'public',
-                table: 'users'
+                table: 'users',
+                filter: filter
             }, (payload: any) => {
                 if (payload.new?.project_id !== projectId && payload.old?.project_id !== projectId) return;
+                if (hasScopedService) {
+                    const newSId = payload.new?.service_id;
+                    const oldSId = payload.old?.service_id;
+                    if (newSId !== serviceId && oldSId !== serviceId) return;
+                }
                 console.log(`📡 [Realtime] Cambio detectado en tabla users para proyecto ${projectId}`);
                 historyEvents.emit('user_updated', payload.new || payload.old);
             })
             .subscribe((status: string) => {
                 if (status === 'SUBSCRIBED') {
-                    console.log(`✅ [Realtime] Suscrito a tabla users para proyecto ${projectId}`);
+                    console.log(`✅ [Realtime] Suscrito a tabla users para proyecto ${projectId} (Service: ${serviceId})`);
                 } else if (status === 'CHANNEL_ERROR') {
                     console.error(`❌ [Realtime] Error en suscripción de users. Verifica que Realtime esté habilitado en la tabla 'users' en Supabase.`);
                 }
@@ -3933,15 +3978,26 @@ export class HistoryHandler {
     static subscribeToChatChanges() {
         if (!supabase) return;
         const projectId = this.PROJECT_IDENTIFIER;
+        const serviceId = this.SERVICE_IDENTIFIER;
+        const hasScopedService = serviceId && !['default_service', 'generic', 'null'].includes(serviceId);
+        const channelName = hasScopedService 
+            ? `chats-changes-${projectId}-${serviceId}` 
+            : `chats-changes-${projectId}`;
+        const filter = hasScopedService
+            ? `project_id=eq.${projectId},service_id=eq.${serviceId}`
+            : `project_id=eq.${projectId}`;
+
         supabase
-            .channel(`chats-changes-${projectId}`)
+            .channel(channelName)
             .on('postgres_changes', {
                 event: '*',
                 schema: 'public',
-                table: 'chats'
+                table: 'chats',
+                filter: filter
             }, (payload: any) => {
                 const chat = payload.new || payload.old;
                 if (!chat || chat.project_id !== projectId) return;
+                if (hasScopedService && chat.service_id !== serviceId) return;
                 historyEvents.emit('chat_updated', {
                     ...chat,
                     chatId: chat.id,
@@ -3952,7 +4008,7 @@ export class HistoryHandler {
             })
             .subscribe((status: string) => {
                 if (status === 'SUBSCRIBED') {
-                    console.log(`✅ [Realtime] Suscrito a tabla chats para proyecto ${projectId}`);
+                    console.log(`✅ [Realtime] Suscrito a tabla chats para proyecto ${projectId} (Service: ${serviceId})`);
                 } else if (status === 'CHANNEL_ERROR') {
                     console.error(`❌ [Realtime] Error en suscripción de chats. Verifica que Realtime esté habilitado en la tabla 'chats' en Supabase.`);
                 }
