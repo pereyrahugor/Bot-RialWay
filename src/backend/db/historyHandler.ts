@@ -3374,6 +3374,8 @@ export class HistoryHandler {
             if ((hasContactDetails || ticketUpdate.estado === 'Cerrado') && activeChatTargetId) {
                 const chatUpdate: any = {};
                 let currentChatRow: any = null;
+                let targetCuit: string | null = null;
+                let targetEmpresa: string | null = null;
 
                 if (hasContactDetails) {
                     if (details.contact.name !== undefined) chatUpdate.name = details.contact.name;
@@ -3402,8 +3404,8 @@ export class HistoryHandler {
                     const existingMeta = currentChatRow?.metadata || {};
                     const rawTargetCuit = details.contact.cuit_dni !== undefined ? details.contact.cuit_dni : currentChatRow?.cuit_dni;
                     const rawTargetEmpresa = details.contact.empresa !== undefined ? details.contact.empresa : (existingMeta.empresa || currentChatRow?.metadata?.empresa);
-                    const targetCuit = normalizeCuitDni(rawTargetCuit);
-                    const targetEmpresa = normalizeEmpresa(rawTargetEmpresa) ? (rawTargetEmpresa?.trim() || null) : null;
+                    targetCuit = normalizeCuitDni(rawTargetCuit);
+                    targetEmpresa = normalizeEmpresa(rawTargetEmpresa) ? (rawTargetEmpresa?.trim() || null) : null;
 
                     let effectiveSharedNotes = details.contact.shared_notes;
                     if (currentProjectId && (targetCuit || targetEmpresa)) {
