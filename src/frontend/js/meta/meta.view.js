@@ -110,7 +110,7 @@ window.metaView = (() => {
                         </div>
 
                         <!-- Grid de plantillas de otras líneas del proyecto -->
-                        <div id="view-project-templates" class="meta-grid" style="display:none;">
+                        <div id="view-project-templates" class="meta-grid" style="display:none; height:100%; min-height:0; overflow:hidden;">
                             <div class="text-center py-10 opacity-50" style="grid-column:1/-1;">
                                 <i class="fas fa-circle-notch fa-spin text-3xl text-accent-bright"></i>
                                 <p class="text-sm text-secondary-content mt-3">Consultando plantillas de otras líneas...</p>
@@ -770,7 +770,7 @@ window.metaView = (() => {
                 </button>`;
         }).join('');
         container.innerHTML = `
-            <div class="meta-template-table">
+            <div class="meta-template-table" style="height:100%; max-height:100%; overflow-y:auto; overflow-x:hidden;">
                 <div class="meta-template-row meta-template-head" aria-hidden="true">
                     <span>Nombre de la plantilla</span>
                     <span>Categoria</span>
@@ -793,7 +793,7 @@ window.metaView = (() => {
         const subtitle    = document.getElementById('meta-templates-subtitle');
 
         if (tab === 'my') {
-            if (myView)     myView.style.display = 'grid';
+            if (myView)     { myView.style.display = 'grid'; myView.style.height = '100%'; myView.style.minHeight = '0'; myView.style.overflow = 'hidden'; }
             if (projView)   projView.style.display = 'none';
             if (detailView) detailView.style.display = 'none';
             if (myTabBtn)   { myTabBtn.classList.add('active'); myTabBtn.style.opacity = '1'; }
@@ -803,7 +803,7 @@ window.metaView = (() => {
             loadTemplates();
         } else if (tab === 'project') {
             if (myView)     myView.style.display = 'none';
-            if (projView)   projView.style.display = 'grid';
+            if (projView)   { projView.style.display = 'grid'; projView.style.height = '100%'; projView.style.minHeight = '0'; projView.style.overflow = 'hidden'; }
             if (detailView) detailView.style.display = 'none';
             if (projTabBtn) { projTabBtn.classList.add('active'); projTabBtn.style.opacity = '1'; }
             if (myTabBtn)   { myTabBtn.classList.remove('active'); myTabBtn.style.opacity = '0.65'; }
@@ -917,7 +917,7 @@ window.metaView = (() => {
         }).join('');
 
         container.innerHTML = `
-            <div class="meta-template-table">
+            <div class="meta-template-table" style="height:100%; max-height:100%; overflow-y:auto; overflow-x:hidden;">
                 <div class="meta-template-row meta-template-head" style="display:grid; grid-template-columns: 2fr 1.5fr 1fr 1fr 1.5fr; align-items:center; gap:12px;" aria-hidden="true">
                     <span>Plantilla / Línea de Origen</span>
                     <span>Categoría</span>

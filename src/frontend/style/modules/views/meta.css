@@ -634,13 +634,15 @@
   }
 
   #view-my-templates,
+  #view-project-templates,
   #view-template-detail {
     overflow: visible;
     height: auto;
     min-height: 520px;
   }
 
-  #meta-connected-area #view-my-templates {
+  #meta-connected-area #view-my-templates,
+  #meta-connected-area #view-project-templates {
     height: 100%;
     min-height: 0;
     overflow: hidden;
@@ -1028,6 +1030,7 @@
   }
 
   #view-my-templates,
+  #view-project-templates,
   #view-template-detail {
     height: auto !important;
     min-height: 0 !important;
