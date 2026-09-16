@@ -208,24 +208,24 @@ window.metaView = (() => {
             </div><!-- /.meta-view-body -->
 
             <!-- Modal Flujo Envío Masivo (Confirmación + Avance en Tiempo Real + Cancelación) -->
-            <div id="bulk-flow-modal" class="bulk-modal-overlay" style="display:none;">
-                <div class="bulk-modal-card">
+            <div id="bulk-flow-modal" class="modal-overlay" style="display:none; z-index:99999;">
+                <div class="modal-content modal-content-md animate-pop-in" style="max-width:560px;">
                     <!-- Header -->
-                    <div class="bulk-modal-header">
-                        <div class="bulk-modal-title-box">
-                            <div class="bulk-modal-icon-badge" id="bulk-modal-badge">
+                    <div class="modal-header">
+                        <div style="display:flex; align-items:center; gap:12px;">
+                            <div style="width:38px; height:38px; border-radius:10px; background:rgba(0,153,255,0.12); color:#0099FF; display:flex; align-items:center; justify-content:center; font-size:1.1rem; flex-shrink:0;">
                                 <i class="fas fa-paper-plane"></i>
                             </div>
                             <div>
-                                <h3 id="bulk-modal-title" class="bulk-modal-title">Confirmar Envío Masivo</h3>
-                                <p id="bulk-modal-subtitle" class="bulk-modal-subtitle">Verifica los datos antes de iniciar el envío</p>
+                                <h3 id="bulk-modal-title" style="margin:0; font-size:1.15rem; font-weight:700; color:inherit;">Confirmar Envío Masivo</h3>
+                                <p id="bulk-modal-subtitle" style="margin:2px 0 0; font-size:0.8rem; color:var(--text-muted);">Verifica los datos antes de iniciar el envío</p>
                             </div>
                         </div>
-                        <button class="bulk-modal-close-btn" id="bulk-modal-close-x" onclick="closeBulkFlowModal()" title="Cerrar">&times;</button>
+                        <button class="modal-close" id="bulk-modal-close-x" onclick="closeBulkFlowModal()" type="button" title="Cerrar">&times;</button>
                     </div>
 
                     <!-- Fase 1: Confirmación Previa -->
-                    <div id="bulk-phase-confirm" class="bulk-modal-body">
+                    <div id="bulk-phase-confirm" class="modal-body" style="display:flex; flex-direction:column; gap:16px;">
                         <div class="bulk-summary-grid">
                             <div class="bulk-summary-item">
                                 <span class="bulk-summary-label"><i class="fas fa-file-alt"></i> Plantilla</span>
@@ -250,22 +250,22 @@ window.metaView = (() => {
                         </div>
 
                         <div class="bulk-alert-box warning">
-                            <i class="fas fa-exclamation-triangle"></i>
+                            <i class="fas fa-exclamation-triangle" style="font-size:1.1rem; margin-top:2px; flex-shrink:0;"></i>
                             <div>
                                 <strong>Verificación previa:</strong> Por favor confirma que la cantidad de destinatarios y los filtros seleccionados sean correctos. Podrás cancelar el proceso en cualquier momento mientras se encuentre en curso.
                             </div>
                         </div>
+                    </div>
 
-                        <div class="bulk-modal-actions">
-                            <button type="button" class="btn-secondary" onclick="closeBulkFlowModal()">Cancelar / Revisar</button>
-                            <button type="button" class="btn-primary" id="bmc-confirm-btn" onclick="executeConfirmedBulkSend()">
-                                <i class="fas fa-paper-plane"></i> Iniciar Envío Masivo
-                            </button>
-                        </div>
+                    <div id="bulk-phase-confirm-footer" class="modal-footer">
+                        <button type="button" class="btn-secondary" onclick="closeBulkFlowModal()">Cancelar / Revisar</button>
+                        <button type="button" class="btn-primary" id="bmc-confirm-btn" onclick="executeConfirmedBulkSend()">
+                            <i class="fas fa-paper-plane"></i> Iniciar Envío Masivo
+                        </button>
                     </div>
 
                     <!-- Fase 2: Avance en Vivo + Cancelación -->
-                    <div id="bulk-phase-progress" class="bulk-modal-body" style="display:none;">
+                    <div id="bulk-phase-progress" class="modal-body" style="display:none; flex-direction:column; gap:16px;">
                         <div class="bulk-live-status-box">
                             <div class="bulk-live-header">
                                 <span id="bulk-live-state-badge" class="bulk-state-badge in-progress">
@@ -299,130 +299,49 @@ window.metaView = (() => {
                                 Enviando mensajes a WhatsApp respetando los límites de entrega de Meta...
                             </div>
                         </div>
+                    </div>
 
-                        <div class="bulk-modal-actions">
-                            <button type="button" class="btn-danger" id="bulk-cancel-btn" onclick="requestCancelBulkSend()">
-                                <i class="fas fa-stop-circle"></i> Cancelar Envío
-                            </button>
-                            <button type="button" class="btn-primary" id="bulk-done-btn" style="display:none;" onclick="closeBulkFlowModal()">
-                                <i class="fas fa-check"></i> Cerrar
-                            </button>
-                        </div>
+                    <div id="bulk-phase-progress-footer" class="modal-footer" style="display:none;">
+                        <button type="button" class="btn-danger" id="bulk-cancel-btn" onclick="requestCancelBulkSend()">
+                            <i class="fas fa-stop-circle"></i> Cancelar Envío
+                        </button>
+                        <button type="button" class="btn-primary" id="bulk-done-btn" style="display:none;" onclick="closeBulkFlowModal()">
+                            <i class="fas fa-check"></i> Cerrar
+                        </button>
                     </div>
                 </div>
             </div>
 
             <style>
-            .bulk-modal-overlay {
-                position: fixed;
-                top: 0; left: 0;
-                width: 100vw; height: 100vh;
-                background: rgba(0, 0, 0, 0.72);
-                backdrop-filter: blur(8px);
-                z-index: 99999;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                padding: 16px;
-                animation: bulkModalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-            }
-            @keyframes bulkModalFadeIn {
-                from { opacity: 0; transform: scale(0.96); }
-                to { opacity: 1; transform: scale(1); }
-            }
-            .bulk-modal-card {
-                background: var(--bg-card, #1c202a);
-                color: var(--text-primary, #ffffff);
-                border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
-                border-radius: 20px;
-                width: 100%;
-                max-width: 550px;
-                box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
-                overflow: hidden;
-                display: flex;
-                flex-direction: column;
-            }
-            .bulk-modal-header {
-                padding: 20px 24px 16px;
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.08));
-            }
-            .bulk-modal-title-box {
-                display: flex;
-                align-items: center;
-                gap: 14px;
-            }
-            .bulk-modal-icon-badge {
-                width: 44px;
-                height: 44px;
-                border-radius: 12px;
-                background: rgba(6, 104, 225, 0.18);
-                color: #0668E1;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 1.25rem;
-            }
-            .bulk-modal-title {
-                margin: 0;
-                font-size: 1.15rem;
-                font-weight: 700;
-                color: var(--text-primary, #fff);
-            }
-            .bulk-modal-subtitle {
-                margin: 2px 0 0;
-                font-size: 0.82rem;
-                color: var(--text-muted, #9ca3af);
-            }
-            .bulk-modal-close-btn {
-                background: transparent;
-                border: none;
-                color: var(--text-muted, #9ca3af);
-                font-size: 1.6rem;
-                cursor: pointer;
-                line-height: 1;
-                padding: 4px 8px;
-                border-radius: 8px;
-                transition: color 0.15s, background 0.15s;
-            }
-            .bulk-modal-close-btn:hover {
-                color: #fff;
-                background: rgba(255, 255, 255, 0.08);
-            }
-            .bulk-modal-body {
-                padding: 22px 24px;
-                display: flex;
-                flex-direction: column;
-                gap: 18px;
-            }
             .bulk-summary-grid {
                 display: grid;
                 grid-template-columns: 1fr 1fr;
                 gap: 12px;
             }
             .bulk-summary-item {
-                background: var(--bg-header, rgba(255, 255, 255, 0.03));
-                border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+                background: rgba(0, 153, 255, 0.03);
+                border: 1px solid var(--border, rgba(0, 0, 0, 0.08));
                 border-radius: 12px;
                 padding: 12px 14px;
                 display: flex;
                 flex-direction: column;
                 gap: 4px;
             }
+            [data-theme="dark"] .bulk-summary-item {
+                background: rgba(255, 255, 255, 0.03);
+            }
             .bulk-summary-item.highlight {
-                background: rgba(6, 104, 225, 0.09);
-                border-color: rgba(6, 104, 225, 0.35);
+                background: rgba(0, 153, 255, 0.08);
+                border-color: rgba(0, 153, 255, 0.35);
             }
             .bulk-summary-item.full-width {
                 grid-column: 1 / -1;
             }
             .bulk-summary-label {
-                font-size: 0.75rem;
-                color: var(--text-muted, #9ca3af);
+                font-size: 0.72rem;
+                color: var(--text-muted, #64748b);
                 text-transform: uppercase;
-                font-weight: 600;
+                font-weight: 700;
                 letter-spacing: 0.5px;
                 display: flex;
                 align-items: center;
@@ -430,12 +349,12 @@ window.metaView = (() => {
             }
             .bulk-summary-val {
                 font-size: 0.95rem;
-                font-weight: 500;
-                color: var(--text-primary, #fff);
+                font-weight: 600;
+                color: var(--text-main, #0f172a);
                 word-break: break-word;
             }
             .bulk-summary-val.bold {
-                font-size: 1.5rem;
+                font-size: 1.6rem;
                 font-weight: 800;
                 color: #0099FF;
             }
@@ -446,11 +365,18 @@ window.metaView = (() => {
                 margin-top: 4px;
             }
             .bulk-tag-chip {
-                background: rgba(255, 255, 255, 0.08);
+                background: rgba(0, 153, 255, 0.09);
+                color: #0284c7;
                 padding: 3px 9px;
                 border-radius: 6px;
                 font-size: 0.78rem;
-                border: 1px solid rgba(255, 255, 255, 0.12);
+                font-weight: 600;
+                border: 1px solid rgba(0, 153, 255, 0.22);
+            }
+            [data-theme="dark"] .bulk-tag-chip {
+                background: rgba(0, 153, 255, 0.18);
+                color: #60a5fa;
+                border-color: rgba(0, 153, 255, 0.35);
             }
             .bulk-alert-box {
                 display: flex;
@@ -462,54 +388,14 @@ window.metaView = (() => {
                 line-height: 1.45;
             }
             .bulk-alert-box.warning {
-                background: rgba(245, 158, 11, 0.1);
+                background: #fffbeb;
+                border: 1px solid #fde68a;
+                color: #b45309;
+            }
+            [data-theme="dark"] .bulk-alert-box.warning {
+                background: rgba(245, 158, 11, 0.12);
                 border: 1px solid rgba(245, 158, 11, 0.3);
-                color: #f59e0b;
-            }
-            .bulk-alert-box.warning i {
-                font-size: 1.15rem;
-                margin-top: 2px;
-                flex-shrink: 0;
-            }
-            .bulk-modal-actions {
-                display: flex;
-                align-items: center;
-                justify-content: flex-end;
-                gap: 12px;
-                margin-top: 8px;
-            }
-            .bulk-modal-actions button {
-                padding: 10px 18px;
-                border-radius: 10px;
-                font-weight: 600;
-                font-size: 0.9rem;
-                cursor: pointer;
-                border: none;
-                display: inline-flex;
-                align-items: center;
-                gap: 8px;
-                transition: all 0.18s;
-            }
-            .bulk-modal-actions .btn-secondary {
-                background: rgba(255, 255, 255, 0.08);
-                color: var(--text-primary, #fff);
-            }
-            .bulk-modal-actions .btn-secondary:hover {
-                background: rgba(255, 255, 255, 0.14);
-            }
-            .bulk-modal-actions .btn-primary {
-                background: #0668E1;
-                color: #fff;
-            }
-            .bulk-modal-actions .btn-primary:hover {
-                background: #0055c4;
-            }
-            .bulk-modal-actions .btn-danger {
-                background: #ef4444;
-                color: #fff;
-            }
-            .bulk-modal-actions .btn-danger:hover {
-                background: #dc2626;
+                color: #fbbf24;
             }
             .bulk-live-status-box {
                 display: flex;
@@ -532,33 +418,36 @@ window.metaView = (() => {
                 font-weight: 600;
             }
             .bulk-state-badge.in-progress {
-                background: rgba(6, 104, 225, 0.18);
-                color: #0668E1;
+                background: rgba(0, 153, 255, 0.15);
+                color: #0099FF;
             }
             .bulk-state-badge.completed {
-                background: rgba(16, 185, 129, 0.18);
+                background: rgba(16, 185, 129, 0.15);
                 color: #10b981;
             }
             .bulk-state-badge.cancelled {
-                background: rgba(239, 68, 68, 0.18);
+                background: rgba(239, 68, 68, 0.15);
                 color: #ef4444;
             }
             .bulk-live-pct {
                 font-size: 1.15rem;
                 font-weight: 700;
-                color: var(--text-primary, #fff);
+                color: var(--text-main, #0f172a);
             }
             .bulk-linear-track {
                 width: 100%;
                 height: 12px;
-                background: rgba(255, 255, 255, 0.08);
+                background: #e2e8f0;
                 border-radius: 8px;
                 overflow: hidden;
                 position: relative;
             }
+            [data-theme="dark"] .bulk-linear-track {
+                background: rgba(255, 255, 255, 0.1);
+            }
             .bulk-linear-bar {
                 height: 100%;
-                background: linear-gradient(90deg, #0668E1 0%, #0099FF 100%);
+                background: linear-gradient(90deg, #0099FF 0%, #0284c7 100%);
                 border-radius: 8px;
                 transition: width 0.35s ease-out, background 0.3s;
             }
@@ -573,12 +462,12 @@ window.metaView = (() => {
                 font-size: 2.1rem;
                 font-weight: 800;
                 letter-spacing: -0.5px;
-                color: var(--text-primary, #fff);
+                color: var(--text-main, #0f172a);
                 font-family: monospace, system-ui;
             }
             .bulk-counter-sub {
                 font-size: 0.82rem;
-                color: var(--text-muted, #9ca3af);
+                color: var(--text-muted, #64748b);
                 text-transform: uppercase;
                 letter-spacing: 0.8px;
             }
@@ -609,7 +498,7 @@ window.metaView = (() => {
             }
             .bulk-live-info-msg {
                 font-size: 0.82rem;
-                color: var(--text-muted, #9ca3af);
+                color: var(--text-muted, #64748b);
                 margin-top: 4px;
             }
             </style>
@@ -1075,7 +964,11 @@ window.metaView = (() => {
 
         // Fase 1 Visible, Fase 2 Oculta
         document.getElementById('bulk-phase-confirm').style.display = 'flex';
+        const confirmFooter = document.getElementById('bulk-phase-confirm-footer');
+        if (confirmFooter) confirmFooter.style.display = 'flex';
         document.getElementById('bulk-phase-progress').style.display = 'none';
+        const progressFooter = document.getElementById('bulk-phase-progress-footer');
+        if (progressFooter) progressFooter.style.display = 'none';
 
         // Setear datos del resumen
         document.getElementById('bmc-template-name').innerText = config.templateName || '-';
@@ -1135,7 +1028,11 @@ window.metaView = (() => {
         const infoMsg      = document.getElementById('bulk-live-info-msg');
 
         confirmBody.style.display  = 'none';
+        const confirmFooter = document.getElementById('bulk-phase-confirm-footer');
+        if (confirmFooter) confirmFooter.style.display = 'none';
         progressBody.style.display = 'flex';
+        const progressFooter = document.getElementById('bulk-phase-progress-footer');
+        if (progressFooter) progressFooter.style.display = 'flex';
 
         // Reset barra y contadores
         const totalExpected = _pendingBulkPayload.totalContacts || 0;
