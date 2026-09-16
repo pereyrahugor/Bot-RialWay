@@ -631,13 +631,18 @@ function _setupCRMTareasFormHandlers() {
             mainNotes += `\n\n--- [Tareas] Added on ${date} ---\n` + additionalNotes.join('\n');
         }
 
+        const rawCuit = document.getElementById('edit-lead-cuit') ? document.getElementById('edit-lead-cuit').value : '';
+        const rawEmpresa = document.getElementById('edit-lead-company') ? document.getElementById('edit-lead-company').value : '';
+        const normCuit = typeof window.normalizeCuitDni === 'function' ? window.normalizeCuitDni(rawCuit) : rawCuit;
+        const normEmpresa = typeof window.normalizeEmpresa === 'function' ? (window.normalizeEmpresa(rawEmpresa) ? rawEmpresa.trim() : '') : rawEmpresa;
+
         const leadData = {
             name: document.getElementById('edit-lead-name').value,
             apellido: document.getElementById('edit-lead-last-name') ? document.getElementById('edit-lead-last-name').value : '',
             email: document.getElementById('edit-lead-email').value,
             source: document.getElementById('edit-lead-source').value,
-            cuit_dni: document.getElementById('edit-lead-cuit').value,
-            empresa: document.getElementById('edit-lead-company') ? document.getElementById('edit-lead-company').value : '',
+            cuit_dni: normCuit || '',
+            empresa: normEmpresa || '',
             address: document.getElementById('edit-lead-address').value,
             localidad: document.getElementById('edit-lead-city') ? document.getElementById('edit-lead-city').value : '',
             provincia: document.getElementById('edit-lead-province') ? document.getElementById('edit-lead-province').value : '',

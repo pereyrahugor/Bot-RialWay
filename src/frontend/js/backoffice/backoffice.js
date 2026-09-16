@@ -2508,6 +2508,37 @@ function populateCRMFields(chat) {
     if (typeof window.applyCRMConfig === 'function') window.applyCRMConfig();
 }
 
+if (typeof window.normalizeCuitDni !== 'function') {
+    window.normalizeCuitDni = function(val) {
+        if (!val) return null;
+        const str = String(val).trim();
+        if (!str) return null;
+        const lower = str.toLowerCase();
+        if (['-', '--', '---', '.', '..', '...', 's/d', 'sd', 'n/a', 'na', 'null', 'undefined', '0'].includes(lower)) return null;
+        let digits = str.replace(/\D/g, '');
+        if (digits.length === 7) digits = digits.padStart(8, '0');
+        if (digits.length !== 8 && digits.length !== 11) return null;
+        if (/^(\d)\1+$/.test(digits)) return null;
+        return digits;
+    };
+}
+
+if (typeof window.normalizeEmpresa !== 'function') {
+    window.normalizeEmpresa = function(val) {
+        if (!val) return null;
+        const str = String(val).trim().toLowerCase();
+        if (!str) return null;
+        const invalid = new Set([
+            '-', '--', '---', '.', '..', '...', 's/d', 'sd', 'n/a', 'na', 'null', 'undefined',
+            'ninguno', 'ninguna', 'sin asignar', 'sin empresa', 'particular', 'consumidor final',
+            'no tiene', 'no', '0', 'none', 'sn', 's/n'
+        ]);
+        if (invalid.has(str)) return null;
+        const alnum = (str.match(/[a-z0-9áéíóúüñ]/gi) || []).length;
+        return alnum >= 2 ? str : null;
+    };
+}
+
 async function checkAndFetchSharedNotesSide(chat) {
     const cuitInput = document.getElementById('crm-cuit');
     const empresaInput = document.getElementById('crm-company-side');
@@ -2517,27 +2548,31 @@ async function checkAndFetchSharedNotesSide(chat) {
 
     if (!notesTextarea) return;
 
-    const cuit = (cuitInput?.value || chat?.cuit_dni || '').trim();
-    const empresa = (empresaInput?.value || chat?.metadata?.empresa || '').trim();
-
-    // Solo habilitar si hay Empresa o CUIT asignado
-    if (!cuit && !empresa) {
-        notesTextarea.disabled = true;
-        notesTextarea.style.opacity = '0.6';
-        notesTextarea.style.cursor = 'not-allowed';
-        notesTextarea.placeholder = 'Asigne Empresa o CUIT arriba para habilitar y sincronizar Notas 2...';
-        if (indicator) {
-            indicator.textContent = '🔒 Requiere CUIT o Empresa';
-            indicator.style.color = '#f59e0b';
-        }
-        if (hint) hint.style.display = 'block';
-        return;
-    }
-
-    // Habilitar edición
+    // La edición NUNCA se bloquea: siempre permitir escribir notas para este lead
     notesTextarea.disabled = false;
     notesTextarea.style.opacity = '1';
     notesTextarea.style.cursor = 'text';
+
+    const rawCuit = (cuitInput?.value || chat?.cuit_dni || '');
+    const rawEmpresa = (empresaInput?.value || chat?.metadata?.empresa || '');
+    const cleanCuit = window.normalizeCuitDni(rawCuit);
+    const cleanEmpresa = window.normalizeEmpresa(rawEmpresa);
+
+    // Si no hay Empresa ni CUIT válidos, es una nota individual del Lead
+    if (!cleanCuit && !cleanEmpresa) {
+        notesTextarea.placeholder = 'Nota individual de este Lead (sin vincular a empresa)...';
+        if (indicator) {
+            indicator.textContent = '📝 Nota individual';
+            indicator.style.color = '#94a3b8';
+        }
+        if (hint) {
+            hint.style.display = 'block';
+            hint.innerHTML = '<i class="fas fa-info-circle"></i> Ingrese un CUIT (8 u 11 dígitos) o Empresa para compartir y sincronizar entre leads del mismo cliente.';
+        }
+        return;
+    }
+
+    // Modo vinculado por CUIT o Empresa
     notesTextarea.placeholder = 'Notas corporativas compartidas entre CRMs del mismo cliente/empresa...';
     if (hint) hint.style.display = 'none';
 
@@ -2547,26 +2582,26 @@ async function checkAndFetchSharedNotesSide(chat) {
     }
 
     try {
-        const res = await fetch(`/api/backoffice/company-notes?token=${token}&cuit=${encodeURIComponent(cuit)}&empresa=${encodeURIComponent(empresa)}`);
+        const res = await fetch(`/api/backoffice/company-notes?token=${token}&cuit=${encodeURIComponent(cleanCuit || '')}&empresa=${encodeURIComponent(cleanEmpresa || '')}`);
         const data = await res.json();
         if (data.success && data.notes) {
             if (!notesTextarea.value.trim()) {
                 notesTextarea.value = data.notes;
             }
             if (indicator) {
-                indicator.textContent = '✅ Sincronizado';
+                indicator.textContent = '✅ Sincronizado por Empresa/CUIT';
                 indicator.style.color = '#10b981';
             }
         } else {
             if (indicator) {
-                indicator.textContent = '⚡ Habilitado (Sin notas previas)';
+                indicator.textContent = '⚡ Vinculado (Sin notas previas)';
                 indicator.style.color = '#38bdf8';
             }
         }
     } catch (err) {
         console.error('[CRM Side] Error fetching shared notes:', err);
         if (indicator) {
-            indicator.textContent = '⚡ Habilitado para editar';
+            indicator.textContent = '⚡ Vinculado por Empresa/CUIT';
             indicator.style.color = '#38bdf8';
         }
     }
@@ -2581,6 +2616,10 @@ async function saveCRMDetails() {
     if (!activeChatId) return;
 
     const phoneInputVal = document.getElementById('crm-phone-side')?.value || '';
+    const rawCuit = document.getElementById('crm-cuit')?.value || '';
+    const rawEmpresa = document.getElementById('crm-company-side')?.value || '';
+    const normCuit = window.normalizeCuitDni(rawCuit);
+    const normEmpresa = window.normalizeEmpresa(rawEmpresa) ? rawEmpresa.trim() : '';
 
     const details = {
         name: document.getElementById('crm-name').value,
@@ -2589,8 +2628,8 @@ async function saveCRMDetails() {
         email: document.getElementById('crm-email').value,
         source: document.getElementById('crm-source').value,
         notes: document.getElementById('crm-notes').value,
-        cuit_dni: document.getElementById('crm-cuit').value,
-        empresa: document.getElementById('crm-company-side')?.value || '',
+        cuit_dni: normCuit || '',
+        empresa: normEmpresa || '',
         address: document.getElementById('crm-address').value,
         localidad: document.getElementById('crm-city-side')?.value || '',
         provincia: document.getElementById('crm-province-side')?.value || '',

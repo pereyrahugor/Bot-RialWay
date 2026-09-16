@@ -45,6 +45,72 @@ export const normalizeTextForCache = (text: string): string => {
         .replace(/[\s\p{P}]/gu, ''); // Elimina espacios y puntuación de cualquier tipo
 };
 
+/**
+ * Normaliza CUIT o DNI:
+ * - Extrae únicamente los dígitos numéricos.
+ * - Es válido únicamente si tiene 8 caracteres (DNI) u 11 caracteres (CUIT/CUIL).
+ *   (También admite 7 caracteres para DNIs antiguos argentinos, completando con '0' a la izquierda a 8 dígitos).
+ * - Rechaza secuencias inválidas (ej. 00000000, 11111111) y placeholders ("-", "s/d", "n/a", etc.).
+ * Retorna el string numérico normalizado de 8 u 11 caracteres, o null si es inválido.
+ */
+export function normalizeCuitDni(val: any): string | null {
+    if (val === null || val === undefined) return null;
+    const str = String(val).trim();
+    if (!str) return null;
+
+    const lower = str.toLowerCase();
+    if (['-', '--', '---', '.', '..', '...', 's/d', 'sd', 'n/a', 'na', 'null', 'undefined', '0'].includes(lower)) {
+        return null;
+    }
+
+    const digits = str.replace(/\D/g, '');
+    let normalizedDigits = digits;
+    if (digits.length === 7) {
+        normalizedDigits = digits.padStart(8, '0');
+    }
+
+    if (normalizedDigits.length !== 8 && normalizedDigits.length !== 11) {
+        return null;
+    }
+
+    // Rechazar secuencias donde todos los dígitos son iguales (ej: 00000000, 11111111)
+    if (/^(\d)\1+$/.test(normalizedDigits)) {
+        return null;
+    }
+
+    return normalizedDigits;
+}
+
+/**
+ * Normaliza Razón Social / Empresa:
+ * - Limpia espacios iniciales/finales y convierte a minúsculas.
+ * - Descarta placeholders inválidos ("-", "--", "s/d", "n/a", "particular", etc.).
+ * - Requiere al menos 2 caracteres alfanuméricos válidos.
+ * Retorna el string normalizado o null si es inválido.
+ */
+export function normalizeEmpresa(val: any): string | null {
+    if (val === null || val === undefined) return null;
+    const str = String(val).trim().toLowerCase();
+    if (!str) return null;
+
+    const invalidPlaceholders = new Set([
+        '-', '--', '---', '.', '..', '...', 's/d', 'sd', 'n/a', 'na', 'null', 'undefined',
+        'ninguno', 'ninguna', 'sin asignar', 'sin empresa', 'particular', 'consumidor final',
+        'no tiene', 'no', '0', 'none', 'sn', 's/n'
+    ]);
+    if (invalidPlaceholders.has(str)) {
+        return null;
+    }
+
+    const alphanumericCount = (str.match(/[a-z0-9áéíóúüñ]/gi) || []).length;
+    if (alphanumericCount < 2) {
+        return null;
+    }
+
+    return str;
+}
+
+
 // Identificador único para este bot específico
 // Identificador único para este bot específico (Usamos el UUID para consistencia total)
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -1848,10 +1914,21 @@ export class HistoryHandler {
                 .eq('project_id', currentProjectId)
                 .maybeSingle();
 
+            if (chatDetails.cuit_dni !== undefined) {
+                chatDetails.cuit_dni = normalizeCuitDni(chatDetails.cuit_dni) || null;
+            }
+            let cleanInputEmpresa: string | undefined = undefined;
+            if (empresa !== undefined) {
+                const normEmp = normalizeEmpresa(empresa);
+                cleanInputEmpresa = normEmp ? empresa.trim() : '';
+            }
+
             const existingMeta = currentChatRow?.metadata || {};
             // Sincronizar / Heredar Notas 2 compartidas de empresa por CUIT o Empresa a nivel de proyecto
-            const targetCuit = chatDetails.cuit_dni !== undefined ? chatDetails.cuit_dni : currentChatRow?.cuit_dni;
-            const targetEmpresa = empresa !== undefined ? empresa : (existingMeta.empresa || currentChatRow?.metadata?.empresa);
+            const rawTargetCuit = chatDetails.cuit_dni !== undefined ? chatDetails.cuit_dni : currentChatRow?.cuit_dni;
+            const rawTargetEmpresa = cleanInputEmpresa !== undefined ? cleanInputEmpresa : (existingMeta.empresa || currentChatRow?.metadata?.empresa);
+            const targetCuit = normalizeCuitDni(rawTargetCuit);
+            const targetEmpresa = normalizeEmpresa(rawTargetEmpresa) ? (rawTargetEmpresa?.trim() || null) : null;
 
             let effectiveSharedNotes = shared_notes;
             if (currentProjectId && (targetCuit || targetEmpresa)) {
@@ -1866,7 +1943,7 @@ export class HistoryHandler {
                 ...existingMeta,
                 ...(chatDetails.metadata || {}),
                 ...(apellido !== undefined ? { apellido } : {}),
-                ...(empresa !== undefined ? { empresa } : {}),
+                ...(cleanInputEmpresa !== undefined ? { empresa: cleanInputEmpresa } : {}),
                 ...(localidad !== undefined ? { localidad } : {}),
                 ...(provincia !== undefined ? { provincia } : {}),
                 ...(transporte !== undefined ? { transporte } : {}),
@@ -2065,8 +2142,10 @@ export class HistoryHandler {
     static async syncCompanySharedNotes(projectId: string, cuitDni?: string | null, empresa?: string | null, sharedNotes?: string | null) {
         if (!projectId || (!cuitDni && !empresa) || sharedNotes === undefined) return;
         try {
-            const cleanCuit = cuitDni ? String(cuitDni).trim().toLowerCase() : null;
-            const cleanEmpresa = empresa ? String(empresa).trim().toLowerCase() : null;
+            const cleanCuit = normalizeCuitDni(cuitDni);
+            const cleanEmpresa = normalizeEmpresa(empresa);
+            // Si ninguno es válido (ej. eran "-", placeholders o inválidos), NO sincronizar con ningún otro contacto.
+            // La nota permanece únicamente en el lead actual.
             if (!cleanCuit && !cleanEmpresa) return;
 
             const trimmedNotes = sharedNotes !== null && sharedNotes !== undefined ? String(sharedNotes).trim() : '';
@@ -2087,13 +2166,18 @@ export class HistoryHandler {
             if (error || !matchingChats) return;
 
             for (const c of matchingChats) {
-                const cCuit = c.cuit_dni ? String(c.cuit_dni).trim().toLowerCase() : null;
-                const cEmpresa = c.metadata?.empresa ? String(c.metadata.empresa).trim().toLowerCase() : null;
+                const cCuit = normalizeCuitDni(c.cuit_dni);
+                const cEmpresa = normalizeEmpresa(c.metadata?.empresa);
                 
-                const matches = (cleanCuit && cCuit === cleanCuit) || (cleanEmpresa && cEmpresa === cleanEmpresa);
-                if (matches) {
+                // REGLA ESTRICTA: CUIT solo se compara con CUIT (ambos normalizados), y Empresa solo con Empresa (ambas normalizadas)
+                const cuitMatches = Boolean(cleanCuit && cCuit && cleanCuit === cCuit);
+                const empresaMatches = Boolean(cleanEmpresa && cEmpresa && cleanEmpresa === cEmpresa);
+
+                if (cuitMatches || empresaMatches) {
                     const newMeta = { ...(c.metadata || {}), shared_notes: sharedNotes };
-                    if (cleanEmpresa && !c.metadata?.empresa) newMeta.empresa = empresa;
+                    if (cleanEmpresa && !normalizeEmpresa(c.metadata?.empresa) && empresa) {
+                        newMeta.empresa = empresa;
+                    }
                     await supabase
                         .from('chats')
                         .update({ metadata: newMeta })
@@ -2112,8 +2196,9 @@ export class HistoryHandler {
     static async getCompanySharedNotes(projectId: string, cuitDni?: string | null, empresa?: string | null): Promise<string | null> {
         if (!projectId || (!cuitDni && !empresa)) return null;
         try {
-            const cleanCuit = cuitDni ? String(cuitDni).trim().toLowerCase() : null;
-            const cleanEmpresa = empresa ? String(empresa).trim().toLowerCase() : null;
+            const cleanCuit = normalizeCuitDni(cuitDni);
+            const cleanEmpresa = normalizeEmpresa(empresa);
+            if (!cleanCuit && !cleanEmpresa) return null;
 
             const { data: matchingChats } = await supabase
                 .from('chats')
@@ -2123,10 +2208,14 @@ export class HistoryHandler {
             if (!matchingChats) return null;
 
             for (const c of matchingChats) {
-                const cCuit = c.cuit_dni ? String(c.cuit_dni).trim().toLowerCase() : null;
-                const cEmpresa = c.metadata?.empresa ? String(c.metadata.empresa).trim().toLowerCase() : null;
-                const matches = (cleanCuit && cCuit === cleanCuit) || (cleanEmpresa && cEmpresa === cleanEmpresa);
-                if (matches && c.metadata?.shared_notes) {
+                const cCuit = normalizeCuitDni(c.cuit_dni);
+                const cEmpresa = normalizeEmpresa(c.metadata?.empresa);
+                
+                // REGLA ESTRICTA: CUIT solo con CUIT, y Empresa solo con Empresa
+                const cuitMatches = Boolean(cleanCuit && cCuit && cleanCuit === cCuit);
+                const empresaMatches = Boolean(cleanEmpresa && cEmpresa && cleanEmpresa === cEmpresa);
+
+                if ((cuitMatches || empresaMatches) && c.metadata?.shared_notes) {
                     return c.metadata.shared_notes;
                 }
             }
@@ -2218,14 +2307,21 @@ export class HistoryHandler {
             this.invalidateChatCache(chatId, currentProjectId);
 
             // 1. Crear o actualizar el chat (Lead)
+            const normCuit = details.cuit_dni !== undefined ? (normalizeCuitDni(details.cuit_dni) || null) : undefined;
+            const normEmp = details.metadata?.empresa !== undefined ? (normalizeEmpresa(details.metadata.empresa) ? details.metadata.empresa.trim() : '') : undefined;
+
             const chatPayload: any = {
                 id: chatId,
                 project_id: currentProjectId,
                 type: details.type || 'whatsapp',
                 ...details,
+                ...(normCuit !== undefined ? { cuit_dni: normCuit } : {}),
                 is_lead: true,
                 last_message_at: new Date().toISOString()
             };
+            if (normEmp !== undefined && chatPayload.metadata) {
+                chatPayload.metadata.empresa = normEmp;
+            }
             if (currentServiceId && currentServiceId !== 'default' && currentServiceId !== 'default_service') {
                 chatPayload.service_id = currentServiceId;
             } else {
@@ -3282,7 +3378,11 @@ export class HistoryHandler {
                 if (hasContactDetails) {
                     if (details.contact.name !== undefined) chatUpdate.name = details.contact.name;
                     if (details.contact.email !== undefined) chatUpdate.email = details.contact.email;
-                    if (details.contact.cuit_dni !== undefined) chatUpdate.cuit_dni = details.contact.cuit_dni;
+                    if (details.contact.cuit_dni !== undefined) chatUpdate.cuit_dni = normalizeCuitDni(details.contact.cuit_dni) || null;
+                    if (details.contact.empresa !== undefined) {
+                        const normEmp = normalizeEmpresa(details.contact.empresa);
+                        details.contact.empresa = normEmp ? details.contact.empresa.trim() : '';
+                    }
                     if (details.contact.address !== undefined) chatUpdate.address = details.contact.address;
                     if (details.contact.tax_status !== undefined) chatUpdate.tax_status = details.contact.tax_status;
                     if (details.contact.offered_product !== undefined) chatUpdate.offered_product = details.contact.offered_product;
@@ -3300,8 +3400,10 @@ export class HistoryHandler {
                     currentChatRow = cRow;
 
                     const existingMeta = currentChatRow?.metadata || {};
-                    const targetCuit = details.contact.cuit_dni !== undefined ? details.contact.cuit_dni : currentChatRow?.cuit_dni;
-                    const targetEmpresa = details.contact.empresa !== undefined ? details.contact.empresa : (existingMeta.empresa || currentChatRow?.metadata?.empresa);
+                    const rawTargetCuit = details.contact.cuit_dni !== undefined ? details.contact.cuit_dni : currentChatRow?.cuit_dni;
+                    const rawTargetEmpresa = details.contact.empresa !== undefined ? details.contact.empresa : (existingMeta.empresa || currentChatRow?.metadata?.empresa);
+                    const targetCuit = normalizeCuitDni(rawTargetCuit);
+                    const targetEmpresa = normalizeEmpresa(rawTargetEmpresa) ? (rawTargetEmpresa?.trim() || null) : null;
 
                     let effectiveSharedNotes = details.contact.shared_notes;
                     if (currentProjectId && (targetCuit || targetEmpresa)) {
@@ -3349,9 +3451,7 @@ export class HistoryHandler {
                     if (upChatErr) throw upChatErr;
 
                     // Sincronizar Notas 2 compartidas de empresa por CUIT o Empresa a nivel de proyecto
-                    const targetCuit = details.contact.cuit_dni !== undefined ? details.contact.cuit_dni : currentChatRow?.cuit_dni;
-                    const targetEmpresa = details.contact.empresa || chatUpdate.metadata?.empresa;
-                    if (hasContactDetails && (targetCuit || targetEmpresa)) {
+                    if (hasContactDetails && currentProjectId && (targetCuit || targetEmpresa)) {
                         const notesToSync = chatUpdate.metadata?.shared_notes;
                         if (notesToSync !== undefined) {
                             await this.syncCompanySharedNotes(currentProjectId, targetCuit, targetEmpresa, notesToSync);

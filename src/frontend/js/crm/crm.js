@@ -1199,13 +1199,18 @@ function _setupCRMFormHandlers() {
             mainNotes += `\n\n--- [${columnTitle}] Added on ${date} ---\n` + additionalNotes.join('\n');
         }
 
+        const rawCuit = document.getElementById('edit-lead-cuit').value;
+        const rawEmpresa = document.getElementById('edit-lead-company').value;
+        const normCuit = typeof window.normalizeCuitDni === 'function' ? window.normalizeCuitDni(rawCuit) : rawCuit;
+        const normEmpresa = typeof window.normalizeEmpresa === 'function' ? (window.normalizeEmpresa(rawEmpresa) ? rawEmpresa.trim() : '') : rawEmpresa;
+
         const leadData = {
             name: document.getElementById('edit-lead-name').value,
             apellido: document.getElementById('edit-lead-last-name').value,
             email: document.getElementById('edit-lead-email').value,
             source: document.getElementById('edit-lead-source').value,
-            cuit_dni: document.getElementById('edit-lead-cuit').value,
-            empresa: document.getElementById('edit-lead-company').value,
+            cuit_dni: normCuit || '',
+            empresa: normEmpresa || '',
             address: document.getElementById('edit-lead-address').value,
             localidad: document.getElementById('edit-lead-city').value,
             provincia: document.getElementById('edit-lead-province').value,
@@ -1266,27 +1271,29 @@ function _setupCRMFormHandlers() {
 
         if (!notesTextarea) return;
 
-        const cuit = (cuitInput?.value || '').trim();
-        const empresa = (empresaInput?.value || '').trim();
-
-        // Solo habilitar si hay Empresa o CUIT asignado
-        if (!cuit && !empresa) {
-            notesTextarea.disabled = true;
-            notesTextarea.style.opacity = '0.6';
-            notesTextarea.style.cursor = 'not-allowed';
-            notesTextarea.placeholder = 'Asigne Empresa o CUIT arriba para habilitar y sincronizar Notas 2...';
-            if (indicator) {
-                indicator.textContent = '🔒 Requiere CUIT o Empresa';
-                indicator.style.color = '#f59e0b';
-            }
-            if (hint) hint.style.display = 'block';
-            return;
-        }
-
-        // Habilitar edición
+        // La edición NUNCA se bloquea: el usuario siempre puede escribir notas para este lead
         notesTextarea.disabled = false;
         notesTextarea.style.opacity = '1';
         notesTextarea.style.cursor = 'text';
+
+        const cleanCuit = typeof window.normalizeCuitDni === 'function' ? window.normalizeCuitDni(cuitInput?.value) : (cuitInput?.value || '').trim();
+        const cleanEmpresa = typeof window.normalizeEmpresa === 'function' ? window.normalizeEmpresa(empresaInput?.value) : (empresaInput?.value || '').trim();
+
+        // Si no hay Empresa ni CUIT válidos, es una nota individual del Lead
+        if (!cleanCuit && !cleanEmpresa) {
+            notesTextarea.placeholder = 'Nota individual de este Lead (sin vincular a empresa)...';
+            if (indicator) {
+                indicator.textContent = '📝 Nota individual del Lead';
+                indicator.style.color = '#94a3b8';
+            }
+            if (hint) {
+                hint.style.display = 'block';
+                hint.innerHTML = '<i class="fas fa-info-circle"></i> Ingrese un CUIT (8 u 11 dígitos) o Empresa para compartir y sincronizar esta nota entre leads del mismo cliente.';
+            }
+            return;
+        }
+
+        // Modo vinculado por CUIT o Empresa
         notesTextarea.placeholder = 'Notas corporativas compartidas entre todos los CRM vinculados por CUIT o Empresa...';
         if (hint) hint.style.display = 'none';
 
@@ -1297,7 +1304,7 @@ function _setupCRMFormHandlers() {
 
         try {
             const token = activeToken || localStorage.getItem('backoffice_token');
-            const res = await fetch(`/api/backoffice/company-notes?token=${token}&cuit=${encodeURIComponent(cuit)}&empresa=${encodeURIComponent(empresa)}`);
+            const res = await fetch(`/api/backoffice/company-notes?token=${token}&cuit=${encodeURIComponent(cleanCuit || '')}&empresa=${encodeURIComponent(cleanEmpresa || '')}`);
             const data = await res.json();
             if (data.success && data.notes) {
                 // Si el textarea está vacío o no tiene la nota corporativa existente, cargarla
@@ -1305,19 +1312,19 @@ function _setupCRMFormHandlers() {
                     notesTextarea.value = data.notes;
                 }
                 if (indicator) {
-                    indicator.textContent = '✅ Sincronizado con Empresa';
+                    indicator.textContent = '✅ Sincronizado por Empresa/CUIT';
                     indicator.style.color = '#10b981';
                 }
             } else {
                 if (indicator) {
-                    indicator.textContent = '⚡ Habilitado (Sin notas previas)';
+                    indicator.textContent = '⚡ Vinculado (Sin notas previas)';
                     indicator.style.color = '#38bdf8';
                 }
             }
         } catch (err) {
             console.error('[CRM] Error fetching shared notes:', err);
             if (indicator) {
-                indicator.textContent = '⚡ Habilitado para editar';
+                indicator.textContent = '⚡ Vinculado por Empresa/CUIT';
                 indicator.style.color = '#38bdf8';
             }
         }

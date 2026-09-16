@@ -195,6 +195,33 @@ window.resetColumnWidth = (colId, e) => {
     if (typeof window.showToast === 'function') window.showToast('Tamaño de columna restaurado', 'success');
 };
 
+window.normalizeCuitDni = function(val) {
+    if (!val) return null;
+    const str = String(val).trim();
+    if (!str) return null;
+    const lower = str.toLowerCase();
+    if (['-', '--', '---', '.', '..', '...', 's/d', 'sd', 'n/a', 'na', 'null', 'undefined', '0'].includes(lower)) return null;
+    let digits = str.replace(/\D/g, '');
+    if (digits.length === 7) digits = digits.padStart(8, '0');
+    if (digits.length !== 8 && digits.length !== 11) return null;
+    if (/^(\d)\1+$/.test(digits)) return null;
+    return digits;
+};
+
+window.normalizeEmpresa = function(val) {
+    if (!val) return null;
+    const str = String(val).trim().toLowerCase();
+    if (!str) return null;
+    const invalid = new Set([
+        '-', '--', '---', '.', '..', '...', 's/d', 'sd', 'n/a', 'na', 'null', 'undefined',
+        'ninguno', 'ninguna', 'sin asignar', 'sin empresa', 'particular', 'consumidor final',
+        'no tiene', 'no', '0', 'none', 'sn', 's/n'
+    ]);
+    if (invalid.has(str)) return null;
+    const alnum = (str.match(/[a-z0-9áéíóúüñ]/gi) || []).length;
+    return alnum >= 2 ? str : null;
+};
+
 window.checkAndFetchSharedNotes = async () => {
     const cuitInput = document.getElementById('edit-lead-cuit');
     const empresaInput = document.getElementById('edit-lead-company');
@@ -204,27 +231,29 @@ window.checkAndFetchSharedNotes = async () => {
 
     if (!notesTextarea) return;
 
-    const cuit = (cuitInput?.value || '').trim();
-    const empresa = (empresaInput?.value || '').trim();
-
-    // Solo habilitar si hay Empresa o CUIT asignado
-    if (!cuit && !empresa) {
-        notesTextarea.disabled = true;
-        notesTextarea.style.opacity = '0.6';
-        notesTextarea.style.cursor = 'not-allowed';
-        notesTextarea.placeholder = 'Asigne Empresa o CUIT arriba para habilitar y sincronizar Notas 2...';
-        if (indicator) {
-            indicator.textContent = '🔒 Requiere CUIT o Empresa';
-            indicator.style.color = '#f59e0b';
-        }
-        if (hint) hint.style.display = 'block';
-        return;
-    }
-
-    // Habilitar edición
+    // La edición NUNCA se bloquea: el usuario siempre puede escribir notas para este lead
     notesTextarea.disabled = false;
     notesTextarea.style.opacity = '1';
     notesTextarea.style.cursor = 'text';
+
+    const cleanCuit = window.normalizeCuitDni(cuitInput?.value);
+    const cleanEmpresa = window.normalizeEmpresa(empresaInput?.value);
+
+    // Si no hay Empresa ni CUIT válidos, es una nota individual del Lead
+    if (!cleanCuit && !cleanEmpresa) {
+        notesTextarea.placeholder = 'Nota individual de este Lead (sin vincular a empresa)...';
+        if (indicator) {
+            indicator.textContent = '📝 Nota individual del Lead';
+            indicator.style.color = '#94a3b8';
+        }
+        if (hint) {
+            hint.style.display = 'block';
+            hint.innerHTML = '<i class="fas fa-info-circle"></i> Ingrese un CUIT (8 u 11 dígitos) o Empresa para compartir y sincronizar esta nota entre leads del mismo cliente.';
+        }
+        return;
+    }
+
+    // Modo vinculado por CUIT o Empresa
     notesTextarea.placeholder = 'Notas corporativas compartidas entre todos los CRM vinculados por CUIT o Empresa...';
     if (hint) hint.style.display = 'none';
 
@@ -235,7 +264,7 @@ window.checkAndFetchSharedNotes = async () => {
 
     try {
         const token = localStorage.getItem('backoffice_token');
-        const res = await fetch(`/api/backoffice/company-notes?token=${token}&cuit=${encodeURIComponent(cuit)}&empresa=${encodeURIComponent(empresa)}`);
+        const res = await fetch(`/api/backoffice/company-notes?token=${token}&cuit=${encodeURIComponent(cleanCuit || '')}&empresa=${encodeURIComponent(cleanEmpresa || '')}`);
         const data = await res.json();
         if (data.success && data.notes) {
             // Si el textarea está vacío o no tiene la nota corporativa existente, cargarla
@@ -243,19 +272,19 @@ window.checkAndFetchSharedNotes = async () => {
                 notesTextarea.value = data.notes;
             }
             if (indicator) {
-                indicator.textContent = '✅ Sincronizado con Empresa';
+                indicator.textContent = '✅ Sincronizado por Empresa/CUIT';
                 indicator.style.color = '#10b981';
             }
         } else {
             if (indicator) {
-                indicator.textContent = '⚡ Habilitado (Sin notas previas)';
+                indicator.textContent = '⚡ Vinculado (Sin notas previas)';
                 indicator.style.color = '#38bdf8';
             }
         }
     } catch (err) {
         console.error('[CRM] Error fetching shared notes:', err);
         if (indicator) {
-            indicator.textContent = '⚡ Habilitado para editar';
+            indicator.textContent = '⚡ Vinculado por Empresa/CUIT';
             indicator.style.color = '#38bdf8';
         }
     }
