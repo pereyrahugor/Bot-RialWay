@@ -882,35 +882,37 @@ window.metaView = (() => {
             return;
         }
 
+        const gridColumns = 'minmax(0, 3.2fr) minmax(105px, 1fr) minmax(75px, 0.7fr) minmax(110px, 0.9fr) minmax(185px, 1.4fr)';
+
         const rows = templates.map(t => {
             const statusClass = t.status === 'APPROVED' ? 'meta-status-approved' : (t.status === 'REJECTED' ? 'meta-status-rejected' : 'meta-status-pending');
 
             const actionHtml = t.alreadyInCurrentService
-                ? `<span style="color:#10b981; font-size:0.82rem; font-weight:700; display:inline-flex; align-items:center; gap:6px; background:rgba(16,185,129,0.12); padding:5px 12px; border-radius:8px;">
+                ? `<span style="color:#10b981; font-size:0.82rem; font-weight:700; display:inline-flex; align-items:center; gap:6px; background:rgba(16,185,129,0.12); padding:5px 12px; border-radius:8px; white-space:nowrap;">
                        <i class="fas fa-check-circle"></i> Disponible en esta línea
                    </span>`
-                : `<button type="button" class="btn-primary" style="padding:6px 14px; font-size:0.82rem; min-height:34px;" onclick="cloneTemplateToCurrentService('${escapeTemplateArg(t.originServiceId)}','${escapeTemplateArg(t.id || '')}','${escapeTemplateArg(t.name)}','${escapeTemplateArg(t.language || 'es')}', this)">
+                : `<button type="button" class="btn-primary" style="padding:6px 14px; font-size:0.82rem; min-height:34px; white-space:nowrap;" onclick="cloneTemplateToCurrentService('${escapeTemplateArg(t.originServiceId)}','${escapeTemplateArg(t.id || '')}','${escapeTemplateArg(t.name)}','${escapeTemplateArg(t.language || 'es')}', this)">
                        <i class="fas fa-download"></i> Vincular a esta línea
                    </button>`;
 
             return `
-                <div class="meta-template-row meta-card meta-card-approved" style="cursor:default; display:grid; grid-template-columns: 2fr 1.5fr 1fr 1fr 1.5fr; align-items:center; gap:12px; padding:14px 18px;">
-                    <div>
-                        <span class="meta-row-name" style="font-weight:700; font-size:0.95rem; color:var(--text-main);">${escapeTemplateText(t.name)}</span>
+                <div class="meta-template-row meta-card meta-card-approved" style="cursor:default; display:grid; grid-template-columns: ${gridColumns}; align-items:center; gap:12px; padding:14px 18px;">
+                    <div style="min-width:0; overflow:hidden;">
+                        <span class="meta-row-name" title="${escapeTemplateText(t.name)}" style="font-weight:700; font-size:0.92rem; color:var(--text-main); display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeTemplateText(t.name)}</span>
                         <div style="margin-top:4px;">
-                            <span style="background:rgba(0,153,255,0.1); color:#0099FF; border:1px solid rgba(0,153,255,0.22); padding:2px 8px; border-radius:6px; font-size:0.75rem; font-weight:600; display:inline-flex; align-items:center; gap:5px;">
-                                <i class="fas fa-mobile-alt"></i> ${escapeTemplateText(t.originServiceName)}
+                            <span style="background:rgba(0,153,255,0.1); color:#0099FF; border:1px solid rgba(0,153,255,0.22); padding:2px 8px; border-radius:6px; font-size:0.75rem; font-weight:600; display:inline-flex; align-items:center; gap:5px; max-width:100%;" title="${escapeTemplateText(t.originServiceName)}">
+                                <i class="fas fa-mobile-alt" style="flex-shrink:0;"></i> <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeTemplateText(t.originServiceName)}</span>
                             </span>
                         </div>
                     </div>
-                    <span class="meta-row-category" style="font-size:0.85rem; color:var(--text-muted);">${escapeTemplateText(t.category || '--')}</span>
-                    <span class="meta-row-language" style="font-size:0.85rem;">
+                    <span class="meta-row-category" style="font-size:0.85rem; color:var(--text-muted); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeTemplateText(t.category || '--')}</span>
+                    <span class="meta-row-language" style="font-size:0.85rem; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
                         <strong>${escapeTemplateText((t.language || '').toUpperCase() || '--')}</strong>
                     </span>
-                    <span class="meta-row-status">
+                    <span class="meta-row-status" style="min-width:0;">
                         <span class="meta-card-tag ${statusClass}" style="position:static; transform:none;">${escapeTemplateText(t.status || 'PENDING')}</span>
                     </span>
-                    <div style="text-align:right;">
+                    <div style="text-align:right; min-width:0; flex-shrink:0;">
                         ${actionHtml}
                     </div>
                 </div>`;
@@ -918,7 +920,7 @@ window.metaView = (() => {
 
         container.innerHTML = `
             <div class="meta-template-table" style="height:100%; max-height:100%; overflow-y:auto; overflow-x:hidden;">
-                <div class="meta-template-row meta-template-head" style="display:grid; grid-template-columns: 2fr 1.5fr 1fr 1fr 1.5fr; align-items:center; gap:12px;" aria-hidden="true">
+                <div class="meta-template-row meta-template-head" style="display:grid; grid-template-columns: ${gridColumns}; align-items:center; gap:12px;" aria-hidden="true">
                     <span>Plantilla / Línea de Origen</span>
                     <span>Categoría</span>
                     <span>Idioma</span>
