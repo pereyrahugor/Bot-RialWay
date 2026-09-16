@@ -7,6 +7,9 @@ window.metaView = (() => {
     let _selectedTagIds = new Set();
     let _popupCheckInterval = null;
     let _previewFitFrame = null;
+    let _activeBulkCampaignId = null;
+    let _bulkPollingTimer = null;
+    let _pendingBulkPayload = null;
 
     // ── HTML ──────────────────────────────────────────────────────────────
     function getHTML() {
@@ -204,6 +207,413 @@ window.metaView = (() => {
 
             </div><!-- /.meta-view-body -->
 
+            <!-- Modal Flujo Envío Masivo (Confirmación + Avance en Tiempo Real + Cancelación) -->
+            <div id="bulk-flow-modal" class="bulk-modal-overlay" style="display:none;">
+                <div class="bulk-modal-card">
+                    <!-- Header -->
+                    <div class="bulk-modal-header">
+                        <div class="bulk-modal-title-box">
+                            <div class="bulk-modal-icon-badge" id="bulk-modal-badge">
+                                <i class="fas fa-paper-plane"></i>
+                            </div>
+                            <div>
+                                <h3 id="bulk-modal-title" class="bulk-modal-title">Confirmar Envío Masivo</h3>
+                                <p id="bulk-modal-subtitle" class="bulk-modal-subtitle">Verifica los datos antes de iniciar el envío</p>
+                            </div>
+                        </div>
+                        <button class="bulk-modal-close-btn" id="bulk-modal-close-x" onclick="closeBulkFlowModal()" title="Cerrar">&times;</button>
+                    </div>
+
+                    <!-- Fase 1: Confirmación Previa -->
+                    <div id="bulk-phase-confirm" class="bulk-modal-body">
+                        <div class="bulk-summary-grid">
+                            <div class="bulk-summary-item">
+                                <span class="bulk-summary-label"><i class="fas fa-file-alt"></i> Plantilla</span>
+                                <span class="bulk-summary-val" id="bmc-template-name">-</span>
+                            </div>
+                            <div class="bulk-summary-item highlight">
+                                <span class="bulk-summary-label"><i class="fas fa-users"></i> Contactos Afectados</span>
+                                <span class="bulk-summary-val bold" id="bmc-total-contacts">0</span>
+                            </div>
+                            <div class="bulk-summary-item">
+                                <span class="bulk-summary-label"><i class="fas fa-database"></i> Origen de Destinatarios</span>
+                                <span class="bulk-summary-val" id="bmc-source-type">-</span>
+                            </div>
+                            <div class="bulk-summary-item" id="bmc-daterange-row">
+                                <span class="bulk-summary-label"><i class="fas fa-calendar-alt"></i> Rango de Fechas</span>
+                                <span class="bulk-summary-val" id="bmc-date-range">Todo el historial</span>
+                            </div>
+                            <div class="bulk-summary-item full-width" id="bmc-tags-row">
+                                <span class="bulk-summary-label"><i class="fas fa-tags"></i> Filtro de Etiquetas</span>
+                                <div class="bulk-summary-tags" id="bmc-tags-list">Sin filtro de etiquetas</div>
+                            </div>
+                        </div>
+
+                        <div class="bulk-alert-box warning">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <div>
+                                <strong>Verificación previa:</strong> Por favor confirma que la cantidad de destinatarios y los filtros seleccionados sean correctos. Podrás cancelar el proceso en cualquier momento mientras se encuentre en curso.
+                            </div>
+                        </div>
+
+                        <div class="bulk-modal-actions">
+                            <button type="button" class="btn-secondary" onclick="closeBulkFlowModal()">Cancelar / Revisar</button>
+                            <button type="button" class="btn-primary" id="bmc-confirm-btn" onclick="executeConfirmedBulkSend()">
+                                <i class="fas fa-paper-plane"></i> Iniciar Envío Masivo
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Fase 2: Avance en Vivo + Cancelación -->
+                    <div id="bulk-phase-progress" class="bulk-modal-body" style="display:none;">
+                        <div class="bulk-live-status-box">
+                            <div class="bulk-live-header">
+                                <span id="bulk-live-state-badge" class="bulk-state-badge in-progress">
+                                    <i class="fas fa-spinner fa-spin"></i> Enviando...
+                                </span>
+                                <span id="bulk-live-percentage" class="bulk-live-pct">0%</span>
+                            </div>
+
+                            <!-- Barra lineal de avance -->
+                            <div class="bulk-linear-track">
+                                <div id="bulk-linear-bar" class="bulk-linear-bar" style="width: 0%;"></div>
+                            </div>
+
+                            <!-- Contador lineal de avance -->
+                            <div class="bulk-counter-box">
+                                <span class="bulk-counter-primary" id="bulk-counter-text">0 / 0</span>
+                                <span class="bulk-counter-sub">contactos procesados</span>
+                            </div>
+
+                            <!-- Estadísticas de entrega -->
+                            <div class="bulk-stats-row">
+                                <div class="bulk-stat-pill success">
+                                    <i class="fas fa-check-circle"></i> Exitosos: <span id="bulk-stat-sent">0</span>
+                                </div>
+                                <div class="bulk-stat-pill danger">
+                                    <i class="fas fa-times-circle"></i> Errores: <span id="bulk-stat-errors">0</span>
+                                </div>
+                            </div>
+
+                            <div id="bulk-live-info-msg" class="bulk-live-info-msg">
+                                Enviando mensajes a WhatsApp respetando los límites de entrega de Meta...
+                            </div>
+                        </div>
+
+                        <div class="bulk-modal-actions">
+                            <button type="button" class="btn-danger" id="bulk-cancel-btn" onclick="requestCancelBulkSend()">
+                                <i class="fas fa-stop-circle"></i> Cancelar Envío
+                            </button>
+                            <button type="button" class="btn-primary" id="bulk-done-btn" style="display:none;" onclick="closeBulkFlowModal()">
+                                <i class="fas fa-check"></i> Cerrar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <style>
+            .bulk-modal-overlay {
+                position: fixed;
+                top: 0; left: 0;
+                width: 100vw; height: 100vh;
+                background: rgba(0, 0, 0, 0.72);
+                backdrop-filter: blur(8px);
+                z-index: 99999;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 16px;
+                animation: bulkModalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            }
+            @keyframes bulkModalFadeIn {
+                from { opacity: 0; transform: scale(0.96); }
+                to { opacity: 1; transform: scale(1); }
+            }
+            .bulk-modal-card {
+                background: var(--bg-card, #1c202a);
+                color: var(--text-primary, #ffffff);
+                border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+                border-radius: 20px;
+                width: 100%;
+                max-width: 550px;
+                box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
+            }
+            .bulk-modal-header {
+                padding: 20px 24px 16px;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+            }
+            .bulk-modal-title-box {
+                display: flex;
+                align-items: center;
+                gap: 14px;
+            }
+            .bulk-modal-icon-badge {
+                width: 44px;
+                height: 44px;
+                border-radius: 12px;
+                background: rgba(6, 104, 225, 0.18);
+                color: #0668E1;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 1.25rem;
+            }
+            .bulk-modal-title {
+                margin: 0;
+                font-size: 1.15rem;
+                font-weight: 700;
+                color: var(--text-primary, #fff);
+            }
+            .bulk-modal-subtitle {
+                margin: 2px 0 0;
+                font-size: 0.82rem;
+                color: var(--text-muted, #9ca3af);
+            }
+            .bulk-modal-close-btn {
+                background: transparent;
+                border: none;
+                color: var(--text-muted, #9ca3af);
+                font-size: 1.6rem;
+                cursor: pointer;
+                line-height: 1;
+                padding: 4px 8px;
+                border-radius: 8px;
+                transition: color 0.15s, background 0.15s;
+            }
+            .bulk-modal-close-btn:hover {
+                color: #fff;
+                background: rgba(255, 255, 255, 0.08);
+            }
+            .bulk-modal-body {
+                padding: 22px 24px;
+                display: flex;
+                flex-direction: column;
+                gap: 18px;
+            }
+            .bulk-summary-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 12px;
+            }
+            .bulk-summary-item {
+                background: var(--bg-header, rgba(255, 255, 255, 0.03));
+                border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+                border-radius: 12px;
+                padding: 12px 14px;
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+            }
+            .bulk-summary-item.highlight {
+                background: rgba(6, 104, 225, 0.09);
+                border-color: rgba(6, 104, 225, 0.35);
+            }
+            .bulk-summary-item.full-width {
+                grid-column: 1 / -1;
+            }
+            .bulk-summary-label {
+                font-size: 0.75rem;
+                color: var(--text-muted, #9ca3af);
+                text-transform: uppercase;
+                font-weight: 600;
+                letter-spacing: 0.5px;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+            }
+            .bulk-summary-val {
+                font-size: 0.95rem;
+                font-weight: 500;
+                color: var(--text-primary, #fff);
+                word-break: break-word;
+            }
+            .bulk-summary-val.bold {
+                font-size: 1.5rem;
+                font-weight: 800;
+                color: #0099FF;
+            }
+            .bulk-summary-tags {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+                margin-top: 4px;
+            }
+            .bulk-tag-chip {
+                background: rgba(255, 255, 255, 0.08);
+                padding: 3px 9px;
+                border-radius: 6px;
+                font-size: 0.78rem;
+                border: 1px solid rgba(255, 255, 255, 0.12);
+            }
+            .bulk-alert-box {
+                display: flex;
+                align-items: flex-start;
+                gap: 12px;
+                padding: 12px 14px;
+                border-radius: 12px;
+                font-size: 0.85rem;
+                line-height: 1.45;
+            }
+            .bulk-alert-box.warning {
+                background: rgba(245, 158, 11, 0.1);
+                border: 1px solid rgba(245, 158, 11, 0.3);
+                color: #f59e0b;
+            }
+            .bulk-alert-box.warning i {
+                font-size: 1.15rem;
+                margin-top: 2px;
+                flex-shrink: 0;
+            }
+            .bulk-modal-actions {
+                display: flex;
+                align-items: center;
+                justify-content: flex-end;
+                gap: 12px;
+                margin-top: 8px;
+            }
+            .bulk-modal-actions button {
+                padding: 10px 18px;
+                border-radius: 10px;
+                font-weight: 600;
+                font-size: 0.9rem;
+                cursor: pointer;
+                border: none;
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                transition: all 0.18s;
+            }
+            .bulk-modal-actions .btn-secondary {
+                background: rgba(255, 255, 255, 0.08);
+                color: var(--text-primary, #fff);
+            }
+            .bulk-modal-actions .btn-secondary:hover {
+                background: rgba(255, 255, 255, 0.14);
+            }
+            .bulk-modal-actions .btn-primary {
+                background: #0668E1;
+                color: #fff;
+            }
+            .bulk-modal-actions .btn-primary:hover {
+                background: #0055c4;
+            }
+            .bulk-modal-actions .btn-danger {
+                background: #ef4444;
+                color: #fff;
+            }
+            .bulk-modal-actions .btn-danger:hover {
+                background: #dc2626;
+            }
+            .bulk-live-status-box {
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+                text-align: center;
+            }
+            .bulk-live-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+            }
+            .bulk-state-badge {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                padding: 4px 12px;
+                border-radius: 20px;
+                font-size: 0.82rem;
+                font-weight: 600;
+            }
+            .bulk-state-badge.in-progress {
+                background: rgba(6, 104, 225, 0.18);
+                color: #0668E1;
+            }
+            .bulk-state-badge.completed {
+                background: rgba(16, 185, 129, 0.18);
+                color: #10b981;
+            }
+            .bulk-state-badge.cancelled {
+                background: rgba(239, 68, 68, 0.18);
+                color: #ef4444;
+            }
+            .bulk-live-pct {
+                font-size: 1.15rem;
+                font-weight: 700;
+                color: var(--text-primary, #fff);
+            }
+            .bulk-linear-track {
+                width: 100%;
+                height: 12px;
+                background: rgba(255, 255, 255, 0.08);
+                border-radius: 8px;
+                overflow: hidden;
+                position: relative;
+            }
+            .bulk-linear-bar {
+                height: 100%;
+                background: linear-gradient(90deg, #0668E1 0%, #0099FF 100%);
+                border-radius: 8px;
+                transition: width 0.35s ease-out, background 0.3s;
+            }
+            .bulk-counter-box {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 2px;
+                margin: 6px 0;
+            }
+            .bulk-counter-primary {
+                font-size: 2.1rem;
+                font-weight: 800;
+                letter-spacing: -0.5px;
+                color: var(--text-primary, #fff);
+                font-family: monospace, system-ui;
+            }
+            .bulk-counter-sub {
+                font-size: 0.82rem;
+                color: var(--text-muted, #9ca3af);
+                text-transform: uppercase;
+                letter-spacing: 0.8px;
+            }
+            .bulk-stats-row {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 14px;
+            }
+            .bulk-stat-pill {
+                padding: 6px 14px;
+                border-radius: 10px;
+                font-size: 0.85rem;
+                font-weight: 600;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+            }
+            .bulk-stat-pill.success {
+                background: rgba(16, 185, 129, 0.1);
+                color: #10b981;
+                border: 1px solid rgba(16, 185, 129, 0.25);
+            }
+            .bulk-stat-pill.danger {
+                background: rgba(239, 68, 68, 0.1);
+                color: #ef4444;
+                border: 1px solid rgba(239, 68, 68, 0.25);
+            }
+            .bulk-live-info-msg {
+                font-size: 0.82rem;
+                color: var(--text-muted, #9ca3af);
+                margin-top: 4px;
+            }
+            </style>
+
         </main>`;
     }
 
@@ -226,6 +636,9 @@ window.metaView = (() => {
         window.syncAndSaveConnection    = syncAndSaveConnection;
         window.startQuickBulkSend       = startQuickBulkSend;
         window.filterBulkTags           = filterBulkTags;
+        window.closeBulkFlowModal       = closeBulkFlowModal;
+        window.executeConfirmedBulkSend = executeConfirmedBulkSend;
+        window.requestCancelBulkSend    = requestCancelBulkSend;
         window.addEventListener('resize', scheduleTemplatePreviewFit);
 
         await checkMetaConnection();
@@ -234,11 +647,14 @@ window.metaView = (() => {
     function destroy() {
         if (_popupCheckInterval) { clearInterval(_popupCheckInterval); _popupCheckInterval = null; }
         if (_previewFitFrame) { cancelAnimationFrame(_previewFitFrame); _previewFitFrame = null; }
+        if (_bulkPollingTimer) { clearInterval(_bulkPollingTimer); _bulkPollingTimer = null; }
         window.removeEventListener('resize', scheduleTemplatePreviewFit);
         document.getElementById('tpl-preview-modal')?.remove();
+        document.getElementById('bulk-flow-modal')?.remove();
         ['switchMetaTab', 'showTemplateDetail', 'startBulkSend', 'downloadBulkExcel',
          'toggleTagChip', 'toggleMetaAccordion', 'showTplPreviewModal', 'launchMetaOnboardingView',
-         'syncAndSaveConnection', 'startQuickBulkSend', 'filterBulkTags'
+         'syncAndSaveConnection', 'startQuickBulkSend', 'filterBulkTags',
+         'closeBulkFlowModal', 'executeConfirmedBulkSend', 'requestCancelBulkSend'
         ].forEach(fn => { delete window[fn]; });
     }
 
@@ -615,104 +1031,360 @@ window.metaView = (() => {
         window.open(url, '_blank');
     }
 
-    // ── Envio masivo ──────────────────────────────────────────────────────
+    // ── Helper SheetJS para contar Excel en cliente ────────────────────────
+    function ensureXlsx() {
+        if (window.XLSX) return Promise.resolve();
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error('No se pudo cargar el lector XLSX'));
+            document.head.appendChild(script);
+        });
+    }
+
+    async function parseExcelFileCount(file) {
+        try {
+            await ensureXlsx();
+            const buffer = await file.arrayBuffer();
+            const workbook = window.XLSX.read(buffer, { type: 'array' });
+            const sheetName = workbook.SheetNames[0];
+            const sheet = workbook.Sheets[sheetName];
+            const data = window.XLSX.utils.sheet_to_json(sheet, { defval: '' });
+            if (!data || data.length === 0) return { totalRows: 0, validPhones: 0 };
+
+            let validPhones = 0;
+            data.forEach(row => {
+                const phoneKey = Object.keys(row).find(k =>
+                    ['phone', 'tel', 'movil', 'cel', 'celular', 'telefono', 'whatsapp'].some(p => k.toLowerCase().includes(p))
+                );
+                const phone = phoneKey ? String(row[phoneKey] ?? '').replace(/\D/g, '') : '';
+                if (phone && phone.length >= 6) validPhones++;
+            });
+            return { totalRows: data.length, validPhones: validPhones || data.length };
+        } catch (err) {
+            console.warn('Error leyendo Excel en cliente:', err);
+            return { totalRows: 0, validPhones: 0 };
+        }
+    }
+
+    // ── Ventana Modal de Envío Masivo ───────────────────────────────────────
+    function openBulkFlowModal(config) {
+        const modal = document.getElementById('bulk-flow-modal');
+        if (!modal) return;
+
+        // Fase 1 Visible, Fase 2 Oculta
+        document.getElementById('bulk-phase-confirm').style.display = 'flex';
+        document.getElementById('bulk-phase-progress').style.display = 'none';
+
+        // Setear datos del resumen
+        document.getElementById('bmc-template-name').innerText = config.templateName || '-';
+        document.getElementById('bmc-total-contacts').innerText = String(config.totalContacts || 0);
+        document.getElementById('bmc-source-type').innerText = config.sourceType || '-';
+        document.getElementById('bmc-date-range').innerText = config.dateRange || 'Todo el historial';
+
+        const tagsListEl = document.getElementById('bmc-tags-list');
+        if (tagsListEl) {
+            if (config.tagNames && config.tagNames.length > 0) {
+                tagsListEl.innerHTML = config.tagNames.map(t => `<span class="bulk-tag-chip"><i class="fas fa-tag"></i> ${escapeTemplateText(t)}</span>`).join('');
+            } else {
+                tagsListEl.innerHTML = '<span style="color:var(--text-muted); font-size:0.85rem;">Sin filtro de etiquetas</span>';
+            }
+        }
+
+        const confirmBtn = document.getElementById('bmc-confirm-btn');
+        if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Iniciar Envío Masivo';
+        }
+
+        modal.style.display = 'flex';
+    }
+
+    async function closeBulkFlowModal() {
+        const modal = document.getElementById('bulk-flow-modal');
+        if (!modal) return;
+
+        // Si hay una campaña corriendo, advertir al usuario
+        if (_activeBulkCampaignId) {
+            const cancel = await window.swalConfirm('¿Cerrar ventana?', 'El envío masivo continúa ejecutándose en segundo plano. ¿Deseas cerrar la ventana de monitoreo?');
+            if (!cancel) return;
+        }
+
+        if (_bulkPollingTimer) {
+            clearInterval(_bulkPollingTimer);
+            _bulkPollingTimer = null;
+        }
+        _activeBulkCampaignId = null;
+        _pendingBulkPayload = null;
+        modal.style.display = 'none';
+    }
+
+    // ── Ejecutar Envío Masivo Confirmado ────────────────────────────────────
+    async function executeConfirmedBulkSend() {
+        if (!_pendingBulkPayload || !_currentTemplate) return;
+
+        const confirmBody  = document.getElementById('bulk-phase-confirm');
+        const progressBody = document.getElementById('bulk-phase-progress');
+        const progressBar  = document.getElementById('bulk-linear-bar');
+        const counterText  = document.getElementById('bulk-counter-text');
+        const pctText      = document.getElementById('bulk-live-percentage');
+        const stateBadge   = document.getElementById('bulk-live-state-badge');
+        const cancelBtn    = document.getElementById('bulk-cancel-btn');
+        const doneBtn      = document.getElementById('bulk-done-btn');
+        const infoMsg      = document.getElementById('bulk-live-info-msg');
+
+        confirmBody.style.display  = 'none';
+        progressBody.style.display = 'flex';
+
+        // Reset barra y contadores
+        const totalExpected = _pendingBulkPayload.totalContacts || 0;
+        progressBar.style.width = '0%';
+        progressBar.style.background = 'linear-gradient(90deg, #0668E1 0%, #0099FF 100%)';
+        counterText.innerText = `0 / ${totalExpected}`;
+        pctText.innerText = '0%';
+        document.getElementById('bulk-stat-sent').innerText = '0';
+        document.getElementById('bulk-stat-errors').innerText = '0';
+
+        stateBadge.className = 'bulk-state-badge in-progress';
+        stateBadge.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+        cancelBtn.style.display = 'inline-flex';
+        cancelBtn.disabled = false;
+        cancelBtn.innerHTML = '<i class="fas fa-stop-circle"></i> Cancelar Envío';
+        doneBtn.style.display = 'none';
+        infoMsg.innerText = 'Iniciando envío a WhatsApp a través de Meta...';
+
+        _activeBulkCampaignId = 'bulk_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+
+        // Escuchar eventos por socket
+        const handleProgress = (data) => {
+            if (data.campaignId !== _activeBulkCampaignId) return;
+            updateBulkProgressUI(data);
+        };
+
+        const sock = window.socket || (typeof io === 'function' ? (window._appSocket || io()) : null);
+        if (sock) {
+            sock.off?.('bulk_progress');
+            sock.on('bulk_progress', handleProgress);
+        }
+
+        // Polling de respaldo cada 1200ms
+        if (_bulkPollingTimer) clearInterval(_bulkPollingTimer);
+        _bulkPollingTimer = setInterval(async () => {
+            if (!_activeBulkCampaignId) return;
+            try {
+                const res = await fetch(`/api/backoffice/whatsapp/bulk-status/${_activeBulkCampaignId}?token=${_token}`);
+                const data = await res.json();
+                if (data.success && data.campaign) {
+                    updateBulkProgressUI(data.campaign);
+                }
+            } catch (_) {}
+        }, 1200);
+
+        try {
+            const params = new URLSearchParams({ token: _token });
+            if (window.railwayProjectId) params.set('projectId', window.railwayProjectId);
+            if (window.railwayServiceId) params.set('serviceId', window.railwayServiceId);
+
+            if (_pendingBulkPayload.type === 'excel') {
+                const formData = new FormData();
+                formData.append('file', _pendingBulkPayload.file);
+                formData.append('templateName', _currentTemplate.name);
+                formData.append('languageCode', _currentTemplate.language || 'es');
+                formData.append('campaignId', _activeBulkCampaignId);
+                if (window.railwayProjectId) formData.append('projectId', window.railwayProjectId);
+                if (window.railwayServiceId) formData.append('serviceId', window.railwayServiceId);
+
+                const res = await fetch(`/api/backoffice/whatsapp/send-bulk-template?${params.toString()}`, {
+                    method: 'POST',
+                    body: formData
+                });
+                if (res.status !== 202) {
+                    const data = await res.json();
+                    throw new Error(data.error || 'Error al iniciar envío masivo por Excel');
+                }
+            } else if (_pendingBulkPayload.type === 'quick') {
+                const res = await fetch(`/api/backoffice/whatsapp/send-quick-template?${params.toString()}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        templateName: _currentTemplate.name,
+                        languageCode: _currentTemplate.language || 'es',
+                        startDate: _pendingBulkPayload.startDate || '',
+                        endDate: _pendingBulkPayload.endDate || '',
+                        tagIds: _pendingBulkPayload.tagIds || [],
+                        campaignId: _activeBulkCampaignId,
+                        projectId: window.railwayProjectId || '',
+                        serviceId: window.railwayServiceId || ''
+                    })
+                });
+                const data = await res.json();
+                if (res.status !== 202 || !data.success) {
+                    throw new Error(data.error || 'Error al iniciar envío rápido');
+                }
+            }
+        } catch (err) {
+            console.error('[Bulk Send] Error al disparar:', err);
+            stateBadge.className = 'bulk-state-badge cancelled';
+            stateBadge.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error';
+            infoMsg.innerText = '❌ Error al iniciar el envío: ' + err.message;
+            cancelBtn.style.display = 'none';
+            doneBtn.style.display = 'inline-flex';
+            if (_bulkPollingTimer) { clearInterval(_bulkPollingTimer); _bulkPollingTimer = null; }
+        }
+    }
+
+    function updateBulkProgressUI(data) {
+        const progressBar  = document.getElementById('bulk-linear-bar');
+        const counterText  = document.getElementById('bulk-counter-text');
+        const pctText      = document.getElementById('bulk-live-percentage');
+        const stateBadge   = document.getElementById('bulk-live-state-badge');
+        const cancelBtn    = document.getElementById('bulk-cancel-btn');
+        const doneBtn      = document.getElementById('bulk-done-btn');
+        const infoMsg      = document.getElementById('bulk-live-info-msg');
+        const sentEl       = document.getElementById('bulk-stat-sent');
+        const errorsEl     = document.getElementById('bulk-stat-errors');
+
+        if (!progressBar) return;
+
+        const total = data.total || 1;
+        const current = data.current || 0;
+        const pct = Math.min(100, Math.round((current / total) * 100));
+
+        progressBar.style.width = `${pct}%`;
+        pctText.innerText = `${pct}%`;
+        counterText.innerText = `${current} / ${total}`;
+        if (sentEl) sentEl.innerText = String(data.sent || 0);
+        if (errorsEl) errorsEl.innerText = String(data.errors || 0);
+
+        if (data.status === 'completed') {
+            stateBadge.className = 'bulk-state-badge completed';
+            stateBadge.innerHTML = '<i class="fas fa-check-circle"></i> Envío Completado';
+            progressBar.style.background = '#10b981';
+            infoMsg.innerText = `🎉 ¡Envío finalizado! Se procesaron ${current} contactos (${data.sent || 0} exitosos, ${data.errors || 0} fallidos).`;
+            cancelBtn.style.display = 'none';
+            doneBtn.style.display = 'inline-flex';
+            if (_bulkPollingTimer) { clearInterval(_bulkPollingTimer); _bulkPollingTimer = null; }
+            _activeBulkCampaignId = null;
+        } else if (data.status === 'cancelled' || data.cancelled) {
+            stateBadge.className = 'bulk-state-badge cancelled';
+            stateBadge.innerHTML = '<i class="fas fa-stop-circle"></i> Envío Cancelado';
+            progressBar.style.background = '#f59e0b';
+            infoMsg.innerText = `⚠️ El envío fue cancelado por el usuario. Se procesaron ${current} de ${total} contactos (${data.sent || 0} exitosos).`;
+            cancelBtn.style.display = 'none';
+            doneBtn.style.display = 'inline-flex';
+            if (_bulkPollingTimer) { clearInterval(_bulkPollingTimer); _bulkPollingTimer = null; }
+            _activeBulkCampaignId = null;
+        } else {
+            infoMsg.innerText = `Enviando... ${current} de ${total} contactos procesados.`;
+        }
+    }
+
+    // ── Solicitar Cancelación en Caliente ───────────────────────────────────
+    async function requestCancelBulkSend() {
+        if (!_activeBulkCampaignId) return;
+
+        const ok = await window.swalConfirm('¿Detener envío masivo?', 'Se cancelará el envío a los contactos restantes. Los mensajes ya enviados no se pueden anular.');
+        if (!ok) return;
+
+        const cancelBtn = document.getElementById('bulk-cancel-btn');
+        if (cancelBtn) {
+            cancelBtn.disabled = true;
+            cancelBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cancelando...';
+        }
+
+        try {
+            const res = await fetch('/api/backoffice/whatsapp/cancel-bulk-template', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${_token}`
+                },
+                body: JSON.stringify({ campaignId: _activeBulkCampaignId })
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast('🛑 Solicitud de cancelación enviada', 'info');
+            }
+        } catch (e) {
+            console.error('Error al solicitar cancelación:', e);
+            showToast('Error al comunicar la cancelación', 'error');
+        }
+    }
+
+    // ── Envio masivo (Excel) ───────────────────────────────────────────────
     async function startBulkSend() {
         if (!_currentTemplate) return;
-        const fileInput   = document.getElementById('bulk-file-input');
-        const btn         = document.getElementById('send-bulk-btn');
-        const progressDiv = document.getElementById('bulk-progress');
-        const progressBar = document.getElementById('bulk-progress-bar');
-        const statusText  = document.getElementById('bulk-status-text');
+        const fileInput = document.getElementById('bulk-file-input');
+        const btn = document.getElementById('send-bulk-btn');
 
         if (!fileInput.files.length) {
             showToast('⚠️ Suba un archivo Excel para iniciar', 'error');
             return;
         }
 
-        const formData = new FormData();
-        formData.append('file', fileInput.files[0]);
-        formData.append('templateName', _currentTemplate.name);
-        formData.append('languageCode', _currentTemplate.language || 'es');
-        if (window.railwayProjectId) formData.append('projectId', window.railwayProjectId);
-        if (window.railwayServiceId) formData.append('serviceId', window.railwayServiceId);
-
-        btn.disabled        = true;
-        btn.innerHTML       = '<i class="fas fa-spinner fa-spin"></i> Iniciando...';
-        progressDiv.style.display = 'block';
-        progressBar.style.width   = '0%';
-        statusText.innerText      = 'Subiendo y procesando...';
+        const file = fileInput.files[0];
+        const originalBtnHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Leyendo...';
 
         try {
-            const params = new URLSearchParams({ token: _token });
-            if (window.railwayProjectId) params.set('projectId', window.railwayProjectId);
-            if (window.railwayServiceId) params.set('serviceId', window.railwayServiceId);
-            const res = await fetch(`/api/backoffice/whatsapp/send-bulk-template?${params.toString()}`, {
-                method: 'POST',
-                body: formData
-            });
-            if (res.status === 202) {
-                statusText.innerText       = '✅ Proceso iniciado en segundo plano.';
-                progressBar.style.width    = '100%';
-                progressBar.style.background = '#10b981';
-                showToast('🚀 Envío masivo iniciado correctamente');
-                setTimeout(() => {
-                    switchMetaTab('my');
-                    btn.disabled   = false;
-                    btn.innerHTML  = '<i class="fas fa-paper-plane"></i> Enviar';
-                    progressDiv.style.display = 'none';
-                    fileInput.value = '';
-                }, 2000);
-            } else {
-                const data = await res.json();
-                throw new Error(data.error || 'Error al iniciar envío');
+            const counts = await parseExcelFileCount(file);
+            if (counts.totalRows === 0) {
+                showToast('❌ El archivo Excel parece estar vacío o no tiene formato válido', 'error');
+                btn.disabled = false;
+                btn.innerHTML = originalBtnHtml;
+                return;
             }
+
+            _pendingBulkPayload = {
+                type: 'excel',
+                file: file,
+                totalContacts: counts.validPhones
+            };
+
+            btn.disabled = false;
+            btn.innerHTML = originalBtnHtml;
+
+            openBulkFlowModal({
+                templateName: _currentTemplate.name,
+                language: _currentTemplate.language || 'es',
+                totalContacts: counts.validPhones,
+                sourceType: `Archivo Excel (${file.name})`,
+                dateRange: 'Definido por filas del Excel',
+                tagNames: []
+            });
         } catch (e) {
-            statusText.innerText          = '❌ ' + e.message;
-            progressBar.style.background  = '#ef4444';
-            btn.disabled  = false;
-            btn.innerHTML = '<i class="fas fa-paper-plane"></i> Reintentar';
+            btn.disabled = false;
+            btn.innerHTML = originalBtnHtml;
+            showToast('Error al leer el archivo Excel: ' + e.message, 'error');
         }
     }
 
-    // ── Envio masivo rápido (sin Excel) ───────────────────────────────────
+    // ── Envio masivo rápido (sin Excel con filtros) ────────────────────────
     async function startQuickBulkSend() {
         if (!_currentTemplate) return;
-        
-        // Confirmar envío
-        if (!await window.swalConfirm('¿Iniciar envío rápido?', `¿Iniciar envío rápido de la plantilla "${_currentTemplate.name}" a los contactos filtrados?`)) {
-            return;
-        }
-
-        const btn         = document.getElementById('quick-send-btn');
-        const progressDiv = document.getElementById('bulk-progress');
-        const progressBar = document.getElementById('bulk-progress-bar');
-        const statusText  = document.getElementById('bulk-status-text');
-
+        const btn = document.getElementById('quick-send-btn');
         const startDate = document.getElementById('bulk-filter-start')?.value || '';
         const endDate   = document.getElementById('bulk-filter-end')?.value || '';
         const tagIds    = [..._selectedTagIds];
 
+        const originalBtnHtml = btn ? btn.innerHTML : '';
         if (btn) {
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Iniciando...';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Consultando contactos...';
         }
-        if (progressDiv) progressDiv.style.display = 'block';
-        if (progressBar) {
-            progressBar.style.width = '0%';
-            progressBar.style.background = 'var(--accent-color, #0099FF)';
-        }
-        if (statusText) statusText.innerText = 'Consultando contactos y procesando envío...';
 
         try {
             const params = new URLSearchParams({ token: _token });
             if (window.railwayProjectId) params.set('projectId', window.railwayProjectId);
             if (window.railwayServiceId) params.set('serviceId', window.railwayServiceId);
-            const res = await fetch(`/api/backoffice/whatsapp/send-quick-template?${params.toString()}`, {
+
+            const res = await fetch(`/api/backoffice/whatsapp/preview-quick-template?${params.toString()}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     templateName: _currentTemplate.name,
-                    languageCode: _currentTemplate.language || 'es',
                     startDate,
                     endDate,
                     tagIds,
@@ -722,33 +1394,43 @@ window.metaView = (() => {
             });
 
             const data = await res.json();
-
-            if (res.status === 202 && data.success) {
-                if (statusText) statusText.innerText = `✅ Envío rápido iniciado para ${data.total} contactos.`;
-                if (progressBar) {
-                    progressBar.style.width = '100%';
-                    progressBar.style.background = '#10b981';
-                }
-                showToast(`🚀 Envío rápido iniciado para ${data.total} contactos`);
-                setTimeout(() => {
-                    switchMetaTab('my');
-                    if (btn) {
-                        btn.disabled = false;
-                        btn.innerHTML = '<i class="fas fa-bolt"></i> Envío Rápido';
-                    }
-                    if (progressDiv) progressDiv.style.display = 'none';
-                }, 3000);
-            } else {
-                throw new Error(data.error || 'Error al iniciar envío rápido');
-            }
-        } catch (e) {
-            console.error('[Quick Bulk] Error:', e);
-            if (statusText) statusText.innerText = '❌ ' + e.message;
-            if (progressBar) progressBar.style.background = '#ef4444';
             if (btn) {
                 btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-bolt"></i> Reintentar Envío Rápido';
+                btn.innerHTML = originalBtnHtml;
             }
+
+            if (!data.success || !data.count || data.count === 0) {
+                showToast('⚠️ No se encontraron contactos que coincidan con los filtros aplicados', 'warning');
+                return;
+            }
+
+            _pendingBulkPayload = {
+                type: 'quick',
+                startDate,
+                endDate,
+                tagIds,
+                totalContacts: data.count
+            };
+
+            const dateStr = (startDate || endDate)
+                ? `${startDate || 'Inicio'} hasta ${endDate || 'Hoy'}`
+                : 'Todo el historial';
+
+            openBulkFlowModal({
+                templateName: _currentTemplate.name,
+                language: _currentTemplate.language || 'es',
+                totalContacts: data.count,
+                sourceType: 'Base de Datos (Contactos Filtrados)',
+                dateRange: dateStr,
+                tagNames: data.tagNames || []
+            });
+        } catch (e) {
+            console.error('[Quick Bulk Preview] Error:', e);
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = originalBtnHtml;
+            }
+            showToast('Error al consultar destinatarios: ' + e.message, 'error');
         }
     }
 

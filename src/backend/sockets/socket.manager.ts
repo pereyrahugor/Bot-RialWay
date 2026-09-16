@@ -141,6 +141,18 @@ export const initSocketIO = (serverInstance: any, { processUserMessage }: any) =
             }
         });
 
+        historyEvents.on('bulk_progress', (payload) => {
+            const projId = payload.project_id || payload.projectId;
+            const servId = payload.service_id || payload.serviceId;
+            if (projId && servId) {
+                io.to(`${projId}:${servId}`).emit('bulk_progress', payload);
+            } else if (projId) {
+                io.to(`${projId}:*`).emit('bulk_progress', payload);
+            } else {
+                io.emit('bulk_progress', payload);
+            }
+        });
+
         io.on('connection', (socket) => {
             const query = socket.handshake.query || {};
             const projectId = query.projectId || 'default_project';

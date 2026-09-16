@@ -448,9 +448,113 @@ export const processSendMessage = async (
         }
 
     } catch (e: any) {
-        console.error('âŒ Error crÃ­tico en processSendMessage:', e);
+        console.error('❌ Error crítico en processSendMessage:', e);
         res.status(500).json({ success: false, error: e.message });
     }
+};
+
+export interface BulkCampaignState {
+    id: string;
+    projectId: string;
+    serviceId: string;
+    templateName: string;
+    total: number;
+    current: number;
+    sent: number;
+    errors: number;
+    cancelled: boolean;
+    status: 'running' | 'completed' | 'cancelled' | 'error';
+    startedAt: number;
+    finishedAt?: number;
+    error?: string;
+}
+
+export const activeBulkCampaigns = new Map<string, BulkCampaignState>();
+
+export const updateBulkProgress = (campaignId: string, updates: Partial<BulkCampaignState>) => {
+    const c = activeBulkCampaigns.get(campaignId);
+    if (!c) return;
+    Object.assign(c, updates);
+    historyEvents.emit('bulk_progress', {
+        campaignId: c.id,
+        current: c.current,
+        total: c.total,
+        sent: c.sent,
+        errors: c.errors,
+        status: c.status,
+        cancelled: c.cancelled,
+        projectId: c.projectId,
+        serviceId: c.serviceId
+    });
+};
+
+/** Helper reutilizable para filtrar contactos de envío de plantillas con estricto multi-tenant y multi-servicio */
+export const getFilteredChatsForTemplate = async (
+    projectId: string,
+    serviceId: string,
+    tagIds: any,
+    startDate?: string,
+    endDate?: string
+) => {
+    const depsHistoryHandler = HistoryHandlerClass;
+    const tagIdArray = Array.isArray(tagIds) ? tagIds : (typeof tagIds === 'string' ? tagIds.split(',').filter(Boolean) : []);
+    let chatsList: any[] = [];
+
+    if (tagIdArray.length === 1) {
+        chatsList = await depsHistoryHandler.listChats(10000, 0, undefined, tagIdArray[0], undefined, undefined, projectId, serviceId);
+    } else if (tagIdArray.length > 1) {
+        const supabase = depsHistoryHandler.getSupabase();
+        let tagQuery = supabase
+            .from('chat_tags')
+            .select('chat_id')
+            .eq('project_id', projectId)
+            .in('tag_id', tagIdArray);
+        if (serviceId && serviceId !== 'default_service') {
+            tagQuery = tagQuery.or(`service_id.eq.${serviceId},service_id.eq.default_service,service_id.is.null`);
+        }
+        const { data: taggedEntries } = await tagQuery;
+
+        const matchingIds = Array.from(new Set((taggedEntries || []).map((te: any) => te.chat_id)));
+        if (matchingIds.length > 0) {
+            let chatsQuery = supabase
+                .from('chats')
+                .select('id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, crm_status, crm_due_date, notes, email, source, is_lead, cuit_dni, tax_status, address, offered_product, unread_count, chat_tags(tag_id, tags(*))')
+                .eq('project_id', projectId)
+                .in('id', matchingIds);
+            if (serviceId && serviceId !== 'default_service') {
+                chatsQuery = chatsQuery.or(`service_id.eq.${serviceId},service_id.eq.default_service,service_id.is.null`);
+            }
+            const { data: rawChats } = await chatsQuery;
+
+            chatsList = (rawChats || []).map((chat: any) => ({
+                ...chat,
+                tags: chat.chat_tags ? chat.chat_tags.map((ct: any) => ct.tags).filter((t: any) => t !== null) : []
+            }));
+        }
+    } else {
+        chatsList = await depsHistoryHandler.listChats(10000, 0, undefined, undefined, undefined, undefined, projectId, serviceId);
+    }
+
+    if (chatsList && chatsList.length > 0) {
+        if (startDate || endDate) {
+            chatsList = chatsList.filter((c: any) => {
+                if (!c.last_message_at) return false;
+                const msgDate = new Date(c.last_message_at);
+                if (startDate && msgDate < new Date(`${startDate}T00:00:00.000Z`)) return false;
+                if (endDate && msgDate > new Date(`${endDate}T23:59:59.999Z`)) return false;
+                return true;
+            });
+        }
+    } else {
+        chatsList = [];
+    }
+
+    chatsList = chatsList.filter((chat: any) => {
+        const cleanPhone = (chat.id || '').split('@')[0];
+        return cleanPhone !== '5491100000000' && cleanPhone.length >= 6;
+    });
+
+    return chatsList;
 };
 
 /** Helper: responder JSON compatible con Polka crudo (sin compatibilityLayer) */
@@ -467,6 +571,8 @@ export const processBulkTemplate = async (req: any, res: any) => {
     const serviceId = resolveServiceId(req) || depsHistoryHandler.SERVICE_IDENTIFIER;
     const file = (req as any).file;
     const { templateName, languageCode } = req.body;
+    const incomingCampaignId = (req.body && req.body.campaignId) || req.query.campaignId;
+    const campaignId = incomingCampaignId || ('bulk_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7));
     const adapterProvider = getAdapterProvider();
     const groupProvider = getGroupProvider();
 
@@ -484,7 +590,7 @@ export const processBulkTemplate = async (req: any, res: any) => {
         const data: any[] = xlsxLib.utils.sheet_to_json(worksheet, { defval: '' });
 
         if (data.length === 0) {
-            return sendJson(res, 400, { success: false, error: 'El Excel estÃ¡ vacÃ­o.' });
+            return sendJson(res, 400, { success: false, error: 'El Excel está vacío.' });
         }
 
         const allKeys = Object.keys(data[0]);
@@ -494,12 +600,12 @@ export const processBulkTemplate = async (req: any, res: any) => {
         const provider = (adapterProvider && typeof adapterProvider.sendTemplate === 'function') ? adapterProvider : groupProvider;
         const templates = await provider.getTemplates();
         const template = templates.find((t: any) => t.name === templateName);
-        if (!template) throw new Error("Plantilla no encontrada al procesar envÃ­o masivo.");
+        if (!template) throw new Error("Plantilla no encontrada al procesar envío masivo.");
 
-        // DEBUG TOTAL: Ver toda la estructura de la plantilla para encontrar los nombres de parÃ¡metros
-        console.log(`ðŸ” [BULK] DEBUG ESTRUCTURA COMPLETA:`, JSON.stringify(template, null, 2));
+        // DEBUG TOTAL: Ver toda la estructura de la plantilla para encontrar los nombres de parámetros
+        console.log(`🔍 [BULK] DEBUG ESTRUCTURA COMPLETA:`, JSON.stringify(template, null, 2));
 
-        // DetecciÃ³n mÃ¡s agresiva: si tiene parameter_format='named' O si algÃºn componente tiene parÃ¡metros nombrados en sus ejemplos
+        // Detección más agresiva: si tiene parameter_format='named' O si algún componente tiene parámetros nombrados en sus ejemplos
         const isNamed = (template.parameter_format || '').toLowerCase() === 'named' ||
                         template.components.some((c: any) =>
                             c.example?.body_text_named_params ||
@@ -511,16 +617,31 @@ export const processBulkTemplate = async (req: any, res: any) => {
         const headerComp = template.components.find((c: any) => c.type === 'HEADER');
         const mediaFormat = headerComp && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComp.format) ? headerComp.format.toLowerCase() : null;
 
-        const languageCode = template.language || 'es';
-        console.log(`ðŸ“Š [BULK] Iniciando envÃ­o masivo: ${templateName} | Idioma: ${languageCode} | Formato final: ${isNamed ? 'NAMED' : 'POSITIONAL'} | Filas: ${data.length}`);
+        const langCode = template.language || languageCode || 'es';
+        console.log(`📊 [BULK] Iniciando envío masivo: ${templateName} | ID: ${campaignId} | Idioma: ${langCode} | Formato final: ${isNamed ? 'NAMED' : 'POSITIONAL'} | Filas: ${data.length}`);
 
-        sendJson(res, 202, { success: true, message: 'Proceso masivo iniciado.', total: data.length });
+        // Registrar estado de la campaña para control de avance y cancelación
+        activeBulkCampaigns.set(campaignId, {
+            id: campaignId,
+            projectId: projectId || '',
+            serviceId: serviceId || '',
+            templateName,
+            total: data.length,
+            current: 0,
+            sent: 0,
+            errors: 0,
+            cancelled: false,
+            status: 'running',
+            startedAt: Date.now()
+        });
+
+        sendJson(res, 202, { success: true, message: 'Proceso masivo iniciado.', total: data.length, campaignId });
 
         let sent = 0, errors = 0;
         let firstRowLogged = false;
         let defaultMediaUrl = '';
 
-        // CachÃ© local para no descargar 100 veces el mismo video de Drive
+        // Caché local para no descargar 100 veces el mismo video de Drive
         const mediaCache = new Map<string, string>();
         const uploadsDir = path.join(process.cwd(), 'uploads');
         if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
@@ -832,13 +953,36 @@ export const processBulkTemplate = async (req: any, res: any) => {
                     console.error('[BULK] Error al guardar mensaje fallido en catch:', saveErr.message);
                 }
             }
+            // Verificar si el usuario solicitó cancelar el envío en caliente
+            if (activeBulkCampaigns.get(campaignId)?.cancelled) {
+                console.log(`🛑 [BULK] Campaña ${campaignId} cancelada por el usuario tras procesar ${sent + errors}/${data.length} contactos.`);
+                break;
+            }
+
             // Pequeño delay para no saturar la API
             await new Promise(r => setTimeout(r, 200));
+
+            // Actualizar progreso dinámico en cada iteración
+            updateBulkProgress(campaignId, {
+                current: sent + errors,
+                sent,
+                errors
+            });
         }
 
-        console.log(`✅ [BULK] Proceso finalizado: ${sent} enviados, ${errors} errores de ${data.length} filas.`);
+        const finalState = activeBulkCampaigns.get(campaignId);
+        const isCancelled = !!finalState?.cancelled;
+        updateBulkProgress(campaignId, {
+            status: isCancelled ? 'cancelled' : 'completed',
+            finishedAt: Date.now()
+        });
+
+        console.log(`✅ [BULK] Proceso ${isCancelled ? 'CANCELADO' : 'finalizado'}: ${sent} enviados, ${errors} errores de ${data.length} filas.`);
     } catch (e: any) {
         console.error('Error en processBulkTemplate:', e);
+        if (incomingCampaignId) {
+            updateBulkProgress(incomingCampaignId, { status: 'error', error: e.message });
+        }
         // Nota: El res ya fue enviado (202), este error solo va a logs si ocurre después
     } finally {
         if (file && fs.existsSync(file.path)) fs.unlinkSync(file.path);
@@ -3371,89 +3515,48 @@ export const registerBackofficeRoutes = (app: any) => {
         const projectId = resolveProjectId(req);
         const serviceId = resolveServiceId(req);
         await syncMetaProvider(projectId, serviceId);
-        const { templateName, languageCode, startDate, endDate, tagIds } = req.body;
+        const { templateName, languageCode, startDate, endDate, tagIds, campaignId: incomingCampaignId } = req.body;
 
         try {
             if (!templateName) {
                 return res.status(400).json({ success: false, error: 'Falta el nombre de la plantilla.' });
             }
 
-            // 1. Obtener contactos reales filtrados
-            const tagIdArray = Array.isArray(tagIds) ? tagIds : (typeof tagIds === 'string' ? tagIds.split(',').filter(Boolean) : []);
-            let chatsList: any[] = [];
-
-            if (tagIdArray.length === 1) {
-                chatsList = await depsHistoryHandler.listChats(10000, 0, undefined, tagIdArray[0], undefined, undefined, projectId, serviceId);
-            } else if (tagIdArray.length > 1) {
-                const supabase = depsHistoryHandler.getSupabase();
-                let tagQuery = supabase
-                    .from('chat_tags')
-                    .select('chat_id')
-                    .eq('project_id', projectId)
-                    .in('tag_id', tagIdArray);
-                if (serviceId && serviceId !== 'default_service') {
-                    tagQuery = tagQuery.or(`service_id.eq.${serviceId},service_id.eq.default_service,service_id.is.null`);
-                }
-                const { data: taggedEntries } = await tagQuery;
-
-                const matchingIds = Array.from(new Set((taggedEntries || []).map((te: any) => te.chat_id)));
-                if (matchingIds.length > 0) {
-                    let chatsQuery = supabase
-                        .from('chats')
-                        .select('id, type, name, last_message_at, last_human_message_at, assigned_to, bot_enabled, crm_status, crm_due_date, notes, email, source, is_lead, cuit_dni, tax_status, address, offered_product, unread_count, chat_tags(tag_id, tags(*))')
-                        .eq('project_id', projectId)
-                        .in('id', matchingIds);
-                    if (serviceId && serviceId !== 'default_service') {
-                        chatsQuery = chatsQuery.or(`service_id.eq.${serviceId},service_id.eq.default_service,service_id.is.null`);
-                    }
-                    const { data: rawChats } = await chatsQuery;
-
-                    chatsList = (rawChats || []).map((chat: any) => ({
-                        ...chat,
-                        tags: chat.chat_tags ? chat.chat_tags.map((ct: any) => ct.tags).filter((t: any) => t !== null) : []
-                    }));
-                }
-            } else {
-                chatsList = await depsHistoryHandler.listChats(10000, 0, undefined, undefined, undefined, undefined, projectId, serviceId);
-            }
-
-            if (chatsList && chatsList.length > 0) {
-                // Filtrar por fecha
-                if (startDate || endDate) {
-                    chatsList = chatsList.filter((c: any) => {
-                        if (!c.last_message_at) return false;
-                        const msgDate = new Date(c.last_message_at);
-                        if (startDate && msgDate < new Date(`${startDate}T00:00:00.000Z`)) return false;
-                        if (endDate && msgDate > new Date(`${endDate}T23:59:59.999Z`)) return false;
-                        return true;
-                    });
-                }
-            } else {
-                chatsList = [];
-            }
-
-            // Filtrar el número de ejemplo
-            chatsList = chatsList.filter((chat: any) => {
-                const cleanPhone = chat.id.split('@')[0];
-                return cleanPhone !== '5491100000000';
-            });
+            // 1. Obtener contactos reales filtrados con segregación multi-tenant y multi-servicio
+            const chatsList = await getFilteredChatsForTemplate(projectId, serviceId, tagIds, startDate, endDate);
 
             if (chatsList.length === 0) {
                 return res.status(400).json({ success: false, error: 'No se encontraron contactos que coincidan con los filtros aplicados.' });
             }
 
-            // 2. Responder 202 de inmediato
-            res.status(202).json({ success: true, message: 'Envío rápido masivo iniciado.', total: chatsList.length });
+            const campaignId = incomingCampaignId || ('quick_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7));
+            activeBulkCampaigns.set(campaignId, {
+                id: campaignId,
+                projectId: projectId || '',
+                serviceId: serviceId || '',
+                templateName,
+                total: chatsList.length,
+                current: 0,
+                sent: 0,
+                errors: 0,
+                cancelled: false,
+                status: 'running',
+                startedAt: Date.now()
+            });
+
+            // 2. Responder 202 de inmediato con el campaignId
+            res.status(202).json({ success: true, message: 'Envío rápido masivo iniciado.', total: chatsList.length, campaignId });
 
             // 3. Procesar envíos en segundo plano
             (async () => {
                 const activeAdapter = getAdapterProvider();
-            const activeGroup = getGroupProvider();
-            const provider = isMetaProvider(activeAdapter) ? activeAdapter : activeGroup;
+                const activeGroup = getGroupProvider();
+                const provider = isMetaProvider(activeAdapter) ? activeAdapter : activeGroup;
                 const templates = await provider.getTemplates();
                 const template = templates.find((t: any) => t.name === templateName);
                 if (!template) {
                     console.error(`❌ [QUICK BULK] Plantilla ${templateName} no encontrada.`);
+                    updateBulkProgress(campaignId, { status: 'error', error: 'Plantilla no encontrada' });
                     return;
                 }
 
@@ -3602,6 +3705,12 @@ export const registerBackofficeRoutes = (app: any) => {
 
                 let sent = 0, errors = 0;
                 for (const chat of chatsList) {
+                    // Verificar cancelación en caliente
+                    if (activeBulkCampaigns.get(campaignId)?.cancelled) {
+                        console.log(`🛑 [QUICK BULK] Campaña ${campaignId} cancelada por el usuario en el contacto ${sent + errors}/${chatsList.length}.`);
+                        break;
+                    }
+
                     const phone = chat.id.split('@')[0];
                     try {
                         const resApi = await provider.sendTemplate(phone, templateName, languageCode || template.language || 'es', components, { isBulk: true, projectId, serviceId });
@@ -3633,9 +3742,23 @@ export const registerBackofficeRoutes = (app: any) => {
                             console.error('[QUICK BULK] Error al guardar mensaje fallido en catch:', saveErr.message);
                         }
                     }
+
+                    updateBulkProgress(campaignId, {
+                        current: sent + errors,
+                        sent,
+                        errors
+                    });
+
                     await new Promise(r => setTimeout(r, 200));
                 }
-                console.log(`âœ… [QUICK BULK] EnvÃ­o rÃ¡pido finalizado: ${sent} enviados, ${errors} errores de ${chatsList.length} contactos.`);
+
+                const finalState = activeBulkCampaigns.get(campaignId);
+                const isCancelled = !!finalState?.cancelled;
+                updateBulkProgress(campaignId, {
+                    status: isCancelled ? 'cancelled' : 'completed',
+                    finishedAt: Date.now()
+                });
+                console.log(`✅ [QUICK BULK] Envío rápido ${isCancelled ? 'CANCELADO' : 'finalizado'}: ${sent} enviados, ${errors} errores de ${chatsList.length} contactos.`);
             })();
 
         } catch (error: any) {
@@ -3644,6 +3767,83 @@ export const registerBackofficeRoutes = (app: any) => {
                 res.status(500).json({ success: false, error: error.message });
             }
         }
+    });
+
+    // --- PREVIEW Y CONTROL DE ENVÍO MASIVO ---
+
+    app.post('/api/backoffice/whatsapp/preview-quick-template', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
+        const projectId = resolveProjectId(req);
+        const serviceId = resolveServiceId(req);
+        const { templateName, startDate, endDate, tagIds } = req.body;
+
+        try {
+            const chatsList = await getFilteredChatsForTemplate(projectId, serviceId, tagIds, startDate, endDate);
+
+            // Obtener nombres legibles de las etiquetas seleccionadas
+            const tagIdArray = Array.isArray(tagIds) ? tagIds : (typeof tagIds === 'string' ? tagIds.split(',').filter(Boolean) : []);
+            let tagNames: string[] = [];
+            if (tagIdArray.length > 0) {
+                const supabase = HistoryHandlerClass.getSupabase();
+                let tagQuery = supabase
+                    .from('tags')
+                    .select('id, name')
+                    .eq('project_id', projectId)
+                    .in('id', tagIdArray);
+                if (serviceId && serviceId !== 'default_service') {
+                    tagQuery = tagQuery.or(`service_id.eq.${serviceId},service_id.eq.default_service,service_id.is.null`);
+                }
+                const { data: tagsData } = await tagQuery;
+                if (tagsData) {
+                    tagNames = tagsData.map((t: any) => t.name);
+                }
+            }
+
+            res.json({
+                success: true,
+                count: chatsList.length,
+                templateName: templateName || '',
+                tagNames,
+                startDate: startDate || null,
+                endDate: endDate || null
+            });
+        } catch (error: any) {
+            console.error('Error en preview-quick-template:', error);
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
+    app.post('/api/backoffice/whatsapp/cancel-bulk-template', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
+        const { campaignId } = req.body;
+        if (!campaignId) {
+            return res.status(400).json({ success: false, error: 'Falta campaignId.' });
+        }
+
+        const campaign = activeBulkCampaigns.get(campaignId);
+        if (!campaign) {
+            return res.status(404).json({ success: false, error: 'Campaña no encontrada o ya finalizada.' });
+        }
+
+        campaign.cancelled = true;
+        campaign.status = 'cancelled';
+        updateBulkProgress(campaignId, { cancelled: true, status: 'cancelled' });
+
+        console.log(`🛑 [BULK CANCEL] Cancelación solicitada para campaña ${campaignId}. Contacto actual: ${campaign.current}/${campaign.total}`);
+        res.json({
+            success: true,
+            message: 'Cancelación solicitada con éxito.',
+            campaignId,
+            current: campaign.current,
+            total: campaign.total
+        });
+    });
+
+    app.get('/api/backoffice/whatsapp/bulk-status/:campaignId', backofficeAuth, async (req: any, res: any) => {
+        const campaignId = req.params.campaignId;
+        const campaign = activeBulkCampaigns.get(campaignId);
+        if (!campaign) {
+            return res.status(404).json({ success: false, error: 'Campaña no encontrada.' });
+        }
+        res.json({ success: true, campaign });
     });
 
     // --- ONBOARDING META ---
