@@ -1509,9 +1509,9 @@ class MetaCloudProvider extends ProviderClass {
             } else if (code === 132001 || code === 132000) {
                 title = 'Variables de plantilla no definidas';
                 description = `La plantilla no pudo enviarse a ${contactLabel} porque los parámetros o variables no coinciden con la definición aprobada en Meta.`;
-            } else if (code === 131016) {
-                title = 'Cuenta comercial restringida';
-                description = `Meta ha suspendido o restringido temporalmente tu cuenta de WhatsApp Business. Revisa la Calidad de la Cuenta en Meta Business Suite.`;
+            } else if (code === 131016 || code === 131031) {
+                title = 'Cuenta Comercial de Meta bloqueada o restringida';
+                description = `Meta ha bloqueado o restringido la Cuenta Comercial (WABA) en Facebook. Aunque el WhatsApp del teléfono siga funcionando, Meta Cloud API bloqueó los envíos. Revisa 'Calidad de la cuenta' en Meta Business Suite para solicitar revisión.`;
             } else if (code === 131049) {
                 title = 'Entrega limitada por Meta';
                 description = `Meta no entrego el mensaje a ${contactLabel} por calidad o interaccion del ecosistema. Revisa opt-in, calidad de la linea y frecuencia de envios.`;
