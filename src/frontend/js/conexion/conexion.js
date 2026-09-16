@@ -199,6 +199,124 @@ function renderMetaConnectionInfo(metaOnboarding, isPrimaryMeta) {
     `;
 }
 
+function renderMetaOnboardingPromo() {
+    return `
+        <div class="meta-onboarding-wrap glass-card animate-fade" style="margin-top:15px; border:1px solid rgba(6,104,225,0.22); background:rgba(6,104,225,0.035); border-radius:14px; padding:1.25rem;">
+            <div style="margin-bottom:1rem; text-align:left; width:100%;">
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; flex-wrap:wrap; gap:8px;">
+                    <h3 style="margin:0; color:var(--text-main); font-size:1.1rem; font-weight:700; display:flex; align-items:center; gap:8px;">
+                        <i class="fab fa-meta" style="color:#0668E1; font-size:1.25rem;"></i> Conectar WhatsApp Oficial (Meta Cloud API)
+                    </h3>
+                    <span class="status" style="background:rgba(245, 158, 11, 0.1); border-color:rgba(245, 158, 11, 0.25); color:#f59e0b; font-size:0.75rem; padding:2px 8px;">
+                        <i class="fas fa-circle-exclamation"></i> Sin conectar
+                    </span>
+                </div>
+                <p style="color:var(--text-muted); font-size:0.88rem; line-height:1.45; margin:0;">
+                    Conecta tu cuenta de <strong>WhatsApp Business</strong> oficial para habilitar plantillas masivas, respuestas oficiales y coexistencia.
+                </p>
+            </div>
+            <div style="background:var(--bg-header); padding:0.85rem 1rem; border-radius:12px; border:1px solid var(--border); width:100%; text-align:left; margin-bottom:1rem;">
+                <h4 style="margin:0 0 6px; color:#0668E1; font-size:0.75rem; text-transform:uppercase; letter-spacing:1px; font-weight:700;">Beneficios activos al conectar:</h4>
+                <ul style="font-size:0.82rem; color:var(--text-main); margin:0; display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:6px; list-style:none; padding:0;">
+                    <li><i class="fas fa-check" style="color:#10b981; margin-right:6px;"></i> Integración por <strong>Coexistencia</strong>.</li>
+                    <li><i class="fas fa-check" style="color:#10b981; margin-right:6px;"></i> Registro vía <strong>Popup de Facebook</strong>.</li>
+                    <li><i class="fas fa-check" style="color:#10b981; margin-right:6px;"></i> Envío de <strong>Plantillas Masivas (HSM)</strong>.</li>
+                    <li><i class="fas fa-check" style="color:#10b981; margin-right:6px;"></i> Soporte para <strong>Imágenes y Audios</strong>.</li>
+                </ul>
+            </div>
+            <button id="meta-onboard-btn-conexion" class="btn-primary w-full" style="padding:10px; font-weight:700;" onclick="window.launchMetaOnboardingFromConexion()">
+                <i class="fab fa-meta"></i> Vincular con META
+            </button>
+            <div id="meta-onboard-status-conexion" style="display:none; margin-top:0.75rem; color:var(--text-muted); font-size:0.85rem; text-align:center;">
+                <i class="fas fa-circle-notch fa-spin"></i> Esperando confirmación de vinculación en Facebook...
+            </div>
+        </div>
+    `;
+}
+
+window.launchMetaOnboardingFromConexion = function() {
+    const token = localStorage.getItem('backoffice_token') || localStorage.getItem('system_config_token') || '';
+    const sId = (typeof window !== 'undefined' && window.railwayServiceId) ? window.railwayServiceId : '';
+    const pId = (typeof window !== 'undefined' && window.railwayProjectId) ? window.railwayProjectId : '';
+
+    const w = 600, h = 800;
+    const left = (window.screen.width / 2) - (w / 2);
+    const top  = (window.screen.height / 2) - (h / 2);
+    const popup = window.open('about:blank', 'MetaOnboarding',
+        `width=${w},height=${h},top=${top},left=${left},scrollbars=yes,status=no,menubar=no`);
+
+    if (!popup) {
+        if (typeof showToast === 'function') showToast('⚠️ El navegador bloqueó la ventana emergente. Permitila e intenta de nuevo.', 'error');
+        return;
+    }
+
+    const statusEl = document.getElementById('meta-onboard-status-conexion');
+    if (statusEl) statusEl.style.display = 'block';
+
+    fetch(`/api/backoffice/whatsapp/config?token=${token}&serviceId=${sId}&projectId=${pId}`)
+        .then(res => res.json())
+        .then(data => {
+            if (!data.appId) {
+                popup.close();
+                if (statusEl) statusEl.style.display = 'none';
+                if (typeof showToast === 'function') showToast('⚠️ Faltan credenciales de Meta en el servidor', 'error');
+                return;
+            }
+            const origin = window.location.origin;
+            const url = new URL('https://duskcodes.com.ar/meta-auth');
+            url.searchParams.append('railwayProjectId', data.railwayProjectId);
+            url.searchParams.append('RAILWAY_PROJECT_ID', data.railwayProjectId);
+            url.searchParams.append('projectId', data.railwayProjectId);
+            url.searchParams.append('metaAppId', data.appId);
+            url.searchParams.append('metaAppSecret', data.appSecret);
+            if (data.configId) url.searchParams.append('configId', data.configId);
+            url.searchParams.append('projectUrl', origin);
+            url.searchParams.append('redirectUri', `${origin}/api/backoffice/whatsapp/onboard-callback?serviceId=${sId}`);
+            url.searchParams.append('state', `${data.railwayProjectId}:${sId}`);
+            url.searchParams.append('serviceId', sId);
+            url.searchParams.append('railwayServiceId', sId);
+
+            popup.location.href = url.toString();
+
+            const interval = setInterval(() => {
+                if (popup.closed) {
+                    clearInterval(interval);
+                    if (statusEl) statusEl.style.display = 'none';
+                    const btn = document.getElementById('meta-onboard-btn-conexion');
+                    if (btn) {
+                        btn.innerHTML = '<i class="fas fa-rotate"></i> Sincronizar y guardar';
+                        btn.onclick = window.syncAndSaveMetaFromConexion;
+                    }
+                    window.syncAndSaveMetaFromConexion();
+                }
+            }, 1000);
+        })
+        .catch(err => {
+            popup.close();
+            if (statusEl) statusEl.style.display = 'none';
+            if (typeof showToast === 'function') showToast('❌ Error de conexión al obtener configuración', 'error');
+        });
+};
+
+window.syncAndSaveMetaFromConexion = async function() {
+    const token = localStorage.getItem('backoffice_token') || localStorage.getItem('system_config_token') || '';
+    const btn = document.getElementById('meta-onboard-btn-conexion');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Sincronizando...';
+    }
+    try {
+        const res = await fetch('/api/backoffice/whatsapp/sync-ids?token=' + token, { method: 'POST' });
+        const data = await res.json();
+        if (data && data.success) {
+            if (typeof showToast === 'function') showToast('Credenciales sincronizadas y guardadas correctamente.', 'success');
+        }
+    } catch (_) {}
+    if (typeof refreshStatus === 'function') {
+        refreshStatus();
+    }
+};
+
 
 async function runBotCommand(command, chatId) {
     const token = localStorage.getItem('backoffice_token');
@@ -591,14 +709,29 @@ async function fetchStatus() {
         const isMeta = data.adapter.type === 'meta';
         const hasMetaOnboarding = Boolean(data.metaOnboarding);
 
+        const metaContainer = document.getElementById('meta-session-container');
+        if (metaContainer) {
+            metaContainer.style.display = 'none';
+            metaContainer.innerHTML = '';
+        }
+
         if (isMeta || hasMetaOnboarding) {
             const metaStatus = data.metaOnboarding?.onboarding_data?.status || data.metaOnboarding?.status || 'Registrada';
             statusEl.textContent = isMeta ? 'Principal: META' : `META: ${metaStatus}`;
             statusEl.style.color = '#0668E1';
-            sessionInfo.style.display = 'block';
-            sessionInfo.innerHTML = renderMetaConnectionInfo(data.metaOnboarding, isMeta);
+            if (metaContainer) {
+                metaContainer.style.display = 'block';
+                metaContainer.innerHTML = renderMetaConnectionInfo(data.metaOnboarding, isMeta);
+            } else {
+                sessionInfo.style.display = 'block';
+                sessionInfo.innerHTML = renderMetaConnectionInfo(data.metaOnboarding, isMeta);
+            }
         } else {
             renderProviderStatus(data.adapter, 'Principal', { preserveQr: Boolean(data.group && !data.group.active) });
+            if (metaContainer) {
+                metaContainer.style.display = 'block';
+                metaContainer.innerHTML = renderMetaOnboardingPromo();
+            }
         }
 
         const groupStatus = getStableGroupStatus(data.group);

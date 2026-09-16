@@ -20,8 +20,8 @@ window.metaView = (() => {
 
             <div class="kanban-header animate-fade">
                 <div class="header-info">
-                    <h1><i class="fab fa-meta kanban-header-icon" style="color:#0668E1;"></i> Centro Meta</h1>
-                    <p>Herramientas para negocios</p>
+                    <h1><i class="fab fa-meta kanban-header-icon" style="color:#0668E1;"></i> Plantillas Meta</h1>
+                    <p>Gestión de plantillas y envíos masivos oficiales</p>
                 </div>
                 <div id="meta-view-badge-bar" class="meta-badge-bar" style="display:none;">
                     <a id="link-meta-library" href="https://business.facebook.com/latest/whatsapp_manager/template_library" target="_blank" class="meta-link-item">
@@ -38,31 +38,19 @@ window.metaView = (() => {
 
                 <!-- Estado: no vinculado -->
                 <div id="meta-not-connected" style="display:none;">
-                    <div class="meta-onboarding-wrap glass-card animate-fade">
-                        <div style="margin-bottom:1.25rem; text-align:center; width:100%;">
-                            <h2 style="margin:0 0 8px; color:var(--text-main); font-size:1.45rem; font-weight:700; display:flex; align-items:center; justify-content:center; gap:10px;">
-                                <i class="fas fa-infinity" style="color:#0668E1; font-size:1.5rem; flex-shrink:0;"></i> Conexion Oficial
-                            </h2>
-                            <div style="height:3px; width:50px; background:#0668E1; border-radius:10px; margin:0 auto 12px;"></div>
-                            <p style="color:var(--text-muted); font-size:0.95rem; line-height:1.5; margin:0;">
-                                Conecta tu cuenta de <strong>WhatsApp Business</strong> oficial para habilitar funciones profesionales.
-                            </p>
+                    <div class="meta-onboarding-wrap glass-card animate-fade" style="text-align:center; padding:3rem 2rem; max-width:580px; margin:3rem auto; border-radius:18px;">
+                        <div style="width:72px; height:72px; border-radius:50%; background:rgba(6,104,225,0.1); display:flex; align-items:center; justify-content:center; margin:0 auto 1.5rem; color:#0668E1; font-size:2rem;">
+                            <i class="fab fa-meta"></i>
                         </div>
-                        <div style="background:var(--bg-header); padding:1rem 1.25rem; border-radius:16px; border:1px solid var(--border); width:100%; text-align:left; margin-bottom:1.25rem;">
-                            <h4 style="margin:0 0 8px; color:#0668E1; font-size:0.78rem; text-transform:uppercase; letter-spacing:1.5px; font-weight:700;">Beneficios activos:</h4>
-                            <ul style="font-size:0.88rem; color:var(--text-main); margin:0; display:flex; flex-direction:column; gap:4px; list-style:none; padding:0;">
-                                <li>Integracion por <strong>Coexistencia</strong>.</li>
-                                <li>Registro via <strong>Popup de Facebook</strong>.</li>
-                                <li>Envio de <strong>Mensajes Masivos (HSM)</strong>.</li>
-                                <li>Soporte para <strong>Imagenes y Audios</strong> oficiales.</li>
-                            </ul>
-                        </div>
-                        <button id="meta-onboard-btn" class="btn-primary w-full" onclick="launchMetaOnboardingView()">
-                            <i class="fab fa-meta"></i> Vincular con META
+                        <h2 style="margin:0 0 12px; color:var(--text-main); font-size:1.35rem; font-weight:700;">
+                            Conexión de WhatsApp requerida
+                        </h2>
+                        <p style="color:var(--text-muted); font-size:0.98rem; line-height:1.6; margin:0 0 1.75rem;">
+                            Para poder ver y enviar plantillas debe primero conectarse desde la sección de <strong>Conexión</strong>.
+                        </p>
+                        <button type="button" class="btn-primary" style="padding:10px 24px; font-size:0.95rem; font-weight:600; display:inline-flex; align-items:center; gap:8px;" onclick="navigate('/conexion')">
+                            <i class="fas fa-plug-circle-bolt"></i> Ir a Conexión
                         </button>
-                        <div id="meta-onboard-status" style="display:none; margin-top:1rem; color:var(--text-muted); font-size:0.85rem; text-align:center;">
-                            <i class="fas fa-circle-notch fa-spin"></i> Esperando confirmacion de vinculacion...
-                        </div>
                     </div>
                 </div>
 
@@ -1663,7 +1651,7 @@ window.metaView = (() => {
     }
 
     return {
-        title: 'Meta - ' + (window.BOT_NAME || 'Backoffice'),
+        title: 'Plantillas Meta - ' + (window.BOT_NAME || 'Backoffice'),
         getHTML,
         init,
         destroy

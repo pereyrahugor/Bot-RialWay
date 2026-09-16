@@ -37,7 +37,7 @@
         ],
         integrations: [
             { label: 'CRM & Tareas', icon: 'fas fa-id-card-clip', route: '/crm', matchRoutes: ['/crm-tareas'], dotId: 'dot-crm', requires: 'crm' },
-            { label: 'Meta', icon: 'fab fa-meta', route: '/meta', requires: 'backoffice' },
+            { label: 'Plantillas Meta', icon: 'fab fa-meta', route: '/meta', requires: 'backoffice' },
             { label: 'Base de Datos', icon: 'fas fa-database', route: '/database' },
             {
                 label: 'Mercado Libre',

@@ -85,6 +85,7 @@ window.conexionView = {
                                 </div>
                             </div>
                             <div id="session-info" style="display:none;" class="conexion-session-info"></div>
+                            <div id="meta-session-container" style="display:none;" class="mt-4"></div>
                             <div id="whatsapp-link-container" style="display:none;" class="mt-5">
                                 <a id="whatsapp-link" href="#" target="_blank" class="btn-primary">
                                     <i class="fab fa-whatsapp"></i> Abrir en WhatsApp
