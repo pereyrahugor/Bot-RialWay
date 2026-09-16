@@ -2925,6 +2925,239 @@ export const registerBackofficeRoutes = (app: any) => {
         }
     });
 
+    // --- CROSS-SERVICE TEMPLATES (Compartición entre líneas del mismo proyecto) ---
+
+    app.get('/api/backoffice/whatsapp/project-templates', backofficeAuth, async (req: any, res: any) => {
+        try {
+            const projectId = resolveProjectId(req);
+            const currentServiceId = resolveServiceId(req);
+
+            if (!projectId) {
+                return res.status(400).json({ success: false, error: 'Falta project_id.' });
+            }
+
+            const supabase = HistoryHandlerClass.getSupabase();
+            const { data: siblingRecords, error: dbErr } = await supabase
+                .from('meta_onboarding')
+                .select('project_id, service_id, waba_id, phone_number_id, access_token, onboarding_data, status')
+                .eq('project_id', projectId);
+
+            if (dbErr) throw dbErr;
+
+            const activeRecords = (siblingRecords || []).filter((r: any) =>
+                r.waba_id && r.access_token && r.waba_id !== 'PENDING' && r.access_token !== 'PENDING'
+            );
+
+            // Si solo hay 1 servicio o ninguno configurado, no hay líneas hermanas para compartir
+            if (activeRecords.length <= 1) {
+                return res.json({
+                    success: true,
+                    hasMultipleServices: false,
+                    currentServiceId,
+                    templates: []
+                });
+            }
+
+            const axios = (await import('axios')).default;
+
+            // 1. Obtener nombres de las plantillas que ya existen en el servicio actual
+            const currentRecord = activeRecords.find((r: any) => r.service_id === currentServiceId);
+            const currentTemplatesSet = new Set<string>();
+
+            if (currentRecord) {
+                try {
+                    const curUrl = `https://graph.facebook.com/v25.0/${currentRecord.waba_id}/message_templates?fields=name,language&limit=1000`;
+                    const curRes = await axios.get(curUrl, { headers: { 'Authorization': `Bearer ${currentRecord.access_token}` } });
+                    (curRes.data?.data || []).forEach((t: any) => {
+                        currentTemplatesSet.add(`${t.name}:::${t.language || 'es'}`);
+                    });
+                } catch (e: any) {
+                    console.warn('[ProjectTemplates] No se pudieron precargar plantillas de la línea actual:', e.message);
+                }
+            }
+
+            // 2. Consultar plantillas de las otras líneas en paralelo
+            const otherRecords = activeRecords.filter((r: any) => r.service_id !== currentServiceId);
+            const allSiblingTemplates: any[] = [];
+
+            await Promise.allSettled(otherRecords.map(async (record: any) => {
+                try {
+                    const lineName = record.onboarding_data?.verified_name ||
+                                     record.onboarding_data?.display_phone_number ||
+                                     (record.service_id ? `Línea ${record.service_id.substring(0, 6)}` : 'Otra línea');
+                    const phoneDisplay = record.onboarding_data?.display_phone_number || '';
+
+                    const url = `https://graph.facebook.com/v25.0/${record.waba_id}/message_templates?fields=id,name,status,components,language,category,parameter_format&limit=500`;
+                    const response = await axios.get(url, { headers: { 'Authorization': `Bearer ${record.access_token}` } });
+                    const tpls = response.data?.data || [];
+
+                    for (const tpl of tpls) {
+                        const key = `${tpl.name}:::${tpl.language || 'es'}`;
+                        allSiblingTemplates.push({
+                            ...tpl,
+                            originServiceId: record.service_id,
+                            originServiceName: lineName,
+                            originPhone: phoneDisplay,
+                            originWabaId: record.waba_id,
+                            alreadyInCurrentService: currentTemplatesSet.has(key)
+                        });
+                    }
+                } catch (err: any) {
+                    console.error(`[ProjectTemplates] Error consultando plantillas para servicio ${record.service_id}:`, err?.response?.data?.error?.message || err.message);
+                }
+            }));
+
+            res.json({
+                success: true,
+                hasMultipleServices: true,
+                currentServiceId,
+                totalSiblingServices: otherRecords.length,
+                templates: allSiblingTemplates
+            });
+
+        } catch (error: any) {
+            console.error('❌ [ProjectTemplates] Error general:', error);
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
+    app.post('/api/backoffice/whatsapp/clone-template-to-service', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
+        try {
+            const projectId = resolveProjectId(req);
+            const targetServiceId = resolveServiceId(req);
+            const { sourceServiceId, templateId, templateName, language } = req.body;
+
+            if (!sourceServiceId || (!templateId && !templateName)) {
+                return res.status(400).json({ success: false, error: 'Faltan parámetros requeridos (sourceServiceId y templateId o templateName).' });
+            }
+
+            const supabase = HistoryHandlerClass.getSupabase();
+
+            // 1. Obtener credenciales del servicio destino
+            const { data: targetRecord, error: tErr } = await supabase
+                .from('meta_onboarding')
+                .select('*')
+                .eq('project_id', projectId)
+                .eq('service_id', targetServiceId)
+                .maybeSingle();
+
+            if (tErr || !targetRecord || !targetRecord.waba_id || !targetRecord.access_token) {
+                return res.status(400).json({ success: false, error: 'La línea actual no tiene credenciales válidas de Meta.' });
+            }
+
+            // 2. Obtener credenciales del servicio origen
+            const { data: sourceRecord, error: sErr } = await supabase
+                .from('meta_onboarding')
+                .select('*')
+                .eq('project_id', projectId)
+                .eq('service_id', sourceServiceId)
+                .maybeSingle();
+
+            if (sErr || !sourceRecord || !sourceRecord.waba_id || !sourceRecord.access_token) {
+                return res.status(400).json({ success: false, error: 'La línea de origen no tiene credenciales válidas de Meta.' });
+            }
+
+            // Si ambas líneas comparten exactamente la misma WABA, ya está disponible
+            if (targetRecord.waba_id === sourceRecord.waba_id) {
+                return res.json({
+                    success: true,
+                    alreadyShared: true,
+                    message: 'Ambas líneas pertenecen a la misma cuenta de WhatsApp Business (WABA). La plantilla ya está disponible para esta línea sin necesidad de clonación.'
+                });
+            }
+
+            const axios = (await import('axios')).default;
+
+            // 3. Obtener la definición completa de la plantilla origen
+            let sourceTemplate: any = null;
+            if (templateId) {
+                try {
+                    const detailUrl = `https://graph.facebook.com/v25.0/${templateId}?fields=id,name,status,components,language,category,parameter_format`;
+                    const detailRes = await axios.get(detailUrl, { headers: { 'Authorization': `Bearer ${sourceRecord.access_token}` } });
+                    sourceTemplate = detailRes.data;
+                } catch (_) {}
+            }
+
+            if (!sourceTemplate) {
+                const listUrl = `https://graph.facebook.com/v25.0/${sourceRecord.waba_id}/message_templates?fields=id,name,status,components,language,category,parameter_format&limit=500`;
+                const listRes = await axios.get(listUrl, { headers: { 'Authorization': `Bearer ${sourceRecord.access_token}` } });
+                sourceTemplate = (listRes.data?.data || []).find((t: any) =>
+                    (t.id === templateId || t.name === templateName) && (!language || t.language === language)
+                );
+            }
+
+            if (!sourceTemplate) {
+                return res.status(404).json({ success: false, error: 'No se pudo encontrar la plantilla en la línea de origen en Meta.' });
+            }
+
+            let cloneResult: any = null;
+            let methodUsed = '';
+
+            // 4. Intento 1: WABA Template Sharing oficial (hsm_id)
+            if (sourceTemplate.id) {
+                try {
+                    const shareUrl = `https://graph.facebook.com/v25.0/${targetRecord.waba_id}/message_templates?hsm_id=${sourceTemplate.id}`;
+                    const shareRes = await axios.post(shareUrl, {}, { headers: { 'Authorization': `Bearer ${targetRecord.access_token}` } });
+                    cloneResult = shareRes.data;
+                    methodUsed = 'hsm_sharing';
+                    console.log(`✅ [Cross-WABA] Plantilla "${sourceTemplate.name}" vinculada vía hsm_id.`);
+                } catch (shareErr: any) {
+                    console.warn(`⚠️ [Cross-WABA] Intento de hsm_id falló: ${shareErr?.response?.data?.error?.message || shareErr.message}. Procediendo con clonación de componentes...`);
+                }
+            }
+
+            // 5. Intento 2: Fallback clonando la estructura de componentes completa
+            if (!cloneResult) {
+                const cleanComponents = (sourceTemplate.components || []).map((comp: any) => {
+                    const clean: any = { type: comp.type };
+                    if (comp.format) clean.format = comp.format;
+                    if (comp.text) clean.text = comp.text;
+                    if (comp.example) clean.example = comp.example;
+                    if (comp.buttons) clean.buttons = comp.buttons;
+                    return clean;
+                });
+
+                const createUrl = `https://graph.facebook.com/v25.0/${targetRecord.waba_id}/message_templates`;
+                const createBody: any = {
+                    name: sourceTemplate.name,
+                    category: sourceTemplate.category || 'MARKETING',
+                    language: sourceTemplate.language || 'es',
+                    components: cleanComponents
+                };
+                if (sourceTemplate.parameter_format) {
+                    createBody.parameter_format = sourceTemplate.parameter_format;
+                }
+
+                const createRes = await axios.post(createUrl, createBody, {
+                    headers: {
+                        'Authorization': `Bearer ${targetRecord.access_token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                cloneResult = createRes.data;
+                methodUsed = 'component_clone';
+                console.log(`✅ [Cross-WABA] Plantilla "${sourceTemplate.name}" creada en la WABA destino por componentes.`);
+            }
+
+            res.json({
+                success: true,
+                method: methodUsed,
+                message: `Plantilla "${sourceTemplate.name}" vinculada exitosamente a esta línea.`,
+                template: {
+                    id: cloneResult?.id || sourceTemplate.id,
+                    name: sourceTemplate.name,
+                    status: cloneResult?.status || 'APPROVED'
+                }
+            });
+
+        } catch (error: any) {
+            const metaErr = error?.response?.data?.error;
+            const errMsg = metaErr?.error_user_msg || metaErr?.message || error.message;
+            console.error('❌ [Cross-WABA Clone] Error:', metaErr || error.message);
+            res.status(error?.response?.status || 500).json({ success: false, error: errMsg });
+        }
+    });
+
     app.get('/api/backoffice/whatsapp/library-templates', backofficeAuth, async (req: any, res: any) => {
         try {
             const projectId = resolveProjectId(req);

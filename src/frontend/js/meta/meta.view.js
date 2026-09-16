@@ -3,6 +3,7 @@ window.metaView = (() => {
     let _token = '';
     let _metaConfig = {};
     let _availableTemplates = [];
+    let _projectTemplates = [];
     let _currentTemplate = null;
     let _selectedTagIds = new Set();
     let _popupCheckInterval = null;
@@ -73,11 +74,23 @@ window.metaView = (() => {
                     <div class="meta-view-panel animate-fade">
 
                         <div class="meta-templates-header">
-                            <div id="tab-my-templates" class="meta-templates-title active">
-                                <span class="meta-templates-icon"><i class="fas fa-list"></i></span>
-                                <div class="meta-templates-copy">
-                                    <h2>Mis Plantillas</h2>
-                                    <p id="meta-templates-subtitle">Selecciona una plantilla para preparar el reenvio.</p>
+                            <div style="display:flex; align-items:center; gap:20px; flex-wrap:wrap;">
+                                <div id="tab-my-templates" class="meta-templates-title active" onclick="switchMetaTab('my')" style="cursor:pointer;">
+                                    <span class="meta-templates-icon"><i class="fas fa-list"></i></span>
+                                    <div class="meta-templates-copy">
+                                        <h2>Mis Plantillas</h2>
+                                        <p id="meta-templates-subtitle">Plantillas de esta línea.</p>
+                                    </div>
+                                </div>
+                                <div id="tab-project-templates" class="meta-templates-title" onclick="switchMetaTab('project')" style="display:none; cursor:pointer; opacity:0.65;">
+                                    <span class="meta-templates-icon" style="background:rgba(0,153,255,0.12); color:#0099FF;"><i class="fas fa-network-wired"></i></span>
+                                    <div class="meta-templates-copy">
+                                        <h2 style="display:flex; align-items:center; gap:8px;">
+                                            Otras Líneas del Proyecto
+                                            <span id="badge-project-tpl-count" class="meta-card-tag meta-status-approved" style="position:static; transform:none; font-size:0.75rem; padding:2px 8px; display:none;">0</span>
+                                        </h2>
+                                        <p>Reutiliza o vincula plantillas de tus otras cuentas.</p>
+                                    </div>
                                 </div>
                             </div>
                             <button id="tpl-detail-back-header" class="tpl-detail-back-btn" style="display:none;" onclick="switchMetaTab('my')">
@@ -88,11 +101,19 @@ window.metaView = (() => {
                         <!-- Body colapsable -->
                         <div class="meta-panel-body">
 
-                        <!-- Grid de plantillas -->
+                        <!-- Grid de plantillas propias -->
                         <div id="view-my-templates" class="meta-grid">
                             <div class="text-center py-10 opacity-50" style="grid-column:1/-1;">
                                 <i class="fas fa-circle-notch fa-spin text-3xl text-accent-bright"></i>
                                 <p class="text-sm text-secondary-content mt-3">Sincronizando con Meta Cloud...</p>
+                            </div>
+                        </div>
+
+                        <!-- Grid de plantillas de otras líneas del proyecto -->
+                        <div id="view-project-templates" class="meta-grid" style="display:none;">
+                            <div class="text-center py-10 opacity-50" style="grid-column:1/-1;">
+                                <i class="fas fa-circle-notch fa-spin text-3xl text-accent-bright"></i>
+                                <p class="text-sm text-secondary-content mt-3">Consultando plantillas de otras líneas...</p>
                             </div>
                         </div>
 
@@ -528,6 +549,7 @@ window.metaView = (() => {
         window.closeBulkFlowModal       = closeBulkFlowModal;
         window.executeConfirmedBulkSend = executeConfirmedBulkSend;
         window.requestCancelBulkSend    = requestCancelBulkSend;
+        window.cloneTemplateToCurrentService = cloneTemplateToCurrentService;
         window.addEventListener('resize', scheduleTemplatePreviewFit);
 
         await checkMetaConnection();
@@ -543,7 +565,8 @@ window.metaView = (() => {
         ['switchMetaTab', 'showTemplateDetail', 'startBulkSend', 'downloadBulkExcel',
          'toggleTagChip', 'toggleMetaAccordion', 'showTplPreviewModal', 'launchMetaOnboardingView',
          'syncAndSaveConnection', 'startQuickBulkSend', 'filterBulkTags',
-         'closeBulkFlowModal', 'executeConfirmedBulkSend', 'requestCancelBulkSend'
+         'closeBulkFlowModal', 'executeConfirmedBulkSend', 'requestCancelBulkSend',
+         'cloneTemplateToCurrentService'
         ].forEach(fn => { delete window[fn]; });
     }
 
@@ -575,6 +598,7 @@ window.metaView = (() => {
 
                 loadTags();
                 loadTemplates();
+                checkProjectTemplates();
             } else if (!silent) {
                 const notConn = document.getElementById('meta-not-connected');
                 if (notConn) notConn.style.display = 'block';
@@ -760,25 +784,197 @@ window.metaView = (() => {
 
     // ── Tabs ──────────────────────────────────────────────────────────────
     function switchMetaTab(tab) {
-        const myView     = document.getElementById('view-my-templates');
-        const detailView = document.getElementById('view-template-detail');
-        const tabBtn     = document.getElementById('tab-my-templates');
-        const backBtn    = document.getElementById('tpl-detail-back-header');
-        const subtitle   = document.getElementById('meta-templates-subtitle');
+        const myView      = document.getElementById('view-my-templates');
+        const projView    = document.getElementById('view-project-templates');
+        const detailView  = document.getElementById('view-template-detail');
+        const myTabBtn    = document.getElementById('tab-my-templates');
+        const projTabBtn  = document.getElementById('tab-project-templates');
+        const backBtn     = document.getElementById('tpl-detail-back-header');
+        const subtitle    = document.getElementById('meta-templates-subtitle');
 
         if (tab === 'my') {
-            if (myView)     { myView.style.display = 'grid'; }
-            if (detailView) { detailView.style.display = 'none'; }
-            if (tabBtn)     { tabBtn.classList.add('active'); }
-            if (backBtn)    { backBtn.style.display = 'none'; }
-            if (subtitle)   { subtitle.innerText = 'Selecciona una plantilla para preparar el reenvio.'; }
+            if (myView)     myView.style.display = 'grid';
+            if (projView)   projView.style.display = 'none';
+            if (detailView) detailView.style.display = 'none';
+            if (myTabBtn)   { myTabBtn.classList.add('active'); myTabBtn.style.opacity = '1'; }
+            if (projTabBtn) { projTabBtn.classList.remove('active'); projTabBtn.style.opacity = '0.65'; }
+            if (backBtn)    backBtn.style.display = 'none';
+            if (subtitle)   subtitle.innerText = 'Plantillas de esta línea.';
             loadTemplates();
+        } else if (tab === 'project') {
+            if (myView)     myView.style.display = 'none';
+            if (projView)   projView.style.display = 'grid';
+            if (detailView) detailView.style.display = 'none';
+            if (projTabBtn) { projTabBtn.classList.add('active'); projTabBtn.style.opacity = '1'; }
+            if (myTabBtn)   { myTabBtn.classList.remove('active'); myTabBtn.style.opacity = '0.65'; }
+            if (backBtn)    backBtn.style.display = 'none';
+            loadProjectTemplates();
         } else if (tab === 'detail') {
-            if (myView)     { myView.style.display = 'none'; }
-            if (detailView) { detailView.style.display = 'flex'; }
-            if (tabBtn)     { tabBtn.classList.remove('active'); }
-            if (backBtn)    { backBtn.style.display = 'inline-flex'; }
-            if (subtitle)   { subtitle.innerText = 'Configura filtros y prepara el envio.'; }
+            if (myView)     myView.style.display = 'none';
+            if (projView)   projView.style.display = 'none';
+            if (detailView) detailView.style.display = 'flex';
+            if (myTabBtn)   { myTabBtn.classList.remove('active'); myTabBtn.style.opacity = '0.65'; }
+            if (projTabBtn) { projTabBtn.classList.remove('active'); projTabBtn.style.opacity = '0.65'; }
+            if (backBtn)    backBtn.style.display = 'inline-flex';
+            if (subtitle)   subtitle.innerText = 'Configura filtros y prepara el envío.';
+        }
+    }
+
+    // ── Plantillas de otras líneas del proyecto (Cross-WABA) ─────────────────
+    async function checkProjectTemplates() {
+        try {
+            const params = new URLSearchParams({ token: _token });
+            if (window.railwayProjectId) params.set('projectId', window.railwayProjectId);
+            if (window.railwayServiceId) params.set('serviceId', window.railwayServiceId);
+
+            const res = await fetch(`/api/backoffice/whatsapp/project-templates?${params.toString()}`);
+            const data = await res.json();
+
+            const projTab = document.getElementById('tab-project-templates');
+            const countBadge = document.getElementById('badge-project-tpl-count');
+
+            if (data.success && data.hasMultipleServices && data.templates && data.templates.length > 0) {
+                _projectTemplates = data.templates;
+                if (projTab) projTab.style.display = 'flex';
+                if (countBadge) {
+                    countBadge.innerText = String(data.templates.length);
+                    countBadge.style.display = 'inline-flex';
+                }
+            } else if (projTab) {
+                projTab.style.display = 'none';
+            }
+        } catch (err) {
+            console.warn('[ProjectTemplates] Error al verificar plantillas del proyecto:', err);
+        }
+    }
+
+    async function loadProjectTemplates() {
+        const container = document.getElementById('view-project-templates');
+        if (!container) return;
+        container.innerHTML = `
+            <div class="text-center py-10 opacity-50" style="grid-column:1/-1;">
+                <i class="fas fa-circle-notch fa-spin text-3xl text-accent-bright"></i>
+                <p class="text-sm text-secondary-content mt-3">Sincronizando plantillas de otras líneas del proyecto...</p>
+            </div>`;
+
+        try {
+            const params = new URLSearchParams({ token: _token });
+            if (window.railwayProjectId) params.set('projectId', window.railwayProjectId);
+            if (window.railwayServiceId) params.set('serviceId', window.railwayServiceId);
+
+            const res = await fetch(`/api/backoffice/whatsapp/project-templates?${params.toString()}`);
+            const data = await res.json();
+
+            if (data.success && data.templates) {
+                _projectTemplates = data.templates;
+                renderProjectCards(container, _projectTemplates);
+            } else {
+                container.innerHTML = '<p style="grid-column:1/-1; text-align:center; padding:20px; color:var(--text-muted);">No se encontraron plantillas en otras líneas del proyecto.</p>';
+            }
+        } catch (e) {
+            container.innerHTML = '<p style="grid-column:1/-1; text-align:center; padding:20px; color:var(--text-muted);">Error al consultar plantillas de otras líneas.</p>';
+        }
+    }
+
+    function renderProjectCards(container, templates) {
+        if (!templates || templates.length === 0) {
+            container.innerHTML = '<p style="grid-column:1/-1; text-align:center; padding:20px; color:var(--text-muted);">No se encontraron plantillas en otras líneas del proyecto.</p>';
+            return;
+        }
+
+        const rows = templates.map(t => {
+            const statusClass = t.status === 'APPROVED' ? 'meta-status-approved' : (t.status === 'REJECTED' ? 'meta-status-rejected' : 'meta-status-pending');
+
+            const actionHtml = t.alreadyInCurrentService
+                ? `<span style="color:#10b981; font-size:0.82rem; font-weight:700; display:inline-flex; align-items:center; gap:6px; background:rgba(16,185,129,0.12); padding:5px 12px; border-radius:8px;">
+                       <i class="fas fa-check-circle"></i> Disponible en esta línea
+                   </span>`
+                : `<button type="button" class="btn-primary" style="padding:6px 14px; font-size:0.82rem; min-height:34px;" onclick="cloneTemplateToCurrentService('${escapeTemplateArg(t.originServiceId)}','${escapeTemplateArg(t.id || '')}','${escapeTemplateArg(t.name)}','${escapeTemplateArg(t.language || 'es')}', this)">
+                       <i class="fas fa-download"></i> Vincular a esta línea
+                   </button>`;
+
+            return `
+                <div class="meta-template-row meta-card meta-card-approved" style="cursor:default; display:grid; grid-template-columns: 2fr 1.5fr 1fr 1fr 1.5fr; align-items:center; gap:12px; padding:14px 18px;">
+                    <div>
+                        <span class="meta-row-name" style="font-weight:700; font-size:0.95rem; color:var(--text-main);">${escapeTemplateText(t.name)}</span>
+                        <div style="margin-top:4px;">
+                            <span style="background:rgba(0,153,255,0.1); color:#0099FF; border:1px solid rgba(0,153,255,0.22); padding:2px 8px; border-radius:6px; font-size:0.75rem; font-weight:600; display:inline-flex; align-items:center; gap:5px;">
+                                <i class="fas fa-mobile-alt"></i> ${escapeTemplateText(t.originServiceName)}
+                            </span>
+                        </div>
+                    </div>
+                    <span class="meta-row-category" style="font-size:0.85rem; color:var(--text-muted);">${escapeTemplateText(t.category || '--')}</span>
+                    <span class="meta-row-language" style="font-size:0.85rem;">
+                        <strong>${escapeTemplateText((t.language || '').toUpperCase() || '--')}</strong>
+                    </span>
+                    <span class="meta-row-status">
+                        <span class="meta-card-tag ${statusClass}" style="position:static; transform:none;">${escapeTemplateText(t.status || 'PENDING')}</span>
+                    </span>
+                    <div style="text-align:right;">
+                        ${actionHtml}
+                    </div>
+                </div>`;
+        }).join('');
+
+        container.innerHTML = `
+            <div class="meta-template-table">
+                <div class="meta-template-row meta-template-head" style="display:grid; grid-template-columns: 2fr 1.5fr 1fr 1fr 1.5fr; align-items:center; gap:12px;" aria-hidden="true">
+                    <span>Plantilla / Línea de Origen</span>
+                    <span>Categoría</span>
+                    <span>Idioma</span>
+                    <span>Estado en Meta</span>
+                    <span style="text-align:right;">Acción</span>
+                </div>
+                ${rows}
+            </div>`;
+    }
+
+    async function cloneTemplateToCurrentService(sourceServiceId, templateId, templateName, language, btnEl) {
+        if (!sourceServiceId || !templateName) return;
+
+        const originalBtnHtml = btnEl ? btnEl.innerHTML : '';
+        if (btnEl) {
+            btnEl.disabled = true;
+            btnEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Vinculando...';
+        }
+
+        try {
+            const params = new URLSearchParams({ token: _token });
+            if (window.railwayProjectId) params.set('projectId', window.railwayProjectId);
+            if (window.railwayServiceId) params.set('serviceId', window.railwayServiceId);
+
+            const res = await fetch(`/api/backoffice/whatsapp/clone-template-to-service?${params.toString()}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sourceServiceId,
+                    templateId,
+                    templateName,
+                    language
+                })
+            });
+
+            const data = await res.json();
+
+            if (res.ok && data.success) {
+                if (btnEl) {
+                    btnEl.outerHTML = `<span style="color:#10b981; font-size:0.82rem; font-weight:700; display:inline-flex; align-items:center; gap:6px; background:rgba(16,185,129,0.12); padding:5px 12px; border-radius:8px;">
+                        <i class="fas fa-check-circle"></i> Vinculada con éxito
+                    </span>`;
+                }
+                showToast(data.message || `✅ Plantilla "${templateName}" vinculada a esta línea`, 'success');
+                // Refrescar plantillas propias en segundo plano
+                loadTemplates();
+            } else {
+                throw new Error(data.error || 'Error al vincular plantilla');
+            }
+        } catch (e) {
+            console.error('[CloneTemplate] Error:', e);
+            if (btnEl) {
+                btnEl.disabled = false;
+                btnEl.innerHTML = originalBtnHtml;
+            }
+            showToast('Error: ' + e.message, 'error');
         }
     }
 
