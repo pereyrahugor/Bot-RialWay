@@ -277,6 +277,14 @@ const main = async () => {
 
     const app = adapterProvider.server;
     if (app) {
+        // Remover parsers por defecto con límite de 100kb de Polka/Builderbot para evitar PayloadTooLargeError en peticiones grandes
+        if (Array.isArray(app.wares)) {
+            app.wares = app.wares.filter((fn: any) => {
+                const name = fn.name || '';
+                return name !== 'jsonParser' && name !== 'urlencodedParser';
+            });
+        }
+
         // 5. Polka/Express Server setup & Early Middlewares
         app.use(compatibilityLayer);
         app.use(rootRedirect);

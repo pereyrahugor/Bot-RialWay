@@ -113,6 +113,7 @@ export const smartBodyParser = (req: any, res: any, next: () => void) => {
     // Si la ruta ya fue manejada por un parser específico o es una ruta de envío de archivos, saltar
     if (req.url.startsWith('/api/backoffice/send-message') || 
         req.url.startsWith('/api/v1/send-message') ||
+        req.url.startsWith('/api/v1/send-template') ||
         req.url.startsWith('/api/backoffice/whatsapp/send-bulk-template') ||
         req.url.startsWith('/api/backoffice/chats/import')) {
         return next(); 

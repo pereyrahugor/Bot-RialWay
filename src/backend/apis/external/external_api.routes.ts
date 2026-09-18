@@ -70,7 +70,7 @@ async function logApiRequest(data: {
 /**
  * Helper para decodificar y guardar archivos Base64 en uploads/
  */
-function saveBase64Media(base64Data: string, rawFilename?: string, fallbackType: string = 'document'): { filePath: string, filename: string, mimeType: string } {
+function saveBase64Media(base64Data: string, rawFilename?: string, fallbackType: string = 'document'): { filePath: string, filename: string, serverFileName: string, mimeType: string } {
     let cleanBase64 = String(base64Data || '').trim();
     let detectedMime = '';
 
@@ -102,6 +102,17 @@ function saveBase64Media(base64Data: string, rawFilename?: string, fallbackType:
         else ext = '.pdf';
     }
 
+    if (!detectedMime) {
+        if (ext === '.pdf') detectedMime = 'application/pdf';
+        else if (ext === '.jpg' || ext === '.jpeg') detectedMime = 'image/jpeg';
+        else if (ext === '.png') detectedMime = 'image/png';
+        else if (ext === '.webp') detectedMime = 'image/webp';
+        else if (ext === '.mp4') detectedMime = 'video/mp4';
+        else if (ext === '.mp3') detectedMime = 'audio/mpeg';
+        else if (ext === '.ogg') detectedMime = 'audio/ogg';
+        else detectedMime = 'application/octet-stream';
+    }
+
     const safeBaseName = rawFilename ? path.basename(rawFilename, path.extname(rawFilename)).replace(/[^a-zA-Z0-9_-]/g, '_') : `file_${Date.now()}`;
     const filename = `${safeBaseName}${ext}`;
     const uploadDir = path.join(process.cwd(), 'uploads');
@@ -112,7 +123,7 @@ function saveBase64Media(base64Data: string, rawFilename?: string, fallbackType:
     const filePath = path.join(uploadDir, tempFileName);
     fs.writeFileSync(filePath, buffer);
 
-    return { filePath, filename, mimeType: detectedMime };
+    return { filePath, filename, serverFileName: tempFileName, mimeType: detectedMime };
 }
 
 /**
@@ -125,7 +136,8 @@ async function uploadOrLinkLocalFile(
     formatType: string,
     provider: any,
     projectId: string,
-    serviceId?: string | null
+    serviceId?: string | null,
+    serverFileName?: string
 ): Promise<any> {
     let uploadedMediaId: string | null = null;
     try {
@@ -153,7 +165,8 @@ async function uploadOrLinkLocalFile(
     // Fallback: Servir con URL local pública si no se pudo subir directamente a Meta
     let baseUrl = process.env.PROJECT_URL || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : '');
     if (baseUrl && !baseUrl.startsWith('http')) baseUrl = `https://${baseUrl}`;
-    const mediaParam: any = { link: `${baseUrl.replace(/\/$/, '')}/uploads/${filename}` };
+    const publicName = serverFileName || filename;
+    const mediaParam: any = { link: `${baseUrl.replace(/\/$/, '')}/uploads/${publicName}` };
     if (formatType === 'document') mediaParam.filename = filename;
     return {
         type: 'HEADER',
@@ -188,7 +201,7 @@ async function buildTemplateHeaderComponent(
     // Si es un string que parece base64 directo
     if (typeof mediaSource === 'string' && !mediaSource.startsWith('http://') && !mediaSource.startsWith('https://') && mediaSource.length > 100) {
         const decoded = saveBase64Media(mediaSource, customFilename, formatType);
-        return await uploadOrLinkLocalFile(decoded.filePath, decoded.mimeType, decoded.filename, formatType, provider, projectId, serviceId);
+        return await uploadOrLinkLocalFile(decoded.filePath, decoded.mimeType, decoded.filename, formatType, provider, projectId, serviceId, decoded.serverFileName);
     }
 
     // 1. Media ID de Meta ya generado
@@ -204,7 +217,7 @@ async function buildTemplateHeaderComponent(
     // 2. Base64
     if (base64Data) {
         const decoded = saveBase64Media(base64Data, customFilename, formatType);
-        return await uploadOrLinkLocalFile(decoded.filePath, decoded.mimeType, decoded.filename, formatType, provider, projectId, serviceId);
+        return await uploadOrLinkLocalFile(decoded.filePath, decoded.mimeType, decoded.filename, formatType, provider, projectId, serviceId, decoded.serverFileName);
     }
 
     // 3. Link / URL directa
