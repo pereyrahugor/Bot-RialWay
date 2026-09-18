@@ -16,6 +16,7 @@ import { upload } from "../../middleware/upload";
 import { getIdsByHost } from '../utils/routingResolver';
 import { ContactService } from "../../contacts/contactService";
 import { getVisibleServiceIds } from '../utils/databaseSync';
+import { registerCrmRoutes } from '../../crm/crm.routes';
 
 // Invalidar visibility cache cuando cambia cualquier setting de visibilidad via Realtime
 const VISIBILITY_KEYS = ['WHATSAPP_VISIBLE', 'INSTAGRAM_VISIBLE', 'MESSENGER_VISIBLE', 'CRM_VISIBLE'];
@@ -2585,141 +2586,13 @@ export const registerBackofficeRoutes = (app: any) => {
         res.json(result);
     });
 
-    // --- TICKETS ---
-
-    app.get('/api/backoffice/tickets/pending-count', backofficeAuth, async (req: any, res: any) => {
-        const projectId = resolveProjectId(req);
-        const tipo = req.query.tipo as string;
-        const count = await depsHistoryHandler.getPendingTicketsCount(projectId, tipo);
-        res.json({ count });
-    });
-
-    app.get('/api/backoffice/tickets', backofficeAuth, async (req: any, res: any) => {
-        const estado = req.query.estado as string;
-        const tipo = req.query.tipo as string;
-        const id = req.query.id as string;
-        const limit = parseInt(req.query.limit as string) || 300;
-        const offset = parseInt(req.query.offset as string) || 0;
-        const chatId = req.query.chatId as string;
-        const projectId = resolveProjectId(req);
-        const serviceId = resolveServiceId(req);
-        const visibleServices = await getVisibleServiceIds(projectId, serviceId);
-        const result = await depsHistoryHandler.listTickets(limit, offset, estado, tipo, chatId, id, projectId, visibleServices.join(','));
-        res.json(result);
-    });
-
-    app.post('/api/backoffice/tickets', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
-        const { chatId, titulo, descripcion, chats_adjuntos, attachments, tipo } = req.body;
-        if (!titulo) return sendJson(res, 400, { success: false, error: 'titulo is required' });
-        const adjuntos = Array.isArray(chats_adjuntos) ? chats_adjuntos : [];
-        const atts = Array.isArray(attachments) ? attachments : [];
-        const projectId = resolveProjectId(req);
-        const serviceId = resolveServiceId(req);
-        const result = await depsHistoryHandler.createTicket(chatId, titulo, descripcion, tipo || 'Soporte', 'Media', projectId || undefined, atts, adjuntos, serviceId);
-        res.json(result);
-    });
-
-    app.put('/api/backoffice/crm/ticket/:id', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
-        try {
-            const { id } = req.params;
-            const result = await depsHistoryHandler.updateLeadAndTicket(id, req.body);
-            res.json(result);
-        } catch (err: any) {
-            res.status(500).json({ success: false, error: err.message });
-        }
-    });
-
-    app.put('/api/backoffice/tickets/:id', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
-        try {
-            const { id } = req.params;
-            const projectId = resolveProjectId(req);
-            const serviceId = resolveServiceId(req);
-            const result = await depsHistoryHandler.updateTicket(id, { ...req.body, service_id: serviceId });
-            res.json(result);
-        } catch (err: any) {
-            res.status(500).json({ success: false, error: err.message });
-        }
-    });
-
-    app.delete('/api/backoffice/tickets/:id', backofficeAuth, async (req: any, res: any) => {
-        try {
-            const { id } = req.params;
-            const projectId = resolveProjectId(req);
-            const result = await depsHistoryHandler.deleteTicket(id, projectId || undefined);
-            res.json(result);
-        } catch (err: any) {
-            res.status(500).json({ success: false, error: err.message });
-        }
-    });
-
-    app.post('/api/backoffice/crm/bulk-delete-leads', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
-        try {
-            const { ticketIds } = req.body;
-            const projectId = resolveProjectId(req);
-
-            if (!Array.isArray(ticketIds) || ticketIds.length === 0) {
-                return sendJson(res, 400, { success: false, error: 'ticketIds array is required' });
-            }
-
-            let deletedCount = 0;
-            for (const ticketId of ticketIds) {
-                const resDel = await depsHistoryHandler.deleteTicket(ticketId, projectId || undefined);
-                if (resDel && resDel.success) {
-                    deletedCount++;
-                }
-            }
-
-            res.json({ success: true, deletedCount });
-        } catch (err: any) {
-            console.error('[Bulk Delete Leads Error]:', err);
-            res.status(500).json({ success: false, error: err.message });
-        }
-    });
-
-    // --- CRM CONFIG & DASHBOARD ---
-
-    app.get('/api/backoffice/crm/config', backofficeAuth, async (req: any, res: any) => {
-        try {
-            const projectId = resolveProjectId(req);
-            const configStr = await depsHistoryHandler.getSetting('CRM_CONFIG', projectId);
-            const config = configStr ? JSON.parse(configStr) : null;
-            res.json({ success: true, config });
-        } catch (e: any) {
-            res.status(500).json({ success: false, error: e.message });
-        }
-    });
-
-    app.post('/api/backoffice/crm/config', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
-        try {
-            const { config } = req.body;
-            const projectId = resolveProjectId(req);
-            await depsHistoryHandler.saveSetting('CRM_CONFIG', JSON.stringify(config), projectId);
-            res.json({ success: true });
-        } catch (e: any) {
-            res.status(500).json({ success: false, error: e.message });
-        }
-    });
-
-    app.get('/api/backoffice/crm/tasks', backofficeAuth, async (req: any, res: any) => {
-        try {
-            const projectId = resolveProjectId(req);
-            const serviceId = resolveServiceId(req);
-            const visibleServices = await getVisibleServiceIds(projectId, serviceId);
-            const tasks = await depsHistoryHandler.getTasksDashboard(projectId, visibleServices.join(','));
-            res.json(tasks);
-        } catch (e: any) {
-            res.status(500).json({ success: false, error: e.message });
-        }
-    });
-
-    app.get('/api/backoffice/leads', backofficeAuth, async (req: any, res: any) => {
-        const limit = parseInt(req.query.limit as string) || 50;
-        const offset = parseInt(req.query.offset as string) || 0;
-        const projectId = resolveProjectId(req);
-        const serviceId = resolveServiceId(req);
-        const visibleServices = await getVisibleServiceIds(projectId, serviceId);
-        const result = await depsHistoryHandler.listEditedLeads(limit, offset, projectId, visibleServices.join(','));
-        res.json(result);
+    // --- CRM & TICKETS (MODULARIZADO) ---
+    registerCrmRoutes(app, {
+        backofficeAuth,
+        resolveProjectId,
+        resolveServiceId,
+        getVisibleServiceIds,
+        sendJson
     });
 
     // --- RESET DE DEMO CRM ---
@@ -5344,7 +5217,7 @@ Hemos recibido tu pago con Ã©xito.
             if (!sock || typeof sock.groupFetchAllParticipating !== 'function') {
                 return res.status(400).json({
                     success: false,
-                    error: 'No hay un proveedor de WhatsApp (Baileys) activo o conectado para listar grupos. Verifica el cÃ³digo QR en la secciÃ³n de ConexiÃ³n.'
+                    error: 'No hay un proveedor de WhatsApp (Baileys) activo o conectado para listar grupos. Verifica el código QR en la sección de Conexión.'
                 });
             }
 
@@ -5358,95 +5231,6 @@ Hemos recibido tu pago con Ã©xito.
             res.json({ success: true, groups: groupsList });
         } catch (error: any) {
             console.error('[API/Groups] Error al listar grupos:', error);
-            res.status(500).json({ success: false, error: error.message });
-        }
-    });
-
-    // --- CRM ROUTES ---
-    app.get('/api/backoffice/crm/tasks', backofficeAuth, async (req: any, res: any) => {
-        try {
-            const projectId = resolveProjectId(req);
-            const tasks = await depsHistoryHandler.getTasksDashboard(projectId);
-            res.json({ success: true, tasks });
-        } catch (error: any) {
-            res.status(500).json({ success: false, error: error.message });
-        }
-    });
-
-    app.post('/api/backoffice/crm/update-lead', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
-        const { leadId, crm_status, crm_due_date } = req.body;
-        if (!leadId) return res.status(400).json({ success: false, error: 'leadId is required' });
-
-        try {
-            const updateData: any = {};
-            if (crm_status !== undefined) updateData.crm_status = crm_status;
-            if (crm_due_date !== undefined) updateData.crm_due_date = crm_due_date;
-
-            const { error } = await supabase
-                .from('chats')
-                .update(updateData)
-                .eq('id', leadId)
-                .eq('project_id', depsHistoryHandler.PROJECT_IDENTIFIER);
-
-            if (error) throw error;
-            res.json({ success: true });
-        } catch (error: any) {
-            res.status(500).json({ success: false, error: error.message });
-        }
-    });
-
-    /**
-     * Endpoint para derivar chats entre agentes (Humanos o Bot)
-     */
-    app.post('/api/backoffice/chat/assign', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
-        const { chatId, agentId, userId } = req.body;
-        // agentId: 'asistente1', 'asistente2'... (LÃ³gica del Bot)
-        // userId: uuid del usuario humano (LÃ³gica CRM)
-
-        if (!chatId) return res.status(400).json({ success: false, error: 'chatId is required' });
-
-        try {
-            console.log(`[BACKOFFICE] Reasignando chat ${chatId}: agentId=${agentId}, userId=${userId}`);
-
-            // 1. Si se especifica un agente del bot, lo asignamos y activamos el bot
-            if (agentId) {
-                await depsHistoryHandler.setAssignedAgent(chatId, agentId, resolveProjectId(req) || undefined, resolveServiceId(req) || undefined);
-            }
-
-            // 2. Si se especifica un usuario humano (o se limpia con null), actualizamos assigned_to
-            if (userId !== undefined) {
-                await depsHistoryHandler.assignChatToUser(chatId, userId, resolveProjectId(req), resolveServiceId(req));
-
-                // Si se asignÃ³ a un humano, desactivamos el bot automÃ¡ticamente para no interferir
-                if (userId) {
-                    await depsHistoryHandler.toggleBot(chatId, false, resolveProjectId(req), resolveServiceId(req));
-                }
-            }
-
-            res.json({ success: true });
-        } catch (error: any) {
-            console.error('âŒ Error en /api/backoffice/chat/assign:', error);
-            res.status(500).json({ success: false, error: error.message });
-        }
-    });
-
-    app.get('/api/backoffice/crm/config', backofficeAuth, async (req: any, res: any) => {
-        try {
-            const projectId = resolveProjectId(req);
-            const config = await depsHistoryHandler.getSetting('CRM_CONFIG', projectId);
-            res.json({ success: true, config: config ? JSON.parse(config) : null });
-        } catch (error: any) {
-            res.status(500).json({ success: false, error: error.message });
-        }
-    });
-
-    app.post('/api/backoffice/crm/config', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
-        const { config } = req.body;
-        try {
-            const projectId = resolveProjectId(req);
-            await depsHistoryHandler.saveSetting('CRM_CONFIG', JSON.stringify(config), projectId);
-            res.json({ success: true });
-        } catch (error: any) {
             res.status(500).json({ success: false, error: error.message });
         }
     });
