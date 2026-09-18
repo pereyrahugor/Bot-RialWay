@@ -229,6 +229,19 @@ window.backofficeView = {
                 </div>
 
                 <div id="input-area" style="display: none;">
+                    <!-- Banner de Ventana 24h WhatsApp Meta -->
+                    <div id="wa-24h-window-warning" class="wa-window-warning-banner" style="display:none;">
+                        <div class="wa-window-warning-content">
+                            <span class="wa-window-icon-badge"><i class="fas fa-clock-rotate-left"></i></span>
+                            <div class="wa-window-text">
+                                <div class="wa-window-title">Ventana de 24 horas cerrada (WhatsApp Meta)</div>
+                                <div class="wa-window-desc">Han pasado m&aacute;s de 24 hs sin respuesta del cliente. Meta proh&iacute;be texto libre; debes enviar una plantilla aprobada para reabrir la conversaci&oacute;n.</div>
+                            </div>
+                        </div>
+                        <button type="button" class="wa-window-action-btn" onclick="window.toggleMetaTemplatesPopover(event)">
+                            <i class="fab fa-whatsapp"></i> Enviar Plantilla
+                        </button>
+                    </div>
                     <div id="reply-preview-container" style="display:none;">
                         <div class="reply-preview-title"><i class="fas fa-reply"></i> Respondiendo a</div>
                         <div id="reply-preview-text"></div>

@@ -436,16 +436,29 @@ export const processSendMessage = async (
             await depsHistoryHandler.toggleBot(chatId, false, currentProjectId, targetServiceId);
 
             res.json({ success: true, messageId: externalId, fileUrl: file ? fileUrl : undefined });
-        } catch (waError) {
+        } catch (waError: any) {
             console.error('[BACKOFFICE] Error enviando a Whatsapp:', waError);
             // Si falló el envío, igual guardamos pero sin ID externo para que al menos quede el log local, marcado como 'failed'
             await depsHistoryHandler.saveMessage(chatId, 'assistant', finalContent, finalType, undefined, undefined, null, 'whatsapp', currentProjectId, targetServiceId, replyRawPayload, 'failed');
 
-            res.json({
-                success: true,
-                fileUrl: file ? fileUrl : undefined,
-                warning: 'El envÃ­o a WhatsApp fallÃ³ (Â¿Bot conectado?), el mensaje solo se guardÃ³ localmente.'
-            });
+            const errorStr = `${waError?.message || ''} ${JSON.stringify(waError?.response?.data || '')} ${JSON.stringify(waError || '')}`;
+            const is24hWindowError = errorStr.includes('131047') || errorStr.includes('24 hours') || errorStr.includes('Re-engagement');
+
+            if (is24hWindowError) {
+                res.json({
+                    success: false,
+                    is24hExpired: true,
+                    fileUrl: file ? fileUrl : undefined,
+                    error: 'Ventana de 24 horas excedida: Meta no permite mensajes directos si han pasado más de 24 hs desde el último mensaje del cliente. Debes enviar una plantilla autorizada.',
+                    warning: 'Ventana de 24 horas excedida. Por favor, envía una plantilla autorizada para reabrir la conversación.'
+                });
+            } else {
+                res.json({
+                    success: true,
+                    fileUrl: file ? fileUrl : undefined,
+                    warning: 'El envío a WhatsApp falló (¿Bot conectado?), el mensaje solo se guardó localmente.'
+                });
+            }
         }
 
     } catch (e: any) {

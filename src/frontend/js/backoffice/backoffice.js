@@ -1399,6 +1399,124 @@ function updateBotStatusText(enabled) {
     if (mobileLabel) mobileLabel.textContent = isEnabled ? 'Bot: on' : 'Bot: off';
 }
 
+function getWhatsApp24hWindowInfo() {
+    if (!activeChatId) return { isClosed: false, hoursSince: 0 };
+    if (!Array.isArray(allMessages) || allMessages.length === 0) {
+        return { isClosed: true, hoursSince: 999 };
+    }
+    // Buscar el último mensaje recibido del contacto (role: 'user')
+    let lastUserMsg = null;
+    for (let i = allMessages.length - 1; i >= 0; i--) {
+        const m = allMessages[i];
+        if (m && m.role === 'user') {
+            lastUserMsg = m;
+            break;
+        }
+    }
+    if (!lastUserMsg || !lastUserMsg.created_at) {
+        return { isClosed: true, hoursSince: 999 };
+    }
+    const lastTime = new Date(lastUserMsg.created_at).getTime();
+    if (isNaN(lastTime)) {
+        return { isClosed: false, hoursSince: 0 };
+    }
+    const diffMs = Date.now() - lastTime;
+    const hoursSince = Math.floor(diffMs / (1000 * 60 * 60));
+    return {
+        isClosed: diffMs >= 24 * 60 * 60 * 1000,
+        hoursSince,
+        lastUserDate: new Date(lastTime)
+    };
+}
+
+function isWhatsApp24hWindowClosed() {
+    const chat = chats.find(c => c.id === activeChatId);
+    const isBotEnabled = chat ? (chat.bot_enabled === true || chat.bot_enabled === 'true' || chat.bot_enabled === 1 || chat.bot_enabled === '1') : false;
+    if (isBotEnabled) return false;
+    return getWhatsApp24hWindowInfo().isClosed;
+}
+
+function update24hWindowState() {
+    const banner = document.getElementById('wa-24h-window-warning');
+    const input = document.getElementById('message-input');
+    const btn = document.getElementById('send-btn');
+    const attachBtn = document.getElementById('attach-btn');
+    const micBtn = document.getElementById('mic-btn');
+    const metaTemplatesBtn = document.getElementById('meta-templates-btn');
+    const emojiBtn = document.getElementById('emoji-btn');
+    const fileAction = document.getElementById('input-plus-file-action');
+
+    if (!activeChatId) {
+        if (banner) banner.style.display = 'none';
+        if (metaTemplatesBtn) metaTemplatesBtn.classList.remove('meta-templates-btn-highlight');
+        return;
+    }
+
+    const chat = chats.find(c => c.id === activeChatId);
+    const isBotEnabled = chat ? (chat.bot_enabled === true || chat.bot_enabled === 'true' || chat.bot_enabled === 1 || chat.bot_enabled === '1') : false;
+
+    // Si el bot está activo, su estado tiene prioridad sobre la ventana de 24h
+    if (isBotEnabled) {
+        if (banner) banner.style.display = 'none';
+        if (metaTemplatesBtn) metaTemplatesBtn.classList.remove('meta-templates-btn-highlight');
+        return;
+    }
+
+    const info = getWhatsApp24hWindowInfo();
+    if (info.isClosed) {
+        if (banner) {
+            banner.style.display = 'flex';
+            const descEl = banner.querySelector('.wa-window-desc');
+            if (descEl) {
+                if (info.hoursSince >= 999) {
+                    descEl.innerHTML = 'No se registra respuesta previa del cliente en este chat. Meta no permite mensajes directos de texto libre; debes enviar una plantilla autorizada para iniciar la conversaci&oacute;n.';
+                } else {
+                    descEl.innerHTML = `Han pasado <b>${info.hoursSince} horas</b> desde el &uacute;ltimo mensaje del cliente. Meta bloquea el texto libre; debes enviar una plantilla aprobada para reabrir la conversaci&oacute;n.`;
+                }
+            }
+        }
+        if (input) {
+            input.disabled = true;
+            input.placeholder = "Ventana de 24 hs cerrada. Envía una plantilla de Meta.";
+            if (input.parentElement) input.parentElement.style.borderColor = '#f59e0b';
+            input.style.opacity = '0.6';
+        }
+        if (btn) btn.disabled = true;
+        if (attachBtn) attachBtn.disabled = true;
+        if (fileAction) {
+            fileAction.classList.add('disabled');
+            fileAction.setAttribute('aria-disabled', 'true');
+        }
+        if (micBtn) micBtn.disabled = true;
+        if (emojiBtn) emojiBtn.disabled = true;
+        if (metaTemplatesBtn) {
+            metaTemplatesBtn.disabled = false;
+            metaTemplatesBtn.classList.add('meta-templates-btn-highlight');
+            metaTemplatesBtn.title = "¡Ventana de 24 hs cerrada! Haz clic para enviar una plantilla de Meta";
+        }
+    } else {
+        if (banner) banner.style.display = 'none';
+        if (metaTemplatesBtn) {
+            metaTemplatesBtn.classList.remove('meta-templates-btn-highlight');
+            metaTemplatesBtn.title = "Plantillas de Meta";
+        }
+        if (input) {
+            input.disabled = false;
+            input.placeholder = "Escribe un mensaje aquí";
+            if (input.parentElement) input.parentElement.style.borderColor = '#f87171';
+            input.style.opacity = '1';
+        }
+        if (btn) btn.disabled = false;
+        if (attachBtn) attachBtn.disabled = false;
+        if (fileAction) {
+            fileAction.classList.remove('disabled');
+            fileAction.setAttribute('aria-disabled', 'false');
+        }
+        if (micBtn && !_isRecording) micBtn.disabled = false;
+        if (emojiBtn) emojiBtn.disabled = false;
+    }
+}
+
 function updateInputState(botEnabled) {
     const input = document.getElementById('message-input');
     const btn = document.getElementById('send-btn');
@@ -1410,32 +1528,36 @@ function updateInputState(botEnabled) {
 
     console.log(`[UI] Actualizando estado de input. Bot habilitado: ${isBotEnabled}`);
 
-    // Bot activo = todo bloqueado; bot inactivo = todo habilitado
-    input.disabled = isBotEnabled;
-    btn.disabled = isBotEnabled;
-    attachBtn.disabled = false;
-    const fileAction = document.getElementById('input-plus-file-action');
-    if (fileAction) {
-        fileAction.classList.toggle('disabled', isBotEnabled);
-        fileAction.setAttribute('aria-disabled', String(isBotEnabled));
-    }
-    const emojiBtn = document.getElementById('emoji-btn');
-    if (emojiBtn) emojiBtn.disabled = isBotEnabled;
-    const quickMsgBtn = document.getElementById('quick-msg-btn');
-    if (quickMsgBtn) quickMsgBtn.disabled = false; // Siempre habilitado si hay un chat seleccionado
-    const metaTemplatesBtn = document.getElementById('meta-templates-btn');
-    if (metaTemplatesBtn) metaTemplatesBtn.disabled = false; // Siempre habilitado si hay un chat seleccionado
-    const micBtn = document.getElementById('mic-btn');
-    if (micBtn && !_isRecording) micBtn.disabled = isBotEnabled;
-
     if (isBotEnabled) {
+        input.disabled = true;
+        btn.disabled = true;
+        attachBtn.disabled = false;
+        const fileAction = document.getElementById('input-plus-file-action');
+        if (fileAction) {
+            fileAction.classList.toggle('disabled', true);
+            fileAction.setAttribute('aria-disabled', 'true');
+        }
+        const emojiBtn = document.getElementById('emoji-btn');
+        if (emojiBtn) emojiBtn.disabled = true;
+        const quickMsgBtn = document.getElementById('quick-msg-btn');
+        if (quickMsgBtn) quickMsgBtn.disabled = false;
+        const metaTemplatesBtn = document.getElementById('meta-templates-btn');
+        if (metaTemplatesBtn) {
+            metaTemplatesBtn.disabled = false;
+            metaTemplatesBtn.classList.remove('meta-templates-btn-highlight');
+        }
+        const micBtn = document.getElementById('mic-btn');
+        if (micBtn && !_isRecording) micBtn.disabled = true;
+
         input.parentElement.style.borderColor = 'var(--accent)';
         input.style.opacity = '0.6';
         input.placeholder = "Asistente Activo";
+
+        const banner = document.getElementById('wa-24h-window-warning');
+        if (banner) banner.style.display = 'none';
     } else {
-        input.parentElement.style.borderColor = '#f87171';
-        input.style.opacity = '1';
-        input.placeholder = "Escribe un mensaje aquí";
+        // Modo humano: verificar si la ventana de 24h de WhatsApp está vigente o vencida
+        update24hWindowState();
     }
 
     // Refrescar el estado de los mensajes rápidos si el popover está abierto
@@ -1697,6 +1819,7 @@ function renderMessages() {
     initMessageLongPressMenu();
     loadCachedMedia();
     loadFileSizes();
+    update24hWindowState();
 }
 
 function generateMessageHtml(m, isNew = false) {
@@ -2081,6 +2204,21 @@ async function toggleRecording() {
 
 async function startRecording() {
     if (!activeChatId) return;
+    if (isWhatsApp24hWindowClosed()) {
+        if (typeof window.swalAlert === 'function') {
+            window.swalAlert(
+                'Ventana de 24 horas cerrada',
+                'Han pasado más de 24 horas desde la última respuesta del cliente. Meta prohíbe el envío de audios o mensajes libres fuera de esta ventana.\n\nPor favor, utiliza una Plantilla de Meta aprobada para reabrir la conversación.',
+                'warning'
+            );
+        } else if (typeof window.showToast === 'function') {
+            window.showToast('Ventana de 24 hs cerrada. Envía una plantilla de Meta.', 'warning');
+        }
+        if (typeof window.toggleMetaTemplatesPopover === 'function') {
+            window.toggleMetaTemplatesPopover();
+        }
+        return;
+    }
     try {
         _isAudioCancelled = false;
         _audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -2224,6 +2362,23 @@ async function sendMessage() {
     const content = input.value.trim();
     if (!content && !selectedFile) { isSending = false; return; }
     if (!activeChatId) { isSending = false; return; }
+
+    if (isWhatsApp24hWindowClosed()) {
+        isSending = false;
+        if (typeof window.swalAlert === 'function') {
+            window.swalAlert(
+                'Ventana de 24 horas cerrada',
+                'Han pasado más de 24 horas desde la última respuesta del cliente. Meta no permite enviar mensajes de texto libre o archivos fuera de esta ventana.\n\nPor favor, utiliza una Plantilla de Meta autorizada para reabrir la conversación.',
+                'warning'
+            );
+        } else if (typeof window.showToast === 'function') {
+            window.showToast('Ventana de 24 hs cerrada. Envía una plantilla de Meta.', 'warning');
+        }
+        if (typeof window.toggleMetaTemplatesPopover === 'function') {
+            window.toggleMetaTemplatesPopover();
+        }
+        return;
+    }
 
     const token = localStorage.getItem('backoffice_token');
     const chatId = activeChatId;
