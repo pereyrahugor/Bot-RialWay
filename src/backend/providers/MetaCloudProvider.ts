@@ -456,6 +456,8 @@ class MetaCloudProvider extends ProviderClass {
             }
         };
 
+        console.log(`📤 [MetaCloudProvider] Enviando plantilla "${templateName}" (${languageCode}) a ${cleanNumber} (PhoneID: ${phone_number_id})...`);
+
         try {
             const response = await axios.post(url, body, {
                 headers: {
@@ -463,6 +465,8 @@ class MetaCloudProvider extends ProviderClass {
                     'Content-Type': 'application/json'
                 }
             });
+            const wamid = response.data?.messages?.[0]?.id || 'N/A';
+            console.log(`✅ [MetaCloudProvider] Plantilla enviada con éxito a ${cleanNumber}. WAMID: ${wamid}`);
             return response.data;
         } catch (error: any) {
             const errorDetail = error?.response?.data || error.message;
@@ -1146,6 +1150,8 @@ class MetaCloudProvider extends ProviderClass {
                                 const projectId = resolvedProject || HistoryHandler.PROJECT_IDENTIFIER;
                                 const serviceId = resolvedService || HistoryHandler.SERVICE_IDENTIFIER;
 
+                                console.log(`📡 [MetaCloudProvider] Estado de entrega: ${status.status} para ${status.recipient_id} (WAMID: ${status.id})`);
+
                                 if (status.status === 'failed' && status.errors) {
                                     for (const err of status.errors) {
                                         console.error(`❌ [MetaCloudProvider] Error de entrega para ${status.recipient_id} (ID: ${status.id}): [Código ${err.code}] ${err.message} - ${err.error_data?.details || ''}`);
@@ -1309,6 +1315,8 @@ class MetaCloudProvider extends ProviderClass {
                                 console.log(`📋 [MetaCloudProvider] ECO/HISTORY (Assistant) DETECTADO. Field: ${fieldName}. De: ${msg.from} Para: ${msg.recipient_id || msg.to || 'N/A'}. Result chatId: ${recipientId}`);
                             } else if (fieldName === 'history') {
                                 console.log(`📋 [MetaCloudProvider] HISTORY (User) DETECTADO. De: ${msg.from}. Result chatId: ${msg.from}`);
+                            } else {
+                                console.log(`📩 [MetaCloudProvider] MENSAJE ENTRANTE de: ${msg.from} -> "${messageBody || type}" (MsgID: ${msg.id})`);
                             }
 
                             // Forzar el body correcto para eventos multimedia/sistema de Builderbot para que coincida con los disparadores

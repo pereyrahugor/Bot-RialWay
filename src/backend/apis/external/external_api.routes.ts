@@ -530,10 +530,13 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
                     });
                 }
 
+                console.log(`🚀 [API_EXTERNAL] /api/v1/send-template -> Enviando plantilla "${templateName}" a ${firstPhone} (Lote: ${data.length} contacto(s))`);
+
                 const resApi = await provider.sendTemplate(firstPhone, templateName, finalLanguage, components, { projectId: resolvedProjectId, serviceId: resolvedServiceId });
                 
                 if (resApi?.messages) {
                     firstMsgId = resApi.messages[0].id;
+                    console.log(`✅ [API_EXTERNAL] /api/v1/send-template -> Aceptado por Meta para ${firstPhone}. WAMID: ${firstMsgId}`);
                     
                     // Renderizar el texto para el historial
                     let renderedText = templateText;
