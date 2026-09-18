@@ -68,6 +68,167 @@ async function logApiRequest(data: {
 }
 
 /**
+ * Helper para decodificar y guardar archivos Base64 en uploads/
+ */
+function saveBase64Media(base64Data: string, rawFilename?: string, fallbackType: string = 'document'): { filePath: string, filename: string, mimeType: string } {
+    let cleanBase64 = String(base64Data || '').trim();
+    let detectedMime = '';
+
+    if (cleanBase64.includes(';base64,')) {
+        const parts = cleanBase64.split(';base64,');
+        detectedMime = parts[0].replace(/^data:/, '').trim();
+        cleanBase64 = parts[1].trim();
+    }
+
+    const buffer = Buffer.from(cleanBase64, 'base64');
+    
+    let ext = '';
+    if (rawFilename && path.extname(rawFilename)) {
+        ext = path.extname(rawFilename);
+    } else if (detectedMime) {
+        if (detectedMime.includes('pdf')) ext = '.pdf';
+        else if (detectedMime.includes('jpeg') || detectedMime.includes('jpg')) ext = '.jpg';
+        else if (detectedMime.includes('png')) ext = '.png';
+        else if (detectedMime.includes('webp')) ext = '.webp';
+        else if (detectedMime.includes('mp4')) ext = '.mp4';
+        else if (detectedMime.includes('ogg')) ext = '.ogg';
+        else if (detectedMime.includes('mp3') || detectedMime.includes('mpeg')) ext = '.mp3';
+        else if (detectedMime.includes('excel') || detectedMime.includes('spreadsheet')) ext = '.xlsx';
+    }
+    if (!ext) {
+        if (fallbackType === 'image') ext = '.jpg';
+        else if (fallbackType === 'video') ext = '.mp4';
+        else if (fallbackType === 'audio') ext = '.mp3';
+        else ext = '.pdf';
+    }
+
+    const safeBaseName = rawFilename ? path.basename(rawFilename, path.extname(rawFilename)).replace(/[^a-zA-Z0-9_-]/g, '_') : `file_${Date.now()}`;
+    const filename = `${safeBaseName}${ext}`;
+    const uploadDir = path.join(process.cwd(), 'uploads');
+    if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    const tempFileName = `${Date.now()}-${Math.round(Math.random() * 1E9)}-${filename}`;
+    const filePath = path.join(uploadDir, tempFileName);
+    fs.writeFileSync(filePath, buffer);
+
+    return { filePath, filename, mimeType: detectedMime };
+}
+
+/**
+ * Sube un archivo local a Meta Cloud API o genera su URL pública de descarga como fallback
+ */
+async function uploadOrLinkLocalFile(
+    localPath: string,
+    mimeType: string,
+    filename: string,
+    formatType: string,
+    provider: any,
+    projectId: string,
+    serviceId?: string | null
+): Promise<any> {
+    let uploadedMediaId: string | null = null;
+    try {
+        const tenantOnboarding = await HistoryHandler.getMetaOnboardingData(projectId, false, serviceId);
+        const tenantSendConfig = {
+            phone_number_id: tenantOnboarding?.phoneNumberId || tenantOnboarding?.whatsappNumberId || tenantOnboarding?.phone_number_id || provider.config?.phone_number_id,
+            access_token: tenantOnboarding?.whatsappToken || tenantOnboarding?.access_token || provider.config?.access_token
+        };
+        if (typeof provider.uploadMedia === 'function') {
+            uploadedMediaId = await provider.uploadMedia(localPath, mimeType, filename, tenantSendConfig);
+        }
+    } catch (upErr: any) {
+        console.warn('⚠️ [API_EXTERNAL] Falló subida directa a Meta, usando fallback de link local:', upErr.message);
+    }
+
+    if (uploadedMediaId) {
+        const mediaParam: any = { id: uploadedMediaId };
+        if (formatType === 'document') mediaParam.filename = filename;
+        return {
+            type: 'HEADER',
+            parameters: [{ type: formatType, [formatType]: mediaParam }]
+        };
+    }
+
+    // Fallback: Servir con URL local pública si no se pudo subir directamente a Meta
+    let baseUrl = process.env.PROJECT_URL || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : '');
+    if (baseUrl && !baseUrl.startsWith('http')) baseUrl = `https://${baseUrl}`;
+    const mediaParam: any = { link: `${baseUrl.replace(/\/$/, '')}/uploads/${filename}` };
+    if (formatType === 'document') mediaParam.filename = filename;
+    return {
+        type: 'HEADER',
+        parameters: [{ type: formatType, [formatType]: mediaParam }]
+    };
+}
+
+/**
+ * Resuelve y genera el componente HEADER para plantillas multimedia (documento, imagen, video)
+ */
+async function buildTemplateHeaderComponent(
+    headerFormat: string | undefined,
+    itemMedia: any,
+    rootMedia: any,
+    provider: any,
+    projectId: string,
+    serviceId?: string | null
+): Promise<any | null> {
+    if (!headerFormat) return null;
+    const formatUpper = String(headerFormat).toUpperCase();
+    if (!['DOCUMENT', 'IMAGE', 'VIDEO'].includes(formatUpper)) return null;
+
+    const mediaSource = itemMedia || rootMedia;
+    if (!mediaSource) return null;
+
+    const formatType = formatUpper.toLowerCase(); // 'document' | 'image' | 'video'
+    let rawLink = typeof mediaSource === 'string' ? mediaSource : (mediaSource.link || mediaSource.url || null);
+    const base64Data = typeof mediaSource === 'object' ? (mediaSource.base64 || mediaSource.data) : null;
+    const directMediaId = typeof mediaSource === 'object' ? mediaSource.id : null;
+    let customFilename = typeof mediaSource === 'object' ? (mediaSource.filename || mediaSource.fileName || mediaSource.name) : undefined;
+
+    // Si es un string que parece base64 directo
+    if (typeof mediaSource === 'string' && !mediaSource.startsWith('http://') && !mediaSource.startsWith('https://') && mediaSource.length > 100) {
+        const decoded = saveBase64Media(mediaSource, customFilename, formatType);
+        return await uploadOrLinkLocalFile(decoded.filePath, decoded.mimeType, decoded.filename, formatType, provider, projectId, serviceId);
+    }
+
+    // 1. Media ID de Meta ya generado
+    if (directMediaId) {
+        const mediaParam: any = { id: String(directMediaId) };
+        if (formatType === 'document' && customFilename) mediaParam.filename = customFilename;
+        return {
+            type: 'HEADER',
+            parameters: [{ type: formatType, [formatType]: mediaParam }]
+        };
+    }
+
+    // 2. Base64
+    if (base64Data) {
+        const decoded = saveBase64Media(base64Data, customFilename, formatType);
+        return await uploadOrLinkLocalFile(decoded.filePath, decoded.mimeType, decoded.filename, formatType, provider, projectId, serviceId);
+    }
+
+    // 3. Link / URL directa
+    if (rawLink) {
+        if (!customFilename && formatType === 'document') {
+            try {
+                const urlPath = new URL(rawLink).pathname;
+                customFilename = path.basename(urlPath);
+            } catch (_) {
+                customFilename = 'documento.pdf';
+            }
+        }
+        const mediaParam: any = { link: rawLink };
+        if (formatType === 'document' && customFilename) mediaParam.filename = customFilename;
+        return {
+            type: 'HEADER',
+            parameters: [{ type: formatType, [formatType]: mediaParam }]
+        };
+    }
+
+    return null;
+}
+
+/**
  * Registra las rutas de la API Externa en la instancia de Express.
  */
 export const registerExternalApiRoutes = (app: any, deps: any) => {
@@ -173,8 +334,8 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
     });
 
     // --- 2. ENVÍO DE PLANTILLA (USA EL TOKEN) ---
-    app.post('/api/v1/send-template', bodyParser.json(), async (req: any, res: any) => {
-        const { token, template_id, data, languageCode = 'es' } = req.body;
+    app.post('/api/v1/send-template', bodyParser.json({ limit: '50mb' }), async (req: any, res: any) => {
+        const { token, template_id, data, document, media, languageCode = 'es' } = req.body;
         
         try {
             if (!token || !template_id || !data || !Array.isArray(data)) {
@@ -239,6 +400,11 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
             const templateName = foundTemplate.name;
             const finalLanguage = foundTemplate.language || languageCode || 'es';
 
+            // --- VALIDACIÓN DE CABECERA MULTIMEDIA (HEADER) ---
+            const headerComponentDef = foundTemplate.components?.find((c: any) => c.type === 'HEADER');
+            const headerFormat = headerComponentDef?.format; // 'DOCUMENT' | 'IMAGE' | 'VIDEO'
+            const requiresMediaHeader = ['DOCUMENT', 'IMAGE', 'VIDEO'].includes(String(headerFormat || '').toUpperCase());
+
             // --- VALIDACIÓN DE VARIABLES ---
             const bodyComponent = foundTemplate.components?.find((c: any) => c.type === 'BODY');
             const templateText = bodyComponent?.text || '';
@@ -277,6 +443,41 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
                         }
                     });
                 }
+
+                // Validar si la plantilla exige archivo multimedia en la cabecera
+                if (requiresMediaHeader) {
+                    const sampleMedia = data[0]?.document || data[0]?.media || data[0]?.header || document || media;
+                    if (!sampleMedia) {
+                        const errorMsg = `La plantilla '${templateName}' requiere un archivo multimedia en la cabecera (${headerFormat}). Debes incluir 'document' con { link: "https://..." } o { base64: "...", filename: "archivo.pdf" }.`;
+                        await logApiRequest({ 
+                            token, 
+                            endpoint: '/api/v1/send-template', 
+                            status: 'error', 
+                            error: errorMsg, 
+                            req,
+                            projectId: resolvedProjectId,
+                            serviceId: resolvedServiceId
+                        });
+                        
+                        return res.status(400).json({ 
+                            success: false, 
+                            error: errorMsg,
+                            expected_format: {
+                                template_id: template_id,
+                                document: {
+                                    link: "https://tudominio.com/archivo.pdf",
+                                    filename: "Comprobante.pdf"
+                                },
+                                data: [
+                                    {
+                                        phone: "54911...",
+                                        variables: expectedVars.reduce((acc: any, curr: any) => ({ ...acc, [curr]: "valor_ejemplo" }), {})
+                                    }
+                                ]
+                            }
+                        });
+                    }
+                }
             }
 
             // --- VALIDACIÓN Y ENVÍO DEL PRIMER MENSAJE ---
@@ -293,10 +494,28 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
                     text: String(value)
                 })) : [];
 
-                const components = parameters.length > 0 ? [{
-                    type: 'BODY',
-                    parameters: parameters
-                }] : [];
+                const components: any[] = [];
+
+                if (requiresMediaHeader) {
+                    const headerComp = await buildTemplateHeaderComponent(
+                        headerFormat,
+                        firstItem.document || firstItem.media || firstItem.header,
+                        document || media,
+                        provider,
+                        resolvedProjectId,
+                        resolvedServiceId
+                    );
+                    if (headerComp) {
+                        components.push(headerComp);
+                    }
+                }
+
+                if (parameters.length > 0) {
+                    components.push({
+                        type: 'BODY',
+                        parameters: parameters
+                    });
+                }
 
                 const resApi = await provider.sendTemplate(firstPhone, templateName, finalLanguage, components, { projectId: resolvedProjectId, serviceId: resolvedServiceId });
                 
@@ -312,7 +531,11 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
                         }
                     }
 
-                    await HistoryHandler.saveMessage(firstPhone, 'assistant', `[API Externa: ${templateName}]\n${renderedText}`, 'text', null, null, firstMsgId, 'whatsapp', resolvedProjectId, resolvedServiceId || undefined);
+                    const firstMediaInfo = firstItem.document || firstItem.media || document || media;
+                    const mediaName = typeof firstMediaInfo === 'object' ? (firstMediaInfo.filename || firstMediaInfo.link || 'archivo') : '';
+                    const historyPrefix = mediaName ? `[API Externa: ${templateName} | Adjunto: ${mediaName}]` : `[API Externa: ${templateName}]`;
+
+                    await HistoryHandler.saveMessage(firstPhone, 'assistant', `${historyPrefix}\n${renderedText}`, 'text', null, null, firstMsgId, 'whatsapp', resolvedProjectId, resolvedServiceId || undefined);
                 } else {
                     throw new Error("Respuesta vacía o inesperada de Meta");
                 }
@@ -370,7 +593,18 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
                 });
 
                 // Procesamos el RESTO de la lista (del índice 1 en adelante)
-                processExternalBulk(provider, templateName, finalLanguage, data.slice(1), token, templateText, resolvedProjectId, resolvedServiceId);
+                processExternalBulk(
+                    provider, 
+                    templateName, 
+                    finalLanguage, 
+                    data.slice(1), 
+                    token, 
+                    templateText, 
+                    resolvedProjectId, 
+                    resolvedServiceId,
+                    requiresMediaHeader ? headerFormat : undefined,
+                    document || media
+                );
             }
 
         } catch (err: any) {
@@ -381,54 +615,6 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
             }
         }
     });
-
-    /**
-     * Helper para decodificar y guardar archivos Base64 en uploads/
-     */
-    function saveBase64Media(base64Data: string, rawFilename?: string, fallbackType: string = 'document'): { filePath: string, filename: string, mimeType: string } {
-        let cleanBase64 = String(base64Data || '').trim();
-        let detectedMime = '';
-
-        if (cleanBase64.includes(';base64,')) {
-            const parts = cleanBase64.split(';base64,');
-            detectedMime = parts[0].replace(/^data:/, '').trim();
-            cleanBase64 = parts[1].trim();
-        }
-
-        const buffer = Buffer.from(cleanBase64, 'base64');
-        
-        let ext = '';
-        if (rawFilename && path.extname(rawFilename)) {
-            ext = path.extname(rawFilename);
-        } else if (detectedMime) {
-            if (detectedMime.includes('pdf')) ext = '.pdf';
-            else if (detectedMime.includes('jpeg') || detectedMime.includes('jpg')) ext = '.jpg';
-            else if (detectedMime.includes('png')) ext = '.png';
-            else if (detectedMime.includes('webp')) ext = '.webp';
-            else if (detectedMime.includes('mp4')) ext = '.mp4';
-            else if (detectedMime.includes('ogg')) ext = '.ogg';
-            else if (detectedMime.includes('mp3') || detectedMime.includes('mpeg')) ext = '.mp3';
-            else if (detectedMime.includes('excel') || detectedMime.includes('spreadsheet')) ext = '.xlsx';
-        }
-        if (!ext) {
-            if (fallbackType === 'image') ext = '.jpg';
-            else if (fallbackType === 'video') ext = '.mp4';
-            else if (fallbackType === 'audio') ext = '.mp3';
-            else ext = '.pdf';
-        }
-
-        const safeBaseName = rawFilename ? path.basename(rawFilename, path.extname(rawFilename)).replace(/[^a-zA-Z0-9_-]/g, '_') : `file_${Date.now()}`;
-        const filename = `${safeBaseName}${ext}`;
-        const uploadDir = path.join(process.cwd(), 'uploads');
-        if (!fs.existsSync(uploadDir)) {
-            fs.mkdirSync(uploadDir, { recursive: true });
-        }
-        const tempFileName = `${Date.now()}-${Math.round(Math.random() * 1E9)}-${filename}`;
-        const filePath = path.join(uploadDir, tempFileName);
-        fs.writeFileSync(filePath, buffer);
-
-        return { filePath, filename, mimeType: detectedMime };
-    }
 
     /**
      * Middleware dual para /api/v1/send-message (soporta JSON y multipart/form-data)
@@ -1197,7 +1383,9 @@ async function processExternalBulk(
     token?: string, 
     templateText: string = '',
     projectId?: string,
-    serviceId?: string | null
+    serviceId?: string | null,
+    headerFormat?: string,
+    rootMedia?: any
 ) {
     let sent = 0;
     let errors = 0;
@@ -1215,10 +1403,28 @@ async function processExternalBulk(
                 text: String(value)
             })) : [];
 
-            const components = parameters.length > 0 ? [{
-                type: 'BODY',
-                parameters: parameters
-            }] : [];
+            const components: any[] = [];
+
+            if (headerFormat) {
+                const headerComp = await buildTemplateHeaderComponent(
+                    headerFormat,
+                    item.document || item.media || item.header,
+                    rootMedia,
+                    provider,
+                    projectId || '',
+                    serviceId
+                );
+                if (headerComp) {
+                    components.push(headerComp);
+                }
+            }
+
+            if (parameters.length > 0) {
+                components.push({
+                    type: 'BODY',
+                    parameters: parameters
+                });
+            }
 
             const resApi = await provider.sendTemplate(phone, templateName, languageCode, components, { isBulk: true, projectId, serviceId });
             
@@ -1235,8 +1441,12 @@ async function processExternalBulk(
                     }
                 }
 
+                const itemMediaInfo = item.document || item.media || rootMedia;
+                const mediaName = typeof itemMediaInfo === 'object' ? (itemMediaInfo.filename || itemMediaInfo.link || 'archivo') : '';
+                const historyPrefix = mediaName ? `[API Externa: ${templateName} | Adjunto: ${mediaName}]` : `[API Externa: ${templateName}]`;
+
                 // Guardar en el historial para que el operador lo vea
-                await HistoryHandler.saveMessage(phone, 'assistant', `[API Externa: ${templateName}]\n${renderedText}`, 'text', null, null, msgId, 'whatsapp', projectId, serviceId || undefined);
+                await HistoryHandler.saveMessage(phone, 'assistant', `${historyPrefix}\n${renderedText}`, 'text', null, null, msgId, 'whatsapp', projectId, serviceId || undefined);
             } else {
                 errors++;
             }
