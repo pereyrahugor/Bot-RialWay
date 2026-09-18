@@ -3732,13 +3732,14 @@ export class HistoryHandler {
             if (error) throw error;
 
             // --- PASO ADICIONAL: Sincronizar con la routing_table para habilitar webhooks globales ---
-            // Solo si tenemos un dominio público configurado
-            // Priorizar el dominio estático de Railway (*.up.railway.app) para evitar fallos de DNS en dominios personalizados
-            const publicDomain = (process.env.RAILWAY_STATIC_URL && process.env.RAILWAY_STATIC_URL.includes('.up.railway.app'))
-                ? process.env.RAILWAY_STATIC_URL
-                : (process.env.RAILWAY_PUBLIC_DOMAIN && process.env.RAILWAY_PUBLIC_DOMAIN.includes('.up.railway.app'))
-                    ? process.env.RAILWAY_PUBLIC_DOMAIN
-                    : (process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PROJECT_URL);
+            // Priorizar PROJECT_URL explícito (en variables de entorno o guardado en settings) para soportar dominios personalizados
+            const explicitProjectUrl = process.env.PROJECT_URL || (await this.getSetting('PROJECT_URL', targetProjectId, targetServiceId));
+            const publicDomain = explicitProjectUrl
+                || ((process.env.RAILWAY_STATIC_URL && process.env.RAILWAY_STATIC_URL.includes('.up.railway.app'))
+                    ? process.env.RAILWAY_STATIC_URL
+                    : (process.env.RAILWAY_PUBLIC_DOMAIN && process.env.RAILWAY_PUBLIC_DOMAIN.includes('.up.railway.app'))
+                        ? process.env.RAILWAY_PUBLIC_DOMAIN
+                        : (process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PROJECT_URL));
             if (publicDomain && phoneId) {
                 let projectUrl = publicDomain.startsWith('http') ? publicDomain : `https://${publicDomain}`;
                 // Asegurar que termina sin barra lateral para consistencia
@@ -3866,11 +3867,14 @@ export class HistoryHandler {
             const onboardingData = await this.getMetaOnboardingData();
             if (!onboardingData || !onboardingData.phone_number_id) return;
 
-            const publicDomain = (process.env.RAILWAY_STATIC_URL && process.env.RAILWAY_STATIC_URL.includes('.up.railway.app'))
-                ? process.env.RAILWAY_STATIC_URL
-                : (process.env.RAILWAY_PUBLIC_DOMAIN && process.env.RAILWAY_PUBLIC_DOMAIN.includes('.up.railway.app'))
-                    ? process.env.RAILWAY_PUBLIC_DOMAIN
-                    : (process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PROJECT_URL);
+            // Priorizar PROJECT_URL explícito (en variables de entorno o guardado en settings)
+            const explicitProjectUrl = process.env.PROJECT_URL || (await this.getSetting('PROJECT_URL', this.PROJECT_IDENTIFIER, this.SERVICE_IDENTIFIER));
+            const publicDomain = explicitProjectUrl
+                || ((process.env.RAILWAY_STATIC_URL && process.env.RAILWAY_STATIC_URL.includes('.up.railway.app'))
+                    ? process.env.RAILWAY_STATIC_URL
+                    : (process.env.RAILWAY_PUBLIC_DOMAIN && process.env.RAILWAY_PUBLIC_DOMAIN.includes('.up.railway.app'))
+                        ? process.env.RAILWAY_PUBLIC_DOMAIN
+                        : (process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PROJECT_URL));
 
             if (publicDomain) {
                 let projectUrl = publicDomain.startsWith('http')
@@ -4195,11 +4199,14 @@ export class HistoryHandler {
 
             // --- PASO ADICIONAL: Si configuramos IDs de Meta, registrar en la routing_table para triangulación ---
             if ((key === 'FACEBOOK_PAGE_ID' || key === 'INSTAGRAM_BUSINESS_ID') && value) {
-                const publicDomain = (process.env.RAILWAY_STATIC_URL && process.env.RAILWAY_STATIC_URL.includes('.up.railway.app'))
-                    ? process.env.RAILWAY_STATIC_URL
-                    : (process.env.RAILWAY_PUBLIC_DOMAIN && process.env.RAILWAY_PUBLIC_DOMAIN.includes('.up.railway.app'))
-                        ? process.env.RAILWAY_PUBLIC_DOMAIN
-                        : (process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PROJECT_URL);
+                // Priorizar PROJECT_URL explícito (en variables de entorno o guardado en settings)
+                const explicitProjectUrl = process.env.PROJECT_URL || (await this.getSetting('PROJECT_URL', targetProjectId, targetServiceId));
+                const publicDomain = explicitProjectUrl
+                    || ((process.env.RAILWAY_STATIC_URL && process.env.RAILWAY_STATIC_URL.includes('.up.railway.app'))
+                        ? process.env.RAILWAY_STATIC_URL
+                        : (process.env.RAILWAY_PUBLIC_DOMAIN && process.env.RAILWAY_PUBLIC_DOMAIN.includes('.up.railway.app'))
+                            ? process.env.RAILWAY_PUBLIC_DOMAIN
+                            : (process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PROJECT_URL));
                 if (publicDomain && value) {
                     let projectUrl = publicDomain.startsWith('http')
                         ? publicDomain

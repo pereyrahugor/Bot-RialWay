@@ -79,10 +79,14 @@ async function main() {
 
         const { data: allDomains } = await domainQuery;
 
-        // Priorizar siempre el dominio estático nativo de Railway (*.up.railway.app) ya que no depende de DNS personalizados
+        // Priorizar PROJECT_URL explícito si existe
+        const explicitProjectUrl = allDomains?.find(d => d.key === 'PROJECT_URL')?.value;
         const staticRailwayDomain = allDomains?.find(d => d.value && d.value.includes('.up.railway.app'));
 
-        if (staticRailwayDomain?.value) {
+        if (explicitProjectUrl) {
+            projectUrl = explicitProjectUrl.startsWith("http") ? explicitProjectUrl : `https://${explicitProjectUrl}`;
+            console.log(`   👉 Dominio PROJECT_URL explícito detectado: ${projectUrl}`);
+        } else if (staticRailwayDomain?.value) {
             const domain = staticRailwayDomain.value;
             projectUrl = domain.startsWith("http") ? domain : `https://${domain}`;
             console.log(`   👉 Dominio Estático Railway detectado (*.up.railway.app): ${projectUrl}`);
