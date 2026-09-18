@@ -133,6 +133,9 @@ window.metaView = (() => {
                                             <h2 id="detail-tpl-name" class="tpl-name-compact">Nombre de Plantilla</h2>
                                             <div class="tpl-detail-badges" style="margin-top:4px;">
                                                 <div id="detail-tpl-status" class="meta-card-tag" style="position:static; transform:none;">ESTADO</div>
+                                                <span id="detail-tpl-id-badge" class="tpl-info-badge" style="cursor:pointer; font-family:monospace; font-weight:600; background:rgba(6,104,225,0.12); color:#0099ff; border:1px solid rgba(0,153,255,0.25);" title="Click para copiar Template ID" onclick="navigator.clipboard.writeText(this.dataset.id || ''); if(window.showToast) showToast('ID copiado: ' + (this.dataset.id || ''), 'success');">
+                                                    <i class="fas fa-fingerprint"></i> <span id="detail-tpl-id-text">ID: --</span> <i class="fas fa-copy" style="font-size:0.75em; margin-left:3px; opacity:0.8;"></i>
+                                                </span>
                                                 <span id="detail-tpl-lang-badge" class="tpl-info-badge"><i class="fas fa-globe"></i> ES</span>
                                                 <span id="detail-tpl-cat-badge" class="tpl-info-badge"><i class="fas fa-tag"></i> CATEGORIA</span>
                                             </div>
@@ -741,7 +744,12 @@ window.metaView = (() => {
             const statusClass = t.status === 'APPROVED' ? 'meta-status-approved' : (t.status === 'REJECTED' ? 'meta-status-rejected' : 'meta-status-pending');
             return `
                 <button type="button" class="meta-template-row meta-card ${cardClass}" onclick="showTemplateDetail('${escapeTemplateArg(t.id || t.name)}','${escapeTemplateArg(t.language)}')">
-                    <span class="meta-row-name">${escapeTemplateText(t.name)}</span>
+                    <span class="meta-row-name" style="display:flex; flex-direction:column; gap:2px; min-width:0;">
+                        <span style="font-weight:700; font-size:0.85rem; color:var(--text-main); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escapeTemplateText(t.name)}">${escapeTemplateText(t.name)}</span>
+                        <span style="font-size:0.72rem; color:var(--text-muted); font-family:monospace; font-weight:normal; display:inline-flex; align-items:center; gap:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="Template ID: ${escapeTemplateText(t.id || 'N/A')}">
+                            <i class="fas fa-fingerprint" style="color:#0099ff; opacity:0.85;"></i> ID: ${escapeTemplateText(t.id || 'N/A')}
+                        </span>
+                    </span>
                     <span class="meta-row-category">${escapeTemplateText(t.category || '--')}</span>
                     <span class="meta-row-language">
                         <strong>${escapeTemplateText((t.language || '').toUpperCase() || '--')}</strong>
@@ -887,9 +895,12 @@ window.metaView = (() => {
                 <div class="meta-template-row meta-card meta-card-approved" style="cursor:default; display:grid; grid-template-columns: ${gridColumns}; align-items:center; gap:12px; padding:14px 18px;">
                     <div style="min-width:0; overflow:hidden;">
                         <span class="meta-row-name" title="${escapeTemplateText(t.name)}" style="font-weight:700; font-size:0.92rem; color:var(--text-main); display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeTemplateText(t.name)}</span>
-                        <div style="margin-top:4px;">
+                        <div style="margin-top:4px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
                             <span style="background:rgba(0,153,255,0.1); color:#0099FF; border:1px solid rgba(0,153,255,0.22); padding:2px 8px; border-radius:6px; font-size:0.75rem; font-weight:600; display:inline-flex; align-items:center; gap:5px; max-width:100%;" title="${escapeTemplateText(t.originServiceName)}">
                                 <i class="fas fa-mobile-alt" style="flex-shrink:0;"></i> <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeTemplateText(t.originServiceName)}</span>
+                            </span>
+                            <span style="background:rgba(255,255,255,0.06); color:var(--text-muted); border:1px solid rgba(255,255,255,0.1); padding:2px 8px; border-radius:6px; font-size:0.72rem; font-family:monospace;" title="Template ID: ${escapeTemplateText(t.id || 'N/A')}">
+                                <i class="fas fa-fingerprint" style="color:#0099ff; opacity:0.85;"></i> ID: ${escapeTemplateText(t.id || 'N/A')}
                             </span>
                         </div>
                     </div>
@@ -978,6 +989,12 @@ window.metaView = (() => {
         switchMetaTab('detail');
 
         document.getElementById('detail-tpl-name').innerText = template.name;
+        const idBadge = document.getElementById('detail-tpl-id-badge');
+        const idText  = document.getElementById('detail-tpl-id-text');
+        if (idBadge && idText) {
+            idBadge.dataset.id = template.id || '';
+            idText.innerText   = `ID: ${template.id || 'N/A'}`;
+        }
         document.getElementById('detail-tpl-lang-badge').innerHTML = `<i class="fas fa-globe"></i> ${template.language.toUpperCase()}`;
         document.getElementById('detail-tpl-cat-badge').innerHTML  = `<i class="fas fa-tag"></i> ${template.category}`;
 
