@@ -91,18 +91,12 @@ window.metaView = (() => {
 
                         <!-- Grid de plantillas propias -->
                         <div id="view-my-templates" class="meta-grid">
-                            <div class="text-center py-10 opacity-50" style="grid-column:1/-1;">
-                                <i class="fas fa-circle-notch fa-spin text-3xl text-accent-bright"></i>
-                                <p class="text-sm text-secondary-content mt-3">Sincronizando con Meta Cloud...</p>
-                            </div>
+                            <div style="grid-column:1/-1;">${typeof batLoaderHtml === 'function' ? batLoaderHtml('Sincronizando con Meta Cloud...') : '<div class="text-center py-10 opacity-50"><i class="fas fa-circle-notch fa-spin text-3xl text-accent-bright"></i><p class="text-sm text-secondary-content mt-3">Sincronizando con Meta Cloud...</p></div>'}</div>
                         </div>
 
                         <!-- Grid de plantillas de otras líneas del proyecto -->
                         <div id="view-project-templates" class="meta-grid" style="display:none; height:100%; min-height:0; overflow:hidden;">
-                            <div class="text-center py-10 opacity-50" style="grid-column:1/-1;">
-                                <i class="fas fa-circle-notch fa-spin text-3xl text-accent-bright"></i>
-                                <p class="text-sm text-secondary-content mt-3">Consultando plantillas de otras líneas...</p>
-                            </div>
+                            <div style="grid-column:1/-1;">${typeof batLoaderHtml === 'function' ? batLoaderHtml('Consultando plantillas de otras líneas...') : '<div class="text-center py-10 opacity-50"><i class="fas fa-circle-notch fa-spin text-3xl text-accent-bright"></i><p class="text-sm text-secondary-content mt-3">Consultando plantillas de otras líneas...</p></div>'}</div>
                         </div>
 
                         <!-- Detalle de plantilla -->
@@ -671,10 +665,7 @@ window.metaView = (() => {
         const container = document.getElementById('view-my-templates');
         if (!container) return;
         container.innerHTML = `
-            <div class="text-center py-10 opacity-50" style="grid-column:1/-1;">
-                <i class="fas fa-circle-notch fa-spin text-3xl text-accent-bright"></i>
-                <p class="text-sm text-secondary-content mt-3">Sincronizando con Meta Cloud...</p>
-            </div>`;
+            <div style="grid-column:1/-1;">${typeof batLoaderHtml === 'function' ? batLoaderHtml('Sincronizando con Meta Cloud...') : '<div class="text-center py-10 opacity-50"><i class="fas fa-circle-notch fa-spin text-3xl text-accent-bright"></i><p class="text-sm text-secondary-content mt-3">Sincronizando con Meta Cloud...</p></div>'}</div>`;
         try {
             const params = new URLSearchParams({ token: _token });
             if (window.railwayProjectId) params.set('projectId', window.railwayProjectId);
@@ -847,11 +838,7 @@ window.metaView = (() => {
     async function loadProjectTemplates() {
         const container = document.getElementById('view-project-templates');
         if (!container) return;
-        container.innerHTML = `
-            <div class="text-center py-10 opacity-50" style="grid-column:1/-1;">
-                <i class="fas fa-circle-notch fa-spin text-3xl text-accent-bright"></i>
-                <p class="text-sm text-secondary-content mt-3">Sincronizando plantillas de otras líneas del proyecto...</p>
-            </div>`;
+        container.innerHTML = '<div style="grid-column:1/-1;">' + (typeof batLoaderHtml === 'function' ? batLoaderHtml('Sincronizando plantillas de otras líneas del proyecto...') : '<div class="text-center py-10 opacity-50"><i class="fas fa-circle-notch fa-spin text-3xl text-accent-bright"></i><p class="text-sm text-secondary-content mt-3">Sincronizando plantillas de otras líneas del proyecto...</p></div>') + '</div>';
 
         try {
             const params = new URLSearchParams({ token: _token });

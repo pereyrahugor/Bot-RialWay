@@ -224,7 +224,9 @@ async function mountView(path) {
     const root = document.getElementById('view-content-root') || document.getElementById('view-root');
     if (!root) return;
 
-    root.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;width:100%;"><i class="fas fa-circle-notch fa-spin" style="font-size:2rem;color:var(--accent-color,#0099FF);"></i></div>';
+    root.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;width:100%;">' +
+        (typeof window.batLoaderHtml === 'function' ? window.batLoaderHtml('Cargando sección...') : '<div class="bat-loader"><div class="bat-stage-wrapper"><div class="bat-stage"><div class="bat-pixel"></div></div></div><span class="bat-loader-text">Cargando sección...</span></div>') +
+        '</div>';
 
     try {
         // Para crm-tareas: pre-cargar crm.view.js para que _getCRMModals este disponible

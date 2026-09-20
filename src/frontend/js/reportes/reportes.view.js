@@ -762,9 +762,7 @@ window.reportesView = (() => {
                         <div id="rep-count" class="reportes-count"></div>
 
                         <div id="rep-list" class="animate-fade">
-                            <div style="display:flex; align-items:center; justify-content:center; padding:60px 24px; color:var(--text-muted);">
-                                <i class="fas fa-circle-notch fa-spin" style="margin-right:10px;"></i> Cargando reportes...
-                            </div>
+                            ${typeof batLoaderHtml === 'function' ? batLoaderHtml('Cargando reportes...') : '<div style="display:flex; align-items:center; justify-content:center; padding:60px 24px; color:var(--text-muted);"><i class="fas fa-circle-notch fa-spin" style="margin-right:10px;"></i> Cargando reportes...</div>'}
                         </div>
                     </div>
 
@@ -792,9 +790,7 @@ window.reportesView = (() => {
                                     </button>
                                 </div>
                                 <div id="waba-groups-list">
-                                    <div style="padding: 15px; text-align: center; color: var(--text-muted); font-size: 0.82rem;">
-                                        <i class="fas fa-circle-notch fa-spin" style="margin-right: 6px;"></i> Cargando grupos...
-                                    </div>
+                                    ${typeof batLoaderHtml === 'function' ? batLoaderHtml({ text: 'Cargando grupos...', size: 'sm' }) : '<div style="padding: 15px; text-align: center; color: var(--text-muted); font-size: 0.82rem;"><i class="fas fa-circle-notch fa-spin" style="margin-right: 6px;"></i> Cargando grupos...</div>'}
                                 </div>
                             </div>
                         </div>
@@ -1012,7 +1008,7 @@ window.reportesView = (() => {
     async function _loadWabaGroups() {
         const container = document.getElementById('waba-groups-list');
         if (container) {
-            container.innerHTML = `<div style="padding:15px; text-align:center; color:var(--text-muted); font-size:0.82rem;"><i class="fas fa-circle-notch fa-spin" style="margin-right:6px;"></i> Cargando grupos de WhatsApp...</div>`;
+            container.innerHTML = typeof batLoaderHtml === 'function' ? batLoaderHtml({ text: 'Cargando grupos de WhatsApp...', size: 'sm' }) : `<div style="padding:15px; text-align:center; color:var(--text-muted); font-size:0.82rem;"><i class="fas fa-circle-notch fa-spin" style="margin-right:6px;"></i> Cargando grupos de WhatsApp...</div>`;
         }
         try {
             const res = await fetch(`/api/backoffice/waba-groups?token=${encodeURIComponent(_token)}`);

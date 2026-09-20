@@ -1484,7 +1484,7 @@ window.openClosedLeadsModal = async () => {
     const list = document.getElementById('closed-leads-list');
     if (!modal || !list) return;
     modal.classList.add('active');
-    list.innerHTML = '<div style="text-align:center; padding:20px;"><i class="fas fa-spinner fa-spin"></i> Cargando historial...</div>';
+    list.innerHTML = typeof batLoaderHtml === 'function' ? batLoaderHtml({ text: 'Cargando historial...', size: 'sm' }) : '<div style="text-align:center; padding:20px;"><i class="fas fa-spinner fa-spin"></i> Cargando historial...</div>';
     
     try {
         const res = await fetch(`/api/backoffice/tickets?token=${activeToken}&estado=Cerrado`);

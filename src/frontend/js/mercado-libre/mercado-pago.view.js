@@ -45,9 +45,8 @@ window.mercadoPagoView = (() => {
                     </div>
 
                     <!-- Estado: Cargando -->
-                    <div id="mp-loading" style="text-align: center; padding: 2rem 0;">
-                        <i class="fas fa-circle-notch fa-spin" style="font-size: 2rem; color: #009ee3;"></i>
-                        <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 10px;">Cargando estado de la integración...</p>
+                    <div id="mp-loading" style="text-align: center; padding: 1.5rem 0;">
+                        ${typeof batLoaderHtml === 'function' ? batLoaderHtml('Cargando estado de la integración...') : '<i class="fas fa-circle-notch fa-spin" style="font-size: 2rem; color: #009ee3;"></i><p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 10px;">Cargando estado de la integración...</p>'}
                     </div>
 
                     <!-- Estado: Desconectado / Formulario de Conexión -->

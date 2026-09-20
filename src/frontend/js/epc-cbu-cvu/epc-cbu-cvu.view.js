@@ -94,10 +94,7 @@ window.epcCbuCvuView = (() => {
 
                     <!-- List Container -->
                     <div id="accounts-list-container" style="flex:1; display:flex; flex-direction:column; gap:12px;">
-                        <div style="padding:48px 0; text-align:center; color:var(--text-muted);">
-                            <i class="fas fa-circle-notch fa-spin" style="font-size:1.5rem; color:#0099FF; margin-bottom:8px; display:block;"></i>
-                            Cargando listado...
-                        </div>
+                        ${typeof batLoaderHtml === 'function' ? batLoaderHtml('Cargando listado...') : '<div style="padding:48px 0; text-align:center; color:var(--text-muted);"><i class="fas fa-circle-notch fa-spin" style="font-size:1.5rem; color:#0099FF; margin-bottom:8px; display:block;"></i>Cargando listado...</div>'}
                     </div>
                 </div>
 

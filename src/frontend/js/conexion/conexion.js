@@ -228,7 +228,7 @@ function renderMetaOnboardingPromo() {
                 <i class="fab fa-meta"></i> Vincular con META
             </button>
             <div id="meta-onboard-status-conexion" style="display:none; margin-top:0.75rem; color:var(--text-muted); font-size:0.85rem; text-align:center;">
-                <i class="fas fa-circle-notch fa-spin"></i> Esperando confirmación de vinculación en Facebook...
+                ${typeof batLoaderHtml === 'function' ? batLoaderHtml({ text: 'Esperando confirmación de vinculación en Facebook...', size: 'sm' }) : '<i class="fas fa-circle-notch fa-spin"></i> Esperando confirmación de vinculación en Facebook...'}
             </div>
         </div>
     `;
@@ -461,7 +461,7 @@ async function loadCommandChats() {
         renderCommandChatList();
         return;
     }
-    if (list) list.innerHTML = '<div class="conexion-command-empty"><i class="fas fa-circle-notch fa-spin"></i> Cargando chats...</div>';
+    if (list) list.innerHTML = typeof batLoaderHtml === 'function' ? batLoaderHtml({ text: 'Cargando chats...', size: 'sm' }) : '<div class="conexion-command-empty"><i class="fas fa-circle-notch fa-spin"></i> Cargando chats...</div>';
     const token = localStorage.getItem('backoffice_token') || '';
     const params = new URLSearchParams({ token, limit: '10000', offset: '0' });
     if (currentProjectId && currentProjectId !== 'default') params.set('projectId', currentProjectId);

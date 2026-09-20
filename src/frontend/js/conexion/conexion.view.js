@@ -60,9 +60,8 @@ window.conexionView = {
                                             </button>
                                         </div>
                                     </div>
-                                    <div id="generate-qr-loading" style="display:none;" class="mt-4 flex flex-col items-center gap-2">
-                                        <i class="fas fa-spinner animate-spin-loader text-accent-bright text-2xl"></i>
-                                        <p class="info-text text-center">Iniciando motor de WhatsApp... esto puede tardar unos segundos.</p>
+                                    <div id="generate-qr-loading" style="display:none;" class="mt-4 flex flex-col items-center justify-center">
+                                        ${typeof batLoaderHtml === 'function' ? batLoaderHtml({ text: 'Iniciando motor de WhatsApp... esto puede tardar unos segundos.', size: 'md' }) : '<i class="fas fa-spinner animate-spin-loader text-accent-bright text-2xl"></i><p class="info-text text-center">Iniciando motor de WhatsApp...</p>'}
                                     </div>
                                 </div>
                                 <div id="qr-section" style="display:block;" class="conexion-qr-section">
@@ -222,7 +221,7 @@ window.conexionView = {
                         <span id="bot-command-modal-count">0 seleccionados</span>
                     </div>
                     <div id="bot-command-chat-list" class="conexion-command-chat-list">
-                        <div class="conexion-command-empty"><i class="fas fa-circle-notch fa-spin"></i> Cargando chats...</div>
+                        ${typeof batLoaderHtml === 'function' ? batLoaderHtml({ text: 'Cargando chats...', size: 'sm' }) : '<div class="conexion-command-empty"><i class="fas fa-circle-notch fa-spin"></i> Cargando chats...</div>'}
                     </div>
                 </div>
                 <div class="modal-footer">

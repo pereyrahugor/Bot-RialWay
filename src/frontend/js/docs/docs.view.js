@@ -42,10 +42,7 @@ window.docsView = {
             <div class="docs-content-area">
                 <div id="content" class="prose max-w-none text-primary-content animate-reveal-up"
                     style="line-height:1.7;">
-                    <div class="flex items-center justify-center py-10 opacity-50">
-                        <i class="fas fa-circle-notch fa-spin text-2xl text-accent-bright mr-3"></i>
-                        Cargando manual...
-                    </div>
+                    ${typeof batLoaderHtml === 'function' ? batLoaderHtml('Cargando manual...') : '<div class="flex items-center justify-center py-10 opacity-50"><i class="fas fa-circle-notch fa-spin text-2xl text-accent-bright mr-3"></i> Cargando manual...</div>'}
                 </div>
             </div>
         </main>`;

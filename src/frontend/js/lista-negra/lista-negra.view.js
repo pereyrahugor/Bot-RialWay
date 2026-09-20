@@ -100,8 +100,8 @@ window.listaNegraView = (() => {
                     <!-- List container -->
                     <div style="overflow:hidden; border-radius:1rem; background:var(--card-bg); border:1px solid var(--card-border-color);">
                         <div id="ln-tbody" class="animate-fade">
-                            <div style="padding:32px; text-align:center; color:var(--text-muted);">
-                                <i class="fas fa-circle-notch fa-spin"></i> Cargando...
+                            <div style="padding:16px; text-align:center;">
+                                ${typeof batLoaderHtml === 'function' ? batLoaderHtml({ text: 'Cargando...', size: 'sm' }) : '<i class="fas fa-circle-notch fa-spin"></i> Cargando...'}
                             </div>
                         </div>
                         <div id="ln-empty" style="display:none; padding:48px 24px; text-align:center;">

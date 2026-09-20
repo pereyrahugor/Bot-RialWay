@@ -3787,7 +3787,7 @@ async function loadTemplates() {
 
 async function loadLibraryTemplates() {
     const grid = document.getElementById('library-templates-grid');
-    if (grid) grid.innerHTML = '<div style="grid-column: 1/-1; text-align:center; padding:40px; opacity:0.5;"><i class="fas fa-circle-notch fa-spin fa-2x"></i><p>Explorando Biblioteca de Meta...</p></div>';
+    if (grid) grid.innerHTML = typeof batLoaderHtml === 'function' ? '<div style="grid-column: 1/-1;">' + batLoaderHtml('Explorando Biblioteca de Meta...') + '</div>' : '<div style="grid-column: 1/-1; text-align:center; padding:40px; opacity:0.5;"><i class="fas fa-circle-notch fa-spin fa-2x"></i><p>Explorando Biblioteca de Meta...</p></div>';
 
     try {
         const res = await fetch(`/api/backoffice/whatsapp/library-templates?token=${token}`);
@@ -5397,7 +5397,7 @@ window.loadMetaTemplates = async function (forceRefresh = false) {
         return;
     }
 
-    listEl.innerHTML = '<div class="qm-empty"><i class="fas fa-spinner fa-spin" style="margin-right:6px;"></i> Cargando plantillas...</div>';
+    listEl.innerHTML = typeof batLoaderHtml === 'function' ? batLoaderHtml({ text: 'Cargando plantillas...', size: 'sm' }) : '<div class="qm-empty"><i class="fas fa-spinner fa-spin" style="margin-right:6px;"></i> Cargando plantillas...</div>';
 
     try {
         const params = new URLSearchParams({ token });

@@ -3879,7 +3879,7 @@ export class HistoryHandler {
 
     /**
      * Obtiene el API_KEY oficial de la instancia consultada.
-     * Si no existe en settings, la genera automáticamente con formato seguro sk_rialway_...
+     * Si no existe en settings, la genera automáticamente con formato seguro sk_dusk_...
      */
     static async getProjectApiKey(projectId: string | null = null, serviceId: string | null = null): Promise<string> {
         if (!supabase) return '';
@@ -3912,7 +3912,7 @@ export class HistoryHandler {
 
             // Si aún no existe, generarlo
             const crypto = await import('crypto');
-            const uniqueKey = `sk_rialway_${crypto.randomBytes(16).toString('hex')}`;
+            const uniqueKey = `sk_dusk_${crypto.randomBytes(16).toString('hex')}`;
             await supabase.from('settings').insert({
                 project_id: targetProjectId,
                 service_id: targetServiceId,
@@ -4050,7 +4050,7 @@ export class HistoryHandler {
                 .maybeSingle();
 
             if (!apiKeySetting) {
-                const uniqueKey = `sk_rialway_${crypto.randomBytes(16).toString('hex')}`;
+                const uniqueKey = `sk_dusk_${crypto.randomBytes(16).toString('hex')}`;
                 console.log(`🆕 [Bootstrap] Generando API_KEY única para el proyecto: ${uniqueKey}`);
                 const payload: any = {
                     project_id: currentProjectId,

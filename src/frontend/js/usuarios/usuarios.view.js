@@ -63,8 +63,8 @@ window.usuariosView = {
                         </div>
                         <div class="variable-group" style="grid-column:1/-1; background:var(--bg-header); border:1.5px solid var(--border); border-radius:14px; padding:0; overflow:hidden;">
                             <div id="team-list-container">
-                                <div style="display:flex;align-items:center;justify-content:center;height:120px;width:100%;">
-                                    <i class="fas fa-circle-notch fa-spin" style="font-size:2rem;color:var(--accent);"></i>
+                                <div style="display:flex;align-items:center;justify-content:center;min-height:120px;width:100%;">
+                                    ${typeof batLoaderHtml === 'function' ? batLoaderHtml({ text: 'Cargando usuarios...', size: 'sm' }) : '<i class="fas fa-circle-notch fa-spin" style="font-size:2rem;color:var(--accent);"></i>'}
                                 </div>
                             </div>
                         </div>
@@ -87,7 +87,7 @@ window.usuariosView = {
                         <input type="text" id="edit-user-username" class="input-field" placeholder="Nombre de usuario">
                     </div>
                     <div>
-                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.5rem;">NUEVA CONTRASEÑA (Opcional)</label>
+                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.5rem;">NUEVA CONTRASEï¿½A (Opcional)</label>
                         <input type="password" id="edit-user-password" class="input-field" placeholder="Dejar en blanco para no cambiar">
                     </div>
                 </div>

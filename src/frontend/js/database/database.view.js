@@ -70,10 +70,7 @@ window.databaseView = (() => {
                     
                     <!-- Loading state overlay -->
                     <div id="workspace-loading" style="position: absolute; top:0; left:0; right:0; bottom:0; background: rgba(255,255,255,0.7); z-index: 100; display: none; align-items: center; justify-content: center; backdrop-filter: blur(2px);">
-                        <div style="text-align: center; color: var(--text-muted);">
-                            <i class="fas fa-circle-notch fa-spin" style="font-size: 2rem; color: var(--accent); margin-bottom: 10px;"></i>
-                            <p style="font-weight: 600;">Procesando cambios...</p>
-                        </div>
+                        ${typeof batLoaderHtml === 'function' ? batLoaderHtml('Procesando cambios...') : '<div class="bat-loader"><div class="bat-stage-wrapper"><div class="bat-stage"><div class="bat-pixel"></div></div></div><span class="bat-loader-text">Procesando cambios...</span></div>'}
                     </div>
 
                     <!-- Panel Tables -->
@@ -234,7 +231,7 @@ window.databaseView = (() => {
     // --- LÓGICA DE TABLAS ---
     async function _loadTablesList() {
         const listEl = document.getElementById('sidebar-items-list');
-        listEl.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted);"><i class="fas fa-circle-notch fa-spin"></i> Cargando...</div>`;
+        listEl.innerHTML = typeof batLoaderHtml === 'function' ? batLoaderHtml({ text: 'Cargando...', size: 'sm' }) : `<div style="text-align:center; padding:20px; color:var(--text-muted);"><i class="fas fa-circle-notch fa-spin"></i> Cargando...</div>`;
 
         try {
             const res = await fetch(`/api/backoffice/database/tables?token=${_token}`);
@@ -285,7 +282,7 @@ window.databaseView = (() => {
         document.getElementById('btn-delete-selected').style.display = 'none';
 
         const wrapper = document.getElementById('table-table-wrapper');
-        wrapper.innerHTML = `<div style="text-align:center; padding:60px; color:var(--text-muted);"><i class="fas fa-circle-notch fa-spin fa-2x"></i><p style="margin-top:10px;">Cargando registros...</p></div>`;
+        wrapper.innerHTML = typeof batLoaderHtml === 'function' ? batLoaderHtml('Cargando registros...') : `<div style="text-align:center; padding:60px; color:var(--text-muted);"><i class="fas fa-circle-notch fa-spin fa-2x"></i><p style="margin-top:10px;">Cargando registros...</p></div>`;
 
         try {
             const res = await fetch(`/api/backoffice/database/table/${_activeTable.tableName}?token=${_token}`);
@@ -509,7 +506,7 @@ window.databaseView = (() => {
     // --- LÓGICA DE RAG ---
     async function _loadDocsList() {
         const listEl = document.getElementById('sidebar-items-list');
-        listEl.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted);"><i class="fas fa-circle-notch fa-spin"></i> Cargando...</div>`;
+        listEl.innerHTML = typeof batLoaderHtml === 'function' ? batLoaderHtml({ text: 'Cargando...', size: 'sm' }) : `<div style="text-align:center; padding:20px; color:var(--text-muted);"><i class="fas fa-circle-notch fa-spin"></i> Cargando...</div>`;
 
         try {
             const res = await fetch(`/api/backoffice/database/rag?token=${_token}`);
@@ -611,7 +608,7 @@ window.databaseView = (() => {
 
     async function _loadMultiCrmList() {
         const container = document.getElementById('multicrm-services-list');
-        container.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:40px; color:var(--text-muted);"><i class="fas fa-circle-notch fa-spin fa-2x"></i><p style="margin-top:10px;">Cargando servicios del proyecto...</p></div>`;
+        container.innerHTML = typeof batLoaderHtml === 'function' ? `<div style="grid-column:1/-1;">${batLoaderHtml('Cargando servicios del proyecto...')}</div>` : `<div style="grid-column:1/-1; text-align:center; padding:40px; color:var(--text-muted);"><i class="fas fa-circle-notch fa-spin fa-2x"></i><p style="margin-top:10px;">Cargando servicios del proyecto...</p></div>`;
         
         try {
             const servicesRes = await fetch(`/api/backoffice/project-services?token=${_token}`);

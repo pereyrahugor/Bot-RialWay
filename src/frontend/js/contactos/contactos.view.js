@@ -60,7 +60,7 @@ window.contactosView = (() => {
                     <span></span>
                 </div>
                 <div id="contactos-list" class="contactos-list">
-                    <div class="contactos-empty"><i class="fas fa-circle-notch fa-spin"></i> Cargando contactos...</div>
+                    ${typeof batLoaderHtml === 'function' ? batLoaderHtml('Cargando contactos...') : '<div class="contactos-empty"><i class="fas fa-circle-notch fa-spin"></i> Cargando contactos...</div>'}
                 </div>
             </section>
 
@@ -159,7 +159,7 @@ window.contactosView = (() => {
 
     async function loadContacts() {
         const list = document.getElementById('contactos-list');
-        if (list) list.innerHTML = '<div class="contactos-empty"><i class="fas fa-circle-notch fa-spin"></i> Cargando contactos...</div>';
+        if (list) list.innerHTML = typeof batLoaderHtml === 'function' ? batLoaderHtml('Cargando contactos...') : '<div class="contactos-empty"><i class="fas fa-circle-notch fa-spin"></i> Cargando contactos...</div>';
 
         try {
             const params = new URLSearchParams();
@@ -271,7 +271,7 @@ window.contactosView = (() => {
 
         state.selectedFileName = file.name;
         const preview = document.getElementById('contactos-import-preview');
-        if (preview) preview.innerHTML = '<div class="contactos-empty"><i class="fas fa-circle-notch fa-spin"></i> Procesando archivo...</div>';
+        if (preview) preview.innerHTML = typeof batLoaderHtml === 'function' ? batLoaderHtml('Procesando archivo...') : '<div class="contactos-empty"><i class="fas fa-circle-notch fa-spin"></i> Procesando archivo...</div>';
 
         try {
             const ext = file.name.split('.').pop().toLowerCase();

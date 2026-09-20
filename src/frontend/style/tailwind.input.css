@@ -30,6 +30,7 @@
 @import './modules/shared/tags.css';
 @import './modules/shared/toast.css';
 @import './modules/shared/animations.css';
+@import './modules/shared/bat-loader.css';
 @import './modules/shared/buttons.css';
 @import './modules/shared/modals.css';
 @import './modules/shared/skeleton.css';

@@ -1,5 +1,5 @@
 
-import { randomBytes } from 'crypto';
+import { randomBytes, createHmac } from 'crypto';
 import bodyParser from 'body-parser';
 import axios from 'axios';
 import fs from 'fs';
@@ -28,6 +28,135 @@ setInterval(() => {
         }
     }
 }, 60000);
+
+const TOKEN_SIGN_SECRET = process.env.API_TOKEN_SECRET || process.env.JWT_SECRET || process.env.SUPABASE_KEY || 'rialway_api_token_signature_secret_2026';
+
+/**
+ * Genera un token firmado criptográficamente que contiene el service_id emisor.
+ * Formato: tk_${serviceId}_${randomPart}_${signature}
+ */
+function generateSignedApiToken(serviceId: string, projectId: string): string {
+    const cleanServiceId = serviceId || HistoryHandler.SERVICE_IDENTIFIER || 'default_service';
+    const cleanProjectId = projectId || HistoryHandler.PROJECT_IDENTIFIER || 'default';
+    const randomPart = randomBytes(16).toString('hex');
+    const signature = createHmac('sha256', TOKEN_SIGN_SECRET)
+        .update(`${cleanServiceId}:${cleanProjectId}:${randomPart}`)
+        .digest('hex')
+        .substring(0, 16);
+    return `tk_${cleanServiceId}_${randomPart}_${signature}`;
+}
+
+interface TokenValidationResult {
+    valid: boolean;
+    statusCode: number;
+    error?: string;
+    tokenData?: any;
+    projectId?: string;
+    serviceId?: string;
+}
+
+/**
+ * Valida un token verificando la firma del service_id, la no expiración, y que corresponda a la instancia actual.
+ */
+async function verifyAndValidateApiToken(
+    token: string,
+    options: { burn?: boolean; endpoint: string; req: any }
+): Promise<TokenValidationResult> {
+    const { burn = false, endpoint, req } = options;
+    if (!token) {
+        return { valid: false, statusCode: 400, error: 'Falta token de autenticación.' };
+    }
+
+    const currentServiceId = HistoryHandler.SERVICE_IDENTIFIER;
+    const currentProjectId = HistoryHandler.PROJECT_IDENTIFIER;
+
+    // 1. Verificar estructura del token con firma de service_id: tk_${serviceId}_${randomPart}_${signature}
+    const tokenMatch = String(token).match(/^tk_([a-zA-Z0-9_-]+)_([a-f0-9]{32})_([a-f0-9]{16})$/);
+
+    if (tokenMatch) {
+        const tokenServiceId = tokenMatch[1];
+        // Comprobación de cruce de instancias antes de consultar base de datos
+        if (currentServiceId && currentServiceId !== 'default' && currentServiceId !== 'default_service') {
+            if (tokenServiceId !== currentServiceId) {
+                const errorMsg = `Acceso denegado: El token fue generado para el servicio '${tokenServiceId}', pero esta solicitud fue recibida por la instancia del servicio '${currentServiceId}'. Cada servicio debe enviar sus peticiones al dominio/URL correspondiente a su propia instancia.`;
+                await logApiRequest({ token, endpoint, status: 'error', error: errorMsg, req, serviceId: currentServiceId, projectId: currentProjectId });
+                return { valid: false, statusCode: 403, error: errorMsg };
+            }
+        }
+    }
+
+    // 2. Consulta en la tabla api_tokens (cumpliendo estricto filtrado multi-tenant y multi-servicio)
+    let query = supabase
+        .from('api_tokens')
+        .select('*')
+        .eq('token', token)
+        .eq('is_used', false)
+        .gt('expires_at', new Date().toISOString());
+
+    if (currentServiceId && currentServiceId !== 'default' && currentServiceId !== 'default_service') {
+        query = query.eq('service_id', currentServiceId);
+    }
+
+    const { data: tokenData, error: fetchError } = await query.maybeSingle();
+
+    if (fetchError || !tokenData) {
+        // Diagnóstico para mensaje de error preciso si el token existe en otra instancia o está expirado/usado
+        const { data: anyToken } = await supabase
+            .from('api_tokens')
+            .select('*')
+            .eq('token', token)
+            .maybeSingle();
+
+        if (anyToken) {
+            if (anyToken.service_id && currentServiceId && anyToken.service_id !== currentServiceId) {
+                const crossMsg = `Acceso denegado: El token pertenece al servicio '${anyToken.service_id}', pero se intentó utilizar en la instancia '${currentServiceId}'.`;
+                await logApiRequest({ token, endpoint, status: 'error', error: crossMsg, req, serviceId: currentServiceId, projectId: anyToken.client_id });
+                return { valid: false, statusCode: 403, error: crossMsg };
+            }
+            if (anyToken.is_used) {
+                await logApiRequest({ token, endpoint, status: 'error', error: 'Token ya utilizado', req, serviceId: anyToken.service_id, projectId: anyToken.client_id });
+                return { valid: false, statusCode: 401, error: 'Token inválido: ya fue utilizado.' };
+            }
+            if (new Date(anyToken.expires_at) <= new Date()) {
+                await logApiRequest({ token, endpoint, status: 'error', error: 'Token expirado', req, serviceId: anyToken.service_id, projectId: anyToken.client_id });
+                return { valid: false, statusCode: 401, error: 'Token expirado (validez máxima de 5 minutos).' };
+            }
+        }
+
+        await logApiRequest({ token, endpoint, status: 'error', error: 'Token inválido o expirado', req });
+        return { valid: false, statusCode: 401, error: 'Token inválido, expirado o ya utilizado.' };
+    }
+
+    // 3. Verificación criptográfica de la firma del token si tiene el formato firmado
+    if (tokenMatch) {
+        const tokenServiceId = tokenMatch[1];
+        const randomPart = tokenMatch[2];
+        const providedSignature = tokenMatch[3];
+        const expectedSignature = createHmac('sha256', TOKEN_SIGN_SECRET)
+            .update(`${tokenData.service_id || tokenServiceId}:${tokenData.client_id}:${randomPart}`)
+            .digest('hex')
+            .substring(0, 16);
+
+        if (providedSignature !== expectedSignature) {
+            const sigMsg = 'Firma criptográfica del token inválida o adulterada.';
+            await logApiRequest({ token, endpoint, status: 'error', error: sigMsg, req, serviceId: tokenData.service_id, projectId: tokenData.client_id });
+            return { valid: false, statusCode: 401, error: sigMsg };
+        }
+    }
+
+    // 4. Si se solicita quemar el token (un solo uso), se marca como usado
+    if (burn) {
+        await supabase.from('api_tokens').update({ is_used: true }).eq('id', tokenData.id);
+    }
+
+    return {
+        valid: true,
+        statusCode: 200,
+        tokenData,
+        projectId: tokenData.client_id,
+        serviceId: tokenData.service_id || currentServiceId
+    };
+}
 
 /**
  * Helper para registrar logs de la API
@@ -287,23 +416,46 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
             }
 
             // Validar la API KEY contra la base de datos (tabla settings) buscando el tenant correspondiente
-            const { data: settingData, error: settingError } = await supabase
+            const currentServiceId = HistoryHandler.SERVICE_IDENTIFIER;
+            const currentProjectId = HistoryHandler.PROJECT_IDENTIFIER;
+
+            let settingQuery = supabase
                 .from('settings')
                 .select('project_id, service_id')
                 .eq('key', 'api_key')
-                .eq('value', api_key)
-                .maybeSingle();
+                .eq('value', api_key);
+
+            // Filtrado estricto multi-tenant y multi-servicio
+            if (currentServiceId && currentServiceId !== 'default' && currentServiceId !== 'default_service') {
+                settingQuery = settingQuery.eq('service_id', currentServiceId);
+            }
+
+            const { data: settingData, error: settingError } = await settingQuery.maybeSingle();
 
             if (settingError || !settingData) {
-                await logApiRequest({ endpoint: '/api/v1/auth', status: 'error', error: 'API KEY inválida', req });
+                // Diagnóstico para detectar si la API KEY pertenece a otra instancia del proyecto
+                const { data: crossSetting } = await supabase
+                    .from('settings')
+                    .select('project_id, service_id')
+                    .eq('key', 'api_key')
+                    .eq('value', api_key)
+                    .maybeSingle();
+
+                if (crossSetting && crossSetting.service_id && currentServiceId && crossSetting.service_id !== currentServiceId) {
+                    const crossMsg = `API KEY pertenece al servicio '${crossSetting.service_id}', pero esta solicitud fue enviada a la instancia del servicio '${currentServiceId}'. Debe solicitar la autenticación en la URL correspondiente a su propio servicio.`;
+                    await logApiRequest({ endpoint: '/api/v1/auth', status: 'error', error: crossMsg, req, serviceId: currentServiceId, projectId: crossSetting.project_id });
+                    return res.status(403).json({ success: false, error: crossMsg });
+                }
+
+                await logApiRequest({ endpoint: '/api/v1/auth', status: 'error', error: 'API KEY inválida', req, serviceId: currentServiceId, projectId: currentProjectId });
                 return res.status(401).json({ success: false, error: "API KEY inválida" });
             }
 
             const resolvedProjectId = settingData.project_id;
-            const resolvedServiceId = settingData.service_id;
+            const resolvedServiceId = settingData.service_id || currentServiceId;
 
-            // Generar token único de un solo uso
-            const oneTimeToken = randomBytes(32).toString('hex');
+            // Generar token único de un solo uso firmado con el service_id
+            const oneTimeToken = generateSignedApiToken(resolvedServiceId, resolvedProjectId);
             const expiresInMinutes = 5;
             const expiresAt = new Date(Date.now() + expiresInMinutes * 60000).toISOString();
 
@@ -362,25 +514,15 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
                 return res.status(400).json({ success: false, error: "El límite es de 2500 destinatarios por solicitud masiva." });
             }
 
-            // Validar y quemar el token
-            const { data: tokenData, error: fetchError } = await supabase
-                .from('api_tokens')
-                .select('*')
-                .eq('token', token)
-                .eq('is_used', false)
-                .gt('expires_at', new Date().toISOString())
-                .maybeSingle();
-
-            if (fetchError || !tokenData) {
-                await logApiRequest({ token, endpoint: '/api/v1/send-template', status: 'error', error: 'Token inválido o expirado', req });
-                return res.status(401).json({ success: false, error: "Token inválido, expirado o ya utilizado." });
+            // Validar y quemar el token con firma de service_id
+            const authResult = await verifyAndValidateApiToken(token, { burn: true, endpoint: '/api/v1/send-template', req });
+            if (!authResult.valid) {
+                return res.status(authResult.statusCode).json({ success: false, error: authResult.error });
             }
 
-            const resolvedProjectId = tokenData.client_id;
-            const resolvedServiceId = tokenData.service_id;
-
-            // Marcar como usado inmediatamente (Atomicidad para prevenir Race Condition)
-            await supabase.from('api_tokens').update({ is_used: true }).eq('id', tokenData.id);
+            const tokenData = authResult.tokenData;
+            const resolvedProjectId = authResult.projectId;
+            const resolvedServiceId = authResult.serviceId;
 
             // Mapear template_id a templateName
             if (!adapterProvider) {
@@ -669,25 +811,15 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
                 return res.status(400).json({ success: false, error: "Datos incompletos. Se requiere token, to y type." });
             }
 
-            // Validar y quemar el token
-            const { data: tokenData, error: fetchError } = await supabase
-                .from('api_tokens')
-                .select('*')
-                .eq('token', token)
-                .eq('is_used', false)
-                .gt('expires_at', new Date().toISOString())
-                .maybeSingle();
-
-            if (fetchError || !tokenData) {
-                await logApiRequest({ token, endpoint: '/api/v1/send-message', status: 'error', error: 'Token inválido o expirado', req });
-                return res.status(401).json({ success: false, error: "Token inválido, expirado o ya utilizado." });
+            // Validar y quemar el token con firma de service_id
+            const authResult = await verifyAndValidateApiToken(token, { burn: true, endpoint: '/api/v1/send-message', req });
+            if (!authResult.valid) {
+                return res.status(authResult.statusCode).json({ success: false, error: authResult.error });
             }
 
-            const resolvedProjectId = tokenData.client_id;
-            const resolvedServiceId = tokenData.service_id;
-
-            // Marcar como usado inmediatamente (Atomicidad para prevenir Race Condition)
-            await supabase.from('api_tokens').update({ is_used: true }).eq('id', tokenData.id);
+            const tokenData = authResult.tokenData;
+            const resolvedProjectId = authResult.projectId;
+            const resolvedServiceId = authResult.serviceId;
 
             const isMeta = adapterProvider && (adapterProvider.constructor.name === 'MetaCloudProvider' || typeof adapterProvider.getTemplates === 'function');
             const provider = isMeta ? adapterProvider : (groupProvider || adapterProvider);
@@ -803,36 +935,37 @@ export const registerExternalApiRoutes = (app: any, deps: any) => {
         const bearerToken = (req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
         const token = req.query.token || req.body?.token || bearerToken;
 
+        const currentServiceId = HistoryHandler.SERVICE_IDENTIFIER;
+
         if (apiKey) {
-            const { data: settingData } = await supabase
+            let settingQuery = supabase
                 .from('settings')
                 .select('project_id, service_id')
                 .eq('key', 'api_key')
-                .eq('value', apiKey)
-                .maybeSingle();
+                .eq('value', apiKey);
+
+            if (currentServiceId && currentServiceId !== 'default' && currentServiceId !== 'default_service') {
+                settingQuery = settingQuery.eq('service_id', currentServiceId);
+            }
+
+            const { data: settingData } = await settingQuery.maybeSingle();
 
             if (settingData) {
                 return {
                     authorized: true,
                     projectId: settingData.project_id,
-                    serviceId: req.body?.service_id || req.query?.service_id || settingData.service_id || 'default_service'
+                    serviceId: settingData.service_id || currentServiceId || 'default_service'
                 };
             }
         }
 
         if (token) {
-            const { data: tokenData } = await supabase
-                .from('api_tokens')
-                .select('*')
-                .eq('token', token)
-                .gt('expires_at', new Date().toISOString())
-                .maybeSingle();
-
-            if (tokenData) {
+            const authResult = await verifyAndValidateApiToken(token, { burn: false, endpoint: req.originalUrl || req.path || '/api/v1/meta-auth', req });
+            if (authResult.valid && authResult.projectId) {
                 return {
                     authorized: true,
-                    projectId: tokenData.client_id,
-                    serviceId: req.body?.service_id || req.query?.service_id || tokenData.service_id || 'default_service'
+                    projectId: authResult.projectId,
+                    serviceId: authResult.serviceId || currentServiceId || 'default_service'
                 };
             }
         }

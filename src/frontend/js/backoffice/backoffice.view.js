@@ -522,10 +522,9 @@ window.backofficeView = {
                     <h3><i class="fas fa-sync-alt modal-h3-icon"></i> Sincronizando</h3>
                 </div>
                 <div class="modal-body sync-modal-body">
-                    <div id="sync-loading">
-                        <div class="spinner"></div>
-                        <p class="sync-loading-title text-base font-heading font-semibold text-primary-content mb-1">Importando datos desde WhatsApp...</p>
-                        <p class="sync-loading-desc text-sm text-secondary-content">Esto puede demorar segun la cantidad de contactos.</p>
+                    <div id="sync-loading" class="flex flex-col items-center justify-center">
+                        ${typeof batLoaderHtml === 'function' ? batLoaderHtml({ text: 'Importando datos desde WhatsApp...', size: 'lg' }) : '<div class="bat-loader"><div class="bat-stage-wrapper"><div class="bat-stage"><div class="bat-pixel"></div></div></div><span class="bat-loader-text">Importando datos desde WhatsApp...</span></div>'}
+                        <p class="sync-loading-desc text-xs text-secondary-content mt-2">Esto puede demorar segun la cantidad de contactos.</p>
                     </div>
                     <div id="sync-result" style="display:none;">
                         <i class="sync-success-icon fas fa-check-circle"></i>

@@ -223,7 +223,7 @@ window.systemConfigView = {
                         <div class="col-span-full" style="grid-column:1/-1;">
                             <button type="button" id="btn-load-groups" class="btn w-full justify-center py-3">
                                 <i class="fab fa-whatsapp"></i>
-                                <i class="fas fa-spinner animate-spin-loader" id="load-groups-spinner" style="display:none;"></i>
+                                <span id="load-groups-spinner" style="display:none; vertical-align:middle; margin-right:4px;"><span class="bat-loader inline bat-loader-xs"><span class="bat-stage-wrapper"><span class="bat-stage"><span class="bat-pixel"></span></span></span></span></span>
                                 <span id="btn-load-groups-text">Cargar Grupos de WhatsApp</span>
                             </button>
                         </div>
@@ -477,7 +477,7 @@ window.systemConfigView = {
                             <div style="margin-top: 14px; border-top: 1px dashed var(--card-border-color); padding-top: 12px;">
                                 <label for="SUPERVISOR_API_KEY" style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 4px;">API_KEY del CRM (Instancia)</label>
                                 <div class="input-password-wrapper" style="position: relative; display: flex; align-items: center;">
-                                    <input type="password" name="SUPERVISOR_API_KEY" id="SUPERVISOR_API_KEY" autocomplete="new-password" placeholder="sk_rialway_..." style="width: 100%;">
+                                    <input type="password" name="SUPERVISOR_API_KEY" id="SUPERVISOR_API_KEY" autocomplete="new-password" placeholder="sk_dusk_..." style="width: 100%;">
                                     <button type="button" class="toggle-password-inline" onclick="toggleFieldVisibility('SUPERVISOR_API_KEY', this)"><i class="fas fa-eye"></i> Mostrar</button>
                                 </div>
                                 <small style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-top: 4px;">Por defecto vacío. Ingrese el API_KEY de la instancia para desbloquear el supervisor.</small>
