@@ -132,9 +132,10 @@ export const aquavitaModule = {
       const respuestaApi = apiResponse.data || {};
       let countResultados = 0;
       let datosCliente = null;
+      let resultados: any[] = [];
 
       if (Array.isArray(respuestaApi.data) && respuestaApi.data.length > 0) {
-        let resultados = respuestaApi.data;
+        resultados = respuestaApi.data;
         
         if (filtroPiso || filtroDepto || requiereFiltroSN) {
           resultados = resultados.filter((c: any) => {
