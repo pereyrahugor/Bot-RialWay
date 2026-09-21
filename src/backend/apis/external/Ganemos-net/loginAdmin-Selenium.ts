@@ -36,7 +36,7 @@ export class LoginAdminSelenium {
             if (pageSource.includes('Forbidden') || pageSource.includes('REQUEST-IP') || pageSource.includes('403')) {
                 console.warn('⚠️ [SeleniumAuth] IP rotatoria bloqueada con 403. Reintentando refresh para forzar rotación de IP...');
                 await this.driver.navigate().refresh();
-                await this.driver.sleep(2000);
+                await this.driver.sleep(4000); // Espera adaptada al doble de latencia de proxy
                 pageSource = await this.driver.getPageSource();
                 if (pageSource.includes('Forbidden') || pageSource.includes('REQUEST-IP')) {
                     console.error('❌ [SeleniumAuth] IP rotatoria rechazada por el servidor objetivo (403 Forbidden).');
@@ -49,13 +49,13 @@ export class LoginAdminSelenium {
             const passwordXPath = "/html/body/div[3]/div/section/div/div[2]/div[2]/div[2]/input";
             const submitButtonXPath = "/html/body/div[3]/div/section/div/div[2]/div[3]/button";
 
-            // 1. Localizar y escribir en el campo de usuario (Timeout 15s para React SPA en proxy)
+            // 1. Localizar y escribir en el campo de usuario (Timeout 30s para React SPA en proxy)
             let userInput: any = null;
             try {
-                userInput = await this.driver.wait(until.elementLocated(By.xpath(userXPath)), 15000);
+                userInput = await this.driver.wait(until.elementLocated(By.xpath(userXPath)), 30000);
             } catch (e) {
-                console.log('⚠️ [SeleniumAuth] XPath primario no localizado en 15s. Probando selectores CSS...');
-                userInput = await this.driver.wait(until.elementLocated(By.css('input[type="text"], input[name="username"], input.form-control')), 5000);
+                console.log('⚠️ [SeleniumAuth] XPath primario no localizado en 30s. Probando selectores CSS...');
+                userInput = await this.driver.wait(until.elementLocated(By.css('input[type="text"], input[name="username"], input.form-control')), 10000);
             }
             await userInput.sendKeys(username);
 
@@ -77,7 +77,7 @@ export class LoginAdminSelenium {
             }
             await submitButton.click();
 
-            // 4. Esperar a que la URL cambie tras hacer clic o aparezca un mensaje de error en pantalla
+            // 4. Esperar a que la URL cambie tras hacer clic o aparezca un mensaje de error en pantalla (30s)
             const loginResult: any = await this.driver.wait(async (d) => {
                 const currentUrl = await d.getCurrentUrl();
                 if (currentUrl !== targetUrl) {
@@ -99,7 +99,7 @@ export class LoginAdminSelenium {
                     }
                 }
                 return false;
-            }, 15000);
+            }, 30000);
 
             if (loginResult && !loginResult.success) {
                 console.error(`❌ [SeleniumAuth] Login fallido por error del servidor de Ganamos: "${loginResult.error}"`);

@@ -113,7 +113,7 @@ export async function rechargeUserSelenium(
             if (currentUrl !== usersListUrl) {
                 console.log(`[Ganemos-net] Navegando a ${usersListUrl}...`);
                 await localDriver.get(usersListUrl);
-                await localDriver.wait(until.urlIs(usersListUrl), 10000);
+                await localDriver.wait(until.urlIs(usersListUrl), 20000);
             }
 
             // 2. Ingresar usuario en el campo de búsqueda
@@ -121,7 +121,7 @@ export async function rechargeUserSelenium(
             console.log(`[Ganemos-net] Escribiendo usuario a buscar: ${username}...`);
             const searchInput = await localDriver.wait(
                 until.elementLocated(By.xpath(searchInputXPath)),
-                10000
+                20000
             );
             await searchInput.clear();
             await searchInput.sendKeys(username);
@@ -131,28 +131,28 @@ export async function rechargeUserSelenium(
             const searchBtn = await localDriver.findElement(By.xpath(searchBtnXPath));
             await searchBtn.click();
 
-            // Esperar a que carguen los resultados
+            // Esperar a que carguen los resultados (adaptado al doble por latencia de proxy)
             console.log("[Ganemos-net] Buscando usuario...");
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            await new Promise(resolve => setTimeout(resolve, 4000));
 
             // 4. Buscar el botón "Depositar"
             console.log("[Ganemos-net] Buscando enlace 'Depositar' en la lista...");
             const depositBtnXPath = "//a[text()='Depositar']";
             const depositBtn = await localDriver.wait(
                 until.elementLocated(By.xpath(depositBtnXPath)),
-                10000
+                20000
             );
             await depositBtn.click();
 
             // 5. Esperar a que redirija a la página de depósito (/user/deposit/{id})
-            await localDriver.wait(until.urlContains('/user/deposit/'), 10000);
+            await localDriver.wait(until.urlContains('/user/deposit/'), 20000);
             console.log("[Ganemos-net] Redirección a la página de depósito confirmada.");
 
             // 6. Ingresar el monto en el input de depósito
             const amountInputXPath = "/html/body/div[3]/div/div[2]/main/div[2]/div/div/div[1]/div[5]/div[1]/div/div/div/div/input";
             const amountInput = await localDriver.wait(
                 until.elementLocated(By.xpath(amountInputXPath)),
-                10000
+                20000
             );
             await amountInput.sendKeys(amount.toString());
 
@@ -199,7 +199,7 @@ export async function rechargeUserSelenium(
                     }
                 }
                 return false;
-            }, 15000);
+            }, 30000);
 
             if (result && !result.success) {
                 throw new Error(`Error al realizar depósito: "${result.error}"`);

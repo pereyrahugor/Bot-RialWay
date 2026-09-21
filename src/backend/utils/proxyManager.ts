@@ -25,17 +25,39 @@ export class ProxyManager {
         try {
             const prefix = clientSlug ? clientSlug.toUpperCase().replace(/[^A-Z0-9]/g, '_') : '';
             const altPrefix = prefix.includes('_') ? prefix.split('_')[0] : prefix;
+            // Variantes fonéticas (GANEMOS vs GANAMOS)
+            const ganamosVariants = (prefix.includes('GANEMOS') || prefix.includes('GANAMOS')) 
+                ? [prefix, prefix.replace('GANEMOS', 'GANAMOS'), altPrefix, altPrefix.replace('GANEMOS', 'GANAMOS'), 'GANAMOSNET', 'GANEMOSNET'] 
+                : [prefix, altPrefix];
 
-            // 1. Verificar si hay un PROXY_URL estático configurado para el cliente
-            let proxyUrl = prefix ? (await HistoryHandler.getConfig(`${prefix}_PROXY_URL`) || process.env[`${prefix}_PROXY_URL`]) : null;
-            if (!proxyUrl && altPrefix && altPrefix !== prefix) {
-                proxyUrl = await HistoryHandler.getConfig(`${altPrefix}_PROXY_URL`) || process.env[`${altPrefix}_PROXY_URL`];
+            // 1. Verificar primero en process.env para que la configuración del entorno tenga precedencia
+            let proxyUrl: string | null = null;
+            for (const variant of ganamosVariants) {
+                if (!variant) continue;
+                if (process.env[`${variant}_PROXY_URL`]) {
+                    proxyUrl = process.env[`${variant}_PROXY_URL`]!;
+                    break;
+                }
             }
 
-            // 2. Verificar Webshare API Key para el cliente
-            let webshareApiKey = prefix ? (await HistoryHandler.getConfig(`${prefix}_WEBSHARE_API_KEY`) || process.env[`${prefix}_WEBSHARE_API_KEY`]) : null;
-            if (!webshareApiKey && altPrefix && altPrefix !== prefix) {
-                webshareApiKey = await HistoryHandler.getConfig(`${altPrefix}_WEBSHARE_API_KEY`) || process.env[`${altPrefix}_WEBSHARE_API_KEY`];
+            // 2. Si no está en env, verificar en DB (HistoryHandler.getConfig)
+            if (!proxyUrl) {
+                for (const variant of ganamosVariants) {
+                    if (!variant) continue;
+                    const dbVal = await HistoryHandler.getConfig(`${variant}_PROXY_URL`);
+                    if (dbVal) {
+                        proxyUrl = dbVal;
+                        break;
+                    }
+                }
+            }
+
+            // 3. Verificar Webshare API Key para el cliente
+            let webshareApiKey: string | null = null;
+            for (const variant of ganamosVariants) {
+                if (!variant) continue;
+                webshareApiKey = process.env[`${variant}_WEBSHARE_API_KEY`] || (await HistoryHandler.getConfig(`${variant}_WEBSHARE_API_KEY`)) || null;
+                if (webshareApiKey) break;
             }
 
             // 3. Fallback a configuración global si no hay específica del cliente

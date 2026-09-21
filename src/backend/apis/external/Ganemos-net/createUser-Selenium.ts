@@ -106,7 +106,7 @@ export async function createUserSelenium(
                 await driver.quit();
                 if ((driver as any)._proxyCleanup) await (driver as any)._proxyCleanup();
                 if (attempt < maxAttempts) {
-                    await new Promise(r => setTimeout(r, 1500));
+                    await new Promise(r => setTimeout(r, 3500));
                     continue;
                 }
                 console.error("❌ [Ganemos-net] No se pudo loguear al administrador tras múltiples intentos. Abortando.");
@@ -119,7 +119,7 @@ export async function createUserSelenium(
         if (currentUrl !== usersListUrl) {
             console.log(`[Ganemos-net] Navegando a ${usersListUrl}...`);
             await driver.get(usersListUrl);
-            await driver.wait(until.urlIs(usersListUrl), 10000);
+            await driver.wait(until.urlIs(usersListUrl), 20000);
         }
 
         // 3. Buscar el botón de crear y hacer click
@@ -128,14 +128,14 @@ export async function createUserSelenium(
         console.log("[Ganemos-net] Buscando y haciendo click en el botón de creación...");
         const createBtn = await driver.wait(
             until.elementLocated(By.xpath(createButtonXPath)),
-            10000
+            20000
         );
         // Hacemos click usando Javascript para evitar que banners o notificaciones de carga intercepten el click visual
         await driver.executeScript("arguments[0].click();", createBtn);
 
         // 4. Esperar a estar en la URL: https://agents.ganamosnet.org/user/create-player
         const createPlayerUrl = "https://agents.ganamosnet.org/user/create-player";
-        await driver.wait(until.urlIs(createPlayerUrl), 10000);
+        await driver.wait(until.urlIs(createPlayerUrl), 20000);
         console.log("[Ganemos-net] En la página de creación de jugador.");
 
         // 5. Generar usuario aleatorio
@@ -167,13 +167,13 @@ export async function createUserSelenium(
         console.log("[Ganemos-net] Esperando y haciendo click en el botón del modal de confirmación...");
         const confirmBtn = await driver.wait(
             until.elementLocated(By.xpath(confirmBtnXPath)),
-            5000
+            10000
         );
         await confirmBtn.click();
 
         // 8. Esperar a que se procese la creación
         console.log("[Ganemos-net] Enviando formulario de creación final...");
-        await driver.sleep(3000); // Esperar procesamiento del formulario
+        await driver.sleep(6000); // Esperar procesamiento del formulario (adaptado al doble por latencia de proxy)
 
         const currentUrlAfterSubmit = await driver.getCurrentUrl();
 
