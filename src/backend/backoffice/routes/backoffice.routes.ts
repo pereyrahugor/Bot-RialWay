@@ -4268,12 +4268,42 @@ export const registerBackofficeRoutes = (app: any) => {
     app.get('/api/backoffice/mercadopago/status', backofficeAuth, async (req: any, res: any) => {
         try {
             const projectId = resolveProjectId(req) || 'default';
-            const { data: acc } = await supabase
+            const serviceId = resolveServiceId(req) || 'default_service';
+
+            let query = supabase
                 .from('mercadopago_acount_user')
                 .select('*')
-                .eq('project_id', projectId)
-                .eq('is_active', true)
-                .maybeSingle();
+                .eq('project_id', projectId);
+            if (serviceId) {
+                query = query.eq('service_id', serviceId);
+            }
+            let { data: accounts } = await query.order('updated_at', { ascending: false });
+
+            // Fallback si no hay registros con service_id específico
+            if ((!accounts || accounts.length === 0) && serviceId !== 'default_service') {
+                const fallbackRes = await supabase
+                    .from('mercadopago_acount_user')
+                    .select('*')
+                    .eq('project_id', projectId)
+                    .order('updated_at', { ascending: false });
+                if (fallbackRes.data && fallbackRes.data.length > 0) {
+                    accounts = fallbackRes.data;
+                }
+            }
+
+            // Fallback si no hay registros con projectId específico
+            if ((!accounts || accounts.length === 0) && projectId !== 'default') {
+                const fallbackRes = await supabase
+                    .from('mercadopago_acount_user')
+                    .select('*')
+                    .eq('project_id', 'default')
+                    .order('updated_at', { ascending: false });
+                if (fallbackRes.data && fallbackRes.data.length > 0) {
+                    accounts = fallbackRes.data;
+                }
+            }
+
+            const acc = (accounts || []).find((a: any) => a.is_active) || (accounts || [])[0];
 
             if (!acc) {
                 return res.json({ success: true, connected: false });
@@ -4296,11 +4326,40 @@ export const registerBackofficeRoutes = (app: any) => {
     app.get('/api/backoffice/mercadopago/accounts', backofficeAuth, async (req: any, res: any) => {
         try {
             const projectId = resolveProjectId(req) || 'default';
-            const { data: accounts, error } = await supabase
+            const serviceId = resolveServiceId(req) || 'default_service';
+
+            let query = supabase
                 .from('mercadopago_acount_user')
-                .select('user_id, nickname, email, is_active, updated_at')
-                .eq('project_id', projectId)
-                .order('updated_at', { ascending: false });
+                .select('user_id, nickname, email, is_active, updated_at, project_id, service_id')
+                .eq('project_id', projectId);
+            if (serviceId) {
+                query = query.eq('service_id', serviceId);
+            }
+            let { data: accounts, error } = await query.order('updated_at', { ascending: false });
+
+            // Fallback si no hay registros con service_id específico
+            if ((!accounts || accounts.length === 0) && serviceId !== 'default_service') {
+                const fallbackRes = await supabase
+                    .from('mercadopago_acount_user')
+                    .select('user_id, nickname, email, is_active, updated_at, project_id, service_id')
+                    .eq('project_id', projectId)
+                    .order('updated_at', { ascending: false });
+                if (fallbackRes.data && fallbackRes.data.length > 0) {
+                    accounts = fallbackRes.data;
+                }
+            }
+
+            // Fallback si no hay registros con projectId específico
+            if ((!accounts || accounts.length === 0) && projectId !== 'default') {
+                const fallbackRes = await supabase
+                    .from('mercadopago_acount_user')
+                    .select('user_id, nickname, email, is_active, updated_at, project_id, service_id')
+                    .eq('project_id', 'default')
+                    .order('updated_at', { ascending: false });
+                if (fallbackRes.data && fallbackRes.data.length > 0) {
+                    accounts = fallbackRes.data;
+                }
+            }
 
             if (error) throw error;
             res.json({ success: true, accounts: accounts || [] });
@@ -4309,105 +4368,118 @@ export const registerBackofficeRoutes = (app: any) => {
         }
     });
 
-    app.post('/api/backoffice/mercadopago/accounts/activate', backofficeAuth, async (req: any, res: any) => {
+    app.post('/api/backoffice/mercadopago/accounts/activate', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         try {
             const projectId = resolveProjectId(req) || 'default';
-            const { userId } = req.body;
+            const serviceId = resolveServiceId(req) || 'default_service';
+            const userId = req.body?.userId || req.query?.userId;
             if (!userId) {
-                return res.status(400).json({ success: false, error: 'userId faltante en la peticiÃ³n' });
+                return res.status(400).json({ success: false, error: 'userId faltante en la petición' });
             }
 
-            // Desactivar todas las cuentas de este proyecto
-            const { error: deactivateErr } = await supabase
+            // Desactivar todas las cuentas de este proyecto y servicio
+            let deactQuery = supabase
                 .from('mercadopago_acount_user')
                 .update({ is_active: false })
                 .eq('project_id', projectId);
+            if (serviceId) deactQuery = deactQuery.eq('service_id', serviceId);
+            const { error: deactivateErr } = await deactQuery;
 
             if (deactivateErr) throw deactivateErr;
 
             // Activar la cuenta seleccionada
-            const { error: activateErr } = await supabase
+            let actQuery = supabase
                 .from('mercadopago_acount_user')
                 .update({ is_active: true })
-                .eq('project_id', projectId)
                 .eq('user_id', String(userId));
+            if (projectId && projectId !== 'default') actQuery = actQuery.eq('project_id', projectId);
+            if (serviceId && serviceId !== 'default_service') actQuery = actQuery.eq('service_id', serviceId);
+            const { error: activateErr } = await actQuery;
 
             if (activateErr) throw activateErr;
 
-            res.json({ success: true, message: 'Cuenta de Mercado Pago activada con Ã©xito.' });
+            res.json({ success: true, message: 'Cuenta de Mercado Pago activada con éxito.' });
         } catch (error: any) {
             res.status(500).json({ success: false, error: error.message });
         }
     });
 
-    app.post('/api/backoffice/mercadopago/accounts/delete', backofficeAuth, async (req: any, res: any) => {
+    app.post('/api/backoffice/mercadopago/accounts/delete', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         try {
             const projectId = resolveProjectId(req) || 'default';
-            const { userId } = req.body;
+            const serviceId = resolveServiceId(req) || 'default_service';
+            const userId = req.body?.userId || req.query?.userId;
             if (!userId) {
-                return res.status(400).json({ success: false, error: 'userId faltante en la peticiÃ³n' });
+                return res.status(400).json({ success: false, error: 'userId faltante en la petición' });
             }
 
             // 1. Obtener la cuenta para ver si es la activa
-            const { data: targetAccount } = await supabase
+            let accQuery = supabase
                 .from('mercadopago_acount_user')
-                .select('is_active, access_token')
-                .eq('project_id', projectId)
-                .eq('user_id', String(userId))
-                .maybeSingle();
+                .select('*')
+                .eq('user_id', String(userId));
+            if (projectId && projectId !== 'default') {
+                accQuery = accQuery.eq('project_id', projectId);
+            }
+            if (serviceId && serviceId !== 'default_service') {
+                accQuery = accQuery.eq('service_id', serviceId);
+            }
+            let { data: targetAccount } = await accQuery.maybeSingle();
+
+            if (!targetAccount) {
+                const { data: fallbackAccount } = await supabase
+                    .from('mercadopago_acount_user')
+                    .select('*')
+                    .eq('user_id', String(userId))
+                    .maybeSingle();
+                targetAccount = fallbackAccount;
+            }
 
             if (!targetAccount) {
                 return res.status(404).json({ success: false, error: 'Cuenta no encontrada' });
             }
 
             const wasActive = targetAccount.is_active;
+            const targetProjectId = targetAccount.project_id || projectId;
+            const targetServiceId = targetAccount.service_id || serviceId;
 
-            // 2. Revocar token en Mercado Pago (Opcional - Mejor esfuerzo)
-            try {
-                const appId = await depsHistoryHandler.getSetting('MP_APP_ID', projectId) || process.env.MP_APP_ID;
-                const appSecret = await depsHistoryHandler.getSetting('MP_PASS', projectId) || process.env.MP_PASS;
-                if (appId && appSecret && targetAccount.access_token) {
-                    await axios.post('https://api.mercadopago.com/oauth/token/revoke', {
-                        client_id: appId,
-                        client_secret: appSecret,
-                        token: targetAccount.access_token
-                    });
-                    console.log(`[MP Revoke] Token de usuario ${userId} revocado con Ã©xito en Mercado Pago.`);
-                }
-            } catch (revokeErr: any) {
-                console.warn('[MP Revoke] No se pudo revocar el token en Mercado Pago:', revokeErr.response?.data || revokeErr.message);
-            }
-
-            // 3. Eliminar de las tablas de base de datos
+            // 2. Eliminar de las tablas de base de datos
             await supabase.from('mercadopago_user_routoing').delete().eq('user_id', String(userId));
             const { error: deleteErr } = await supabase
                 .from('mercadopago_acount_user')
                 .delete()
-                .eq('project_id', projectId)
-                .eq('user_id', String(userId));
+                .eq('user_id', String(userId))
+                .eq('project_id', targetProjectId);
 
             if (deleteErr) throw deleteErr;
 
-            // 4. Si la cuenta que eliminamos era la activa, buscar otra cuenta vinculada para activarla
+            // 3. Si la cuenta que eliminamos era la activa, buscar otra cuenta vinculada para activarla
             if (wasActive) {
-                const { data: otherAccounts } = await supabase
+                let otherQuery = supabase
                     .from('mercadopago_acount_user')
                     .select('user_id')
-                    .eq('project_id', projectId)
-                    .order('updated_at', { ascending: false });
+                    .eq('project_id', targetProjectId);
+                if (targetServiceId) {
+                    otherQuery = otherQuery.eq('service_id', targetServiceId);
+                }
+                const { data: otherAccounts } = await otherQuery.order('updated_at', { ascending: false });
 
                 if (otherAccounts && otherAccounts.length > 0) {
                     const nextActiveUserId = otherAccounts[0].user_id;
-                    await supabase
+                    let actNextQuery = supabase
                         .from('mercadopago_acount_user')
                         .update({ is_active: true })
-                        .eq('project_id', projectId)
+                        .eq('project_id', targetProjectId)
                         .eq('user_id', nextActiveUserId);
-                    console.log(`[MP Delete] Cuenta activa eliminada. Activando cuenta ${nextActiveUserId} automÃ¡ticamente.`);
+                    if (targetServiceId) {
+                        actNextQuery = actNextQuery.eq('service_id', targetServiceId);
+                    }
+                    await actNextQuery;
+                    console.log(`[MP Delete] Cuenta activa eliminada. Activando cuenta ${nextActiveUserId} automáticamente.`);
                 }
             }
 
-            res.json({ success: true, message: 'Cuenta de Mercado Pago eliminada con Ã©xito.' });
+            res.json({ success: true, message: 'Cuenta de Mercado Pago eliminada con éxito.' });
         } catch (error: any) {
             res.status(500).json({ success: false, error: error.message });
         }
@@ -4418,8 +4490,9 @@ export const registerBackofficeRoutes = (app: any) => {
     app.get('/api/backoffice/mercadopago/auth-url', backofficeAuth, async (req: any, res: any) => {
         try {
             const projectId = resolveProjectId(req) || 'default';
+            const serviceId = resolveServiceId(req) || 'default_service';
 
-            // Detectar dominio pÃºblico y guardarlo dinÃ¡micamente en settings
+            // Detectar dominio público y guardarlo dinámicamente en settings
             const host = req.headers.host || '';
             const protocol = req.headers['x-forwarded-proto'] || 'https';
             const domain = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PROJECT_URL || `${protocol}://${host}`;
@@ -4437,14 +4510,14 @@ export const registerBackofficeRoutes = (app: any) => {
 
             const appId = await depsHistoryHandler.getSetting('MP_APP_ID', projectId) || process.env.MP_APP_ID;
             if (!appId) {
-                return res.status(500).json({ success: false, error: 'ConfiguraciÃ³n MP_APP_ID faltante en el servidor o base de datos.' });
+                return res.status(500).json({ success: false, error: 'Configuración MP_APP_ID faltante en el servidor o base de datos.' });
             }
 
             const supabaseUrl = process.env.SUPABASE_URL || '';
             const redirectUri = encodeURIComponent(`${supabaseUrl}/functions/v1/clientes-mercadopago-webhook`);
 
-            // Codificar el state como base64 conteniendo el projectId y el initiatorDomain (fullUrl)
-            const stateObj = { projectId, initiatorDomain: fullUrl };
+            // Codificar el state como base64 conteniendo el projectId, serviceId y el initiatorDomain (fullUrl)
+            const stateObj = { projectId, serviceId, initiatorDomain: fullUrl };
             const stateBase64 = Buffer.from(JSON.stringify(stateObj)).toString('base64');
 
             const authUrl = `https://auth.mercadopago.com.ar/authorization?client_id=${appId}&response_type=code&platform_id=mp&redirect_uri=${redirectUri}&state=${stateBase64}`;
@@ -4458,17 +4531,37 @@ export const registerBackofficeRoutes = (app: any) => {
     app.get('/api/backoffice/mercadopago/callback', async (req: any, res: any) => {
         const { code, state } = req.query;
         if (!code) {
-            return res.status(400).send('CÃ³digo de autorizaciÃ³n faltante de Mercado Pago.');
+            return res.status(400).send('Código de autorización faltante de Mercado Pago.');
         }
 
         try {
-            const projectId = (state && state !== 'default') ? state : 'default';
+            let projectId = 'default';
+            let serviceId = 'default_service';
+            if (state) {
+                try {
+                    let raw = String(state);
+                    if (!raw.startsWith('{')) {
+                        const decoded = Buffer.from(raw, 'base64').toString('utf-8');
+                        if (decoded.startsWith('{')) raw = decoded;
+                    }
+                    if (raw.startsWith('{')) {
+                        const parsed = JSON.parse(raw);
+                        if (parsed.projectId) projectId = parsed.projectId;
+                        if (parsed.serviceId) serviceId = parsed.serviceId;
+                    } else if (raw !== 'default') {
+                        projectId = raw;
+                    }
+                } catch (_) {
+                    if (state !== 'default') projectId = String(state);
+                }
+            }
+
             const appId = await depsHistoryHandler.getSetting('MP_APP_ID', projectId) || process.env.MP_APP_ID;
             const appSecret = await depsHistoryHandler.getSetting('MP_PASS', projectId) || process.env.MP_PASS; // client_secret
 
             if (!appId || !appSecret) {
-                console.error('[MercadoPago Callback] Faltan credenciales de aplicaciÃ³n en env o DB:', { appId, appSecret, projectId });
-                return res.status(500).send(`Error interno: ConfiguraciÃ³n de la aplicaciÃ³n faltante. (Project: ${projectId}, AppID: ${appId ? 'Presente' : 'Faltante'}, Secret: ${appSecret ? 'Presente' : 'Faltante'})`);
+                console.error('[MercadoPago Callback] Faltan credenciales de aplicación en env o DB:', { appId, appSecret, projectId });
+                return res.status(500).send(`Error interno: Configuración de la aplicación faltante. (Project: ${projectId}, AppID: ${appId ? 'Presente' : 'Faltante'}, Secret: ${appSecret ? 'Presente' : 'Faltante'})`);
             }
 
             const supabaseUrl = process.env.SUPABASE_URL || '';
@@ -4491,7 +4584,7 @@ export const registerBackofficeRoutes = (app: any) => {
             const { access_token, public_key, user_id } = tokenRes.data;
 
             if (!access_token) {
-                return res.status(400).send('No se recibiÃ³ el access token en la respuesta de Mercado Pago.');
+                return res.status(400).send('No se recibió el access token en la respuesta de Mercado Pago.');
             }
 
             // Obtener el nickname e email del vendedor desde Mercado Pago
@@ -4508,19 +4601,22 @@ export const registerBackofficeRoutes = (app: any) => {
             }
 
             // Determinar si esta debe ser la cuenta activa por defecto o si ya estaba vinculada
-            const { data: existingAccounts } = await supabase
+            let checkQuery = supabase
                 .from('mercadopago_acount_user')
                 .select('user_id, is_active')
                 .eq('project_id', projectId);
+            if (serviceId) checkQuery = checkQuery.eq('service_id', serviceId);
+            const { data: existingAccounts } = await checkQuery;
 
             const hasActiveAccount = (existingAccounts || []).some((acc: any) => acc.is_active);
             const isAlreadyLinked = (existingAccounts || []).some((acc: any) => String(acc.user_id) === String(user_id));
             const isFirst = (existingAccounts || []).length === 0;
             const makeActive = isFirst || !hasActiveAccount;
 
-            // Guardar en la tabla mercadopago_acount_user (Soporta mÃºltiples cuentas por proyecto)
+            // Guardar en la tabla mercadopago_acount_user (Soporta múltiples cuentas por proyecto y servicio)
             await supabase.from('mercadopago_acount_user').upsert({
                 project_id: projectId,
+                service_id: serviceId,
                 access_token,
                 public_key: public_key || null,
                 user_id: String(user_id),
@@ -4538,23 +4634,23 @@ export const registerBackofficeRoutes = (app: any) => {
                 updated_at: new Date().toISOString()
             }, { onConflict: 'user_id' });
 
-            // Retornar pÃ¡gina HTML para cerrar el popup y notificar a la ventana principal, o redirigir si no hay opener
+            // Retornar página HTML para cerrar el popup y notificar a la ventana principal, o redirigir si no hay opener
             const publicDomain = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PROJECT_URL || "";
             const cleanDomain = publicDomain.startsWith("http") ? publicDomain : publicDomain ? `https://${publicDomain}` : "";
             const origin = cleanDomain || '';
-            const targetUrl = `${origin}/mercado-pago?projectId=${projectId}`;
+            const targetUrl = `${origin}/mercado-pago?projectId=${projectId}&serviceId=${serviceId}`;
 
             res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
             res.end(`
                 <!DOCTYPE html>
                 <html>
                 <head>
-                    <title>VinculaciÃ³n Exitosa</title>
+                    <title>Vinculación Exitosa</title>
                 </head>
                 <body>
                     <div style="text-align: center; margin-top: 50px; font-family: sans-serif;">
                         <h2>Vinculando cuenta...</h2>
-                        <p>Esta ventana se cerrarÃ¡ automÃ¡ticamente.</p>
+                        <p>Esta ventana se cerrará automáticamente.</p>
                     </div>
                     <script>
                         try {
@@ -4562,6 +4658,7 @@ export const registerBackofficeRoutes = (app: any) => {
                                 window.opener.postMessage({
                                     type: '${isAlreadyLinked ? 'mp-linked-existing' : 'mp-linked'}',
                                     projectId: '${projectId}',
+                                    serviceId: '${serviceId}',
                                     nickname: '${nickname}'
                                 }, '*');
                                 window.close();
@@ -4888,19 +4985,28 @@ Hemos recibido tu pago con Ã©xito.
     app.post('/api/backoffice/mercadopago/disconnect', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
         try {
             const projectId = resolveProjectId(req) || 'default';
+            const serviceId = resolveServiceId(req) || 'default_service';
 
-            // Buscar el user_id antes de borrar para limpiar ruteo
-            const { data: acc } = await supabase
+            // Buscar user_ids antes de borrar para limpiar ruteo
+            let findQuery = supabase
                 .from('mercadopago_acount_user')
                 .select('user_id')
-                .eq('project_id', projectId)
-                .maybeSingle();
+                .eq('project_id', projectId);
+            if (serviceId) findQuery = findQuery.eq('service_id', serviceId);
+            const { data: accs } = await findQuery;
 
-            if (acc && acc.user_id) {
-                await supabase.from('mercadopago_user_routoing').delete().eq('user_id', acc.user_id);
+            if (accs && accs.length > 0) {
+                for (const acc of accs) {
+                    if (acc.user_id) {
+                        await supabase.from('mercadopago_user_routoing').delete().eq('user_id', acc.user_id);
+                    }
+                }
             }
 
-            await supabase.from('mercadopago_acount_user').delete().eq('project_id', projectId);
+            let delQuery = supabase.from('mercadopago_acount_user').delete().eq('project_id', projectId);
+            if (serviceId) delQuery = delQuery.eq('service_id', serviceId);
+            await delQuery;
+
             res.json({ success: true });
         } catch (error: any) {
             res.status(500).json({ success: false, error: error.message });

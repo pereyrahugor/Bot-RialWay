@@ -2,20 +2,29 @@
 window.mercadoPagoView = (() => {
     let _token = '';
     let _projectId = '';
+    let _serviceId = '';
 
     window.addEventListener('message', async (event) => {
         if (event.data && event.data.type === 'mp-linked') {
             showToast('¡Cuenta vinculada con éxito!', 'success');
-            if (!_projectId || event.data.projectId === _projectId) {
-                await checkStatus();
-            }
+            await checkStatus();
         } else if (event.data && event.data.type === 'mp-linked-existing') {
             showToast(`La cuenta "${event.data.nickname}" ya estaba vinculada a este proyecto.`, 'info');
-            if (!_projectId || event.data.projectId === _projectId) {
-                await checkStatus();
-            }
+            await checkStatus();
         }
     });
+
+    function getQueryParams(extra = {}) {
+        const token = localStorage.getItem('backoffice_token') || _token;
+        const params = new URLSearchParams({
+            token: token || '',
+            projectId: _projectId || '',
+            serviceId: _serviceId || '',
+            _t: Date.now().toString(),
+            ...extra
+        });
+        return params.toString();
+    }
 
     function getHTML() {
         return `
@@ -129,21 +138,20 @@ window.mercadoPagoView = (() => {
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
                 try {
-                    const res = await fetch(`/api/backoffice/mercadopago/accounts/activate?token=${_token}&projectId=${_projectId}`, {
+                    const res = await fetch(`/api/backoffice/mercadopago/accounts/activate?${getQueryParams()}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ userId })
+                        body: JSON.stringify({ userId, projectId: _projectId, serviceId: _serviceId })
                     });
                     const data = await res.json();
                     if (res.ok && data.success) {
                         showToast('Cuenta activada con éxito.', 'success');
-                        await checkStatus();
                     } else {
                         showToast(data.error || 'No se pudo activar la cuenta.', 'error');
-                        await checkStatus();
                     }
                 } catch (err) {
                     showToast('Error al activar la cuenta.', 'error');
+                } finally {
                     await checkStatus();
                 }
             });
@@ -157,21 +165,20 @@ window.mercadoPagoView = (() => {
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
                 try {
-                    const res = await fetch(`/api/backoffice/mercadopago/accounts/delete?token=${_token}&projectId=${_projectId}`, {
+                    const res = await fetch(`/api/backoffice/mercadopago/accounts/delete?${getQueryParams()}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ userId })
+                        body: JSON.stringify({ userId, projectId: _projectId, serviceId: _serviceId })
                     });
                     const data = await res.json();
                     if (res.ok && data.success) {
                         showToast('Cuenta eliminada con éxito.', 'success');
-                        await checkStatus();
                     } else {
                         showToast(data.error || 'No se pudo eliminar la cuenta.', 'error');
-                        await checkStatus();
                     }
                 } catch (err) {
                     showToast('Error al eliminar la cuenta.', 'error');
+                } finally {
                     await checkStatus();
                 }
             });
@@ -192,8 +199,9 @@ window.mercadoPagoView = (() => {
         generatorSec.style.display = 'none';
 
         try {
-            const token = localStorage.getItem('backoffice_token');
-            const res = await fetch(`/api/backoffice/mercadopago/status?token=${token}&projectId=${_projectId}`);
+            const res = await fetch(`/api/backoffice/mercadopago/status?${getQueryParams()}`, {
+                cache: 'no-store'
+            });
             const data = await res.json();
 
             if (!loading) return; // Safety check
@@ -202,9 +210,12 @@ window.mercadoPagoView = (() => {
             if (data && data.connected) {
                 connectedSec.style.display = 'block';
                 generatorSec.style.display = 'block';
+                disconnectedSec.style.display = 'none';
                 
                 // Cargar todas las cuentas vinculadas
-                const accountsRes = await fetch(`/api/backoffice/mercadopago/accounts?token=${token}&projectId=${_projectId}`);
+                const accountsRes = await fetch(`/api/backoffice/mercadopago/accounts?${getQueryParams()}`, {
+                    cache: 'no-store'
+                });
                 const accountsData = await accountsRes.json();
                 const accounts = accountsData.accounts || [];
 
@@ -241,12 +252,16 @@ window.mercadoPagoView = (() => {
                     }
                 }
             } else {
+                connectedSec.style.display = 'none';
+                generatorSec.style.display = 'none';
                 disconnectedSec.style.display = 'block';
             }
         } catch (e) {
             console.error('Error fetching Mercado Pago status:', e);
             if (loading) {
                 loading.style.display = 'none';
+                connectedSec.style.display = 'none';
+                generatorSec.style.display = 'none';
                 disconnectedSec.style.display = 'block';
             }
         }
@@ -258,7 +273,9 @@ window.mercadoPagoView = (() => {
         btnElement.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Redirigiendo...';
 
         try {
-            const res = await fetch(`/api/backoffice/mercadopago/auth-url?token=${_token}&projectId=${_projectId}`);
+            const res = await fetch(`/api/backoffice/mercadopago/auth-url?${getQueryParams()}`, {
+                cache: 'no-store'
+            });
             const data = await res.json();
             
             if (res.ok && data.success && data.url) {
@@ -296,16 +313,17 @@ window.mercadoPagoView = (() => {
 
     async function init() {
         const token = localStorage.getItem('backoffice_token');
-        _token = token;
+        _token = token || '';
 
         const urlParams = new URLSearchParams(window.location.search);
         const paramProjectId = urlParams.get('projectId');
-        if (paramProjectId) {
-            localStorage.setItem('mp_current_project_id', paramProjectId);
-            _projectId = paramProjectId;
-        } else {
-            _projectId = localStorage.getItem('mp_current_project_id') || '';
-        }
+        const paramServiceId = urlParams.get('serviceId');
+
+        _projectId = paramProjectId || window.railwayProjectId || localStorage.getItem('mp_current_project_id') || '';
+        _serviceId = paramServiceId || window.railwayServiceId || localStorage.getItem('mp_current_service_id') || '';
+
+        if (_projectId) localStorage.setItem('mp_current_project_id', _projectId);
+        if (_serviceId) localStorage.setItem('mp_current_service_id', _serviceId);
 
         await checkStatus();
 
@@ -350,10 +368,10 @@ window.mercadoPagoView = (() => {
                 generateBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Generando...';
 
                 try {
-                    const res = await fetch(`/api/backoffice/mercadopago/create-link?token=${_token}&projectId=${_projectId}`, {
+                    const res = await fetch(`/api/backoffice/mercadopago/create-link?${getQueryParams()}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ title, amount })
+                        body: JSON.stringify({ title, amount, projectId: _projectId, serviceId: _serviceId })
                     });
                     const data = await res.json();
 
