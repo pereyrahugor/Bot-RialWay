@@ -1,4 +1,4 @@
-import { HistoryHandler } from "../db/historyHandler";
+import { HistoryHandler } from "../../db/historyHandler";
 
 // Promise singleton: todos los requests simultáneos comparten el mismo fetch, no se duplica la query
 let _adminPassPromise: Promise<string> | null = null;

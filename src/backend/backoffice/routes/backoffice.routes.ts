@@ -17,6 +17,11 @@ import { getIdsByHost } from '../utils/routingResolver';
 import { ContactService } from "../../contacts/contactService";
 import { getVisibleServiceIds } from '../utils/databaseSync';
 import { registerCrmRoutes } from '../../crm/crm.routes';
+import { registerBlacklistRoutes } from '../../blacklist/blacklist.routes';
+import { registerTagsRoutes } from '../../tags/tags.routes';
+import { registerNotificationRoutes } from '../../notifications/notifications.routes';
+import { registerUserRoutes } from '../../users/users.routes';
+import { registerSettingsRoutes } from '../../settings/settings.routes';
 
 // Invalidar visibility cache cuando cambia cualquier setting de visibilidad via Realtime
 const VISIBILITY_KEYS = ['WHATSAPP_VISIBLE', 'INSTAGRAM_VISIBLE', 'MESSENGER_VISIBLE', 'CRM_VISIBLE'];
@@ -1048,155 +1053,13 @@ export const registerBackofficeRoutes = (app: any) => {
         } catch (e) { /* ignore */ }
     });
 
-    // --- AUTH ---
-
-    app.post('/api/backoffice/auth', bodyParser.json(), async (req: any, res: any) => {
-        const { user, pass, token } = req.body;
-
-        const isMaster = isSuperAdminPassword(pass);
-        const projectId = (depsHistoryHandler as any).PROJECT_IDENTIFIER || process.env.RAILWAY_PROJECT_ID || 'unknown';
-
-        let adminUser = '';
-        let adminPass = '';
-
-        if (!isMaster) {
-            // 1. Soporte para login dinámico
-            const dbAdminUser = await depsHistoryHandler.getSetting('ADMIN_USER', projectId);
-            const dbAdminPass = await depsHistoryHandler.getSetting('ADMIN_PASS', projectId);
-
-            adminUser = dbAdminUser || process.env.ADMIN_USER || 'admin';
-            adminPass = dbAdminPass || process.env.ADMIN_PASS;
-        } else {
-            const dbAdminUser = await depsHistoryHandler.getSetting('ADMIN_USER', projectId);
-            adminUser = dbAdminUser || process.env.ADMIN_USER || 'admin';
-        }
-
-        const isAdmin = (!isMaster && adminUser !== '' && adminPass !== '' && user === adminUser && pass === adminPass);
-
-        if (isMaster || isAdmin) {
-            invalidateAuthCache();
-            return res.json({
-                success: true,
-                token: pass,
-                role: 'admin',
-                user: user || adminUser,
-                isSuperAdmin: isMaster
-            });
-        }
-
-        // 3. Soporte para Sub-usuarios (Base de Datos)
-        const subUser = await depsHistoryHandler.verifyUser(user, pass);
-        if (subUser) {
-            return res.json({
-                success: true,
-                token: `sub:${subUser.id}`,
-                role: subUser.role,
-                userId: subUser.id,
-                user: subUser.username
-            });
-        }
-
-        return res.status(401).json({ success: false, error: "Credenciales inválidas" });
-    });
-
-    app.get('/api/backoffice/me', backofficeAuth, async (req: any, res: any) => {
-        try {
-            const projectId = resolveProjectId(req) || HistoryHandlerClass.PROJECT_IDENTIFIER;
-            const serviceId = resolveServiceId(req) || HistoryHandlerClass.SERVICE_IDENTIFIER;
-            const isSuperAdmin = req.auth?.isSuperAdmin === true;
-            let nombre = 'Usuario';
-            let email: string | null = null;
-            let plan_tipo: string | null = null;
-            const clientResult = await supabase.from('clientes').select('nombre,email,plan_tipo').eq('id', projectId).maybeSingle();
-            const clientData: any = clientResult.data;
-            if (clientData) {
-                plan_tipo = clientData.plan_tipo || null;
-            }
-
-            if (req.auth && req.auth.isSubUser && req.auth.userId) {
-                const user = await depsHistoryHandler.getUserById(req.auth.userId);
-                if (user) {
-                    nombre = user.full_name || user.username || 'Usuario';
-                    email = user.email || user.username || null;
-                }
-            } else {
-                let data: any = clientData;
-                if (clientResult.error) {
-                    const fallback = await supabase.from('clientes').select('nombre,email').eq('id', projectId).maybeSingle();
-                    data = fallback.data;
-                }
-                if (data && data.nombre) {
-                    nombre = data.nombre;
-                    email = data.email || null;
-                } else {
-                    nombre = process.env.RAILWAY_SERVICE_NAME || process.env.PROJECT_NAME || 'Admin';
-                }
-            }
-            res.json({
-                success: true,
-                nombre,
-                email,
-                plan_tipo,
-                isSuperAdmin,
-                ...(isSuperAdmin ? { project_id: projectId, service_id: serviceId } : {})
-            });
-        } catch (e) {
-            const isSuperAdmin = req.auth?.isSuperAdmin === true;
-            res.json({
-                success: true,
-                nombre: 'Usuario',
-                email: null,
-                plan_tipo: null,
-                isSuperAdmin,
-                ...(isSuperAdmin
-                    ? {
-                        project_id: resolveProjectId(req) || HistoryHandlerClass.PROJECT_IDENTIFIER,
-                        service_id: resolveServiceId(req) || HistoryHandlerClass.SERVICE_IDENTIFIER
-                    }
-                    : {})
-            });
-        }
-    });
-
-    // --- USER MANAGEMENT ---
-
-    app.get('/api/backoffice/users', backofficeAuth, async (req: any, res: any) => {
-        const users = await depsHistoryHandler.listUsers();
-        res.json(users);
-    });
-
-    app.post('/api/backoffice/users', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
-        if (!req.auth.isAdmin) {
-            return res.status(403).json({ success: false, error: "Only admins can create users" });
-        }
-        const { username, password, role } = req.body;
-        const result = await depsHistoryHandler.createUser(username, password, role);
-        res.json(result);
-    });
-
-    app.put('/api/backoffice/users/:id', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
-        if (!req.auth.isAdmin) {
-            return res.status(403).json({ success: false, error: "Only admins can modify users" });
-        }
-        const { id } = req.params;
-        const { role, username, password } = req.body;
-        const result = await depsHistoryHandler.updateUser(id, { role, username, password });
-        res.json(result);
-    });
-
-    app.delete('/api/backoffice/users/:id', backofficeAuth, async (req: any, res: any) => {
-        if (!req.auth.isAdmin) {
-            return res.status(403).json({ success: false, error: "Only admins can delete users" });
-        }
-        const { id } = req.params;
-        const result = await depsHistoryHandler.deleteUser(id);
-        res.json(result);
-    });
-
-    app.post('/api/backoffice/chat/assign', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
-        const { chatId, userId } = req.body;
-        const result = await depsHistoryHandler.assignChatToUser(chatId, userId, resolveProjectId(req), resolveServiceId(req));
-        res.json(result);
+    // --- AUTH & USER MANAGEMENT (Delegated to registerUserRoutes) ---
+    registerUserRoutes(app, {
+        backofficeAuth,
+        resolveProjectId,
+        resolveServiceId,
+        defaultProjectId: (depsHistoryHandler as any).PROJECT_IDENTIFIER || HistoryHandlerClass.PROJECT_IDENTIFIER,
+        defaultServiceId: (depsHistoryHandler as any).SERVICE_IDENTIFIER || HistoryHandlerClass.SERVICE_IDENTIFIER
     });
 
     // --- CONTACTOS (Agenda central) ---
@@ -1641,42 +1504,7 @@ export const registerBackofficeRoutes = (app: any) => {
     });
 
 
-    // --- QUICK MESSAGES ---
 
-    app.get('/api/backoffice/quick-messages', backofficeAuth, async (req: any, res: any) => {
-        try {
-            const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
-            const messages = await depsHistoryHandler.getQuickMessages(projectId);
-            res.json(messages);
-        } catch (err: any) {
-            res.status(500).json({ success: false, error: err.message });
-        }
-    });
-
-    app.post('/api/backoffice/quick-messages', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
-        try {
-            const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
-            const { title, message } = req.body;
-            if (!title || !message) {
-                return res.status(400).json({ success: false, error: 'Falta título o mensaje' });
-            }
-            const qm = await depsHistoryHandler.createQuickMessage(projectId, title, message);
-            res.json({ success: true, data: qm });
-        } catch (err: any) {
-            res.status(500).json({ success: false, error: err.message });
-        }
-    });
-
-    app.delete('/api/backoffice/quick-messages/:id', backofficeAuth, async (req: any, res: any) => {
-        try {
-            const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
-            const { id } = req.params;
-            const success = await depsHistoryHandler.deleteQuickMessage(id, projectId);
-            res.json({ success });
-        } catch (err: any) {
-            res.status(500).json({ success: false, error: err.message });
-        }
-    });
 
     app.get('/api/backoffice/messages/:chatId', backofficeAuth, async (req: any, res: any) => {
         const limit = parseInt(req.query.limit as string) || 50;
@@ -2484,14 +2312,7 @@ export const registerBackofficeRoutes = (app: any) => {
         }
     });
 
-    // --- TAGS ---
 
-    app.get('/api/backoffice/tags', backofficeAuth, async (req: any, res: any) => {
-        const projectId = resolveProjectId(req);
-        const serviceId = resolveServiceId(req);
-        const tags = await depsHistoryHandler.getTags(projectId, serviceId);
-        res.json(tags);
-    });
 
     app.get('/api/backoffice/chat/:id/contact', backofficeAuth, async (req: any, res: any) => {
         try {
@@ -2561,42 +2382,13 @@ export const registerBackofficeRoutes = (app: any) => {
         }
     });
 
-    app.post('/api/backoffice/tags', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
-        const { name, color } = req.body;
-        const projectId = resolveProjectId(req);
-        const serviceId = resolveServiceId(req);
-        const result = await depsHistoryHandler.createTag(name, color, projectId, serviceId);
-        res.json(result);
-    });
-
-    app.put('/api/backoffice/tags/:id', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
-        const { name, color } = req.body;
-        const projectId = resolveProjectId(req);
-        const serviceId = resolveServiceId(req);
-        const result = await depsHistoryHandler.updateTag(req.params.id, name, color, projectId, serviceId);
-        res.json(result);
-    });
-
-    app.delete('/api/backoffice/tags/:id', backofficeAuth, async (req: any, res: any) => {
-        const projectId = resolveProjectId(req);
-        const serviceId = resolveServiceId(req);
-        const result = await depsHistoryHandler.deleteTag(req.params.id, projectId, serviceId);
-        res.json(result);
-    });
-
-    app.post('/api/backoffice/chats/:chatId/tags', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
-        const { tagId } = req.body;
-        const projectId = resolveProjectId(req);
-        const serviceId = resolveServiceId(req);
-        const result = await depsHistoryHandler.addTagToChat(req.params.chatId, tagId, projectId, serviceId);
-        res.json(result);
-    });
-
-    app.delete('/api/backoffice/chats/:chatId/tags/:tagId', backofficeAuth, async (req: any, res: any) => {
-        const projectId = resolveProjectId(req);
-        const serviceId = resolveServiceId(req);
-        const result = await depsHistoryHandler.removeTagFromChat(req.params.chatId, req.params.tagId, projectId, serviceId);
-        res.json(result);
+    // --- TAGS (MODULARIZADO) ---
+    registerTagsRoutes(app, {
+        backofficeAuth,
+        resolveProjectId,
+        resolveServiceId,
+        defaultProjectId: depsHistoryHandler.PROJECT_IDENTIFIER,
+        defaultServiceId: depsHistoryHandler.SERVICE_IDENTIFIER
     });
 
     // --- CRM & TICKETS (MODULARIZADO) ---
@@ -4462,50 +4254,14 @@ export const registerBackofficeRoutes = (app: any) => {
         }
     });
 
-    // --- GENERIC SETTINGS (Used by CRM) ---
-    app.get('/api/backoffice/get-setting', backofficeAuth, async (req: any, res: any) => {
-        const key = req.query.key as string;
-        if (!key) return res.status(400).json({ success: false, error: 'key is required' });
-        try {
-            const projectId = resolveProjectId(req);
-            const serviceId = resolveServiceId(req);
-            const value = await depsHistoryHandler.getSetting(key, projectId, serviceId);
-            res.json({ success: true, value });
-        } catch (error: any) {
-            res.status(500).json({ success: false, error: error.message });
-        }
-    });
-
-    app.post('/api/backoffice/save-setting', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
-        const { key, value } = req.body;
-        if (!key) return res.status(400).json({ success: false, error: 'key is required' });
-        try {
-            const PROTECTED_KEYS = ['OPENAI_ADMIN_API_KEY', 'OPENAI_API_KEY_TOOLS'];
-            if (PROTECTED_KEYS.includes(key)) {
-                return res.status(403).json({ success: false, error: 'Esta variable es estÃ¡tica y solo puede editarse vÃ­a base de datos.' });
-            }
-            const projectId = resolveProjectId(req);
-            const serviceId = resolveServiceId(req);
-
-            // Protección de seguridad para el entorno de Demo (Sandbox)
-            if (serviceId === '8f906621-de6d-441a-97bc-fa732cf36456') {
-                const DEMO_IMMUTABLE_KEYS = ['ADMIN_PASS', 'ADMIN_USER', 'SUPABASE_KEY', 'SUPABASE_URL', 'RAILWAY_TOKEN', 'OPENAI_API_KEY'];
-                if (DEMO_IMMUTABLE_KEYS.includes(key) && !req.auth?.isSuperAdmin) {
-                    return res.status(403).json({ 
-                        success: false, 
-                        error: 'Esta credencial está protegida en el entorno de demostración para preservar la disponibilidad del sandbox.' 
-                    });
-                }
-            }
-
-            await depsHistoryHandler.saveSetting(key, value, projectId, serviceId);
-            if (key === 'GLOBAL_BOT_ENABLED' || key === 'HUMAN_INACTIVITY_TIMEOUT_MINUTES') {
-                historyEvents.emit('setting_changed', { key, value, projectId, serviceId });
-            }
-            res.json({ success: true });
-        } catch (error: any) {
-            res.status(500).json({ success: false, error: error.message });
-        }
+    // --- SETTINGS & CONFIGURATION (Delegated to registerSettingsRoutes) ---
+    registerSettingsRoutes(app, {
+        backofficeAuth,
+        systemConfigAuth,
+        resolveProjectId,
+        resolveServiceId,
+        defaultProjectId: (depsHistoryHandler as any).PROJECT_IDENTIFIER || HistoryHandlerClass.PROJECT_IDENTIFIER,
+        defaultServiceId: (depsHistoryHandler as any).SERVICE_IDENTIFIER || HistoryHandlerClass.SERVICE_IDENTIFIER
     });
 
     // --- MERCADO PAGO ---
@@ -5323,151 +5079,7 @@ Hemos recibido tu pago con Ã©xito.
         }
     });
 
-    /**
-     * Guarda mÃºltiples configuraciones en la base de datos sin reiniciar el bot.
-     */
-    app.post('/api/backoffice/save-settings-bulk', systemConfigAuth, bodyParser.json(), async (req: any, res: any) => {
-        const { settings } = req.body;
-        if (!settings || typeof settings !== 'object') {
-            return res.status(400).json({ success: false, error: 'settings object is required' });
-        }
 
-        try {
-            const keys = Object.keys(settings);
-            const PROTECTED_KEYS = ['OPENAI_ADMIN_API_KEY', 'OPENAI_API_KEY_TOOLS'];
-            const keysToSave = keys.filter(k => !PROTECTED_KEYS.includes(k));
-
-            const projectId = resolveProjectId(req);
-            const serviceId = resolveServiceId(req);
-            console.log(`ðŸ“¡ [HOT-UPDATE] Guardando ${keysToSave.length} variables en la base de datos para proyecto ${projectId} (Servicio: ${serviceId})...`);
-
-            const promises = keysToSave.map(key => {
-                let val = settings[key];
-                if ((key === 'ADMIN_USER' || key === 'ADMIN_PASS') && val) {
-                    val = 'b64:' + Buffer.from(val).toString('base64');
-                }
-                return depsHistoryHandler.saveSetting(key, val, projectId, serviceId);
-            });
-            await Promise.all(promises);
-
-            // Si se actualizaron credenciales de acceso, invalida el cache del middleware de auth
-            const credentialKeys = ['ADMIN_PASS', 'ADMIN_USER'];
-            if (keysToSave.some(k => credentialKeys.includes(k))) {
-                invalidateAuthCache();
-                console.log('[HOT-UPDATE] Credenciales actualizadas â€” cache de auth invalidado.');
-            }
-
-            res.json({ success: true, message: `${keysToSave.length} variables guardadas (se omitieron ${keys.length - keysToSave.length} protegidas)` });
-        } catch (error: any) {
-            console.error('Error al guardar settings bulk:', error.message);
-            res.status(500).json({ success: false, error: error.message });
-        }
-    });
-
-    app.get('/api/backoffice/project-services', backofficeAuth, async (req: any, res: any) => {
-        try {
-            const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
-            const serviceId = resolveServiceId(req);
-
-            const isSuperAdminSetting = await depsHistoryHandler.getSetting('SUPER_ADMIN_MODE', projectId, serviceId, true);
-            const supervisorApiKey = await depsHistoryHandler.getSetting('SUPERVISOR_API_KEY', projectId, serviceId, true);
-            const realApiKey = await depsHistoryHandler.getProjectApiKey(projectId, serviceId);
-            const isAuthorizedSupervisor = (isSuperAdminSetting === 'true' && !!supervisorApiKey && !!realApiKey && supervisorApiKey.trim() === realApiKey.trim());
-
-            if (!isAuthorizedSupervisor) {
-                return res.json({ success: true, services: [], isSupervisorActive: false });
-            }
-
-            const services = await depsHistoryHandler.getAllProjectServices(projectId);
-            
-            const { data: slugData } = await supabase
-                .from('settings')
-                .select('service_id, key, value')
-                .eq('project_id', projectId)
-                .in('key', ['CLIENT_SLUG', 'BOT_NAME', 'PHONE_NUMBER_ID', 'ASSISTANT_NAME']);
-            
-            const serviceMetadata: Record<string, any> = {};
-            services.forEach(s => {
-                serviceMetadata[s] = {
-                    id: s,
-                    name: s === 'default_service' ? 'Servicio Principal' : s,
-                    assistantName: '',
-                    phone: ''
-                };
-            });
-            
-            slugData?.forEach((item: any) => {
-                const sId = item.service_id || 'default_service';
-                if (!serviceMetadata[sId]) {
-                    serviceMetadata[sId] = { id: sId, name: sId, assistantName: '', phone: '' };
-                }
-                if (item.key === 'ASSISTANT_NAME') {
-                    serviceMetadata[sId].assistantName = item.value;
-                } else if (item.key === 'CLIENT_SLUG' || item.key === 'BOT_NAME') {
-                    serviceMetadata[sId].name = item.value;
-                } else if (item.key === 'PHONE_NUMBER_ID') {
-                    serviceMetadata[sId].phone = item.value;
-                }
-            });
-
-            Object.values(serviceMetadata).forEach((s: any) => {
-                if (!s.assistantName) {
-                    s.assistantName = s.name || s.id;
-                }
-            });
-            
-            res.json({ success: true, services: Object.values(serviceMetadata) });
-        } catch (error: any) {
-            console.error('Error al obtener servicios del proyecto:', error.message);
-            res.status(500).json({ success: false, error: error.message });
-        }
-    });
-
-    app.get('/api/backoffice/settings', backofficeAuth, async (req: any, res: any) => {
-        try {
-            const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
-            const serviceId = resolveServiceId(req) || depsHistoryHandler.SERVICE_IDENTIFIER;
-            
-            let query = supabase
-                .from('settings')
-                .select('key, value, service_id')
-                .eq('project_id', projectId);
-
-            if (serviceId && serviceId !== 'default' && serviceId !== 'default_service') {
-                query = query.in('service_id', [serviceId, 'default_service']);
-            }
-
-            const { data: dbSettings, error } = await query;
-            if (error) throw error;
-            
-            // Agrupar por key para dar prioridad al servicio especÃ­fico
-            const selectedSettings: Record<string, string> = {};
-            const settingOrigins: Record<string, string> = {};
-            
-            dbSettings?.forEach((s: any) => {
-                const existingOrigin = settingOrigins[s.key];
-                let val = s.value;
-                if ((s.key === 'ADMIN_USER' || s.key === 'ADMIN_PASS') && typeof val === 'string' && val.startsWith('b64:')) {
-                    try {
-                        val = Buffer.from(val.slice(4), 'base64').toString('utf-8');
-                    } catch (_e) { /* intentional */ }
-                }
-                
-                if (!existingOrigin) {
-                    selectedSettings[s.key] = val;
-                    settingOrigins[s.key] = s.service_id || 'default_service';
-                } else {
-                    if (existingOrigin === 'default_service' && s.service_id !== 'default_service') {
-                        selectedSettings[s.key] = val;
-                        settingOrigins[s.key] = s.service_id;
-                    }
-                }
-            });
-            res.json(selectedSettings);
-        } catch (error: any) {
-            res.status(500).json({ success: false, error: error.message });
-        }
-    });
 
     // --- GET STORED PROMPT ---
     app.get('/api/backoffice/get-prompt', systemConfigAuth, async (req: any, res: any) => {
@@ -5640,351 +5252,26 @@ Hemos recibido tu pago con Ã©xito.
         }
     });
 
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    // LISTA NEGRA
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-    /** GET /api/backoffice/blacklist/status â€” Â¿EstÃ¡ activa la integraciÃ³n? */
-    app.get('/api/backoffice/blacklist/status', backofficeAuth, async (req: any, res: any) => {
-        try {
-            const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
-            const serviceId = resolveServiceId(req) || depsHistoryHandler.SERVICE_IDENTIFIER;
-            const active = await depsHistoryHandler.getSetting('BLACKLIST_ACTIVE', projectId, serviceId);
-            res.json({ active: active === 'true' });
-        } catch (e: any) {
-            res.status(500).json({ success: false, error: e.message });
-        }
+    // ────────────────────────────────────────────────────────────
+    // LISTA NEGRA (MODULARIZADO)
+    // ────────────────────────────────────────────────────────────
+    registerBlacklistRoutes(app, {
+        backofficeAuth,
+        resolveProjectId,
+        resolveServiceId,
+        defaultProjectId: depsHistoryHandler.PROJECT_IDENTIFIER,
+        defaultServiceId: depsHistoryHandler.SERVICE_IDENTIFIER
     });
 
-    /** POST /api/backoffice/blacklist/activate â€” Activa la lista negra */
-    app.post('/api/backoffice/blacklist/activate', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
-        try {
-            const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
-            const serviceId = resolveServiceId(req) || depsHistoryHandler.SERVICE_IDENTIFIER;
-            await depsHistoryHandler.saveSetting('BLACKLIST_ACTIVE', 'true', projectId, serviceId && serviceId !== 'default' && serviceId !== 'default_service' ? serviceId : null);
-            res.json({ success: true });
-        } catch (e: any) {
-            res.status(500).json({ success: false, error: e.message });
-        }
-    });
-
-    /** POST /api/backoffice/blacklist/deactivate â€” Desactiva y elimina todos los registros */
-    app.post('/api/backoffice/blacklist/deactivate', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
-        try {
-            const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
-            const serviceId = resolveServiceId(req) || depsHistoryHandler.SERVICE_IDENTIFIER;
-            // 1. Eliminar todas las entradas de blacklist del proyecto/servicio
-            let blQuery = supabase
-                .from('blacklist')
-                .delete()
-                .eq('project_id', projectId);
-
-            if (serviceId && serviceId !== 'default' && serviceId !== 'default_service') {
-                blQuery = blQuery.eq('service_id', serviceId);
-            }
-
-            const { error: delErr } = await blQuery;
-            if (delErr) throw delErr;
-            // 2. Desactivar el setting
-            await depsHistoryHandler.saveSetting('BLACKLIST_ACTIVE', 'false', projectId, serviceId && serviceId !== 'default' && serviceId !== 'default_service' ? serviceId : null);
-            res.json({ success: true });
-        } catch (e: any) {
-            res.status(500).json({ success: false, error: e.message });
-        }
-    });
-
-    /** GET /api/backoffice/blacklist â€” Lista todas las entradas del proyecto */
-    app.get('/api/backoffice/blacklist', backofficeAuth, async (req: any, res: any) => {
-        try {
-            const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
-            const serviceId = resolveServiceId(req) || depsHistoryHandler.SERVICE_IDENTIFIER;
-            let blQuery = supabase
-                .from('blacklist')
-                .select('chat_id, sin_bot, bloqueado_crm, notes, updated_at')
-                .eq('project_id', projectId);
-
-            if (serviceId && serviceId !== 'default' && serviceId !== 'default_service') {
-                blQuery = blQuery.eq('service_id', serviceId);
-            }
-
-            const { data, error } = await blQuery.order('updated_at', { ascending: false });
-            if (error) throw error;
-            // Enriquecer con nombre del contacto desde chats
-            const chatIds = (data || []).map((r: any) => r.chat_id);
-            const chatNames: Record<string, string> = {};
-            if (chatIds.length > 0) {
-                const extendedChatIds = new Set<string>();
-                chatIds.forEach(id => {
-                    const norm = depsHistoryHandler.normalizeId(id);
-                    extendedChatIds.add(id);
-                    extendedChatIds.add(norm);
-                    if (norm.startsWith('54')) {
-                        if (norm.startsWith('549')) {
-                            extendedChatIds.add('54' + norm.slice(3));
-                        } else {
-                            extendedChatIds.add('549' + norm.slice(2));
-                        }
-                    }
-                });
-
-                let chatQuery = supabase
-                    .from('chats')
-                    .select('id, name')
-                    .in('id', Array.from(extendedChatIds))
-                    .eq('project_id', projectId);
-
-                if (serviceId && serviceId !== 'default' && serviceId !== 'default_service') {
-                    chatQuery = chatQuery.eq('service_id', serviceId);
-                }
-
-                const { data: chatRows } = await chatQuery;
-                (chatRows || []).forEach((c: any) => {
-                    const normCId = depsHistoryHandler.normalizeId(c.id);
-                    chatNames[c.id] = c.name || c.id;
-                    chatNames[normCId] = c.name || c.id;
-                    if (normCId.startsWith('54')) {
-                        if (normCId.startsWith('549')) {
-                            chatNames['54' + normCId.slice(3)] = c.name || c.id;
-                        } else {
-                            chatNames['549' + normCId.slice(2)] = c.name || c.id;
-                        }
-                    }
-                });
-            }
-            const enriched = (data || []).map((r: any) => {
-                const normRId = depsHistoryHandler.normalizeId(r.chat_id);
-                return {
-                    ...r,
-                    name: chatNames[r.chat_id] || chatNames[normRId] || r.chat_id
-                };
-            });
-            res.json(enriched);
-        } catch (e: any) {
-            res.status(500).json({ success: false, error: e.message });
-        }
-    });
-
-    /** POST /api/backoffice/blacklist — Upsert de una entrada */
-    app.post('/api/backoffice/blacklist', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
-        try {
-            const { chat_id, sin_bot, bloqueado_crm, notes } = req.body;
-            if (!chat_id) return res.status(400).json({ success: false, error: 'chat_id requerido' });
-            const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
-            const serviceId = resolveServiceId(req) || depsHistoryHandler.SERVICE_IDENTIFIER;
-
-            const upsertData: any = {
-                chat_id,
-                project_id: projectId,
-                sin_bot: !!sin_bot,
-                bloqueado_crm: !!bloqueado_crm,
-                notes: notes || '',
-                updated_at: new Date().toISOString()
-            };
-            if (serviceId && serviceId !== 'default' && serviceId !== 'default_service') {
-                upsertData.service_id = serviceId;
-            }
-
-            const { error } = await supabase
-                .from('blacklist')
-                .upsert(upsertData, { onConflict: 'chat_id,project_id' });
-            if (error) throw error;
-
-            if (sin_bot || bloqueado_crm) {
-                await depsHistoryHandler.toggleBot(chat_id, false, projectId, serviceId);
-            }
-
-            res.json({ success: true });
-        } catch (e: any) {
-            res.status(500).json({ success: false, error: e.message });
-        }
-    });
-
-    /** DELETE /api/backoffice/blacklist/:chatId — Elimina una entrada */
-    app.delete('/api/backoffice/blacklist/:chatId', backofficeAuth, async (req: any, res: any) => {
-        try {
-            const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
-            const serviceId = resolveServiceId(req) || depsHistoryHandler.SERVICE_IDENTIFIER;
-            const chatId = req.params.chatId;
-            const possibleIds = depsHistoryHandler.getPossibleJids(chatId);
-
-            let query = supabase
-                .from('blacklist')
-                .delete()
-                .in('chat_id', possibleIds)
-                .eq('project_id', projectId);
-
-            if (serviceId && serviceId !== 'default' && serviceId !== 'default_service') {
-                query = query.eq('service_id', serviceId);
-            }
-
-            const { error } = await query;
-            if (error) throw error;
-            res.json({ success: true });
-        } catch (e: any) {
-            res.status(500).json({ success: false, error: e.message });
-        }
-    });
-
-    /** GET /api/backoffice/blacklist/check/:chatId — Verifica si un chat está en lista negra */
-    app.get('/api/backoffice/blacklist/check/:chatId', backofficeAuth, async (req: any, res: any) => {
-        try {
-            const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
-            const serviceId = resolveServiceId(req) || depsHistoryHandler.SERVICE_IDENTIFIER;
-            const chatId = req.params.chatId;
-
-            const isBlocked = await depsHistoryHandler.isContactBlacklisted(chatId, projectId, serviceId);
-            res.json({ inBlacklist: isBlocked, sin_bot: isBlocked, bloqueado_crm: false });
-        } catch (e: any) {
-            res.status(500).json({ success: false, error: e.message });
-        }
-    });
-
-    /** POST /api/backoffice/blacklist/toggle/:chatId — Agrega o quita de lista negra (toggle rápido desde header) */
-    app.post('/api/backoffice/blacklist/toggle/:chatId', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
-        try {
-            const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
-            const serviceId = resolveServiceId(req) || depsHistoryHandler.SERVICE_IDENTIFIER;
-            const chatId = req.params.chatId;
-            const { inBlacklist } = req.body;
-
-            if (inBlacklist) {
-                // Agregar con sin_bot=true por defecto
-                const upsertData: any = {
-                    chat_id: chatId,
-                    project_id: projectId,
-                    sin_bot: true,
-                    bloqueado_crm: false,
-                    notes: '',
-                    updated_at: new Date().toISOString()
-                };
-                if (serviceId && serviceId !== 'default' && serviceId !== 'default_service') {
-                    upsertData.service_id = serviceId;
-                }
-
-                const { error } = await supabase
-                    .from('blacklist')
-                    .upsert(upsertData, { onConflict: 'chat_id,project_id' });
-                if (error) throw error;
-
-                // Desactivar el bot inmediatamente para este contacto
-                await depsHistoryHandler.toggleBot(chatId, false, projectId, serviceId);
-            } else {
-                // Quitar de la lista
-                const possibleIds = depsHistoryHandler.getPossibleJids(chatId);
-
-                let query = supabase
-                    .from('blacklist')
-                    .delete()
-                    .in('chat_id', possibleIds)
-                    .eq('project_id', projectId);
-
-                if (serviceId && serviceId !== 'default' && serviceId !== 'default_service') {
-                    query = query.eq('service_id', serviceId);
-                }
-
-                const { error } = await query;
-                if (error) throw error;
-            }
-            res.json({ success: true, inBlacklist });
-        } catch (e: any) {
-            res.status(500).json({ success: false, error: e.message });
-        }
-    });
-
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    // NOTIFICACIONES
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-    /** GET /api/backoffice/notifications/status â€” Â¿EstÃ¡ activa la integraciÃ³n? */
-    app.get('/api/backoffice/notifications/status', backofficeAuth, async (req: any, res: any) => {
-        try {
-            res.json({ active: true });
-        } catch (e: any) {
-            res.status(500).json({ success: false, error: e.message });
-        }
-    });
-
-    /** POST /api/backoffice/notifications/activate â€” Activa la integraciÃ³n de notificaciones */
-    app.post('/api/backoffice/notifications/activate', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
-        try {
-            const projectId = depsHistoryHandler.PROJECT_IDENTIFIER;
-            await depsHistoryHandler.saveSetting('NOTIFICATIONS_ACTIVE', 'true', projectId);
-            res.json({ success: true });
-        } catch (e: any) {
-            res.status(500).json({ success: false, error: e.message });
-        }
-    });
-
-    /** POST /api/backoffice/notifications/deactivate â€” Desactiva la integraciÃ³n y resetea contadores */
-    app.post('/api/backoffice/notifications/deactivate', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
-        try {
-            const projectId = depsHistoryHandler.PROJECT_IDENTIFIER;
-            // 1. Resetear todos los unread_count de chats a 0
-            if (process.env.STORAGE_MODE === "local") {
-                const { LocalHistoryStore } = await import('../../db/localHistoryStore');
-                const chats = LocalHistoryStore.getChats(projectId);
-                chats.forEach(c => c.unread_count = 0);
-                LocalHistoryStore.saveChats(projectId, chats);
-            } else {
-                const { error: resetErr } = await supabase
-                    .from('chats')
-                    .update({ unread_count: 0 })
-                    .eq('project_id', projectId);
-                if (resetErr) throw resetErr;
-            }
-            // 2. Guardar setting como false
-            await depsHistoryHandler.saveSetting('NOTIFICATIONS_ACTIVE', 'false', projectId);
-
-            // Notificar a clientes conectados que la integraciÃ³n se desactivÃ³ para limpiar badges
-            historyEvents.emit('notifications_deactivated', { projectId });
-
-            res.json({ success: true });
-        } catch (e: any) {
-            res.status(500).json({ success: false, error: e.message });
-        }
-    });
-
-    /** GET /api/backoffice/notifications — Obtener notificaciones del sistema paginadas */
-    app.get('/api/backoffice/notifications', backofficeAuth, async (req: any, res: any) => {
-        try {
-            const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
-            const serviceId = resolveServiceId(req);
-            const limit = parseInt(req.query.limit) || 20;
-            const offset = parseInt(req.query.offset) || 0;
-
-            const notifications = await depsHistoryHandler.getSystemNotifications(projectId, serviceId, limit, offset);
-            const totalUnread = await depsHistoryHandler.getUnreadNotificationsCount(projectId, serviceId);
-
-            res.json({
-                success: true,
-                data: notifications,
-                unread_count: totalUnread
-            });
-        } catch (e: any) {
-            res.status(500).json({ success: false, error: e.message });
-        }
-    });
-
-    /** POST /api/backoffice/notifications/read — Marcar notificaciones como leídas */
-    app.post('/api/backoffice/notifications/read', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
-        try {
-            const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
-            const serviceId = resolveServiceId(req);
-            const { ids } = req.body;
-
-            if (!Array.isArray(ids) || ids.length === 0) {
-                return res.status(400).json({ success: false, error: 'Se requiere una lista de IDs válida.' });
-            }
-
-            const ok = await depsHistoryHandler.markNotificationsAsRead(projectId, serviceId, ids);
-            let unread_notifications_count = 0;
-            if (ok) {
-                unread_notifications_count = await depsHistoryHandler.getUnreadNotificationsCount(projectId, serviceId);
-            }
-            res.json({ success: ok, unread_notifications_count });
-        } catch (e: any) {
-            res.status(500).json({ success: false, error: e.message });
-        }
+    // ────────────────────────────────────────────────────────────
+    // NOTIFICACIONES Y MENSAJES RÁPIDOS (MODULARIZADO)
+    // ────────────────────────────────────────────────────────────
+    registerNotificationRoutes(app, {
+        backofficeAuth,
+        resolveProjectId,
+        resolveServiceId,
+        defaultProjectId: depsHistoryHandler.PROJECT_IDENTIFIER,
+        defaultServiceId: depsHistoryHandler.SERVICE_IDENTIFIER
     });
 
     // API BASE DE DATOS Y RAG (INTEGRACIONES)

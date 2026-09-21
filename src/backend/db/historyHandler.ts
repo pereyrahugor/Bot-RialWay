@@ -7,6 +7,11 @@ import crypto from "crypto";
 import { vault } from "./vault";
 import { LocalHistoryStore } from "./localHistoryStore";
 import { CrmService } from "../crm/crm.service";
+import { BlacklistService } from "../blacklist/blacklist.service";
+import { TagsService } from "../tags/tags.service";
+import { NotificationsService } from "../notifications/notifications.service";
+import { UsersService } from "../users/users.service";
+import { SettingsService } from "../settings/settings.service";
 
 dotenv.config();
 
@@ -241,7 +246,7 @@ export class HistoryHandler {
     static initialized = false;
 
     // In-memory caches to optimize database performance and avoid Disk I/O exhaustion (Supabase Best Practice)
-    private static settingsCache = new Map<string, { value: string | null, timestamp: number }>();
+    public static get settingsCache() { return SettingsService.settingsCache; }
     private static chatCache = new Map<string, { data: any, timestamp: number }>();
     private static tenantCache = new Map<string, { tenantId: string | null, resolved: boolean, globalScope: boolean, timestamp: number }>();
     private static readonly CACHE_TTL_MS = 60 * 1000; // Settings cache: 1 minute
@@ -2379,37 +2384,10 @@ export class HistoryHandler {
 
     /**
      * Verifica si un contacto está en lista negra (sin_bot o bloqueado_crm)
+     * Delegado en BlacklistService
      */
     static async isContactBlacklisted(rawChatId: string, projectId?: string | null, serviceId?: string | null): Promise<boolean> {
-        if (!supabase) return false;
-        try {
-            const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
-            const currentServiceId = serviceId || this.SERVICE_IDENTIFIER;
-
-            const possibleIds = this.getPossibleJids(rawChatId);
-
-            let query = supabase
-                .from('blacklist')
-                .select('sin_bot, bloqueado_crm')
-                .in('chat_id', possibleIds)
-                .eq('project_id', currentProjectId)
-                .or('sin_bot.eq.true,bloqueado_crm.eq.true');
-
-            if (isScopedServiceId(currentServiceId)) {
-                query = query.or(`service_id.eq.${currentServiceId},service_id.is.null,service_id.eq.default,service_id.eq.default_service`);
-            }
-
-            const { data, error } = await query.limit(1);
-            if (error) {
-                console.warn('[HistoryHandler] Error consultando isContactBlacklisted:', error.message);
-                return false;
-            }
-
-            return !!(data && data.length > 0);
-        } catch (err: any) {
-            console.warn('[HistoryHandler] Excepción en isContactBlacklisted:', err?.message || err);
-            return false;
-        }
+        return BlacklistService.isContactBlacklisted(rawChatId, projectId, serviceId);
     }
 
     /**
@@ -2806,198 +2784,34 @@ export class HistoryHandler {
         }
     }
 
-    // --- Tag Management ---
+    // --- Tag Management (Delegado en TagsService) ---
 
     static async getTags(projectId: string | null = null, serviceId: string | null = null) {
-        const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
-        const currentServiceId = serviceId || this.SERVICE_IDENTIFIER;
-        if (process.env.STORAGE_MODE === "local") {
-            return LocalHistoryStore.getTags(currentProjectId);
-        }
-        if (!supabase) return [];
-        try {
-            let query = supabase
-                .from('tags')
-                .select('*')
-                .eq('project_id', currentProjectId);
-
-            if (currentServiceId && currentServiceId !== 'default' && currentServiceId !== 'default_service') {
-                query = query.eq('service_id', currentServiceId);
-            }
-
-            const { data, error } = await query.order('name');
-            if (error) throw error;
-            return data || [];
-        } catch (err) {
-            console.error('[HistoryHandler] Error en getTags:', err);
-            return [];
-        }
+        return TagsService.getTags(projectId, serviceId);
     }
 
     static async createTag(name: string, color: string = '#6366f1', projectId: string | null = null, serviceId: string | null = null) {
-        const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
-        const currentServiceId = serviceId || this.SERVICE_IDENTIFIER;
-        if (process.env.STORAGE_MODE === "local") {
-            const tag = await LocalHistoryStore.createTag(name, color, currentProjectId);
-            return { success: true, tag };
-        }
-        if (!supabase) return { success: false, error: 'Supabase not initialized' };
-        try {
-            const insertData: any = {
-                name,
-                color,
-                project_id: currentProjectId,
-                created_at: new Date().toISOString()
-            };
-            if (currentServiceId && currentServiceId !== 'default' && currentServiceId !== 'default_service') {
-                insertData.service_id = currentServiceId;
-            }
-
-            const { data, error } = await supabase
-                .from('tags')
-                .insert(insertData)
-                .select()
-                .single();
-            if (error) throw error;
-            return { success: true, tag: data };
-        } catch (err: any) {
-            console.error('[HistoryHandler] Error en createTag:', err);
-            return { success: false, error: err.message };
-        }
+        return TagsService.createTag(name, color, projectId, serviceId);
     }
 
     static async updateTag(id: string, name: string, color: string, projectId: string | null = null, serviceId: string | null = null) {
-        const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
-        const currentServiceId = serviceId || this.SERVICE_IDENTIFIER;
-        if (process.env.STORAGE_MODE === "local") {
-            const res = await LocalHistoryStore.updateTag(id, name, color, currentProjectId);
-            return { success: res };
-        }
-        try {
-            let query = supabase
-                .from('tags')
-                .update({ name, color })
-                .eq('id', id)
-                .eq('project_id', currentProjectId);
-
-            if (currentServiceId && currentServiceId !== 'default' && currentServiceId !== 'default_service') {
-                query = query.eq('service_id', currentServiceId);
-            }
-
-            const { error } = await query;
-            if (error) throw error;
-            return { success: true };
-        } catch (err: any) {
-            return { success: false, error: err.message };
-        }
+        return TagsService.updateTag(id, name, color, projectId, serviceId);
     }
 
     static async deleteTag(id: string, projectId: string | null = null, serviceId: string | null = null) {
-        const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
-        const currentServiceId = serviceId || this.SERVICE_IDENTIFIER;
-        if (process.env.STORAGE_MODE === "local") {
-            const res = await LocalHistoryStore.deleteTag(id, currentProjectId);
-            return { success: res };
-        }
-        try {
-            let query = supabase
-                .from('tags')
-                .delete()
-                .eq('id', id)
-                .eq('project_id', currentProjectId);
-
-            if (currentServiceId && currentServiceId !== 'default' && currentServiceId !== 'default_service') {
-                query = query.eq('service_id', currentServiceId);
-            }
-
-            const { error } = await query;
-            if (error) throw error;
-            return { success: true };
-        } catch (err: any) {
-            return { success: false, error: err.message };
-        }
+        return TagsService.deleteTag(id, projectId, serviceId);
     }
 
     static async addTagToChat(rawChatId: string, tagId: string, projectId: string | null = null, serviceId: string | null = null) {
-        const chatId = this.normalizeId(rawChatId);
-        const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
-        const currentServiceId = serviceId || this.SERVICE_IDENTIFIER;
-        if (process.env.STORAGE_MODE === "local") {
-            const res = await LocalHistoryStore.addTagToChat(chatId, tagId, currentProjectId);
-            return { success: res };
-        }
-        try {
-            // Invalidar cache
-            this.invalidateChatCache(chatId, currentProjectId);
-
-            // Aseguramos que el chat base existe antes de vincular la etiqueta
-            // para evitar fallos de clave foránea si el chat no ha sido persistido aún.
-            await this.getOrCreateChat(chatId, 'whatsapp', null, null, currentProjectId, currentServiceId);
-
-            const insertData: any = {
-                chat_id: chatId,
-                tag_id: tagId,
-                project_id: currentProjectId
-            };
-            if (currentServiceId && currentServiceId !== 'default' && currentServiceId !== 'default_service') {
-                insertData.service_id = currentServiceId;
-            }
-
-            const { error } = await supabase
-                .from('chat_tags')
-                .insert(insertData);
-
-            if (error) {
-                if (error.code === '23505') return { success: true }; // Ya existe
-                throw error;
-            }
-            return { success: true };
-        } catch (err: any) {
-            console.error('[HistoryHandler] Error en addTagToChat:', err);
-            return { success: false, error: err.message };
-        }
+        return TagsService.addTagToChat(rawChatId, tagId, projectId, serviceId);
     }
 
     static async removeTagFromChat(rawChatId: string, tagId: string, projectId: string | null = null, serviceId: string | null = null) {
-        const chatId = this.normalizeId(rawChatId);
-        const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
-        const currentServiceId = serviceId || this.SERVICE_IDENTIFIER;
-        if (process.env.STORAGE_MODE === "local") {
-            const res = await LocalHistoryStore.removeTagFromChat(chatId, tagId, currentProjectId);
-            return { success: res };
-        }
-        try {
-            // Invalidar cache
-            this.invalidateChatCache(chatId, currentProjectId);
-
-            let query = supabase
-                .from('chat_tags')
-                .delete()
-                .eq('chat_id', chatId)
-                .eq('tag_id', tagId)
-                .eq('project_id', currentProjectId);
-
-            if (currentServiceId && currentServiceId !== 'default' && currentServiceId !== 'default_service') {
-                query = query.eq('service_id', currentServiceId);
-            }
-
-            const { error } = await query;
-            if (error) throw error;
-            return { success: true };
-        } catch (err: any) {
-            console.error('[HistoryHandler] Error en removeTagFromChat:', err);
-            return { success: false, error: err.message };
-        }
+        return TagsService.removeTagFromChat(rawChatId, tagId, projectId, serviceId);
     }
 
     static async getChatTags(rawChatId: string) {
-        try {
-            const chat = await this.getChat(rawChatId);
-            return chat && chat.tags ? chat.tags : [];
-        } catch (err) {
-            console.error('[HistoryHandler] Error en getChatTags:', err);
-            return [];
-        }
+        return TagsService.getChatTags(rawChatId);
     }
 
 
@@ -3657,274 +3471,25 @@ export class HistoryHandler {
         }
     }
 
+    // --- Settings & Configuration Management (Delegated to SettingsService) ---
     static async saveSetting(key: string, value: string, projectId: string | null = null, serviceId: string | null = null) {
-        if (!supabase) return;
-        const targetProjectId = projectId || HistoryHandler.PROJECT_IDENTIFIER;
-        const targetServiceId = serviceId || process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || HistoryHandler.SERVICE_IDENTIFIER;
-
-        // Invalidar cache en memoria
-        const cacheKey = `${targetProjectId}:${targetServiceId}:${key}`;
-        this.settingsCache.delete(cacheKey);
-
-        const payload: any = {
-            project_id: targetProjectId,
-            service_id: targetServiceId,
-            key,
-            value,
-            updated_at: new Date().toISOString()
-        };
-
-        const { error } = await supabase
-            .from('settings')
-            .upsert(payload, { onConflict: 'project_id,service_id,key' });
-
-        if (error) {
-            console.error(`❌ [HistoryHandler] Error guardando setting ${key}:`, error);
-            throw new Error(`Error guardando configuracion ${key}: ${error.message}`);
-        } else {
-            // Sincronizar en process.env para que el bot actualice su comportamiento de inmediato (Hot-update)
-            if (targetProjectId === HistoryHandler.PROJECT_IDENTIFIER && value !== 'PENDING') {
-                process.env[key] = value;
-            }
-
-            // --- PASO ADICIONAL: Si configuramos IDs de Meta, registrar en la routing_table para triangulación ---
-            if ((key === 'FACEBOOK_PAGE_ID' || key === 'INSTAGRAM_BUSINESS_ID') && value) {
-                // Priorizar PROJECT_URL explícito (en variables de entorno o guardado en settings)
-                const explicitProjectUrl = process.env.PROJECT_URL || (await this.getSetting('PROJECT_URL', targetProjectId, targetServiceId));
-                const publicDomain = explicitProjectUrl
-                    || ((process.env.RAILWAY_STATIC_URL && process.env.RAILWAY_STATIC_URL.includes('.up.railway.app'))
-                        ? process.env.RAILWAY_STATIC_URL
-                        : (process.env.RAILWAY_PUBLIC_DOMAIN && process.env.RAILWAY_PUBLIC_DOMAIN.includes('.up.railway.app'))
-                            ? process.env.RAILWAY_PUBLIC_DOMAIN
-                            : (process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PROJECT_URL));
-                if (publicDomain && value) {
-                    let projectUrl = publicDomain.startsWith('http')
-                        ? publicDomain
-                        : `https://${publicDomain}`;
-
-                    if (projectUrl.endsWith('/')) {
-                        projectUrl = projectUrl.slice(0, -1);
-                    }
-
-                    console.log(
-                        `📡 [HistoryHandler] Sincronizando routing_table para ${key}: ${value} -> ${projectUrl}`
-                    );
-
-                    await supabase
-                        .from('routing_table')
-                        .upsert({
-                            phone_number_id: value,
-                            waba_id: null,
-                            project_id: targetProjectId,
-                            service_id: targetServiceId,
-                            project_url: projectUrl,
-                            updated_at: new Date().toISOString()
-                        }, { onConflict: 'phone_number_id' });
-                }
-            }
-        }
+        return SettingsService.saveSetting(key, value, projectId, serviceId);
     }
 
     static async getAllProjectServices(projectId: string): Promise<string[]> {
-        if (!supabase) return ['default_service'];
-        try {
-            // Consultar todos los service_id únicos para el project_id en settings y chats
-            const { data, error } = await supabase
-                .from('settings')
-                .select('service_id')
-                .eq('project_id', projectId);
-
-            if (error) throw error;
-
-            const services = (data || [])
-                .map((item: any) => item.service_id)
-                .filter((val: any, idx: number, self: any[]) => val && val !== 'null' && val !== 'generic' && self.indexOf(val) === idx);
-
-            return services.length > 0 ? services : ['default_service'];
-        } catch (e: any) {
-            console.error('[HistoryHandler] Error en getAllProjectServices:', e.message);
-            return ['default_service'];
-        }
+        return SettingsService.getAllProjectServices(projectId);
     }
 
     static async getSetting(key: string, projectId: string | null = null, serviceId: string | null = null, strictService: boolean = false): Promise<string | null> {
-        if (!supabase) return null;
-        const targetProjectId = projectId || HistoryHandler.PROJECT_IDENTIFIER;
-        const rawServiceId = serviceId || process.env.SERVICE_ID || process.env.RAILWAY_SERVICE_ID || HistoryHandler.SERVICE_IDENTIFIER;
-
-        const isGenericService = !rawServiceId ||
-            rawServiceId === 'default_service' ||
-            rawServiceId === 'generic' ||
-            rawServiceId === 'null' ||
-            rawServiceId.trim() === '';
-
-        const targetServiceId = isGenericService ? null : rawServiceId;
-        const cacheKey = `${targetProjectId}:${targetServiceId || 'default'}:${key}`;
-        const now = Date.now();
-
-        // 1. Intentar obtener desde cache en memoria (excepto credenciales para garantizar realtime)
-        if (key !== 'ADMIN_USER' && key !== 'ADMIN_PASS') {
-            const cached = this.settingsCache.get(cacheKey);
-            if (cached && (now - cached.timestamp < this.CACHE_TTL_MS)) {
-                return cached.value;
-            }
-        }
-
-        let query = supabase
-            .from('settings')
-            .select('value')
-            .eq('project_id', targetProjectId)
-            .eq('key', key);
-
-        if (targetServiceId) {
-            query = query.eq('service_id', targetServiceId);
-        } else if (strictService) {
-            query = query.is('service_id', null);
-        }
-
-        const { data: mainData, error } = await query.maybeSingle();
-
-        if (error && error.code !== 'PGRST116') {
-            console.error(`❌ [HistoryHandler] Error obteniendo setting ${key}:`, error);
-        }
-
-        let data = mainData;
-
-        // Fallback: Si no lo encontró con service_id específico, buscar solo por project_id
-        if (!data && targetServiceId && !strictService) {
-            const fallbackRes = await supabase
-                .from('settings')
-                .select('value')
-                .eq('project_id', targetProjectId)
-                .eq('key', key)
-                .limit(1)
-                .maybeSingle();
-            if (fallbackRes.data) {
-                data = fallbackRes.data;
-            }
-        }
-
-        let value = data ? data.value : null;
-
-        if (key === 'CRM_FIELDS_CONFIG' && (!value || value.trim() === '')) {
-            const slug = await this.getConfig('CLIENT_SLUG', targetProjectId);
-            const cleanSlug = String(slug || '').trim().toLowerCase();
-
-            if (cleanSlug === 'ganemos' || cleanSlug === 'ganemos-net' || cleanSlug === 'cas-epc' || cleanSlug === 'casepc') {
-                value = JSON.stringify([
-                    { id: 'crm-ticket-title', label: 'Titulo del Ticket', visible: true, order: 0 },
-                    { id: 'crm-name', label: 'Nombre del Contacto', visible: true, order: 1 },
-                    { id: 'crm-phone', label: 'Teléfono', visible: true, order: 2 },
-                    { id: 'crm-cuit', label: 'Usuario / DNI', visible: true, order: 3 },
-                    { id: 'crm-email', label: 'Correo Electrónico', visible: true, order: 4 },
-                    { id: 'crm-address', label: 'Domicilio', visible: true, order: 5 },
-                    { id: 'crm-tax-status', label: 'Situación Impositiva', visible: true, order: 6 },
-                    { id: 'crm-product', label: 'Producto Ofrecido', visible: true, order: 7 },
-                    { id: 'crm-source', label: 'Fuente / Canal', visible: true, order: 8 },
-                    { id: 'crm-notes', label: 'Historial de Notas', visible: true, order: 9 },
-                    { id: 'crm-due-date', label: 'Fecha Alerta / Seguimiento', visible: true, order: 10 },
-                    { id: 'crm-priority', label: 'Prioridad', visible: true, order: 11 },
-                    { id: 'crm-status', label: 'Estado del Lead (CRM)', visible: true, order: 12 }
-                ]);
-            } else if (cleanSlug === 'aquavita') {
-                value = JSON.stringify([
-                    { id: 'crm-ticket-title', label: 'Titulo del Ticket', visible: true, order: 0 },
-                    { id: 'crm-name', label: 'Nombre del Contacto', visible: true, order: 1 },
-                    { id: 'crm-phone', label: 'Teléfono', visible: true, order: 2 },
-                    { id: 'crm-cuit', label: 'Nro Cliente / DNI', visible: true, order: 3 },
-                    { id: 'crm-email', label: 'Correo Electrónico', visible: true, order: 4 },
-                    { id: 'crm-address', label: 'Dirección', visible: true, order: 5 },
-                    { id: 'crm-tax-status', label: 'Tipo Cliente', visible: true, order: 6 },
-                    { id: 'crm-product', label: 'Producto Ofrecido', visible: true, order: 7 },
-                    { id: 'crm-source', label: 'Fuente / Canal', visible: true, order: 8 },
-                    { id: 'crm-notes', label: 'Historial de Notas', visible: true, order: 9 },
-                    { id: 'crm-due-date', label: 'Fecha Alerta / Seguimiento', visible: true, order: 10 },
-                    { id: 'crm-priority', label: 'Prioridad', visible: true, order: 11 },
-                    { id: 'crm-status', label: 'Estado del Lead (CRM)', visible: true, order: 12 }
-                ]);
-            }
-        }
-
-        if ((key === 'ADMIN_USER' || key === 'ADMIN_PASS') && value && value.startsWith('b64:')) {
-            try {
-                value = Buffer.from(value.slice(4), 'base64').toString('utf-8');
-            } catch (e) {
-                console.error(`[HistoryHandler] Error decoding base64 setting ${key}:`, e);
-            }
-        }
-
-        // 2. Guardar en cache antes de retornar
-        this.settingsCache.set(cacheKey, { value, timestamp: now });
-
-        return value;
+        return SettingsService.getSetting(key, projectId, serviceId, strictService);
     }
 
-    /**
-     * Helper de configuración dinámica (Hot-update).
-     * Busca primero en la base de datos (settings) y si no existe, recurre a process.env.
-     */
     static async getConfig(key: string, projectId: string | null = null, serviceId: string | null = null): Promise<string | null> {
-        const dbValue = await this.getSetting(key, projectId, serviceId);
-        if (dbValue !== null && dbValue !== undefined && dbValue !== '') {
-            return dbValue;
-        }
-
-        // Si no está en DB, lo tomamos de Railway (env)
-        const envValue = process.env[key] || null;
-
-        // Si lo encontramos en Railway pero no estaba en DB, lo retornamos pero NO lo persistimos automáticamente
-        // para evitar sobreescrituras accidentales de la configuración base.
-        return envValue;
+        return SettingsService.getConfig(key, projectId, serviceId);
     }
 
-    /**
-     * Obtiene el API_KEY oficial de la instancia consultada.
-     * Si no existe en settings, la genera automáticamente con formato seguro sk_dusk_...
-     */
     static async getProjectApiKey(projectId: string | null = null, serviceId: string | null = null): Promise<string> {
-        if (!supabase) return '';
-        const targetProjectId = projectId || HistoryHandler.PROJECT_IDENTIFIER;
-        const targetServiceId = serviceId || HistoryHandler.SERVICE_IDENTIFIER;
-
-        try {
-            // Buscar filtrando rigurosamente por project_id y service_id
-            const { data } = await supabase
-                .from('settings')
-                .select('value')
-                .eq('project_id', targetProjectId)
-                .eq('service_id', targetServiceId)
-                .eq('key', 'api_key')
-                .maybeSingle();
-
-            if (data?.value) return data.value;
-
-            // Fallback: si el serviceId consultado era distinto de SERVICE_IDENTIFIER, probar con el identificador principal
-            if (targetServiceId !== HistoryHandler.SERVICE_IDENTIFIER) {
-                const { data: defData } = await supabase
-                    .from('settings')
-                    .select('value')
-                    .eq('project_id', targetProjectId)
-                    .eq('service_id', HistoryHandler.SERVICE_IDENTIFIER)
-                    .eq('key', 'api_key')
-                    .maybeSingle();
-                if (defData?.value) return defData.value;
-            }
-
-            // Si aún no existe, generarlo
-            const crypto = await import('crypto');
-            const uniqueKey = `sk_dusk_${crypto.randomBytes(16).toString('hex')}`;
-            await supabase.from('settings').insert({
-                project_id: targetProjectId,
-                service_id: targetServiceId,
-                key: 'api_key',
-                value: uniqueKey,
-                updated_at: new Date().toISOString()
-            });
-            return uniqueKey;
-        } catch (e: any) {
-            console.error('❌ [HistoryHandler] Error obteniendo getProjectApiKey:', e.message);
-            return '';
-        }
+        return SettingsService.getProjectApiKey(projectId, serviceId);
     }
 
     /**
@@ -4198,152 +3763,37 @@ export class HistoryHandler {
         }
     }
 
-    // --- User Management ---
-
+    // --- User Management (Delegated to UsersService) ---
     static async createUser(username: string, pass: string, role: string = 'subuser') {
-        try {
-            const { data, error } = await supabase
-                .from('users')
-                .insert({
-                    project_id: HistoryHandler.PROJECT_IDENTIFIER,
-                    username,
-                    password: pass,
-                    role
-                })
-                .select()
-                .single();
-            if (error) throw error;
-            return { success: true, user: data };
-        } catch (err: any) {
-            console.error('[HistoryHandler] Error en createUser:', err);
-            return { success: false, error: err.message };
-        }
+        return UsersService.createUser(username, pass, role, HistoryHandler.PROJECT_IDENTIFIER);
     }
 
     static async updateUserRole(userId: string, role: string) {
-        return this.updateUser(userId, { role });
+        return UsersService.updateUserRole(userId, role, HistoryHandler.PROJECT_IDENTIFIER);
     }
 
     static async updateUser(userId: string, updates: { role?: string; username?: string; password?: string }) {
-        try {
-            const cleanUpdates: any = {};
-            if (updates.role) cleanUpdates.role = updates.role;
-            if (updates.username) cleanUpdates.username = updates.username;
-            if (updates.password) cleanUpdates.password = updates.password;
-
-            const { data, error } = await supabase
-                .from('users')
-                .update(cleanUpdates)
-                .eq('id', userId)
-                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER)
-                .select()
-                .single();
-            if (error) throw error;
-            return { success: true, user: data };
-        } catch (err: any) {
-            console.error('[HistoryHandler] Error en updateUser:', err);
-            return { success: false, error: err.message };
-        }
+        return UsersService.updateUser(userId, updates, HistoryHandler.PROJECT_IDENTIFIER);
     }
 
     static async deleteUser(userId: string) {
-        try {
-            const { error } = await supabase
-                .from('users')
-                .delete()
-                .eq('id', userId)
-                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
-            if (error) throw error;
-            return { success: true };
-        } catch (err: any) {
-            console.error('[HistoryHandler] Error en deleteUser:', err);
-            return { success: false, error: err.message };
-        }
+        return UsersService.deleteUser(userId, HistoryHandler.PROJECT_IDENTIFIER);
     }
 
     static async listUsers() {
-        try {
-            const { data, error } = await supabase
-                .from('users')
-                .select('id, username, role, created_at')
-                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER);
-            if (error) throw error;
-            return data || [];
-        } catch (err) {
-            console.error('[HistoryHandler] Error en listUsers:', err);
-            return [];
-        }
+        return UsersService.listUsers(HistoryHandler.PROJECT_IDENTIFIER);
     }
 
     static async verifyUser(username: string, pass: string) {
-        try {
-            const cleanUser = (username || '').trim();
-            const cleanPass = (pass || '').trim();
-
-            const { data, error } = await supabase
-                .from('users')
-                .select('*')
-                .eq('project_id', HistoryHandler.PROJECT_IDENTIFIER)
-                .ilike('username', cleanUser)
-                .eq('password', cleanPass)
-                .maybeSingle();
-            if (error) throw error;
-            return data || null;
-        } catch (err) {
-            console.error('[HistoryHandler] Error en verifyUser:', err);
-            return null;
-        }
+        return UsersService.verifyUser(username, pass, HistoryHandler.PROJECT_IDENTIFIER);
     }
 
     static async getUserById(userId: string, projectId: string | null = null) {
-        try {
-            let query = supabase
-                .from('users')
-                .select('*')
-                .eq('id', userId);
-
-            if (projectId) {
-                query = query.eq('project_id', projectId);
-            }
-
-            const { data, error } = await query.maybeSingle();
-            if (error) throw error;
-            return data || null;
-        } catch (err) {
-            console.error('[HistoryHandler] Error en getUserById:', err);
-            return null;
-        }
+        return UsersService.getUserById(userId, projectId || HistoryHandler.PROJECT_IDENTIFIER);
     }
 
     static async assignChatToUser(rawChatId: string, userId: string | null, projectId: string | null = null, serviceId: string | null = null) {
-        const chatId = this.normalizeId(rawChatId);
-        const currentProjectId = projectId || HistoryHandler.PROJECT_IDENTIFIER;
-        const currentServiceId = serviceId || HistoryHandler.SERVICE_IDENTIFIER;
-        try {
-            let query = supabase
-                .from('chats')
-                .update({ assigned_to: userId })
-                .eq('id', chatId)
-                .eq('project_id', currentProjectId);
-            if (currentServiceId && currentServiceId !== 'default' && currentServiceId !== 'default_service') {
-                query = query.eq('service_id', currentServiceId);
-            }
-            const { error } = await query;
-            if (error) throw error;
-
-            // Emitir evento para actualización en tiempo real
-            historyEvents.emit('contact_updated', {
-                chatId,
-                project_id: currentProjectId,
-                service_id: currentServiceId,
-                details: { assigned_to: userId }
-            });
-
-            return { success: true };
-        } catch (err: any) {
-            console.error('[HistoryHandler] Error en assignChatToUser:', err);
-            return { success: false, error: err.message };
-        }
+        return UsersService.assignChatToUser(rawChatId, userId, projectId || HistoryHandler.PROJECT_IDENTIFIER, serviceId || HistoryHandler.SERVICE_IDENTIFIER);
     }
 
     /**
@@ -4735,102 +4185,20 @@ export class HistoryHandler {
         }
     }
 
-    /**
-     * Obtiene todos los mensajes rápidos para un proyecto.
-     */
+    // --- Quick Messages & Notifications (Delegado en NotificationsService) ---
+
     static async getQuickMessages(projectId: string, serviceId: string | null = null): Promise<any[]> {
-        const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
-        const currentServiceId = serviceId || this.SERVICE_IDENTIFIER;
-        if (process.env.STORAGE_MODE === "local") {
-            return LocalHistoryStore.getQuickMessages(currentProjectId);
-        }
-        try {
-            let query = supabase
-                .from('quick_messages')
-                .select('*')
-                .eq('project_id', currentProjectId);
-
-            if (currentServiceId && currentServiceId !== 'default' && currentServiceId !== 'default_service') {
-                query = query.eq('service_id', currentServiceId);
-            }
-
-            const { data, error } = await query.order('created_at', { ascending: false });
-
-            if (error) throw error;
-            return data || [];
-        } catch (err: any) {
-            console.error('[HistoryHandler] Error en getQuickMessages:', err.message);
-            return [];
-        }
+        return NotificationsService.getQuickMessages(projectId, serviceId);
     }
 
-    /**
-     * Crea un nuevo mensaje rápido para el proyecto.
-     */
     static async createQuickMessage(projectId: string, title: string, message: string, serviceId: string | null = null): Promise<any> {
-        const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
-        const currentServiceId = serviceId || this.SERVICE_IDENTIFIER;
-        if (process.env.STORAGE_MODE === "local") {
-            return LocalHistoryStore.createQuickMessage(currentProjectId, title, message);
-        }
-        try {
-            const insertData: any = {
-                project_id: currentProjectId,
-                title,
-                message,
-                created_at: new Date().toISOString()
-            };
-            if (currentServiceId && currentServiceId !== 'default' && currentServiceId !== 'default_service') {
-                insertData.service_id = currentServiceId;
-            }
-
-            const { data, error } = await supabase
-                .from('quick_messages')
-                .insert(insertData)
-                .select()
-                .single();
-
-            if (error) throw error;
-            return data;
-        } catch (err: any) {
-            console.error('[HistoryHandler] Error en createQuickMessage:', err.message);
-            return null;
-        }
+        return NotificationsService.createQuickMessage(projectId, title, message, serviceId);
     }
 
-    /**
-     * Elimina un mensaje rápido por su ID.
-     */
     static async deleteQuickMessage(id: string, projectId: string, serviceId: string | null = null): Promise<boolean> {
-        const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
-        const currentServiceId = serviceId || this.SERVICE_IDENTIFIER;
-        if (process.env.STORAGE_MODE === "local") {
-            return LocalHistoryStore.deleteQuickMessage(id, currentProjectId);
-        }
-        try {
-            let query = supabase
-                .from('quick_messages')
-                .delete()
-                .eq('id', id)
-                .eq('project_id', currentProjectId);
-
-            if (currentServiceId && currentServiceId !== 'default' && currentServiceId !== 'default_service') {
-                query = query.eq('service_id', currentServiceId);
-            }
-
-            const { error } = await query;
-
-            if (error) throw error;
-            return true;
-        } catch (err: any) {
-            console.error('[HistoryHandler] Error en deleteQuickMessage:', err.message);
-            return false;
-        }
+        return NotificationsService.deleteQuickMessage(id, projectId, serviceId);
     }
 
-    /**
-     * Registra una nueva notificación de sistema (ej. error de Meta).
-     */
     static async createSystemNotification(
         projectId: string,
         serviceId: string | null,
@@ -4839,150 +4207,31 @@ export class HistoryHandler {
         description: string,
         metadata: any = {}
     ): Promise<any> {
-        const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
-        const currentServiceId = serviceId || this.SERVICE_IDENTIFIER;
-
-        if (process.env.STORAGE_MODE === "local") {
-            return LocalHistoryStore.createSystemNotification(currentProjectId, currentServiceId, type, title, description, metadata);
-        }
-
-        try {
-            const insertData: any = {
-                project_id: currentProjectId,
-                service_id: currentServiceId,
-                type,
-                title,
-                description,
-                metadata,
-                read: false,
-                created_at: new Date().toISOString()
-            };
-
-            const { data, error } = await supabase
-                .from('system_notifications')
-                .insert(insertData)
-                .select()
-                .single();
-
-            if (error) throw error;
-
-            // Emitir evento en tiempo real para avisar al Backoffice (Socket.IO / Realtime)
-            historyEvents.emit('notification_created', { projectId: currentProjectId, serviceId: currentServiceId, notification: data });
-
-            return data;
-        } catch (err: any) {
-            console.error('[HistoryHandler] Error en createSystemNotification:', err.message);
-            return null;
-        }
+        return NotificationsService.createSystemNotification(projectId, serviceId, type, title, description, metadata);
     }
 
-    /**
-     * Obtiene notificaciones de sistema paginadas filtrando por project_id y service_id.
-     */
     static async getSystemNotifications(
         projectId: string,
         serviceId: string | null,
         limit = 20,
         offset = 0
     ): Promise<any[]> {
-        const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
-        const currentServiceId = serviceId || this.SERVICE_IDENTIFIER;
-
-        if (process.env.STORAGE_MODE === "local") {
-            return LocalHistoryStore.getSystemNotifications(currentProjectId, currentServiceId, limit, offset);
-        }
-
-        try {
-            let query = supabase
-                .from('system_notifications')
-                .select('*')
-                .eq('project_id', currentProjectId);
-
-            if (currentServiceId && currentServiceId !== 'default' && currentServiceId !== 'default_service') {
-                query = query.eq('service_id', currentServiceId);
-            }
-
-            const { data, error } = await query
-                .order('created_at', { ascending: false })
-                .range(offset, offset + limit - 1);
-
-            if (error) throw error;
-            return data || [];
-        } catch (err: any) {
-            console.error('[HistoryHandler] Error en getSystemNotifications:', err.message);
-            return [];
-        }
+        return NotificationsService.getSystemNotifications(projectId, serviceId, limit, offset);
     }
 
-    /**
-     * Marca una o más notificaciones como leídas filtrando por project_id y service_id.
-     */
     static async markNotificationsAsRead(
         projectId: string,
         serviceId: string | null,
         notificationIds: string[]
     ): Promise<boolean> {
-        const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
-        const currentServiceId = serviceId || this.SERVICE_IDENTIFIER;
-
-        if (process.env.STORAGE_MODE === "local") {
-            return LocalHistoryStore.markNotificationsAsRead(currentProjectId, currentServiceId, notificationIds);
-        }
-
-        try {
-            let query = supabase
-                .from('system_notifications')
-                .update({ read: true })
-                .eq('project_id', currentProjectId)
-                .in('id', notificationIds);
-
-            if (currentServiceId && currentServiceId !== 'default' && currentServiceId !== 'default_service') {
-                query = query.eq('service_id', currentServiceId);
-            }
-
-            const { error } = await query;
-            if (error) throw error;
-
-            historyEvents.emit('notifications_read', { projectId: currentProjectId, serviceId: currentServiceId, ids: notificationIds });
-            return true;
-        } catch (err: any) {
-            console.error('[HistoryHandler] Error en markNotificationsAsRead:', err.message);
-            return false;
-        }
+        return NotificationsService.markNotificationsAsRead(projectId, serviceId, notificationIds);
     }
 
-    /**
-     * Obtiene la cantidad de notificaciones no leídas filtrando por project_id y service_id.
-     */
     static async getUnreadNotificationsCount(
         projectId: string,
         serviceId: string | null
     ): Promise<number> {
-        const currentProjectId = projectId || this.PROJECT_IDENTIFIER;
-        const currentServiceId = serviceId || this.SERVICE_IDENTIFIER;
-
-        if (process.env.STORAGE_MODE === "local") {
-            return LocalHistoryStore.getUnreadNotificationsCount(currentProjectId, currentServiceId);
-        }
-
-        try {
-            let query = supabase
-                .from('system_notifications')
-                .select('id', { count: 'exact', head: true })
-                .eq('project_id', currentProjectId)
-                .eq('read', false);
-
-            if (currentServiceId && currentServiceId !== 'default' && currentServiceId !== 'default_service') {
-                query = query.eq('service_id', currentServiceId);
-            }
-
-            const { count, error } = await query;
-            if (error) throw error;
-            return count || 0;
-        } catch (err: any) {
-            console.error('[HistoryHandler] Error en getUnreadNotificationsCount:', err.message);
-            return 0;
-        }
+        return NotificationsService.getUnreadNotificationsCount(projectId, serviceId);
     }
 
 }
