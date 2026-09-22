@@ -44,7 +44,7 @@ window.databaseView = (() => {
                     <button onclick="databaseView._switchTab('rag')" id="btn-tab-rag" class="filter-pill" style="border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px;">
                         <i class="fas fa-brain"></i> Documentos RAG
                     </button>
-                    <button onclick="databaseView._switchTab('pedidos')" id="btn-tab-pedidos" class="filter-pill" style="border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                    <button onclick="databaseView._switchTab('pedidos')" id="btn-tab-pedidos" class="filter-pill" style="border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; display: none; align-items: center; gap: 8px;">
                         <i class="fas fa-file-excel" style="color: #107c41;"></i> Base de Pedidos
                     </button>
                     <button onclick="databaseView._switchTab('multicrm')" id="btn-tab-multicrm" class="filter-pill" style="border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; display: none; align-items: center; gap: 8px;">
@@ -272,7 +272,7 @@ window.databaseView = (() => {
             if (result.success) {
                 _hasTables = result.hasTables;
                 _hasRag = result.hasRag;
-                _hasPedidosBase = result.hasPedidosBase !== false;
+                _hasPedidosBase = Boolean(result.hasPedidosBase);
                 _isSuperAdmin = result.isSuperAdmin || false;
 
                 const btnMultiCrm = document.getElementById('btn-tab-multicrm');
@@ -335,6 +335,10 @@ window.databaseView = (() => {
             sidebarTitle.innerHTML = `<i class="fas fa-brain" style="color: var(--accent);"></i> Documentos RAG`;
             await _loadDocsList();
         } else if (tabId === 'pedidos') {
+            if (!_hasPedidosBase) {
+                _switchTab('tables');
+                return;
+            }
             btnTables.classList.remove('active');
             btnRag.classList.remove('active');
             if (btnPedidos) btnPedidos.classList.add('active');
