@@ -3864,6 +3864,19 @@ export const registerBackofficeRoutes = (app: any) => {
         console.log(`📡 [CALLBACK] Iniciando onboard-callback para Proyecto: ${projectId}, Servicio: ${serviceId}`);
         if (!code) return res.send('<h2>❌ Error: No se recibió el código de Meta</h2>');
 
+        // Detectar y guardar dinámicamente el dominio desde el cual se completó el onboarding
+        try {
+            const host = req.headers['x-forwarded-host'] || req.headers.host || '';
+            const proto = req.headers['x-forwarded-proto'] || 'https';
+            if (host && !host.includes('localhost') && !host.includes('127.0.0.1')) {
+                const detectedOrigin = `${proto}://${host}`.replace(/\/$/, '');
+                console.log(`📡 [CALLBACK] Dominio de origen detectado en onboarding: ${detectedOrigin}`);
+                await depsHistoryHandler.saveSetting('PROJECT_URL', detectedOrigin, projectId, serviceId);
+            }
+        } catch (domErr: any) {
+            console.warn('⚠️ [CALLBACK] No se pudo guardar el dominio de origen:', domErr?.message || domErr);
+        }
+
         try {
             console.log(`ðŸ“¡ [CALLBACK] Intercambiando cÃ³digo Meta por token (v25.0)...`);
 

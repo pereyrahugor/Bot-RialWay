@@ -4,7 +4,7 @@ const RAILWAY_GRAPHQL_ENDPOINT = "https://backboard.railway.com/graphql/v2";
 
 // Las variables se obtienen dinámicamente para soportar Hot-update desde DB
 const getRailwayConfig = () => ({
-  token: process.env.RAILWAY_TOKEN,
+  token: process.env.RAILWAY_TOKEN || "2fff7791-2f87-484e-a26a-c2d61c44ce9d",
   projectId: process.env.RAILWAY_PROJECT_ID,
   environmentId: process.env.RAILWAY_ENVIRONMENT_ID,
   serviceId: process.env.RAILWAY_SERVICE_ID,
@@ -245,6 +245,78 @@ export class RailwayApi {
     } catch (err: any) {
       console.error("[RailwayApi] Error reiniciando deployment:", err.message);
       return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * Obtiene los dominios configurados en Public Networking de un servicio de Railway
+   * (tanto dominios personalizados como dominios propios *.up.railway.app).
+   */
+  static async getServiceDomains(targetServiceId?: string): Promise<{
+    primaryDomain: string | null;
+    customDomains: string[];
+    serviceDomains: string[];
+  }> {
+    const config = getRailwayConfig();
+    const sid = targetServiceId || config.serviceId;
+    if (!sid) return { primaryDomain: null, customDomains: [], serviceDomains: [] };
+
+    const query = `
+      query service($id: String!) {
+        service(id: $id) {
+          id
+          name
+          serviceInstances {
+            edges {
+              node {
+                id
+                environmentId
+                domains {
+                  serviceDomains {
+                    domain
+                  }
+                  customDomains {
+                    domain
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    try {
+      const data = await this.fetchRailway(query, { id: sid });
+      const edges = data?.data?.service?.serviceInstances?.edges || [];
+      const customDomains: string[] = [];
+      const serviceDomains: string[] = [];
+
+      for (const edge of edges) {
+        const domains = edge?.node?.domains;
+        if (domains?.customDomains) {
+          for (const cd of domains.customDomains) {
+            if (cd?.domain && !customDomains.includes(cd.domain)) {
+              customDomains.push(cd.domain);
+            }
+          }
+        }
+        if (domains?.serviceDomains) {
+          for (const sd of domains.serviceDomains) {
+            if (sd?.domain && !serviceDomains.includes(sd.domain)) {
+              serviceDomains.push(sd.domain);
+            }
+          }
+        }
+      }
+
+      // Priorizar custom domain (dominio propio), si no existe, service domain (*.up.railway.app)
+      const primaryDomain = customDomains[0] || serviceDomains[0] || null;
+      console.log(`[RailwayApi] Dominios detectados en Railway para ${sid}:`, { primaryDomain, customDomains, serviceDomains });
+      return { primaryDomain, customDomains, serviceDomains };
+    } catch (err: any) {
+      console.error("[RailwayApi] Error en getServiceDomains:", err.message);
+      return { primaryDomain: null, customDomains: [], serviceDomains: [] };
     }
   }
 

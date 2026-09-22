@@ -3036,18 +3036,45 @@ export class HistoryHandler {
             if (error) throw error;
 
             // --- PASO ADICIONAL: Sincronizar con la routing_table para habilitar webhooks globales ---
-            // Priorizar PROJECT_URL explícito (en variables de entorno o guardado en settings) para soportar dominios personalizados
-            const explicitProjectUrl = process.env.PROJECT_URL || (await this.getSetting('PROJECT_URL', targetProjectId, targetServiceId));
-            const publicDomain = explicitProjectUrl
-                || ((process.env.RAILWAY_STATIC_URL && process.env.RAILWAY_STATIC_URL.includes('.up.railway.app'))
+            // 1. Priorizar PROJECT_URL explícito (en variables de entorno o guardado en settings)
+            let publicDomain = process.env.PROJECT_URL || (await this.getSetting('PROJECT_URL', targetProjectId, targetServiceId));
+
+            // 2. Si no hay PROJECT_URL explícito, consultar dinámicamente el Public Networking de Railway para este servicio
+            if (!publicDomain && targetServiceId) {
+                try {
+                    const { RailwayApi } = await import('../apis/railway/Railway');
+                    const domains = await RailwayApi.getServiceDomains(targetServiceId);
+                    if (domains.customDomains.length > 0 && domains.serviceDomains.length > 0) {
+                        publicDomain = `${domains.customDomains[0]}, ${domains.serviceDomains[0]}`;
+                    } else if (domains.primaryDomain) {
+                        publicDomain = domains.primaryDomain;
+                    }
+                    if (publicDomain) {
+                        console.log(`📡 [HistoryHandler] Dominio detectado desde Railway Public Networking para ${targetServiceId}: ${publicDomain}`);
+                        await this.saveSetting('PROJECT_URL', publicDomain, targetProjectId, targetServiceId);
+                    }
+                } catch (rErr: any) {
+                    console.warn('[HistoryHandler] No se pudo resolver dominio desde Railway Public Networking:', rErr?.message || rErr);
+                }
+            }
+
+            // 3. Fallback a variables de entorno estándar de Railway
+            if (!publicDomain) {
+                publicDomain = (process.env.RAILWAY_STATIC_URL && process.env.RAILWAY_STATIC_URL.includes('.up.railway.app'))
                     ? process.env.RAILWAY_STATIC_URL
                     : (process.env.RAILWAY_PUBLIC_DOMAIN && process.env.RAILWAY_PUBLIC_DOMAIN.includes('.up.railway.app'))
                         ? process.env.RAILWAY_PUBLIC_DOMAIN
-                        : (process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PROJECT_URL));
+                        : (process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PROJECT_URL);
+            }
             if (publicDomain && phoneId) {
-                let projectUrl = publicDomain.startsWith('http') ? publicDomain : `https://${publicDomain}`;
-                // Asegurar que termina sin barra lateral para consistencia
-                if (projectUrl.endsWith('/')) projectUrl = projectUrl.slice(0, -1);
+                const formattedUrls = publicDomain
+                    .split(',')
+                    .map((d: string) => {
+                        let u = d.trim();
+                        if (!u.startsWith('http')) u = `https://${u}`;
+                        return u.replace(/\/$/, '');
+                    });
+                const projectUrl = formattedUrls.join(', ');
                 console.log(`📡 [HistoryHandler] Sincronizando routing_table para ${phoneId} -> ${projectUrl}`);
 
                 await supabase
@@ -3171,23 +3198,46 @@ export class HistoryHandler {
             const onboardingData = await this.getMetaOnboardingData();
             if (!onboardingData || !onboardingData.phone_number_id) return;
 
-            // Priorizar PROJECT_URL explícito (en variables de entorno o guardado en settings)
-            const explicitProjectUrl = process.env.PROJECT_URL || (await this.getSetting('PROJECT_URL', this.PROJECT_IDENTIFIER, this.SERVICE_IDENTIFIER));
-            const publicDomain = explicitProjectUrl
-                || ((process.env.RAILWAY_STATIC_URL && process.env.RAILWAY_STATIC_URL.includes('.up.railway.app'))
+            // 1. Priorizar PROJECT_URL explícito (en variables de entorno o guardado en settings)
+            let publicDomain = process.env.PROJECT_URL || (await this.getSetting('PROJECT_URL', this.PROJECT_IDENTIFIER, this.SERVICE_IDENTIFIER));
+
+            // 2. Si no hay PROJECT_URL explícito, consultar dinámicamente el Public Networking de Railway para este servicio
+            if (!publicDomain && this.SERVICE_IDENTIFIER) {
+                try {
+                    const { RailwayApi } = await import('../apis/railway/Railway');
+                    const domains = await RailwayApi.getServiceDomains(this.SERVICE_IDENTIFIER);
+                    if (domains.customDomains.length > 0 && domains.serviceDomains.length > 0) {
+                        publicDomain = `${domains.customDomains[0]}, ${domains.serviceDomains[0]}`;
+                    } else if (domains.primaryDomain) {
+                        publicDomain = domains.primaryDomain;
+                    }
+                    if (publicDomain) {
+                        console.log(`📡 [HistoryHandler] Dominio detectado desde Railway Public Networking para inicio de ${this.SERVICE_IDENTIFIER}: ${publicDomain}`);
+                        await this.saveSetting('PROJECT_URL', publicDomain, this.PROJECT_IDENTIFIER, this.SERVICE_IDENTIFIER);
+                    }
+                } catch (rErr: any) {
+                    console.warn('[HistoryHandler] No se pudo resolver dominio desde Railway Public Networking en inicio:', rErr?.message || rErr);
+                }
+            }
+
+            // 3. Fallback a variables de entorno estándar de Railway
+            if (!publicDomain) {
+                publicDomain = (process.env.RAILWAY_STATIC_URL && process.env.RAILWAY_STATIC_URL.includes('.up.railway.app'))
                     ? process.env.RAILWAY_STATIC_URL
                     : (process.env.RAILWAY_PUBLIC_DOMAIN && process.env.RAILWAY_PUBLIC_DOMAIN.includes('.up.railway.app'))
                         ? process.env.RAILWAY_PUBLIC_DOMAIN
-                        : (process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PROJECT_URL));
+                        : (process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PROJECT_URL);
+            }
 
             if (publicDomain) {
-                let projectUrl = publicDomain.startsWith('http')
-                    ? publicDomain
-                    : `https://${publicDomain}`;
-
-                if (projectUrl.endsWith('/')) {
-                    projectUrl = projectUrl.slice(0, -1);
-                }
+                const formattedUrls = publicDomain
+                    .split(',')
+                    .map((d: string) => {
+                        let u = d.trim();
+                        if (!u.startsWith('http')) u = `https://${u}`;
+                        return u.replace(/\/$/, '');
+                    });
+                const projectUrl = formattedUrls.join(', ');
 
                 console.log(
                     `📡 [HistoryHandler] Auto-sincronizando routing_table al inicio para phoneId ${onboardingData.phone_number_id} -> ${projectUrl} (Service: ${this.SERVICE_IDENTIFIER})`

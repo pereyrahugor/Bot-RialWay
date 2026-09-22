@@ -1225,12 +1225,32 @@ class MetaCloudProvider extends ProviderClass {
                                                     .maybeSingle();
                                                 
                                                 if (routeData?.project_url) {
-                                                    const targetUrl = `${routeData.project_url.replace(/\/$/, '')}/webhook`;
-                                                    console.log(`📡 [MetaCloudProvider] Reenviando webhook para Phone ID ${incomingPhoneId} -> ${targetUrl}`);
-                                                    axios.post(targetUrl, body, {
-                                                        headers: { 'Content-Type': 'application/json' }
-                                                    }).catch(err => {
-                                                        console.error(`❌ [MetaCloudProvider] Error al reenviar webhook:`, err.message);
+                                                    const urls = routeData.project_url
+                                                        .split(',')
+                                                        .map((u: string) => u.trim().replace(/\/$/, ''))
+                                                        .filter(Boolean)
+                                                        .map((u: string) => `${u}/webhook`);
+
+                                                    const primaryUrl = urls[0];
+                                                    console.log(`📡 [MetaCloudProvider] Reenviando webhook para Phone ID ${incomingPhoneId} -> ${primaryUrl}`);
+                                                    axios.post(primaryUrl, body, {
+                                                        headers: { 'Content-Type': 'application/json' },
+                                                        timeout: 8000
+                                                    }).catch(async (err) => {
+                                                        console.error(`❌ [MetaCloudProvider] Error al reenviar webhook a ${primaryUrl}:`, err.message);
+                                                        if (urls.length > 1) {
+                                                            const fallbackUrl = urls[1];
+                                                            console.log(`🔄 [MetaCloudProvider] Reintentando con URL fallback -> ${fallbackUrl}`);
+                                                            try {
+                                                                await axios.post(fallbackUrl, body, {
+                                                                    headers: { 'Content-Type': 'application/json' },
+                                                                    timeout: 8000
+                                                                });
+                                                                console.log(`✅ [MetaCloudProvider] Reenvío exitoso vía fallback: ${fallbackUrl}`);
+                                                            } catch (fallbackErr: any) {
+                                                                console.error(`❌ [MetaCloudProvider] Error al reenviar webhook a fallback ${fallbackUrl}:`, fallbackErr.message);
+                                                            }
+                                                        }
                                                     });
                                                 }
                                             }
