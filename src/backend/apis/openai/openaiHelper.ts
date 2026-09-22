@@ -183,7 +183,7 @@ export async function syncAssistantTools(assistantId: string, projectId: string 
     }
 }
 
-export const askWithFunctions = async (assistantId: string, message: string, state: any, userId: string = 'unknown', forceDb: boolean = false, projectId: string | null = null, directMode: boolean = true, agentName: string | undefined = undefined, serviceId: string | null = null): Promise<string> => {
+export const askWithFunctions = async (assistantId: string, message: string, state: any, userId: string = 'unknown', forceDb: boolean = false, projectId: string | null = null, directMode: boolean = true, agentName: string | undefined = undefined, serviceId: string | null = null, extraContext: any = {}): Promise<string> => {
     try {
         const { HistoryHandler } = await import("../../db/historyHandler");
         const stateServiceId = (typeof state?.get === 'function') ? state.get('dynamicServiceId') : state?.dynamicServiceId;
@@ -505,11 +505,15 @@ INSTRUCCIÓN CRÍTICA DE IDENTIDAD DE JUGADOR:
                         // Intentar enrutar a herramientas del cliente o Mercado Pago
                         try {
                             const { executeClientTool } = await import("../../bot/toolRouter");
+                            const isWebchat = userId.startsWith('wc_') || !!extraContext?.isWebchat || extraContext?.ctx?.type === 'webchat';
                             const context = {
                                 state,
-                                ctx: { from: userId },
+                                ctx: { from: userId, ...(extraContext?.ctx || {}) },
                                 projectId: targetProjectId,
-                                serviceId: chatServiceId
+                                serviceId: chatServiceId,
+                                flowDynamic: extraContext?.flowDynamic,
+                                provider: extraContext?.provider,
+                                isWebchat
                             };
                             console.log(`[ChatCompletion] Enrutando tool call '${funcName}' al router de cliente...`);
                             const routerRes = await executeClientTool(funcName, args, context);
@@ -574,7 +578,8 @@ export const safeToAsk = async (
     projectId: string | null = null,
     directMode: boolean = true,
     agentName: string | undefined = undefined,
-    serviceId: string | null = null
+    serviceId: string | null = null,
+    extraContext: any = {}
 ) => {
     const SAFE_TIMEOUT = 120000;
 
@@ -583,7 +588,7 @@ export const safeToAsk = async (
             let attempt = 0;
             while (attempt < maxRetries) {
                 try {
-                    return await askWithFunctions(assistantId, message, state, userId, forceDb, projectId, directMode, agentName, serviceId);
+                    return await askWithFunctions(assistantId, message, state, userId, forceDb, projectId, directMode, agentName, serviceId, extraContext);
                 } catch (err: any) {
                     attempt++;
                     console.error(`[openaiHelper] Intento ${attempt} fallido:`, err.message);

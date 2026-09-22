@@ -396,8 +396,6 @@ export const registerWebchatRoutes = (app: any) => {
                 }
             };
 
-            const reply = await safeToAsk(currentAssistantId, message, state, clientKey, undefined, 5, true, projectId, true, assigned, serviceId || undefined);
-
             const flowDynamic = async (arr: any) => {
                 if (Array.isArray(arr)) {
                     for (const a of arr) {
@@ -412,6 +410,21 @@ export const registerWebchatRoutes = (app: any) => {
                     replyText = replyText ? replyText + "\n\n" + arr.trim() : arr.trim();
                 }
             };
+
+            const reply = await safeToAsk(
+                currentAssistantId, 
+                message, 
+                state, 
+                clientKey, 
+                undefined, 
+                5, 
+                true, 
+                projectId, 
+                true, 
+                assigned, 
+                serviceId || undefined,
+                { flowDynamic, ctx: { type: 'webchat', from: clientKey }, isWebchat: true }
+            );
 
             await AssistantResponseProcessor.procesarHandoverYDerivacion(
                 reply as string,

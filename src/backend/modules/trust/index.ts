@@ -180,24 +180,50 @@ export const trustModule = {
           return "La base de artículos para pedidos aún no ha sido cargada en el panel de control. Por favor contacte con administración.";
         }
 
-        // Si tenemos flowDynamic o provider en el contexto, enviamos el archivo por WhatsApp
+        const isWebchat = context?.isWebchat || context?.ctx?.type === 'webchat' || String(context?.ctx?.from || '').startsWith('wc_');
         const flowDynamic = context?.flowDynamic;
-        if (typeof flowDynamic === "function" && fs.existsSync(templateResult.filePath)) {
-          console.log(`[trustModule] 📤 Enviando archivo Excel al cliente vía flowDynamic: ${templateResult.filePath}`);
-          await flowDynamic([
-            {
-              body: "📄 Aquí tienes la plantilla para confeccionar tu pedido. Completa la columna de cantidad con los artículos que necesitas y envíanos el archivo de vuelta por este chat para procesarlo inmediatamente.",
-              media: templateResult.filePath,
-            },
-          ]);
+        const provider = context?.provider;
+
+        if (isWebchat) {
+          const downloadUrl = `/api/backoffice/trust/plantilla-pedido?serviceId=${encodeURIComponent(serviceId || '')}`;
+          return JSON.stringify({
+            exito: true,
+            canal: "webchat",
+            archivoGenerado: templateResult.fileName,
+            totalArticulos: templateResult.totalRows,
+            enlaceDescarga: downloadUrl,
+            mensajeParaAsistente: `El usuario está interactuando desde el Webchat del panel. Ofrécele cordialmente el siguiente enlace clicable para que descargue la plantilla en su computadora: [📥 Descargar Plantilla de Pedidos](${downloadUrl}) e indícale que complete las cantidades y vuelva a adjuntar o reenviar el archivo.`,
+          });
+        }
+
+        // Si es WhatsApp: despachar archivo físico adjunto
+        if (fs.existsSync(templateResult.filePath)) {
+          const fromNumber = context?.ctx?.from || '';
+          const jid = fromNumber.includes('@') ? fromNumber : `${fromNumber}@s.whatsapp.net`;
+          const fileName = templateResult.fileName || path.basename(templateResult.filePath);
+
+          console.log(`[trustModule] 📤 Enviando archivo Excel al cliente vía WhatsApp (${fromNumber}): ${templateResult.filePath}`);
+          if (provider?.sendFile && typeof provider.sendFile === 'function') {
+            await provider.sendFile(jid, templateResult.filePath, "📄 Aquí tienes la plantilla oficial para confeccionar tu pedido.");
+          } else if (provider?.sendMessage && typeof provider.sendMessage === 'function') {
+            await provider.sendMessage(jid, "📄 Aquí tienes la plantilla oficial para confeccionar tu pedido.", { media: templateResult.filePath, fileName });
+          } else if (typeof flowDynamic === "function") {
+            await flowDynamic([
+              {
+                body: "📄 Aquí tienes la plantilla para confeccionar tu pedido. Completa la columna de cantidad con los artículos que necesitas y envíanos el archivo de vuelta por este chat para procesarlo inmediatamente.",
+                media: templateResult.filePath,
+              },
+            ]);
+          }
         }
 
         return JSON.stringify({
           exito: true,
+          canal: "whatsapp",
           archivoGenerado: templateResult.fileName,
           totalArticulos: templateResult.totalRows,
           rutaArchivo: templateResult.filePath,
-          mensajeParaAsistente: "El archivo Excel con la plantilla de pedido fue generado y enviado exitosamente al cliente por WhatsApp. Indícale que complete la columna de cantidad y reenvíe el archivo por este chat cuando esté listo.",
+          mensajeParaAsistente: "El archivo Excel con la plantilla de pedido fue generado y enviado exitosamente como documento adjunto al cliente por WhatsApp. Indícale que complete la columna de cantidad y reenvíe el archivo por este chat cuando esté listo.",
         });
       } catch (err: any) {
         console.error("❌ [trustModule] Error generando plantilla Excel:", err);

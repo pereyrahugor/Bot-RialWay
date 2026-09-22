@@ -53,7 +53,7 @@ export class AiManager {
         return assistantId;
     }
 
-    public getAssistantResponse = async (assistantId: string, message: string, state: any, fallbackMessage: string | undefined, userId: string, thread_id: string | null = null, projectId: string | null = null, agentName: string | undefined = undefined, serviceId: string | null = null) => {
+    public getAssistantResponse = async (assistantId: string, message: string, state: any, fallbackMessage: string | undefined, userId: string, thread_id: string | null = null, projectId: string | null = null, agentName: string | undefined = undefined, serviceId: string | null = null, extraContext: any = {}) => {
         if (this.userTimeouts.has(userId)) {
             clearTimeout(this.userTimeouts.get(userId)!);
             this.userTimeouts.delete(userId);
@@ -70,7 +70,7 @@ export class AiManager {
             const stateServiceId = (typeof state?.get === 'function') ? state.get('dynamicServiceId') : state?.dynamicServiceId;
             const targetServiceId = serviceId || stateServiceId || HistoryHandler.SERVICE_IDENTIFIER;
 
-            safeToAsk(assistantId, message, state, userId, this.errorReporter, 5, isWhatsApp, targetProjectId, false, agentName, targetServiceId)
+            safeToAsk(assistantId, message, state, userId, this.errorReporter, 5, isWhatsApp, targetProjectId, false, agentName, targetServiceId, extraContext)
                 .then(result => {
                     if (this.userTimeouts.has(userId)) {
                         clearTimeout(this.userTimeouts.get(userId)!);
@@ -393,7 +393,18 @@ export class AiManager {
                 }
             }
 
-            const response = (await this.getAssistantResponse(assignedAssistantId, messageForAI, state, undefined, ctx.from, ctx.thread_id, dynamicProjectId, assigned, dynamicServiceId)) as string;
+            const response = (await this.getAssistantResponse(
+                assignedAssistantId, 
+                messageForAI, 
+                state, 
+                undefined, 
+                ctx.from, 
+                ctx.thread_id, 
+                dynamicProjectId, 
+                assigned, 
+                dynamicServiceId,
+                { flowDynamic, provider, ctx, isWebchat: ctx.type === 'webchat' }
+            )) as string;
 
             if (!response) return state;
 
