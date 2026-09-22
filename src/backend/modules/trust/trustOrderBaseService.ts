@@ -124,7 +124,7 @@ export class TrustOrderBaseService {
   static async getBaseParaPedidoStatus(
     projectId: string,
     serviceId: string
-  ): Promise<{ count: number; headers: string[]; lastUpdate: any }> {
+  ): Promise<{ count: number; headers: string[]; lastUpdate: any; sample: any[] }> {
     const { count, error } = await supabase
       .from('base_para_pedido')
       .select('*', { count: 'exact', head: true })
@@ -136,17 +136,24 @@ export class TrustOrderBaseService {
     }
 
     let headers: string[] = [];
+    let sample: any[] = [];
+
     if (count && count > 0) {
-      const { data: sample } = await supabase
+      const { data: rows } = await supabase
         .from('base_para_pedido')
-        .select('headers')
+        .select('row_index, codigo, descripcion, data, headers')
         .eq('project_id', projectId)
         .eq('service_id', serviceId)
-        .limit(1)
-        .maybeSingle();
+        .order('row_index', { ascending: true })
+        .limit(25);
 
-      if (sample && sample.headers && Array.isArray(sample.headers)) {
-        headers = sample.headers;
+      if (rows && rows.length > 0) {
+        if (rows[0].headers && Array.isArray(rows[0].headers)) {
+          headers = rows[0].headers;
+        } else if (rows[0].data) {
+          headers = Object.keys(rows[0].data);
+        }
+        sample = rows.map(r => r.data || { codigo: r.codigo, descripcion: r.descripcion });
       }
     }
 
@@ -159,8 +166,25 @@ export class TrustOrderBaseService {
     return {
       count: count || 0,
       headers,
-      lastUpdate
+      lastUpdate,
+      sample
     };
+  }
+
+  /**
+   * Elimina todos los registros de la base de pedidos para este proyecto y servicio.
+   */
+  static async clearBaseParaPedido(
+    projectId: string,
+    serviceId: string
+  ): Promise<void> {
+    const { error } = await supabase
+      .from('base_para_pedido')
+      .delete()
+      .eq('project_id', projectId)
+      .eq('service_id', serviceId);
+
+    if (error) throw error;
   }
 
   /**

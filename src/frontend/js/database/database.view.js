@@ -44,6 +44,9 @@ window.databaseView = (() => {
                     <button onclick="databaseView._switchTab('rag')" id="btn-tab-rag" class="filter-pill" style="border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px;">
                         <i class="fas fa-brain"></i> Documentos RAG
                     </button>
+                    <button onclick="databaseView._switchTab('pedidos')" id="btn-tab-pedidos" class="filter-pill" style="border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-file-excel" style="color: #107c41;"></i> Base de Pedidos
+                    </button>
                     <button onclick="databaseView._switchTab('multicrm')" id="btn-tab-multicrm" class="filter-pill" style="border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; display: none; align-items: center; gap: 8px;">
                         <i class="fas fa-user-shield"></i> Modo Supervisor
                     </button>
@@ -132,6 +135,106 @@ window.databaseView = (() => {
                         </div>
                     </div>
 
+                    <!-- Panel Base de Pedidos (Excel) -->
+                    <div id="panel-pedidos" style="display: none; flex-direction: column; height: 100%; width: 100%; overflow-y: auto;">
+                        <div style="padding: 18px 24px; border-bottom: 1px solid var(--card-border-color); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; flex-wrap: wrap; gap: 14px; background: rgba(16, 124, 65, 0.03);">
+                            <div style="display: flex; align-items: center; gap: 14px;">
+                                <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(16, 124, 65, 0.12); display: flex; align-items: center; justify-content: center; color: #107c41; font-size: 1.4rem; box-shadow: 0 2px 8px rgba(16, 124, 65, 0.15);">
+                                    <i class="fas fa-file-excel"></i>
+                                </div>
+                                <div>
+                                    <h2 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: var(--text-main);">Base de Artículos para Pedidos (Excel)</h2>
+                                    <p style="margin: 2px 0 0; font-size: 0.78rem; color: var(--text-muted);">
+                                        Subí la lista de artículos y precios. Esta tabla se utiliza para generar la plantilla que completan los clientes por WhatsApp y sincronizar con Tango Gestión.
+                                    </p>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <button onclick="databaseView._downloadPlantilla()" id="btn-download-plantilla" class="filter-pill" style="cursor: pointer; padding: 8px 16px; border-radius: 10px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--card-border-color); background: var(--bg-secondary); color: var(--text-main);">
+                                    <i class="fas fa-download" style="color: #107c41;"></i> Descargar Plantilla
+                                </button>
+                                <button onclick="databaseView._loadPedidosData()" class="filter-pill" title="Actualizar datos" style="cursor: pointer; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--card-border-color); background: var(--bg-secondary); color: var(--text-muted);">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div style="flex: 1; padding: 24px; display: flex; flex-direction: column; gap: 20px;">
+                            <!-- KPIS / STATS CARDS -->
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px;">
+                                <div style="background: var(--bg-secondary); border: 1px solid var(--card-border-color); border-radius: 14px; padding: 16px 20px; display: flex; flex-direction: column; gap: 6px;">
+                                    <span style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted);">Total de Artículos</span>
+                                    <div style="display: flex; align-items: baseline; gap: 10px;">
+                                        <span id="pedidos-kpi-count" style="font-size: 1.8rem; font-weight: 800; color: var(--text-main); line-height: 1;">0</span>
+                                        <span id="pedidos-kpi-badge" style="font-size: 0.75rem; font-weight: 700; padding: 3px 8px; border-radius: 20px; background: rgba(239, 68, 68, 0.15); color: #ef4444;">Sin Datos</span>
+                                    </div>
+                                </div>
+                                <div style="background: var(--bg-secondary); border: 1px solid var(--card-border-color); border-radius: 14px; padding: 16px 20px; display: flex; flex-direction: column; gap: 6px;">
+                                    <span style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted);">Columnas Registradas</span>
+                                    <span id="pedidos-kpi-columns" style="font-size: 1.1rem; font-weight: 700; color: var(--text-main); line-height: 1.4;">--</span>
+                                </div>
+                                <div style="background: var(--bg-secondary); border: 1px solid var(--card-border-color); border-radius: 14px; padding: 16px 20px; display: flex; flex-direction: column; gap: 6px;">
+                                    <span style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted);">Última Sincronización</span>
+                                    <span id="pedidos-kpi-updated" style="font-size: 0.95rem; font-weight: 600; color: var(--text-main); line-height: 1.4;">Aún no cargada</span>
+                                </div>
+                            </div>
+
+                            <!-- DRAG AND DROP UPLOAD ZONE -->
+                            <div id="pedidos-drop-zone" style="border: 2px dashed rgba(16, 124, 65, 0.4); border-radius: 16px; padding: 32px 24px; text-align: center; background: rgba(16, 124, 65, 0.02); transition: all 0.2s ease; cursor: pointer; position: relative;">
+                                <input type="file" id="pedidos-excel-input" accept=".xlsx, .xls" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer;" onchange="databaseView._handleFileSelected(this)">
+                                <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: none;">
+                                    <div style="width: 60px; height: 60px; border-radius: 50%; background: rgba(16, 124, 65, 0.1); display: flex; align-items: center; justify-content: center; color: #107c41; font-size: 1.8rem; margin-bottom: 4px;">
+                                        <i class="fas fa-cloud-arrow-up"></i>
+                                    </div>
+                                    <h3 style="margin: 0; font-size: 1.05rem; font-weight: 700; color: var(--text-main);">
+                                        Arrastrá el archivo Excel aquí o hacé click para explorar
+                                    </h3>
+                                    <p style="margin: 0; font-size: 0.8rem; color: var(--text-muted); max-width: 520px; line-height: 1.5;">
+                                        Admite archivos <strong>.xlsx</strong> y <strong>.xls</strong>. El sistema lee automáticamente las columnas originales y agrega al final la columna destacada <strong>"CANTIDAD A PEDIR"</strong> para enviar al cliente.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- FILE SELECTED DETAILS & UPLOAD ACTION -->
+                            <div id="pedidos-selected-card" style="display: none; background: var(--bg-secondary); border: 1px solid var(--card-border-color); border-radius: 14px; padding: 14px 20px; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <i class="fas fa-file-excel" style="font-size: 1.8rem; color: #107c41;"></i>
+                                    <div>
+                                        <div id="pedidos-selected-name" style="font-weight: 700; font-size: 0.9rem; color: var(--text-main);">archivo.xlsx</div>
+                                        <div id="pedidos-selected-size" style="font-size: 0.75rem; color: var(--text-muted);">0 KB</div>
+                                    </div>
+                                </div>
+                                <div style="display: flex; gap: 10px;">
+                                    <button onclick="databaseView._clearSelectedFile()" class="filter-pill" style="cursor: pointer; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--card-border-color); background: transparent; color: var(--text-muted);">
+                                        Cancelar
+                                    </button>
+                                    <button onclick="databaseView._uploadExcel()" id="btn-upload-pedidos-excel" class="filter-pill active" style="cursor: pointer; padding: 8px 20px; border-radius: 8px; font-weight: 700; background: #107c41; color: white; border: none; display: flex; align-items: center; gap: 8px;">
+                                        <i class="fas fa-cloud-upload-alt"></i> Importar a Base de Pedidos
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- FEEDBACK MESSAGE -->
+                            <div id="pedidos-feedback" style="display: none; padding: 12px 16px; border-radius: 10px; font-size: 0.85rem;"></div>
+
+                            <!-- PREVIEW DATA TABLE -->
+                            <div style="background: var(--bg-secondary); border: 1px solid var(--card-border-color); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column;">
+                                <div style="padding: 14px 20px; border-bottom: 1px solid var(--card-border-color); display: flex; justify-content: space-between; align-items: center;">
+                                    <h4 style="margin: 0; font-size: 0.92rem; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
+                                        <i class="fas fa-table-list" style="color: #107c41;"></i> Vista Previa de la Base Cargada
+                                    </h4>
+                                    <span id="pedidos-preview-counter" style="font-size: 0.75rem; color: var(--text-muted);">Mostrando primeros 25 registros</span>
+                                </div>
+                                <div id="pedidos-table-container" style="max-height: 420px; overflow: auto;">
+                                    <div style="padding: 40px; text-align: center; color: var(--text-muted);">
+                                        <i class="fas fa-file-excel" style="font-size: 2.5rem; opacity: 0.3; margin-bottom: 12px;"></i>
+                                        <p>No hay artículos cargados en la base de pedidos todavía.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
             </div>
 
@@ -162,26 +265,36 @@ window.databaseView = (() => {
     async function init() {
         _token = localStorage.getItem('backoffice_token') || '';
         
-        // 1. Validar configuraciones habilitadas (si tiene tables y/o RAG)
+        // 1. Validar configuraciones habilitadas (si tiene tables, RAG o base de pedidos)
         try {
             const res = await fetch(`/api/backoffice/database/settings?token=${_token}`);
             const result = await res.json();
             if (result.success) {
                 _hasTables = result.hasTables;
                 _hasRag = result.hasRag;
+                _hasPedidosBase = result.hasPedidosBase !== false;
                 _isSuperAdmin = result.isSuperAdmin || false;
 
                 const btnMultiCrm = document.getElementById('btn-tab-multicrm');
                 if (btnMultiCrm) {
                     btnMultiCrm.style.display = _isSuperAdmin ? 'flex' : 'none';
                 }
+
+                const btnPedidos = document.getElementById('btn-tab-pedidos');
+                if (btnPedidos) {
+                    btnPedidos.style.display = _hasPedidosBase ? 'flex' : 'none';
+                }
             }
         } catch (e) {
             console.error(e);
         }
 
-        // Cargar por defecto tab de tablas si está disponible
-        _switchTab('tables');
+        // Si no hay tablas sincronizadas pero sí base de pedidos, ir a pedidos por defecto
+        if (!_hasTables && _hasPedidosBase) {
+            _switchTab('pedidos');
+        } else {
+            _switchTab('tables');
+        }
     }
 
     // SWITCH TAB
@@ -190,9 +303,11 @@ window.databaseView = (() => {
         
         const btnTables = document.getElementById('btn-tab-tables');
         const btnRag = document.getElementById('btn-tab-rag');
+        const btnPedidos = document.getElementById('btn-tab-pedidos');
         const btnMultiCrm = document.getElementById('btn-tab-multicrm');
         const panelTables = document.getElementById('panel-tables');
         const panelRag = document.getElementById('panel-rag');
+        const panelPedidos = document.getElementById('panel-pedidos');
         const panelMultiCrm = document.getElementById('panel-multicrm');
         const sidebarTitle = document.getElementById('sidebar-title');
         const sidebarItemsList = document.getElementById('sidebar-items-list');
@@ -200,27 +315,45 @@ window.databaseView = (() => {
         if (tabId === 'tables') {
             btnTables.classList.add('active');
             btnRag.classList.remove('active');
+            if (btnPedidos) btnPedidos.classList.remove('active');
             if (btnMultiCrm) btnMultiCrm.classList.remove('active');
             panelTables.style.display = 'flex';
             panelRag.style.display = 'none';
+            if (panelPedidos) panelPedidos.style.display = 'none';
             if (panelMultiCrm) panelMultiCrm.style.display = 'none';
             sidebarTitle.innerHTML = `<i class="fas fa-table" style="color: var(--accent);"></i> Tablas Disponibles`;
             await _loadTablesList();
         } else if (tabId === 'rag') {
             btnTables.classList.remove('active');
             btnRag.classList.add('active');
+            if (btnPedidos) btnPedidos.classList.remove('active');
             if (btnMultiCrm) btnMultiCrm.classList.remove('active');
             panelTables.style.display = 'none';
             panelRag.style.display = 'flex';
+            if (panelPedidos) panelPedidos.style.display = 'none';
             if (panelMultiCrm) panelMultiCrm.style.display = 'none';
             sidebarTitle.innerHTML = `<i class="fas fa-brain" style="color: var(--accent);"></i> Documentos RAG`;
             await _loadDocsList();
+        } else if (tabId === 'pedidos') {
+            btnTables.classList.remove('active');
+            btnRag.classList.remove('active');
+            if (btnPedidos) btnPedidos.classList.add('active');
+            if (btnMultiCrm) btnMultiCrm.classList.remove('active');
+            panelTables.style.display = 'none';
+            panelRag.style.display = 'none';
+            if (panelMultiCrm) panelMultiCrm.style.display = 'none';
+            if (panelPedidos) panelPedidos.style.display = 'flex';
+            sidebarTitle.innerHTML = `<i class="fas fa-file-excel" style="color: #107c41;"></i> Base de Pedidos`;
+            _loadPedidosSidebar();
+            await _loadPedidosData();
         } else if (tabId === 'multicrm') {
             btnTables.classList.remove('active');
             btnRag.classList.remove('active');
+            if (btnPedidos) btnPedidos.classList.remove('active');
             if (btnMultiCrm) btnMultiCrm.classList.add('active');
             panelTables.style.display = 'none';
             panelRag.style.display = 'none';
+            if (panelPedidos) panelPedidos.style.display = 'none';
             if (panelMultiCrm) panelMultiCrm.style.display = 'flex';
             sidebarTitle.innerHTML = `<i class="fas fa-network-wired" style="color: var(--accent);"></i> Multi-CRM`;
             sidebarItemsList.innerHTML = `<div style="padding:16px; font-size:0.8rem; color:var(--text-muted); text-align:center;">Configuración de vista unificada de servicios</div>`;
@@ -681,6 +814,235 @@ window.databaseView = (() => {
         }
     }
 
+    // --- LÓGICA DE BASE DE PEDIDOS (EXCEL) ---
+    let _selectedPedidosFile = null;
+
+    function _loadPedidosSidebar() {
+        const listEl = document.getElementById('sidebar-items-list');
+        if (!listEl) return;
+        listEl.innerHTML = `
+            <div class="crm-chat-item active" style="padding:10px 12px; border-radius:10px; cursor:pointer; display:flex; align-items:center; gap:10px;">
+                <div style="width:32px; height:32px; border-radius:8px; background:rgba(16,124,65,0.12); color:#107c41; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                    <i class="fas fa-file-excel" style="font-size:0.95rem;"></i>
+                </div>
+                <div style="flex:1; min-width:0;">
+                    <h4 style="margin:0; font-size:0.85rem; font-weight:700; color:var(--text-main);">Catálogo de Pedidos</h4>
+                    <span style="font-size:0.68rem; color:var(--text-muted);">Tabla: base_para_pedido</span>
+                </div>
+            </div>
+
+            <div style="margin-top:16px; padding:14px; background:var(--bg-secondary); border:1px solid var(--card-border-color); border-radius:12px; font-size:0.75rem; color:var(--text-muted); line-height:1.5;">
+                <strong style="color:var(--text-main); display:block; margin-bottom:6px;">
+                    <i class="fas fa-info-circle" style="color:var(--accent);"></i> Flujo de Pedidos
+                </strong>
+                <p style="margin:0 0 6px 0;">1. Cargá el archivo Excel con artículos y precios.</p>
+                <p style="margin:0 0 6px 0;">2. El bot genera la plantilla agregando la columna <strong>"CANTIDAD A PEDIR"</strong> y la envía a los clientes por WhatsApp.</p>
+                <p style="margin:0;">3. Al recibir el Excel completado, cotiza e ingresa el pedido en Tango Gestión.</p>
+            </div>
+        `;
+    }
+
+    async function _loadPedidosData() {
+        const kpiCount = document.getElementById('pedidos-kpi-count');
+        const kpiBadge = document.getElementById('pedidos-kpi-badge');
+        const kpiColumns = document.getElementById('pedidos-kpi-columns');
+        const kpiUpdated = document.getElementById('pedidos-kpi-updated');
+        const tableContainer = document.getElementById('pedidos-table-container');
+        const previewCounter = document.getElementById('pedidos-preview-counter');
+
+        if (tableContainer) {
+            tableContainer.innerHTML = typeof batLoaderHtml === 'function' ? batLoaderHtml('Consultando base de pedidos...') : `<div style="text-align:center; padding:40px; color:var(--text-muted);"><i class="fas fa-circle-notch fa-spin fa-2x"></i><p style="margin-top:10px;">Consultando base de pedidos...</p></div>`;
+        }
+
+        try {
+            const res = await fetch(`/api/backoffice/trust/base-pedido-status?token=${_token}`);
+            const result = await res.json();
+
+            if (!result.success) throw new Error(result.error || 'Error al consultar');
+
+            const count = result.count || 0;
+            const headers = result.headers || [];
+            const sample = result.sample || [];
+
+            if (kpiCount) kpiCount.textContent = count.toLocaleString('es-AR');
+            if (kpiBadge) {
+                if (count > 0) {
+                    kpiBadge.textContent = '✅ Activa';
+                    kpiBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+                    kpiBadge.style.color = '#10b981';
+                } else {
+                    kpiBadge.textContent = '⚠️ Sin Datos';
+                    kpiBadge.style.background = 'rgba(239, 68, 68, 0.15)';
+                    kpiBadge.style.color = '#ef4444';
+                }
+            }
+
+            if (kpiColumns) {
+                if (headers.length > 0) {
+                    kpiColumns.innerHTML = `<span style="font-size:0.8rem; color:var(--accent);">${headers.length} detectadas</span>: ` + 
+                        headers.slice(0, 4).map(h => `<span style="display:inline-block; font-size:0.72rem; padding:1px 6px; border-radius:6px; background:rgba(0,153,255,0.08); margin:1px;">${_esc(h)}</span>`).join(' ') +
+                        (headers.length > 4 ? ` <span style="font-size:0.72rem; color:var(--text-muted);">+${headers.length - 4} más</span>` : '');
+                } else {
+                    kpiColumns.textContent = 'Ninguna detectada';
+                }
+            }
+
+            if (kpiUpdated) {
+                if (result.lastUpdate) {
+                    const date = new Date(result.lastUpdate).toLocaleString('es-AR');
+                    kpiUpdated.textContent = date;
+                } else {
+                    kpiUpdated.textContent = count > 0 ? 'Registrado' : 'Aún no cargada';
+                }
+            }
+
+            if (previewCounter) {
+                previewCounter.textContent = count > 0 
+                    ? `Mostrando ${Math.min(sample.length, count)} de ${count} registros` 
+                    : 'Sin registros';
+            }
+
+            if (!tableContainer) return;
+
+            if (sample.length === 0 || count === 0) {
+                tableContainer.innerHTML = `
+                    <div style="padding: 40px; text-align: center; color: var(--text-muted);">
+                        <i class="fas fa-file-excel" style="font-size: 2.5rem; opacity: 0.3; margin-bottom: 12px;"></i>
+                        <p style="margin:0 0 6px 0; font-weight:600; color:var(--text-main);">No hay artículos cargados en la base de pedidos</p>
+                        <p style="margin:0; font-size:0.8rem;">Arrastrá o seleccioná un archivo Excel en la sección superior para cargar el catálogo.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Render table grid
+            const colsToRender = headers.length > 0 ? headers : Object.keys(sample[0] || {});
+            const thHtml = colsToRender.map(col => `<th style="padding: 10px 14px; text-align: left; font-weight: 700; border-bottom: 2px solid var(--card-border-color); white-space:nowrap; font-size:0.82rem;">${_esc(col)}</th>`).join('');
+
+            const trHtml = sample.map((row) => {
+                const tds = colsToRender.map(col => {
+                    const val = row[col] !== undefined ? row[col] : '';
+                    return `<td style="padding: 10px 14px; border-bottom: 1px solid var(--card-border-color); font-size: 0.82rem; white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis;">${_esc(val)}</td>`;
+                }).join('');
+                return `<tr>${tds}</tr>`;
+            }).join('');
+
+            tableContainer.innerHTML = `
+                <table class="crm-table" style="width: 100%; border-collapse: collapse; background: var(--card-bg);">
+                    <thead>
+                        <tr style="background: var(--bg-secondary);">${thHtml}</tr>
+                    </thead>
+                    <tbody>
+                        ${trHtml}
+                    </tbody>
+                </table>
+            `;
+        } catch (err) {
+            console.error('[DatabaseView] Error al cargar pedidos:', err);
+            if (tableContainer) {
+                tableContainer.innerHTML = `<div style="padding: 30px; text-align: center; color: #ef4444;"><i class="fas fa-exclamation-triangle"></i> Error al cargar datos: ${_esc(err.message)}</div>`;
+            }
+        }
+    }
+
+    function _handleFileSelected(input) {
+        const file = input?.files?.[0];
+        const card = document.getElementById('pedidos-selected-card');
+        const nameEl = document.getElementById('pedidos-selected-name');
+        const sizeEl = document.getElementById('pedidos-selected-size');
+        const feedback = document.getElementById('pedidos-feedback');
+
+        if (feedback) feedback.style.display = 'none';
+
+        if (file) {
+            _selectedPedidosFile = file;
+            if (nameEl) nameEl.textContent = file.name;
+            if (sizeEl) sizeEl.textContent = `${(file.size / 1024).toFixed(1)} KB`;
+            if (card) card.style.display = 'flex';
+        } else {
+            _clearSelectedFile();
+        }
+    }
+
+    function _clearSelectedFile() {
+        _selectedPedidosFile = null;
+        const input = document.getElementById('pedidos-excel-input');
+        if (input) input.value = '';
+        const card = document.getElementById('pedidos-selected-card');
+        if (card) card.style.display = 'none';
+        const feedback = document.getElementById('pedidos-feedback');
+        if (feedback) feedback.style.display = 'none';
+    }
+
+    async function _uploadExcel() {
+        if (!_selectedPedidosFile) {
+            if (typeof showToast === 'function') showToast('Seleccioná un archivo Excel primero.', 'warning');
+            else alert('Seleccioná un archivo Excel primero.');
+            return;
+        }
+
+        const btn = document.getElementById('btn-upload-pedidos-excel');
+        const feedback = document.getElementById('pedidos-feedback');
+
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Procesando Excel...';
+        }
+
+        try {
+            const formData = new FormData();
+            formData.append('file', _selectedPedidosFile);
+
+            const res = await fetch(`/api/backoffice/trust/upload-base-pedido?token=${_token}`, {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await res.json();
+
+            if (res.ok && data.success) {
+                if (feedback) {
+                    feedback.style.display = 'block';
+                    feedback.style.background = 'rgba(16, 185, 129, 0.12)';
+                    feedback.style.color = '#10b981';
+                    feedback.style.border = '1px solid rgba(16, 185, 129, 0.3)';
+                    feedback.innerHTML = `<strong>✅ Éxito:</strong> Se cargaron <strong>${data.count}</strong> artículos correctamente en la base de pedidos.`;
+                }
+
+                if (typeof showToast === 'function') {
+                    showToast(`Se cargaron ${data.count} artículos en la base de pedidos`, 'success');
+                } else if (window.swalAlert) {
+                    window.swalAlert('Base Actualizada', `Se cargaron ${data.count} artículos correctamente.`, 'success');
+                }
+
+                _clearSelectedFile();
+                await _loadPedidosData();
+            } else {
+                throw new Error(data.error || 'Error al procesar el archivo Excel.');
+            }
+        } catch (err) {
+            console.error('[DatabaseView] Error al subir Excel:', err);
+            if (feedback) {
+                feedback.style.display = 'block';
+                feedback.style.background = 'rgba(239, 68, 68, 0.12)';
+                feedback.style.color = '#ef4444';
+                feedback.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+                feedback.innerHTML = `<strong>❌ Error:</strong> ${_esc(err.message)}`;
+            }
+            if (typeof showToast === 'function') showToast(err.message, 'error');
+            else alert('Error: ' + err.message);
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Importar a Base de Pedidos';
+            }
+        }
+    }
+
+    function _downloadPlantilla() {
+        window.open(`/api/backoffice/trust/download-plantilla?token=${_token}`, '_blank');
+    }
+
     // UTILS
     function _esc(str) {
         return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -708,6 +1070,11 @@ window.databaseView = (() => {
         _selectActiveDoc,
         _saveDocText,
         _toggleServiceVisibility,
-        _saveMultiCrmConfig
+        _saveMultiCrmConfig,
+        _handleFileSelected,
+        _clearSelectedFile,
+        _uploadExcel,
+        _downloadPlantilla,
+        _loadPedidosData
     };
 })();

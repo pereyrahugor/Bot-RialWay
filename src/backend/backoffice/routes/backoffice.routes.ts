@@ -1311,6 +1311,37 @@ export const registerBackofficeRoutes = (app: any) => {
         }
     });
 
+    app.get('/api/backoffice/trust/download-plantilla', backofficeAuth, async (req: any, res: any) => {
+        try {
+            const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
+            const serviceId = resolveServiceId(req) || depsHistoryHandler.SERVICE_IDENTIFIER;
+
+            const { TrustOrderBaseService } = await import('../../modules/trust/trustOrderBaseService');
+            const result = await TrustOrderBaseService.generatePlantillaExcel(projectId, serviceId);
+            if (!result.filePath || !fs.existsSync(result.filePath)) {
+                return res.status(404).json({ success: false, error: 'No se encontraron artículos cargados para generar la plantilla.' });
+            }
+            return res.download(result.filePath, result.fileName);
+        } catch (error: any) {
+            console.error("❌ [BACKOFFICE-TRUST] Error al generar/descargar plantilla:", error);
+            return res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
+    app.delete('/api/backoffice/trust/base-pedido', backofficeAuth, async (req: any, res: any) => {
+        try {
+            const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
+            const serviceId = resolveServiceId(req) || depsHistoryHandler.SERVICE_IDENTIFIER;
+
+            const { TrustOrderBaseService } = await import('../../modules/trust/trustOrderBaseService');
+            await TrustOrderBaseService.clearBaseParaPedido(projectId, serviceId);
+            return res.json({ success: true, message: 'Base de pedidos eliminada correctamente.' });
+        } catch (error: any) {
+            console.error("❌ [BACKOFFICE-TRUST] Error al eliminar base de pedidos:", error);
+            return res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
     app.post('/api/backoffice/chats/create-individual', backofficeAuth, (req: any, res: any) => {
         return processCreateIndividualContact(req, res);
     });
@@ -5467,10 +5498,16 @@ Hemos recibido tu pago con Ã©xito.
             const realApiKey = await depsHistoryHandler.getProjectApiKey(projectId, serviceId);
             const isSuperAdmin = (isSuperAdminSetting === 'true' && !!supervisorApiKey && !!realApiKey && supervisorApiKey.trim() === realApiKey.trim());
 
+            const clientSlug = (await depsHistoryHandler.getSetting('CLIENT_SLUG', projectId, serviceId)) || '';
+            const isTrust = (clientSlug.toLowerCase() === 'trust') || (process.env.CLIENT_SLUG === 'trust');
+
             res.json({
                 success: true,
                 hasTables,
                 hasRag,
+                hasPedidosBase: true,
+                isTrust,
+                clientSlug,
                 isSuperAdmin
             });
         } catch (e: any) {
