@@ -62,13 +62,83 @@ export const welcomeFlowDoc = addKeyword<BaileysProvider, MemoryDB>(EVENTS.DOCUM
         const setTime = Number(timeoutCierreValue) * 60 * 1000;
         reset(ctx, gotoFlow, setTime);
         try {
+            const clientSlugRaw = await HistoryHandler.getConfig('CLIENT_SLUG', dynamicProjectId, dynamicServiceId) || process.env.CLIENT_SLUG;
+            const clientSlug = (clientSlugRaw || '').trim().toLowerCase();
+
             const mimetype = (ctx?.media?.mimetype || ctx?.message?.documentMessage?.mimetype || ctx?.mimetype || '').toLowerCase();
             const fileName = (ctx?.media?.filename || ctx?.message?.documentMessage?.fileName || '').toLowerCase();
 
-            const isPdf = mimetype.includes('pdf') || fileName.endsWith('.pdf') || mimetype === 'application/octet-stream' || mimetype === 'application/x-pdf' || !mimetype;
+            const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || mimetype.includes('sheet') || mimetype.includes('excel') || mimetype.includes('spreadsheet');
+            const isPdf = mimetype.includes('pdf') || fileName.endsWith('.pdf') || mimetype === 'application/octet-stream' || mimetype === 'application/x-pdf' || (!mimetype && !isExcel);
+
+            // MANEJO EXCLUSIVO PARA SLUG: trust (Recepción de archivos Excel de Pedidos)
+            if (clientSlug === 'trust' && isExcel) {
+                console.log(`[welcomeFlowDoc] 📊 Documento Excel detectado para slug 'trust' de ${ctx.from} (${fileName || mimetype})`);
+
+                const pedidosDir = path.join(process.cwd(), "tmp", "pedidos_recibidos");
+                if (!fs.existsSync(pedidosDir)) {
+                    fs.mkdirSync(pedidosDir, { recursive: true });
+                }
+
+                // Guardar archivo Excel
+                let excelSavedPath: string | null = null;
+                try {
+                    excelSavedPath = await provider.saveFile(ctx, { path: pedidosDir });
+                } catch (saveErr: any) {
+                    console.warn("⚠️ [welcomeFlowDoc] provider.saveFile falló con Excel:", saveErr.message || saveErr);
+                }
+
+                if (!excelSavedPath || !fs.existsSync(excelSavedPath)) {
+                    if (ctx?.media?.buffer && Buffer.isBuffer(ctx.media.buffer) && ctx.media.buffer.length > 0) {
+                        const targetPath = path.join(pedidosDir, `pedido_${Date.now()}_${fileName || 'orden.xlsx'}`);
+                        fs.writeFileSync(targetPath, ctx.media.buffer);
+                        excelSavedPath = targetPath;
+                    }
+                }
+
+                if (!excelSavedPath) {
+                    await flowDynamic("⚠️ Se recibió tu archivo pero hubo un problema al guardarlo en el servidor. Por favor intenta reenviarlo.");
+                    return;
+                }
+
+                console.log(`✅ [welcomeFlowDoc] Excel de pedido guardado exitosamente en: ${excelSavedPath}`);
+                if (state && typeof state.update === 'function') {
+                    await state.update({ lastReceivedExcelPath: excelSavedPath });
+                }
+
+                const displayFileName = fileName || path.basename(excelSavedPath);
+                ctx.body = `[Archivo Excel de Pedido recibido]: "${displayFileName}". Ruta en servidor: "${excelSavedPath}". El cliente envió la planilla de pedido completada. Procesa este archivo con la herramienta 'trust_procesar_excel_pedido' para extraer las cantidades pedidas, cotizar en Tango Gestión y presentar el presupuesto final al cliente.`;
+
+                try {
+                    await HistoryHandler.saveMessage(
+                        ctx.from,
+                        'user',
+                        `📄 Archivo Excel de Pedido adjuntado: "${displayFileName}"`,
+                        'text',
+                        null,
+                        ctx.userId,
+                        null,
+                        ctx.platform || 'whatsapp',
+                        dynamicProjectId,
+                        dynamicServiceId
+                    );
+                } catch (dbErr) {
+                    console.error("❌ Error guardando mensaje de Excel en BD:", dbErr);
+                }
+
+                if (!userQueues.has(ctx.from)) {
+                    userQueues.set(ctx.from, []);
+                }
+                userQueues.get(ctx.from)!.push({ ctx, flowDynamic, state, provider, gotoFlow });
+
+                if (!userLocks.get(ctx.from) && userQueues.get(ctx.from)!.length === 1) {
+                    await handleQueue(ctx.from);
+                }
+                return; // Finalizar aquí para no ejecutar la conversión PDF/OCR
+            }
 
             if (!isPdf) {
-                console.log(`[welcomeFlowDoc] ℹ️ Documento recibido de ${ctx.from} no es PDF (${mimetype || fileName}). Omitiendo.`);
+                console.log(`[welcomeFlowDoc] ℹ️ Documento recibido de ${ctx.from} no es PDF ni Excel para trust (${mimetype || fileName}). Omitiendo.`);
                 return;
             }
 

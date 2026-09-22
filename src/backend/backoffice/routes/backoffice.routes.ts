@@ -1253,6 +1253,64 @@ export const registerBackofficeRoutes = (app: any) => {
         });
     });
 
+    // ==========================================
+    // RUTAS EXCLUSIVAS PARA SLUG: trust (Tango Gestión)
+    // ==========================================
+    app.post('/api/backoffice/trust/upload-base-pedido', backofficeAuth, (req: any, res: any) => {
+        upload.single('file')(req, res, async (err: any) => {
+            if (err) {
+                console.error("❌ [BACKOFFICE-TRUST] Error de Multer al cargar Excel de base para pedidos:", err);
+                return res.status(400).json({ success: false, error: `Error de archivo: ${err.message}` });
+            }
+
+            try {
+                const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
+                const serviceId = resolveServiceId(req) || depsHistoryHandler.SERVICE_IDENTIFIER;
+
+                if (!req.file) {
+                    return res.status(400).json({ success: false, error: 'No se envió ningún archivo Excel.' });
+                }
+
+                const { TrustOrderBaseService } = await import('../../modules/trust/trustOrderBaseService');
+                const fileSource = (req.file.buffer && req.file.buffer.length > 0) ? req.file.buffer : req.file.path;
+                const result = await TrustOrderBaseService.importExcelToBaseParaPedido(fileSource, projectId, serviceId);
+
+                if (req.file.path && fs.existsSync(req.file.path)) {
+                    try { fs.unlinkSync(req.file.path); } catch (_) {}
+                }
+
+                return res.json({
+                    success: true,
+                    count: result.count,
+                    headers: result.headers,
+                    sample: result.sample,
+                    message: `Se importaron ${result.count} artículos en la base de pedidos exitosamente.`
+                });
+            } catch (error: any) {
+                console.error("❌ [BACKOFFICE-TRUST] Error al importar base de pedidos:", error);
+                return res.status(500).json({ success: false, error: error.message || 'Error al procesar el Excel' });
+            }
+        });
+    });
+
+    app.get('/api/backoffice/trust/base-pedido-status', backofficeAuth, async (req: any, res: any) => {
+        try {
+            const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
+            const serviceId = resolveServiceId(req) || depsHistoryHandler.SERVICE_IDENTIFIER;
+
+            const { TrustOrderBaseService } = await import('../../modules/trust/trustOrderBaseService');
+            const status = await TrustOrderBaseService.getBaseParaPedidoStatus(projectId, serviceId);
+
+            return res.json({
+                success: true,
+                ...status
+            });
+        } catch (error: any) {
+            console.error("❌ [BACKOFFICE-TRUST] Error al consultar estado de base de pedidos:", error);
+            return res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
     app.post('/api/backoffice/chats/create-individual', backofficeAuth, (req: any, res: any) => {
         return processCreateIndividualContact(req, res);
     });

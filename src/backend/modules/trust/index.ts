@@ -1,5 +1,8 @@
 // src/backend/modules/trust/index.ts
 import { TangoClient, QuoteResult } from "../../apis/external/Trust/tangoClient";
+import { TrustOrderBaseService } from "./trustOrderBaseService";
+import path from "path";
+import fs from "fs";
 
 // Memoria volátil para cotizaciones pendientes de confirmación por chat
 const pendingQuotesMap = new Map<string, QuoteResult>();
@@ -35,6 +38,14 @@ export const trustModule = {
     crear_pedido: async (args: any, context: any) => trustModule.tools.CONFIRMAR_PEDIDO(args, context),
     crearPedido: async (args: any, context: any) => trustModule.tools.CONFIRMAR_PEDIDO(args, context),
     trust_confirmar_pedido: async (args: any, context: any) => trustModule.tools.CONFIRMAR_PEDIDO(args, context),
+
+    descargar_plantilla_pedido: async (args: any, context: any) => trustModule.tools.DESCARGAR_PLANTILLA_PEDIDO(args, context),
+    enviar_plantilla_pedido: async (args: any, context: any) => trustModule.tools.DESCARGAR_PLANTILLA_PEDIDO(args, context),
+    trust_descargar_plantilla_pedido: async (args: any, context: any) => trustModule.tools.DESCARGAR_PLANTILLA_PEDIDO(args, context),
+
+    procesar_excel_pedido: async (args: any, context: any) => trustModule.tools.PROCESAR_EXCEL_PEDIDO(args, context),
+    procesar_archivo_pedido: async (args: any, context: any) => trustModule.tools.PROCESAR_EXCEL_PEDIDO(args, context),
+    trust_procesar_excel_pedido: async (args: any, context: any) => trustModule.tools.PROCESAR_EXCEL_PEDIDO(args, context),
 
     // ----------------------------------------------------
     // 1. CONSULTAR CLIENTE
@@ -103,7 +114,7 @@ export const trustModule = {
           descripcion: p.description,
           precioUnitario: p.price,
           unidadMedida: p.measureUnit,
-          unidadesPorBulto: p.salesEquivalence, // Cómo se vende por unidad o bulto y cantidad
+          unidadesPorBulto: p.salesEquivalence,
           stockDisponible: p.stock,
           stockTotal: p.totalStockAcrossWarehouses,
         })),
@@ -143,7 +154,166 @@ export const trustModule = {
     },
 
     // ----------------------------------------------------
-    // 4. REALIZAR PRESUPUESTO / COTIZACIÓN
+    // 4. DESCARGAR / ENVIAR PLANTILLA DE PEDIDO EN EXCEL
+    // ----------------------------------------------------
+    DESCARGAR_PLANTILLA_PEDIDO: async (args: any, context: any) => {
+      console.log("[trustModule] 📊 DESCARGAR_PLANTILLA_PEDIDO:", args);
+      const projectId = context?.projectId || null;
+      const serviceId = context?.serviceId || null;
+
+      try {
+        const customerQuery = args.codigo_cliente || args.cuit || args.cliente;
+        let customerInfo: any = null;
+
+        if (customerQuery) {
+          const tango = new TangoClient(projectId, serviceId);
+          customerInfo = await tango.findCustomer(String(customerQuery));
+        }
+
+        const templateResult = await TrustOrderBaseService.generatePlantillaExcel(projectId, serviceId, {
+          customerCode: customerInfo?.Code,
+          customerName: customerInfo?.BusinessName || customerInfo?.TradeName,
+          priceList: customerInfo?.PriceListNumber,
+        });
+
+        if (templateResult.totalRows === 0) {
+          return "La base de artículos para pedidos aún no ha sido cargada en el panel de control. Por favor contacte con administración.";
+        }
+
+        // Si tenemos flowDynamic o provider en el contexto, enviamos el archivo por WhatsApp
+        const flowDynamic = context?.flowDynamic;
+        if (typeof flowDynamic === "function" && fs.existsSync(templateResult.filePath)) {
+          console.log(`[trustModule] 📤 Enviando archivo Excel al cliente vía flowDynamic: ${templateResult.filePath}`);
+          await flowDynamic([
+            {
+              body: "📄 Aquí tienes la plantilla actualizada para confeccionar tu pedido. Completa la columna *CANTIDAD A PEDIR* con los artículos que necesitas y envíanos el archivo de vuelta por este chat para procesarlo inmediatamente.",
+              media: templateResult.filePath,
+            },
+          ]);
+        }
+
+        return JSON.stringify({
+          exito: true,
+          archivoGenerado: templateResult.fileName,
+          totalArticulos: templateResult.totalRows,
+          rutaArchivo: templateResult.filePath,
+          mensajeParaAsistente: "El archivo Excel con la plantilla de pedido fue generado y enviado exitosamente al cliente por WhatsApp. Indícale que complete la columna 'CANTIDAD A PEDIR' y reenvíe el archivo por este chat cuando esté listo.",
+        });
+      } catch (err: any) {
+        console.error("❌ [trustModule] Error generando plantilla Excel:", err);
+        return `Error al generar la plantilla de pedidos: ${err.message}`;
+      }
+    },
+
+    // ----------------------------------------------------
+    // 5. PROCESAR ARCHIVO EXCEL DE PEDIDO DEVUELTO
+    // ----------------------------------------------------
+    PROCESAR_EXCEL_PEDIDO: async (args: any, context: any) => {
+      console.log("[trustModule] 📥 PROCESAR_EXCEL_PEDIDO:", args);
+      const projectId = context?.projectId || null;
+      const serviceId = context?.serviceId || null;
+
+      try {
+        let filePath = args.ruta_archivo || args.filePath || "";
+
+        // Si no vino en los args, intentar obtenerlo del estado de la conversación
+        if (!filePath && context?.state) {
+          if (typeof context.state.get === "function") {
+            filePath = context.state.get("lastReceivedExcelPath");
+          }
+        }
+
+        // Si aún no está, buscar el último archivo Excel en ./tmp/pedidos_recibidos/
+        if (!filePath) {
+          const dir = path.join(process.cwd(), "tmp", "pedidos_recibidos");
+          if (fs.existsSync(dir)) {
+            const files = fs.readdirSync(dir)
+              .filter((f) => f.endsWith(".xlsx") || f.endsWith(".xls"))
+              .map((f) => ({ name: f, time: fs.statSync(path.join(dir, f)).mtimeMs }))
+              .sort((a, b) => b.time - a.time);
+            if (files.length > 0) {
+              filePath = path.join(dir, files[0].name);
+              console.log(`[trustModule] Archivo Excel resuelto desde carpeta recibidos: ${filePath}`);
+            }
+          }
+        }
+
+        if (!filePath || !fs.existsSync(filePath)) {
+          return "No se encontró el archivo Excel del pedido recibido. Por favor adjunta el archivo Excel completado.";
+        }
+
+        const parsed = await TrustOrderBaseService.processIncomingOrderExcel(filePath);
+
+        if (parsed.items.length === 0) {
+          return JSON.stringify({
+            exito: false,
+            mensaje: "No se encontraron artículos con cantidad mayor a 0 en la columna 'CANTIDAD A PEDIR' del archivo Excel recibido. Por favor revisa el archivo y asegúrate de indicar las cantidades requeridas.",
+            totalFilasLeidas: parsed.totalRowsRead,
+          });
+        }
+
+        // Determinar cliente para cotizar
+        const tango = new TangoClient(projectId, serviceId);
+        let customerQuery = args.codigo_cliente || args.cuit || args.cliente;
+
+        if (!customerQuery && context?.ctx?.from) {
+          const phone = String(context.ctx.from).replace(/\D/g, "");
+          const found = await tango.findCustomer(phone);
+          if (found) {
+            customerQuery = found.Code;
+          }
+        }
+
+        if (!customerQuery) {
+          return JSON.stringify({
+            exito: true,
+            requiereIdentificarCliente: true,
+            totalItemsDetectados: parsed.items.length,
+            items: parsed.items,
+            mensaje: `Se detectaron ${parsed.items.length} artículos en el archivo Excel. Por favor indícame tu CUIT o Código de Cliente para calcular los precios y descuentos correspondientes de tu cuenta en Tango.`,
+          });
+        }
+
+        // Calcular presupuesto con Tango
+        const quote = await tango.calculateQuote(String(customerQuery), parsed.items);
+
+        // Guardar cotización pendiente en memoria
+        const chatId = context?.ctx?.from || context?.chatId || quote.customer.code;
+        pendingQuotesMap.set(chatId, quote);
+        pendingQuotesMap.set(quote.quoteId, quote);
+
+        return JSON.stringify({
+          exito: true,
+          cotizacionGenerada: true,
+          numeroCotizacion: quote.quoteId,
+          cliente: quote.customer.name,
+          cuit: quote.customer.document,
+          listaPrecios: quote.customer.priceListNumber,
+          descuentoCliente: `${quote.customer.discountPercentage}%`,
+          totalArticulosPedios: quote.items.length,
+          items: quote.items.map((i) => ({
+            codigo: i.code,
+            descripcion: i.description,
+            cantidad: i.quantity,
+            unidad: i.measureUnit,
+            precioUnitario: i.unitPrice,
+            descuento: `${i.discountPercentage}%`,
+            subtotal: i.subtotal,
+          })),
+          subtotalBruto: quote.subtotal,
+          totalDescuento: quote.totalDiscount,
+          totalFinal: quote.total,
+          moneda: quote.currency,
+          mensajeParaCliente: `✅ Hemos procesado tu archivo Excel. Se cotizaron *${quote.items.length} productos* por un total final de *$${quote.total.toLocaleString("es-AR")}* (Cotización #${quote.quoteId}). ¿Deseas confirmar este pedido para ingresarlo al sistema?`,
+        });
+      } catch (err: any) {
+        console.error("❌ [trustModule] Error procesando Excel de pedido:", err);
+        return `Error al procesar el archivo Excel: ${err.message}`;
+      }
+    },
+
+    // ----------------------------------------------------
+    // 6. REALIZAR PRESUPUESTO / COTIZACIÓN DIRECTA
     // ----------------------------------------------------
     GENERAR_PRESUPUESTO: async (args: any, context: any) => {
       console.log("[trustModule] 📝 GENERAR_PRESUPUESTO:", args);
@@ -197,14 +367,13 @@ export const trustModule = {
     },
 
     // ----------------------------------------------------
-    // 5. ESPERAR CONFIRMACIÓN Y PASAR A PEDIDO
+    // 7. ESPERAR CONFIRMACIÓN Y PASAR A PEDIDO
     // ----------------------------------------------------
     CONFIRMAR_PEDIDO: async (args: any, context: any) => {
       console.log("[trustModule] 🛒 CONFIRMAR_PEDIDO:", args);
       const chatId = context?.ctx?.from || context?.chatId || "";
       const quoteId = args.cotizacion_id || args.numeroCotizacion || "";
 
-      // Recuperar cotización guardada previamente
       let quote: QuoteResult | undefined = undefined;
       if (quoteId && pendingQuotesMap.has(quoteId)) {
         quote = pendingQuotesMap.get(quoteId);
@@ -214,21 +383,18 @@ export const trustModule = {
 
       const tango = new TangoClient(context?.projectId || null, context?.serviceId || null);
 
-      // Si no estaba en caché pero se pasaron los artículos directamente
       if (!quote && args.codigo_cliente && Array.isArray(args.articulos)) {
         quote = await tango.calculateQuote(args.codigo_cliente, args.articulos);
       }
 
       if (!quote) {
-        return "No se encontró un presupuesto activo para confirmar. Primero debe generar un presupuesto con 'generar_presupuesto'.";
+        return "No se encontró un presupuesto activo para confirmar. Primero debe generar un presupuesto o procesar el archivo Excel del pedido.";
       }
 
-      // Enviar la orden a Tango Tiendas
       const orderResult = await tango.createOrder(quote, {
         comments: args.comentarios || args.notas_entrega || "Confirmado por cliente vía WhatsApp",
       });
 
-      // Limpiar cotización pendiente
       if (chatId) pendingQuotesMap.delete(chatId);
       if (quote.quoteId) pendingQuotesMap.delete(quote.quoteId);
 
@@ -241,4 +407,151 @@ export const trustModule = {
       });
     },
   },
+
+  // ----------------------------------------------------
+  // NATIVE OPENAI TOOLS SCHEMAS (EXCLUSIVAS PARA SLUG TRUST)
+  // ----------------------------------------------------
+  openAiTools: [
+    {
+      type: "function",
+      function: {
+        name: "trust_consultar_cliente",
+        description: "Consulta en Tango Gestión la información comercial de un cliente por su CUIT o Razón Social (lista de precios, descuento asignado, saldo de cuenta corriente y condición de venta).",
+        parameters: {
+          type: "object",
+          properties: {
+            cuit_o_nombre: {
+              type: "string",
+              description: "CUIT (sin guiones o con guiones) o Razón Social / Nombre del cliente a buscar.",
+            },
+          },
+          required: ["cuit_o_nombre"],
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "trust_consultar_articulos",
+        description: "Consulta precios netos, unidad de medida, equivalencia de bulto y stock disponible de uno o varios artículos en Tango Gestión.",
+        parameters: {
+          type: "object",
+          properties: {
+            codigos: {
+              type: "array",
+              items: { type: "string" },
+              description: "Lista de códigos SKU o nombres de artículos a consultar.",
+            },
+            lista_precio: {
+              type: "number",
+              description: "Número de lista de precios a consultar (opcional, por defecto lista 1).",
+            },
+          },
+          required: ["codigos"],
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "trust_obtener_descuentos_cliente",
+        description: "Obtiene los descuentos comerciales, condiciones de venta y lista asignada a un cliente específico en Tango.",
+        parameters: {
+          type: "object",
+          properties: {
+            codigo_cliente: {
+              type: "string",
+              description: "Código o CUIT del cliente registrado en Tango.",
+            },
+          },
+          required: ["codigo_cliente"],
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "trust_descargar_plantilla_pedido",
+        description: "Genera y envía automáticamente al cliente por WhatsApp una plantilla de Excel personalizada con todos los productos disponibles en la base para que complete la columna 'CANTIDAD A PEDIR'. Usar cuando el cliente solicite pasar un pedido o pida el listado/planilla de pedidos.",
+        parameters: {
+          type: "object",
+          properties: {
+            codigo_cliente: {
+              type: "string",
+              description: "Código o CUIT del cliente si ya está identificado (opcional).",
+            },
+          },
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "trust_procesar_excel_pedido",
+        description: "Procesa el archivo Excel completado por el cliente con sus cantidades a pedir, calcula la cotización en Tango Gestión con sus descuentos comerciales y devuelve el resumen para confirmación. Usar cuando el cliente haya enviado un archivo Excel de pedido.",
+        parameters: {
+          type: "object",
+          properties: {
+            codigo_cliente: {
+              type: "string",
+              description: "Código o CUIT del cliente para aplicar sus precios y descuentos de Tango.",
+            },
+            ruta_archivo: {
+              type: "string",
+              description: "Ruta local del archivo Excel recibido si está disponible.",
+            },
+          },
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "trust_generar_presupuesto",
+        description: "Genera una cotización o presupuesto formal en Tango Gestión para una lista de productos y cantidades específicas.",
+        parameters: {
+          type: "object",
+          properties: {
+            codigo_cliente: {
+              type: "string",
+              description: "Código o CUIT del cliente.",
+            },
+            articulos: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  codigo: { type: "string", description: "Código SKU del artículo" },
+                  cantidad: { type: "number", description: "Cantidad a pedir" },
+                },
+                required: ["codigo", "cantidad"],
+              },
+              description: "Lista de artículos con sus cantidades.",
+            },
+          },
+          required: ["codigo_cliente", "articulos"],
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "trust_confirmar_pedido",
+        description: "Confirma e ingresa formalmente en Tango Gestión un presupuesto previamente cotizado como una orden/pedido de venta activo. Solo invocar una vez que el cliente haya confirmado explícitamente la cotización.",
+        parameters: {
+          type: "object",
+          properties: {
+            cotizacion_id: {
+              type: "string",
+              description: "Identificador de la cotización calculada previamente.",
+            },
+            comentarios: {
+              type: "string",
+              description: "Comentarios o notas de entrega para el pedido en Tango.",
+            },
+          },
+        },
+      },
+    },
+  ],
 };

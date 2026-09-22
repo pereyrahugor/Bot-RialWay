@@ -356,6 +356,45 @@ window.systemConfigView = {
                                     </div>
                                 </div>
                             </div>
+
+                            <!-- Sección Exclusiva: Base para Pedidos (Excel) -->
+                            <div style="margin-top:10px; padding-top:16px; border-top:1px solid var(--border);">
+                                <h4 style="margin:0 0 6px 0; color:var(--text-main); display:flex; align-items:center; gap:8px;">
+                                    <i class="fas fa-file-excel" style="color:#107c41;"></i> Base de Artículos para Pedidos (Excel)
+                                </h4>
+                                <p class="description" style="margin-bottom:12px;">
+                                    Sube la planilla Excel con la lista de productos disponibles para pedidos. Esta tabla se enviará como plantilla a los clientes por WhatsApp cuando deseen confeccionar un pedido.
+                                </p>
+
+                                <!-- Status Badge & Metadata -->
+                                <div id="trust-base-status-card" style="background:rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:10px; padding:12px 16px; margin-bottom:14px;">
+                                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                                        <div style="font-size:0.85rem;">
+                                            <strong style="color:var(--text-main);">Estado de la Base:</strong>
+                                            <span id="trust-base-status-badge" style="display:inline-block; margin-left:6px; padding:2px 8px; border-radius:12px; font-size:0.75rem; font-weight:600; background:rgba(255,255,255,0.1); color:var(--text-muted);">
+                                                Consultando...
+                                            </span>
+                                        </div>
+                                        <div id="trust-base-meta-info" style="font-size:0.8rem; color:var(--text-muted);"></div>
+                                    </div>
+                                    <div id="trust-base-headers-preview" style="margin-top:8px; font-size:0.75rem; color:var(--text-muted); display:none;">
+                                        <strong>Columnas registradas:</strong> <span id="trust-base-headers-text"></span>
+                                    </div>
+                                </div>
+
+                                <!-- Formulario de Carga de Excel -->
+                                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                                    <label for="trust-excel-file-input" class="btn btn-sm btn-secondary" style="margin:0; cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
+                                        <i class="fas fa-folder-open"></i> Seleccionar Excel (.xlsx, .xls)
+                                        <input type="file" id="trust-excel-file-input" accept=".xlsx, .xls" style="display:none;" onchange="handleTrustFileSelected(this)">
+                                    </label>
+                                    <span id="trust-selected-filename" style="font-size:0.82rem; color:var(--text-muted); font-style:italic;">Ningún archivo seleccionado</span>
+                                    <button type="button" id="trust-upload-btn" class="btn btn-sm btn-primary" style="display:none; margin:0;" onclick="uploadTrustExcelBase()">
+                                        <i class="fas fa-cloud-upload-alt"></i> Cargar Base de Pedidos
+                                    </button>
+                                </div>
+                                <div id="trust-upload-feedback" style="margin-top:8px; font-size:0.8rem; display:none;"></div>
+                            </div>
                         </div>
                         <div class="variable-group">
                             <h3>GRUPO RESUMEN <span style="opacity:0.5;font-weight:400;">1</span></h3>

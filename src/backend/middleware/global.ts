@@ -115,7 +115,8 @@ export const smartBodyParser = (req: any, res: any, next: () => void) => {
         req.url.startsWith('/api/v1/send-message') ||
         req.url.startsWith('/api/v1/send-template') ||
         req.url.startsWith('/api/backoffice/whatsapp/send-bulk-template') ||
-        req.url.startsWith('/api/backoffice/chats/import')) {
+        req.url.startsWith('/api/backoffice/chats/import') ||
+        req.url.startsWith('/api/backoffice/trust/upload-base-pedido')) {
         return next(); 
     }
 
