@@ -16,8 +16,8 @@ export class SettingsService {
         }
         const targetProjectId = projectId || HistoryHandler.PROJECT_IDENTIFIER;
         const targetServiceId = serviceId || 'default';
-        const cacheKey = `${targetProjectId}:${targetServiceId}:${key}`;
-        this.settingsCache.delete(cacheKey);
+        this.settingsCache.delete(`${targetProjectId}:${targetServiceId}:${key}`);
+        this.settingsCache.delete(`${targetProjectId}:${targetServiceId}:${key}:strict`);
     }
 
     /**
@@ -40,7 +40,7 @@ export class SettingsService {
             rawServiceId.trim() === '';
 
         const targetServiceId = isGenericService ? null : rawServiceId;
-        const cacheKey = `${targetProjectId}:${targetServiceId || 'default'}:${key}`;
+        const cacheKey = `${targetProjectId}:${targetServiceId || 'default'}:${key}${strictService ? ':strict' : ''}`;
         const now = Date.now();
 
         // 1. Intentar obtener desde cache en memoria (excepto credenciales para garantizar realtime)
@@ -71,13 +71,15 @@ export class SettingsService {
 
         let data = mainData;
 
-        // Fallback: Si no lo encontró con service_id específico, buscar solo por project_id
+        // Fallback: Si no lo encontró con service_id específico, buscar configuraciones globales del proyecto
+        // NUNCA debe adoptar registros que pertenezcan explícitamente a otro service_id
         if (!data && targetServiceId && !strictService) {
             const fallbackRes = await supabase
                 .from('settings')
                 .select('value')
                 .eq('project_id', targetProjectId)
                 .eq('key', key)
+                .or('service_id.is.null,service_id.eq.default_service,service_id.eq.generic')
                 .limit(1)
                 .maybeSingle();
             if (fallbackRes.data) {
@@ -144,10 +146,13 @@ export class SettingsService {
      * Helper de configuración dinámica (Hot-update).
      * Busca primero en la base de datos (settings) y si no existe, recurre a process.env.
      */
-    static async getConfig(key: string, projectId: string | null = null, serviceId: string | null = null): Promise<string | null> {
-        const dbValue = await this.getSetting(key, projectId, serviceId);
+    static async getConfig(key: string, projectId: string | null = null, serviceId: string | null = null, strictService: boolean = false): Promise<string | null> {
+        const dbValue = await this.getSetting(key, projectId, serviceId, strictService);
         if (dbValue !== null && dbValue !== undefined && dbValue !== '') {
             return dbValue;
+        }
+        if (strictService && serviceId) {
+            return null;
         }
         return process.env[key] || null;
     }
@@ -163,6 +168,7 @@ export class SettingsService {
         // Invalidar cache en memoria
         const cacheKey = `${targetProjectId}:${targetServiceId}:${key}`;
         this.settingsCache.delete(cacheKey);
+        this.settingsCache.delete(`${cacheKey}:strict`);
 
         const payload: any = {
             project_id: targetProjectId,

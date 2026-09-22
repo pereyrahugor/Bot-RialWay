@@ -264,10 +264,11 @@ window.databaseView = (() => {
     // INIT
     async function init() {
         _token = localStorage.getItem('backoffice_token') || '';
+        const serviceParam = (typeof window !== 'undefined' && window.railwayServiceId) ? `&serviceId=${encodeURIComponent(window.railwayServiceId)}` : '';
         
         // 1. Validar configuraciones habilitadas (si tiene tables, RAG o base de pedidos)
         try {
-            const res = await fetch(`/api/backoffice/database/settings?token=${_token}`);
+            const res = await fetch(`/api/backoffice/database/settings?token=${_token}${serviceParam}`);
             const result = await res.json();
             if (result.success) {
                 _hasTables = result.hasTables;
@@ -292,6 +293,8 @@ window.databaseView = (() => {
         // Si no hay tablas sincronizadas pero sí base de pedidos, ir a pedidos por defecto
         if (!_hasTables && _hasPedidosBase) {
             _switchTab('pedidos');
+        } else if (_activeTab === 'pedidos' && !_hasPedidosBase) {
+            _switchTab('tables');
         } else {
             _switchTab('tables');
         }
@@ -859,7 +862,8 @@ window.databaseView = (() => {
         }
 
         try {
-            const res = await fetch(`/api/backoffice/trust/base-pedido-status?token=${_token}`);
+            const serviceParam = (typeof window !== 'undefined' && window.railwayServiceId) ? `&serviceId=${encodeURIComponent(window.railwayServiceId)}` : '';
+            const res = await fetch(`/api/backoffice/trust/base-pedido-status?token=${_token}${serviceParam}`);
             const result = await res.json();
 
             if (!result.success) throw new Error(result.error || 'Error al consultar');
@@ -997,7 +1001,8 @@ window.databaseView = (() => {
             const formData = new FormData();
             formData.append('file', _selectedPedidosFile);
 
-            const res = await fetch(`/api/backoffice/trust/upload-base-pedido?token=${_token}`, {
+            const serviceParam = (typeof window !== 'undefined' && window.railwayServiceId) ? `&serviceId=${encodeURIComponent(window.railwayServiceId)}` : '';
+            const res = await fetch(`/api/backoffice/trust/upload-base-pedido?token=${_token}${serviceParam}`, {
                 method: 'POST',
                 body: formData
             });
@@ -1044,7 +1049,8 @@ window.databaseView = (() => {
     }
 
     function _downloadPlantilla() {
-        window.open(`/api/backoffice/trust/download-plantilla?token=${_token}`, '_blank');
+        const serviceParam = (typeof window !== 'undefined' && window.railwayServiceId) ? `&serviceId=${encodeURIComponent(window.railwayServiceId)}` : '';
+        window.open(`/api/backoffice/trust/download-plantilla?token=${_token}${serviceParam}`, '_blank');
     }
 
     // UTILS

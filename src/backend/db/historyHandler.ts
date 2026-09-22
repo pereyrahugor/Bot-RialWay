@@ -3484,8 +3484,8 @@ export class HistoryHandler {
         return SettingsService.getSetting(key, projectId, serviceId, strictService);
     }
 
-    static async getConfig(key: string, projectId: string | null = null, serviceId: string | null = null): Promise<string | null> {
-        return SettingsService.getConfig(key, projectId, serviceId);
+    static async getConfig(key: string, projectId: string | null = null, serviceId: string | null = null, strictService: boolean = false): Promise<string | null> {
+        return SettingsService.getConfig(key, projectId, serviceId, strictService);
     }
 
     static async getProjectApiKey(projectId: string | null = null, serviceId: string | null = null): Promise<string> {

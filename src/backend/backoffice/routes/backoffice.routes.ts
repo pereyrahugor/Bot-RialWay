@@ -1267,9 +1267,8 @@ export const registerBackofficeRoutes = (app: any) => {
                 const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
                 const serviceId = resolveServiceId(req) || depsHistoryHandler.SERVICE_IDENTIFIER;
 
-                const clientSlug = (await depsHistoryHandler.getSetting('CLIENT_SLUG', projectId, serviceId))
-                    || (await depsHistoryHandler.getConfig('CLIENT_SLUG', projectId, serviceId))
-                    || process.env.CLIENT_SLUG
+                const clientSlug = (await depsHistoryHandler.getSetting('CLIENT_SLUG', projectId, serviceId, true))
+                    || (await depsHistoryHandler.getConfig('CLIENT_SLUG', projectId, serviceId, true))
                     || '';
                 if (clientSlug.trim().toLowerCase() !== 'trust') {
                     return res.status(403).json({ success: false, error: "La base de pedidos solo está permitida y habilitada cuando el slug de cliente activo es 'trust'." });
@@ -1306,9 +1305,8 @@ export const registerBackofficeRoutes = (app: any) => {
             const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
             const serviceId = resolveServiceId(req) || depsHistoryHandler.SERVICE_IDENTIFIER;
 
-            const clientSlug = (await depsHistoryHandler.getSetting('CLIENT_SLUG', projectId, serviceId))
-                || (await depsHistoryHandler.getConfig('CLIENT_SLUG', projectId, serviceId))
-                || process.env.CLIENT_SLUG
+            const clientSlug = (await depsHistoryHandler.getSetting('CLIENT_SLUG', projectId, serviceId, true))
+                || (await depsHistoryHandler.getConfig('CLIENT_SLUG', projectId, serviceId, true))
                 || '';
             if (clientSlug.trim().toLowerCase() !== 'trust') {
                 return res.status(403).json({ success: false, error: "La base de pedidos solo está permitida y habilitada cuando el slug de cliente activo es 'trust'." });
@@ -1332,9 +1330,8 @@ export const registerBackofficeRoutes = (app: any) => {
             const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
             const serviceId = resolveServiceId(req) || depsHistoryHandler.SERVICE_IDENTIFIER;
 
-            const clientSlug = (await depsHistoryHandler.getSetting('CLIENT_SLUG', projectId, serviceId))
-                || (await depsHistoryHandler.getConfig('CLIENT_SLUG', projectId, serviceId))
-                || process.env.CLIENT_SLUG
+            const clientSlug = (await depsHistoryHandler.getSetting('CLIENT_SLUG', projectId, serviceId, true))
+                || (await depsHistoryHandler.getConfig('CLIENT_SLUG', projectId, serviceId, true))
                 || '';
             if (clientSlug.trim().toLowerCase() !== 'trust') {
                 return res.status(403).json({ success: false, error: "La base de pedidos solo está permitida y habilitada cuando el slug de cliente activo es 'trust'." });
@@ -1357,9 +1354,8 @@ export const registerBackofficeRoutes = (app: any) => {
             const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
             const serviceId = resolveServiceId(req) || depsHistoryHandler.SERVICE_IDENTIFIER;
 
-            const clientSlug = (await depsHistoryHandler.getSetting('CLIENT_SLUG', projectId, serviceId))
-                || (await depsHistoryHandler.getConfig('CLIENT_SLUG', projectId, serviceId))
-                || process.env.CLIENT_SLUG
+            const clientSlug = (await depsHistoryHandler.getSetting('CLIENT_SLUG', projectId, serviceId, true))
+                || (await depsHistoryHandler.getConfig('CLIENT_SLUG', projectId, serviceId, true))
                 || '';
             if (clientSlug.trim().toLowerCase() !== 'trust') {
                 return res.status(403).json({ success: false, error: "La base de pedidos solo está permitida y habilitada cuando el slug de cliente activo es 'trust'." });
@@ -5530,9 +5526,8 @@ Hemos recibido tu pago con Ã©xito.
             const realApiKey = await depsHistoryHandler.getProjectApiKey(projectId, serviceId);
             const isSuperAdmin = (isSuperAdminSetting === 'true' && !!supervisorApiKey && !!realApiKey && supervisorApiKey.trim() === realApiKey.trim());
 
-            const clientSlug = (await depsHistoryHandler.getSetting('CLIENT_SLUG', projectId, serviceId))
-                || (await depsHistoryHandler.getConfig('CLIENT_SLUG', projectId, serviceId))
-                || process.env.CLIENT_SLUG
+            const clientSlug = (await depsHistoryHandler.getSetting('CLIENT_SLUG', projectId, serviceId, true))
+                || (await depsHistoryHandler.getConfig('CLIENT_SLUG', projectId, serviceId, true))
                 || '';
             const isTrust = clientSlug.trim().toLowerCase() === 'trust';
 
