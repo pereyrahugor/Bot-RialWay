@@ -15,6 +15,7 @@ export interface TangoCustomer {
   Discount?: number;
   SaleConditionCode?: number;
   SellerCode?: string;
+  TransportCode?: string;
   Address?: string;
   City?: string;
   ProvinceCode?: string;

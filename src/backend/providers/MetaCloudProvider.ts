@@ -1056,7 +1056,25 @@ class MetaCloudProvider extends ProviderClass {
         try {
             const body = req.body;
 
-            // Responder 200 OK inmediatamente (Obligatorio para Meta)
+            // Verificación del Webhook (GET /webhook)
+            if (req.method === 'GET') {
+                const mode = req.query['hub.mode'];
+                const token = req.query['hub.verify_token'];
+                const challenge = req.query['hub.challenge'];
+                const { verify_token } = this.config;
+
+                if (mode === 'subscribe' && token === verify_token) {
+                    console.log('✅ [MetaCloudProvider] Webhook Verificado Correctamente.');
+                    res.statusCode = 200;
+                    return res.end(challenge);
+                } else {
+                    console.error('❌ [MetaCloudProvider] Error de Verificación: Token incorrecto');
+                    res.statusCode = 403;
+                    return res.end('Forbidden');
+                }
+            }
+
+            // Responder 200 OK inmediatamente para peticiones POST (Obligatorio para Meta)
             if (!res.headersSent) {
                 res.statusCode = 200;
                 res.end('OK');
@@ -1077,23 +1095,6 @@ class MetaCloudProvider extends ProviderClass {
                     }
                 } catch (e: any) {
                     console.error('⚠️ [MetaCloudProvider] Error cargando config dinámica en Webhook:', e.message);
-                }
-            }
-
-            // Verificación del Webhook (GET /webhook)
-            if (req.method === 'GET') {
-                const mode = req.query['hub.mode'];
-                const token = req.query['hub.verify_token'];
-                const challenge = req.query['hub.challenge'];
-                const { verify_token } = this.config;
-
-                if (mode === 'subscribe' && token === verify_token) {
-                    console.log('✅ [MetaCloudProvider] Webhook Verificado Correctamente.');
-                    return res.end(challenge);
-                } else {
-                    console.error('❌ [MetaCloudProvider] Error de Verificación: Token incorrecto');
-                    res.statusCode = 403;
-                    return res.end('Forbidden');
                 }
             }
 
