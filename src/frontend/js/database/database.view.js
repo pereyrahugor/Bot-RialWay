@@ -153,6 +153,9 @@ window.databaseView = (() => {
                                 <button onclick="databaseView._downloadPlantilla()" id="btn-download-plantilla" class="filter-pill" style="cursor: pointer; padding: 8px 16px; border-radius: 10px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--card-border-color); background: var(--bg-secondary); color: var(--text-main);">
                                     <i class="fas fa-download" style="color: #107c41;"></i> Descargar Plantilla
                                 </button>
+                                <button onclick="databaseView._clearBasePedidos()" id="btn-clear-pedidos" class="filter-pill" style="cursor: pointer; padding: 8px 16px; border-radius: 10px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; border: 1px solid rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.08); color: #ef4444;" title="Vaciar todos los artículos y eliminar la plantilla">
+                                    <i class="fas fa-trash-alt"></i> Vaciar Base
+                                </button>
                                 <button onclick="databaseView._loadPedidosData()" class="filter-pill" title="Actualizar datos" style="cursor: pointer; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--card-border-color); background: var(--bg-secondary); color: var(--text-muted);">
                                     <i class="fas fa-sync-alt"></i>
                                 </button>
@@ -1053,6 +1056,48 @@ window.databaseView = (() => {
         window.open(`/api/backoffice/trust/download-plantilla?token=${_token}${serviceParam}`, '_blank');
     }
 
+    async function _clearBasePedidos() {
+        const confirmMsg = '¿Estás seguro de que deseas vaciar la base de pedidos y eliminar la plantilla cargada? Esta acción no se puede deshacer.';
+        if (window.swalConfirm) {
+            const confirmed = await window.swalConfirm('Vaciar Base de Pedidos', confirmMsg, 'warning');
+            if (!confirmed) return;
+        } else {
+            if (!confirm(confirmMsg)) return;
+        }
+
+        const btn = document.getElementById('btn-clear-pedidos');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Vaciando...';
+        }
+
+        try {
+            const serviceParam = (typeof window !== 'undefined' && window.railwayServiceId) ? `&serviceId=${encodeURIComponent(window.railwayServiceId)}` : '';
+            const res = await fetch(`/api/backoffice/trust/base-pedido?token=${_token}${serviceParam}`, {
+                method: 'DELETE'
+            });
+            const result = await res.json();
+            if (result.success) {
+                if (typeof showToast === 'function') showToast('Base de pedidos vaciada correctamente.', 'success');
+                else if (window.swalAlert) window.swalAlert('Base Vaciada', 'Se eliminaron todos los artículos y la plantilla.', 'success');
+                else alert('Base de pedidos vaciada.');
+                _clearSelectedFile();
+                await _loadPedidosData();
+            } else {
+                throw new Error(result.error || 'Error al vaciar la base.');
+            }
+        } catch (err) {
+            console.error('[DatabaseView] Error al vaciar base de pedidos:', err);
+            if (typeof showToast === 'function') showToast(err.message, 'error');
+            else alert('Error: ' + err.message);
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-trash-alt"></i> Vaciar Base';
+            }
+        }
+    }
+
     // UTILS
     function _esc(str) {
         return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -1085,6 +1130,7 @@ window.databaseView = (() => {
         _clearSelectedFile,
         _uploadExcel,
         _downloadPlantilla,
+        _clearBasePedidos,
         _loadPedidosData
     };
 })();

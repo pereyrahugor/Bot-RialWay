@@ -472,7 +472,7 @@ export const trustModule = {
       type: "function",
       function: {
         name: "trust_descargar_plantilla_pedido",
-        description: "Genera y envía automáticamente al cliente por WhatsApp una plantilla de Excel personalizada con todos los productos disponibles en la base para que complete la columna 'CANTIDAD A PEDIR'. Usar cuando el cliente solicite pasar un pedido o pida el listado/planilla de pedidos.",
+        description: "Envía automáticamente al cliente por WhatsApp el archivo Excel oficial con el catálogo de productos y su columna de pedidos. Usar SIEMPRE que el cliente solicite realizar, confeccionar o cargar un pedido, comprar mercadería, o solicite el catálogo/lista/planilla de pedidos.",
         parameters: {
           type: "object",
           properties: {
