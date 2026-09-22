@@ -14,37 +14,128 @@ export interface ProcessedOrderItem {
 
 export class TrustOrderBaseService {
   /**
-   * Importa un archivo Excel a la tabla 'base_para_pedido' de forma dinámica.
-   * Las columnas quedan definidas por los encabezados del archivo del cliente.
+   * Guarda el archivo Excel original en Supabase (tabla settings) en formato Base64.
+   * Esto garantiza la persistencia indestructible ante reinicios del contenedor en Railway.
    */
-  static async importExcelToBaseParaPedido(
-    filePath: string,
+  static async saveOriginalTemplate(
+    fileBuffer: Buffer,
+    fileName: string,
     projectId: string,
     serviceId: string
-  ): Promise<{ count: number; headers: string[]; preview: any[]; sample: any[] }> {
-    if (!fs.existsSync(filePath)) {
-      throw new Error(`El archivo ${filePath} no existe.`);
+  ): Promise<void> {
+    const base64Data = fileBuffer.toString('base64');
+    const { error } = await supabase.from('settings').upsert({
+      project_id: projectId,
+      service_id: serviceId,
+      key: 'TRUST_ORIGINAL_EXCEL_TEMPLATE',
+      value: JSON.stringify({
+        fileName: fileName || 'Planilla_Pedido_Trust.xlsx',
+        base64: base64Data,
+        uploadedAt: new Date().toISOString(),
+        size: fileBuffer.length
+      }),
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'project_id,service_id,key' });
+
+    if (error) {
+      console.error('[TrustOrderBaseService] Error al guardar plantilla en Supabase:', error);
+      throw new Error(`Error al persistir archivo Excel original: ${error.message}`);
+    }
+    console.log(`[TrustOrderBaseService] 💾 Plantilla original guardada en Supabase (${(fileBuffer.length / 1024).toFixed(1)} KB).`);
+  }
+
+  /**
+   * Recupera el archivo Excel original desde Supabase (Base64).
+   */
+  static async getOriginalTemplate(
+    projectId: string,
+    serviceId: string
+  ): Promise<{ fileName: string; base64: string; uploadedAt: string; size?: number } | null> {
+    const { data, error } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('project_id', projectId)
+      .eq('service_id', serviceId)
+      .eq('key', 'TRUST_ORIGINAL_EXCEL_TEMPLATE')
+      .maybeSingle();
+
+    if (error) {
+      console.warn('[TrustOrderBaseService] Error al consultar plantilla original en Supabase:', error.message);
+      return null;
     }
 
-    const workbook = XLSX.readFile(filePath);
+    if (data?.value) {
+      try {
+        return JSON.parse(data.value);
+      } catch (e) {
+        console.error('[TrustOrderBaseService] Error parseando JSON de plantilla original:', e);
+        return null;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Importa un archivo Excel:
+   * 1. Persiste el archivo original idéntico en Supabase (Base64).
+   * 2. Puebla la tabla 'base_para_pedido' para las consultas, KPIs y vistas previas.
+   */
+  static async importExcelToBaseParaPedido(
+    fileSource: string | Buffer,
+    projectId: string,
+    serviceId: string,
+    originalFileName?: string
+  ): Promise<{ count: number; headers: string[]; preview: any[]; sample: any[] }> {
+    let fileBuffer: Buffer;
+    let fileName: string = originalFileName || 'Planilla_Pedido.xlsx';
+
+    if (Buffer.isBuffer(fileSource)) {
+      fileBuffer = fileSource;
+    } else if (typeof fileSource === 'string') {
+      if (!fs.existsSync(fileSource)) {
+        throw new Error(`El archivo ${fileSource} no existe.`);
+      }
+      fileBuffer = fs.readFileSync(fileSource);
+      if (!originalFileName) {
+        fileName = path.basename(fileSource);
+      }
+    } else {
+      throw new Error('Fuente de archivo inválida.');
+    }
+
+    // 1. Guardar el archivo binario original en Supabase para persistencia ante reinicios
+    await this.saveOriginalTemplate(fileBuffer, fileName, projectId, serviceId);
+
+    // 2. Leer con SheetJS para poblar base_para_pedido
+    const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
     if (!sheetName) {
       throw new Error('El archivo Excel no contiene ninguna hoja.');
     }
 
     const sheet = workbook.Sheets[sheetName];
-    // Obtener las filas como arrays para identificar con precisión los encabezados de la fila 1
+    // Obtener las filas como arrays para identificar con precisión los encabezados
     const rawMatrix: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
     if (!rawMatrix || rawMatrix.length < 2) {
       throw new Error('El archivo Excel está vacío o no contiene datos.');
     }
 
-    const rawHeaders = rawMatrix[0];
+    // Identificar fila de encabezados (primera fila con al menos 2 columnas no vacías)
+    let headerRowIdx = 0;
+    for (let i = 0; i < Math.min(rawMatrix.length, 5); i++) {
+      const nonEmpty = (rawMatrix[i] || []).filter(c => c !== undefined && c !== null && String(c).trim() !== '').length;
+      if (nonEmpty >= 2) {
+        headerRowIdx = i;
+        break;
+      }
+    }
+
+    const rawHeaders = rawMatrix[headerRowIdx] || [];
     const headers: string[] = rawHeaders
       .map((h, i) => (h !== undefined && h !== null && String(h).trim() !== '' ? String(h).trim() : `Columna_${i + 1}`));
 
     // Obtener las filas como objetos usando los encabezados detectados
-    const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    const rows: any[] = XLSX.utils.sheet_to_json(sheet, { range: headerRowIdx, defval: '' });
 
     if (rows.length === 0) {
       throw new Error('No se encontraron filas con datos en el archivo.');
@@ -101,7 +192,7 @@ export class TrustOrderBaseService {
         updatedAt: new Date().toISOString(),
         totalRows: rowsToInsert.length,
         headers: headers,
-        fileName: path.basename(filePath)
+        fileName: fileName
       }),
       projectId,
       serviceId
@@ -109,7 +200,7 @@ export class TrustOrderBaseService {
 
     console.log(`[TrustOrderBaseService] ✅ Base de pedidos actualizada con éxito. Total filas: ${rowsToInsert.length} (Project: ${projectId}, Service: ${serviceId})`);
 
-    const sampleData = rowsToInsert.slice(0, 3).map(r => r.data);
+    const sampleData = rowsToInsert.slice(0, 5).map(r => r.data);
     return {
       count: rowsToInsert.length,
       headers,
@@ -157,7 +248,7 @@ export class TrustOrderBaseService {
       }
     }
 
-    const lastUpdateSetting = await HistoryHandler.getSetting('TRUST_BASE_PEDIDO_LAST_UPDATE', projectId, serviceId);
+    const lastUpdateSetting = await HistoryHandler.getSetting('TRUST_BASE_PEDIDO_LAST_UPDATE', projectId, serviceId, true);
     let lastUpdate = null;
     if (lastUpdateSetting) {
       try { lastUpdate = JSON.parse(lastUpdateSetting); } catch (_) { lastUpdate = lastUpdateSetting; }
@@ -172,7 +263,7 @@ export class TrustOrderBaseService {
   }
 
   /**
-   * Elimina todos los registros de la base de pedidos para este proyecto y servicio.
+   * Elimina todos los registros de la base de pedidos y la plantilla original persistida.
    */
   static async clearBaseParaPedido(
     projectId: string,
@@ -185,12 +276,22 @@ export class TrustOrderBaseService {
       .eq('service_id', serviceId);
 
     if (error) throw error;
+
+    // Eliminar también la plantilla original persistida y el timestamp de actualización
+    await supabase
+      .from('settings')
+      .delete()
+      .eq('project_id', projectId)
+      .eq('service_id', serviceId)
+      .in('key', ['TRUST_ORIGINAL_EXCEL_TEMPLATE', 'TRUST_BASE_PEDIDO_LAST_UPDATE']);
+
+    console.log(`[TrustOrderBaseService] 🗑️ Base de pedidos y plantilla original eliminadas para ${projectId} / ${serviceId}`);
   }
 
   /**
-   * Genera el archivo Excel de la plantilla de pedidos para enviarle al cliente.
-   * Mantiene exactamente todas las columnas originales del Excel cargado y
-   * le agrega una columna destacada final: "CANTIDAD A PEDIR".
+   * Entrega la plantilla de pedidos para enviarle al cliente.
+   * Recupera el archivo original exacto desde Supabase (Base64) con todos sus colores,
+   * fuentes, celdas combinadas de categorías y columna de pedido original 100% intactas.
    */
   static async generatePlantillaExcel(
     projectId: string | null,
@@ -205,6 +306,38 @@ export class TrustOrderBaseService {
       throw new Error("projectId y serviceId son requeridos para generar la plantilla de pedidos.");
     }
 
+    const tmpDir = path.resolve("./tmp/plantillas_pedido");
+    if (!fs.existsSync(tmpDir)) {
+      fs.mkdirSync(tmpDir, { recursive: true });
+    }
+
+    // 1. Intentar recuperar la plantilla original exacta almacenada en Supabase (Base64)
+    const originalTemplate = await this.getOriginalTemplate(projectId, serviceId);
+    if (originalTemplate && originalTemplate.base64) {
+      const buffer = Buffer.from(originalTemplate.base64, 'base64');
+      const customerSuffix = options?.customerCode ? `_${options.customerCode}` : '';
+      const parsedName = originalTemplate.fileName ? path.parse(originalTemplate.fileName) : { name: 'Planilla_Pedido', ext: '.xlsx' };
+      const fileName = `${parsedName.name}${customerSuffix}${parsedName.ext || '.xlsx'}`;
+      const filePath = path.join(tmpDir, `${Date.now()}_${fileName}`);
+
+      fs.writeFileSync(filePath, buffer);
+      console.log(`[TrustOrderBaseService] 📄 Entregando plantilla original exacta desde Supabase: ${filePath}`);
+
+      const { count } = await supabase
+        .from('base_para_pedido')
+        .select('*', { count: 'exact', head: true })
+        .eq('project_id', projectId)
+        .eq('service_id', serviceId);
+
+      return {
+        filePath,
+        fileName,
+        totalItems: count || 0,
+        totalRows: count || 0
+      };
+    }
+
+    // 2. Fallback: Si no hay plantilla original guardada en Supabase, generar desde base_para_pedido
     const { data: rows, error } = await supabase
       .from('base_para_pedido')
       .select('row_index, codigo, descripcion, data, headers')
@@ -222,50 +355,26 @@ export class TrustOrderBaseService {
       };
     }
 
-    // Tomar los encabezados dinámicos
     const originalHeaders: string[] = rows[0]?.headers || (rows[0]?.data ? Object.keys(rows[0].data) : []);
-    const quantityColName = "CANTIDAD A PEDIR";
-
-    // Reconstruir cada fila asegurando el orden exacto de columnas + la columna para pedir
     const excelRows = rows.map(r => {
       const rowData = r.data || {};
       const newRow: Record<string, any> = {};
-      
       for (const h of originalHeaders) {
         newRow[h] = rowData[h] !== undefined ? rowData[h] : '';
       }
-      
-      // Columna donde el cliente ingresa su pedido
-      newRow[quantityColName] = ''; 
       return newRow;
     });
 
     const worksheet = XLSX.utils.json_to_sheet(excelRows);
-
-    // Ajuste de ancho de columnas automático para presentación profesional
-    const allHeaders = [...originalHeaders, quantityColName];
-    worksheet['!cols'] = allHeaders.map(h => {
-      const maxLen = Math.max(
-        h.length,
-        ...excelRows.slice(0, 30).map(r => String(r[h] || '').length)
-      );
-      return { wch: Math.min(Math.max(maxLen + 3, 12), 50) };
-    });
-
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Planilla de Pedido");
-
-    const tmpDir = path.resolve("./tmp/plantillas_pedido");
-    if (!fs.existsSync(tmpDir)) {
-      fs.mkdirSync(tmpDir, { recursive: true });
-    }
 
     const customerSuffix = options?.customerCode ? `_${options.customerCode}` : '';
     const fileName = `Planilla_Pedido_Trust${customerSuffix}_${Date.now()}.xlsx`;
     const filePath = path.join(tmpDir, fileName);
 
     XLSX.writeFile(workbook, filePath);
-    console.log(`[TrustOrderBaseService] 📄 Planilla Excel generada exitosamente en: ${filePath}`);
+    console.log(`[TrustOrderBaseService] 📄 Planilla Excel generada desde base_para_pedido: ${filePath}`);
 
     return {
       filePath,
@@ -277,7 +386,8 @@ export class TrustOrderBaseService {
 
   /**
    * Procesa la planilla Excel que completó y devolvió el cliente por WhatsApp.
-   * Detecta la columna de cantidad y extrae todos los artículos donde la cantidad > 0.
+   * Detecta la columna de cantidad existente y extrae todos los artículos donde la cantidad > 0.
+   * Filtra automáticamente títulos, encabezados y categorías combinadas.
    */
   static async processIncomingOrderExcel(
     filePath: string
@@ -304,7 +414,7 @@ export class TrustOrderBaseService {
 
     // 1. Detectar la columna de cantidad a pedir
     const quantityKey = columnKeys.find(k => /(cantidad|pedir|pedido|solicitad|cant|unidades_a_pedir|qty)/i.test(k.trim()))
-      || columnKeys[columnKeys.length - 1]; // Fallback a la última columna agregada
+      || columnKeys[columnKeys.length - 1];
 
     // 2. Detectar la columna de código/SKU
     const codeKey = columnKeys.find(k => /^(c[oó]d|sku|art[ií]culo|item|c[oó]digo)/i.test(k.trim()))
@@ -325,7 +435,6 @@ export class TrustOrderBaseService {
     for (const r of rows) {
       const rawQty = r[quantityKey];
       if (rawQty !== undefined && rawQty !== null && String(rawQty).trim() !== '') {
-        // Limpiar caracteres no numéricos excepto punto o coma
         const cleanQtyStr = String(rawQty).trim().replace(',', '.');
         const qtyNum = parseFloat(cleanQtyStr);
 
@@ -333,10 +442,18 @@ export class TrustOrderBaseService {
           const codeVal = r[codeKey] !== undefined ? String(r[codeKey]).trim() : '';
           const descVal = r[descKey] !== undefined ? String(r[descKey]).trim() : '';
 
-          if (codeVal) {
+          // Filtrar encabezados y filas que no tengan código real (ej. categorías combinadas)
+          const isHeaderOrCategory = !codeVal ||
+            codeVal.toLowerCase() === 'código' ||
+            codeVal.toLowerCase() === 'codigo' ||
+            codeVal.toLowerCase() === 'sku' ||
+            codeVal.toLowerCase() === 'artículo' ||
+            codeVal.toLowerCase() === 'articulo';
+
+          if (!isHeaderOrCategory) {
             items.push({
               code: codeVal,
-              quantity: Math.round(qtyNum), // o decimal si admite fraccionados
+              quantity: Math.round(qtyNum),
               description: descVal,
               rawData: r
             });

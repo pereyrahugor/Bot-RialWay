@@ -186,7 +186,7 @@ export const trustModule = {
           console.log(`[trustModule] 📤 Enviando archivo Excel al cliente vía flowDynamic: ${templateResult.filePath}`);
           await flowDynamic([
             {
-              body: "📄 Aquí tienes la plantilla actualizada para confeccionar tu pedido. Completa la columna *CANTIDAD A PEDIR* con los artículos que necesitas y envíanos el archivo de vuelta por este chat para procesarlo inmediatamente.",
+              body: "📄 Aquí tienes la plantilla para confeccionar tu pedido. Completa la columna de cantidad con los artículos que necesitas y envíanos el archivo de vuelta por este chat para procesarlo inmediatamente.",
               media: templateResult.filePath,
             },
           ]);
@@ -197,7 +197,7 @@ export const trustModule = {
           archivoGenerado: templateResult.fileName,
           totalArticulos: templateResult.totalRows,
           rutaArchivo: templateResult.filePath,
-          mensajeParaAsistente: "El archivo Excel con la plantilla de pedido fue generado y enviado exitosamente al cliente por WhatsApp. Indícale que complete la columna 'CANTIDAD A PEDIR' y reenvíe el archivo por este chat cuando esté listo.",
+          mensajeParaAsistente: "El archivo Excel con la plantilla de pedido fue generado y enviado exitosamente al cliente por WhatsApp. Indícale que complete la columna de cantidad y reenvíe el archivo por este chat cuando esté listo.",
         });
       } catch (err: any) {
         console.error("❌ [trustModule] Error generando plantilla Excel:", err);
@@ -247,7 +247,7 @@ export const trustModule = {
         if (parsed.items.length === 0) {
           return JSON.stringify({
             exito: false,
-            mensaje: "No se encontraron artículos con cantidad mayor a 0 en la columna 'CANTIDAD A PEDIR' del archivo Excel recibido. Por favor revisa el archivo y asegúrate de indicar las cantidades requeridas.",
+            mensaje: "No se encontraron artículos con cantidad mayor a 0 en el archivo Excel recibido. Por favor revisa el archivo y asegúrate de indicar las cantidades requeridas.",
             totalFilasLeidas: parsed.totalRowsRead,
           });
         }

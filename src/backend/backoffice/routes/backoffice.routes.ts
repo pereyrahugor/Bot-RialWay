@@ -1280,7 +1280,7 @@ export const registerBackofficeRoutes = (app: any) => {
 
                 const { TrustOrderBaseService } = await import('../../modules/trust/trustOrderBaseService');
                 const fileSource = (req.file.buffer && req.file.buffer.length > 0) ? req.file.buffer : req.file.path;
-                const result = await TrustOrderBaseService.importExcelToBaseParaPedido(fileSource, projectId, serviceId);
+                const result = await TrustOrderBaseService.importExcelToBaseParaPedido(fileSource, projectId, serviceId, req.file.originalname);
 
                 if (req.file.path && fs.existsSync(req.file.path)) {
                     try { fs.unlinkSync(req.file.path); } catch (_) {}
@@ -1342,7 +1342,11 @@ export const registerBackofficeRoutes = (app: any) => {
             if (!result.filePath || !fs.existsSync(result.filePath)) {
                 return res.status(404).json({ success: false, error: 'No se encontraron artículos cargados para generar la plantilla.' });
             }
-            return res.download(result.filePath, result.fileName);
+            return res.download(result.filePath, result.fileName, () => {
+                if (result.filePath && fs.existsSync(result.filePath)) {
+                    try { fs.unlinkSync(result.filePath); } catch (_) {}
+                }
+            });
         } catch (error: any) {
             console.error("❌ [BACKOFFICE-TRUST] Error al generar/descargar plantilla:", error);
             return res.status(500).json({ success: false, error: error.message });
