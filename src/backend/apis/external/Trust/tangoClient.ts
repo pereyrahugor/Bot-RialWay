@@ -326,7 +326,7 @@ export class TangoClient {
         const stockItems = stocks.filter((s) => s.SKUCode === prod.SKUCode);
         const warehouseStock = warehouseCode
           ? stockItems.find((s) => s.WarehouseCode === warehouseCode)
-          : stockItems[0];
+          : null;
 
         const totalStock = stockItems.reduce((acc, s) => acc + (Number(s.Quantity) || 0), 0);
 
