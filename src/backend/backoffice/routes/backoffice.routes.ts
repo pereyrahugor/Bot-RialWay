@@ -1262,41 +1262,7 @@ export const registerBackofficeRoutes = (app: any) => {
                 console.error("❌ [BACKOFFICE-TRUST] Error de Multer al cargar Excel de base para pedidos:", err);
                 return res.status(400).json({ success: false, error: `Error de archivo: ${err.message}` });
             }
-
-            try {
-                const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
-                const serviceId = resolveServiceId(req) || depsHistoryHandler.SERVICE_IDENTIFIER;
-
-                const clientSlug = (await depsHistoryHandler.getSetting('CLIENT_SLUG', projectId, serviceId, true))
-                    || (await depsHistoryHandler.getConfig('CLIENT_SLUG', projectId, serviceId, true))
-                    || '';
-                if (clientSlug.trim().toLowerCase() !== 'trust') {
-                    return res.status(403).json({ success: false, error: "La base de pedidos solo está permitida y habilitada cuando el slug de cliente activo es 'trust'." });
-                }
-
-                if (!req.file) {
-                    return res.status(400).json({ success: false, error: 'No se envió ningún archivo Excel.' });
-                }
-
-                const { TrustOrderBaseService } = await import('../../modules/trust/trustOrderBaseService');
-                const fileSource = (req.file.buffer && req.file.buffer.length > 0) ? req.file.buffer : req.file.path;
-                const result = await TrustOrderBaseService.importExcelToBaseParaPedido(fileSource, projectId, serviceId, req.file.originalname);
-
-                if (req.file.path && fs.existsSync(req.file.path)) {
-                    try { fs.unlinkSync(req.file.path); } catch (_) {}
-                }
-
-                return res.json({
-                    success: true,
-                    count: result.count,
-                    headers: result.headers,
-                    sample: result.sample,
-                    message: `Se importaron ${result.count} artículos en la base de pedidos exitosamente.`
-                });
-            } catch (error: any) {
-                console.error("❌ [BACKOFFICE-TRUST] Error al importar base de pedidos:", error);
-                return res.status(500).json({ success: false, error: error.message || 'Error al procesar el Excel' });
-            }
+            return processUploadBasePedido(req, res);
         });
     });
 
@@ -6344,6 +6310,44 @@ Hemos recibido tu pago con Ã©xito.
             res.status(500).json({ success: false, error: e.message });
         }
     });
+};
+
+/** Procesa la subida e importación de la base de pedidos de Trust */
+export const processUploadBasePedido = async (req: any, res: any) => {
+    try {
+        const projectId = resolveProjectId(req) || HistoryHandlerClass.PROJECT_IDENTIFIER;
+        const serviceId = resolveServiceId(req) || HistoryHandlerClass.SERVICE_IDENTIFIER;
+
+        const clientSlug = (await HistoryHandlerClass.getSetting('CLIENT_SLUG', projectId, serviceId, true))
+            || (await HistoryHandlerClass.getConfig('CLIENT_SLUG', projectId, serviceId, true))
+            || '';
+        if (clientSlug.trim().toLowerCase() !== 'trust') {
+            return res.status(403).json({ success: false, error: "La base de pedidos solo está permitida y habilitada cuando el slug de cliente activo es 'trust'." });
+        }
+
+        if (!req.file) {
+            return res.status(400).json({ success: false, error: 'No se envió ningún archivo Excel.' });
+        }
+
+        const { TrustOrderBaseService } = await import('../../modules/trust/trustOrderBaseService');
+        const fileSource = (req.file.buffer && req.file.buffer.length > 0) ? req.file.buffer : req.file.path;
+        const result = await TrustOrderBaseService.importExcelToBaseParaPedido(fileSource, projectId, serviceId, req.file.originalname);
+
+        if (req.file.path && fs.existsSync(req.file.path)) {
+            try { fs.unlinkSync(req.file.path); } catch (_) {}
+        }
+
+        return res.json({
+            success: true,
+            count: result.count,
+            headers: result.headers,
+            sample: result.sample,
+            message: `Se importaron ${result.count} artículos en la base de pedidos exitosamente.`
+        });
+    } catch (error: any) {
+        console.error("❌ [BACKOFFICE-TRUST] Error al importar base de pedidos:", error);
+        return res.status(500).json({ success: false, error: error.message || 'Error al procesar el Excel' });
+    }
 };
 
 /** Procesa la importaciÃ³n de contactos desde Excel */

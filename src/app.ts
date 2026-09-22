@@ -12,7 +12,7 @@ import { ErrorReporter } from "./backend/bot/errorReporter";
 import { updateMain } from "./backend/apis/google/updateMain";
 import { HistoryHandler, historyEvents } from "./backend/db/historyHandler";
 import { registerProcessCallback, handleQueue, userQueues, userLocks } from "./backend/bot/queueManager";
-import { registerBackofficeRoutes, processSendMessage, processBulkTemplate, processImportExcel } from "./backend/backoffice/routes/backoffice.routes";
+import { registerBackofficeRoutes, processSendMessage, processBulkTemplate, processImportExcel, processUploadBasePedido } from "./backend/backoffice/routes/backoffice.routes";
 import { registerDashboardRoutes } from "./backend/backoffice/routes/dashboard.routes";
 import { registerStaticRoutes } from "./backend/backoffice/routes/static.routes";
 import { registerWebchatRoutes } from "./backend/backoffice/webchat/routes/webchat.routes";
@@ -295,8 +295,9 @@ const main = async () => {
             const isBulk = normalizedPath.includes('/api/backoffice/whatsapp/send-bulk-template');
             const isSend = normalizedPath.includes('/api/backoffice/send-message');
             const isImport = normalizedPath.includes('/api/backoffice/chats/import');
+            const isTrustUpload = normalizedPath.includes('/api/backoffice/trust/upload-base-pedido');
 
-            if ((isSend || isBulk || isImport) && req.method === 'POST') {
+            if ((isSend || isBulk || isImport || isTrustUpload) && req.method === 'POST') {
                 req.setTimeout(0);
                 console.log(`🛡️ [MASTER-INTERCEPTOR-PRIORITY] Bypass activo para: ${normalizedPath}`);
                 
@@ -333,6 +334,9 @@ const main = async () => {
                             } else if (isImport) {
                                 console.log("🚀 [MASTER-INTERCEPTOR] Ejecutando lógica de importación...");
                                 return processImportExcel(req, res);
+                            } else if (isTrustUpload) {
+                                console.log("🚀 [MASTER-INTERCEPTOR] Ejecutando lógica de importación de base de pedidos (bypass stream)...");
+                                return processUploadBasePedido(req, res);
                             } else {
                                 console.log("🚀 [MASTER-INTERCEPTOR] Ejecutando lógica de envío masivo (bypass total)...");
                                 return processBulkTemplate(req, res);
