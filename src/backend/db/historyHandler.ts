@@ -3274,22 +3274,54 @@ export class HistoryHandler {
 
             if (!currentServiceId || currentServiceId === 'default_service') return;
 
-            const { data: defaultSettings } = await supabase
+            const { data: defaultSettings, error: fetchErr } = await supabase
                 .from('settings')
                 .select('key')
                 .eq('project_id', currentProjectId)
                 .or('service_id.eq.default_service,service_id.is.null');
 
+            if (fetchErr) {
+                console.warn('[HistoryHandler] Error consultando settings default:', fetchErr.message);
+                return;
+            }
+
             if (defaultSettings && defaultSettings.length > 0) {
-                console.log(`📡 [HistoryHandler] Asignando automáticamente ${defaultSettings.length} settings de 'default_service' -> '${currentServiceId}' (Proyecto: ${currentProjectId})...`);
+                // Obtener las llaves que YA están configuradas para el service_id activo
+                const { data: existingServiceSettings } = await supabase
+                    .from('settings')
+                    .select('key')
+                    .eq('project_id', currentProjectId)
+                    .eq('service_id', currentServiceId);
+
+                const existingKeys = new Set((existingServiceSettings || []).map(s => s.key));
+
+                console.log(`📡 [HistoryHandler] Verificando ${defaultSettings.length} settings de 'default_service' para migración a '${currentServiceId}' (Proyecto: ${currentProjectId})...`);
 
                 for (const setting of defaultSettings) {
-                    await supabase
-                        .from('settings')
-                        .update({ service_id: currentServiceId, updated_at: new Date().toISOString() })
-                        .eq('project_id', currentProjectId)
-                        .eq('key', setting.key)
-                        .or('service_id.eq.default_service,service_id.is.null');
+                    if (existingKeys.has(setting.key)) {
+                        // El service_id activo ya tiene su propio registro (ej: ADMIN_PASS).
+                        // Intentar un UPDATE violaría la restricción de clave primaria (settings_pkey).
+                        // Eliminamos el registro huérfano/obsoleto de default_service para sanear la tabla.
+                        await supabase
+                            .from('settings')
+                            .delete()
+                            .eq('project_id', currentProjectId)
+                            .eq('key', setting.key)
+                            .or('service_id.eq.default_service,service_id.is.null');
+                    } else {
+                        const { error: updateErr } = await supabase
+                            .from('settings')
+                            .update({ service_id: currentServiceId, updated_at: new Date().toISOString() })
+                            .eq('project_id', currentProjectId)
+                            .eq('key', setting.key)
+                            .or('service_id.eq.default_service,service_id.is.null');
+
+                        if (updateErr) {
+                            console.warn(`[HistoryHandler] No se pudo migrar setting '${setting.key}':`, updateErr.message);
+                        } else {
+                            existingKeys.add(setting.key);
+                        }
+                    }
                 }
             }
         } catch (err: any) {
