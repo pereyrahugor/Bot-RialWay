@@ -3,6 +3,7 @@ import { TangoClient, QuoteResult } from "../../apis/external/Trust/tangoClient"
 import { TrustOrderBaseService } from "./trustOrderBaseService";
 import path from "path";
 import fs from "fs";
+import { HistoryHandler } from "../../db/historyHandler";
 
 // Memoria volátil para cotizaciones pendientes de confirmación por chat
 const pendingQuotesMap = new Map<string, QuoteResult>();
@@ -158,8 +159,8 @@ export const trustModule = {
     // ----------------------------------------------------
     DESCARGAR_PLANTILLA_PEDIDO: async (args: any, context: any) => {
       console.log("[trustModule] 📊 DESCARGAR_PLANTILLA_PEDIDO:", args);
-      const projectId = context?.projectId || null;
-      const serviceId = context?.serviceId || null;
+      const projectId = context?.projectId || HistoryHandler.PROJECT_IDENTIFIER;
+      const serviceId = context?.serviceId || HistoryHandler.SERVICE_IDENTIFIER;
 
       try {
         const customerQuery = args.codigo_cliente || args.cuit || args.cliente;
@@ -186,6 +187,26 @@ export const trustModule = {
 
         if (isWebchat) {
           const downloadUrl = `/api/backoffice/trust/plantilla-pedido?serviceId=${encodeURIComponent(serviceId || '')}`;
+          const fromNumber = context?.ctx?.from || '';
+          if (fromNumber) {
+            try {
+              await HistoryHandler.saveMessage(
+                fromNumber,
+                'assistant',
+                downloadUrl,
+                'document',
+                null,
+                context?.ctx?.userId || null,
+                null,
+                'webchat',
+                projectId,
+                serviceId || undefined,
+                { fileName: templateResult.fileName, caption: "📄 Plantilla oficial de pedido generada." }
+              );
+            } catch (histErr: any) {
+              console.error("[trustModule] ⚠️ Error guardando plantilla en historial webchat:", histErr?.message || histErr);
+            }
+          }
           return JSON.stringify({
             exito: true,
             canal: "webchat",
@@ -198,7 +219,7 @@ export const trustModule = {
 
         // Si es WhatsApp: despachar archivo físico adjunto
         if (fs.existsSync(templateResult.filePath)) {
-          const fromNumber = context?.ctx?.from || '';
+          const fromNumber = context?.ctx?.from || context?.ctx?.key?.remoteJid || '';
           const jid = fromNumber.includes('@') ? fromNumber : `${fromNumber}@s.whatsapp.net`;
           const fileName = templateResult.fileName || path.basename(templateResult.filePath);
 
@@ -214,6 +235,32 @@ export const trustModule = {
                 media: templateResult.filePath,
               },
             ]);
+          }
+
+          // Guardar el documento adjunto en el historial de Supabase/CRM para visibilidad y descarga del operador
+          if (fromNumber) {
+            try {
+              const normalized = templateResult.filePath.replace(/\\/g, '/');
+              const tmpIdx = normalized.toLowerCase().indexOf('/tmp/');
+              const webUrl = tmpIdx !== -1 ? normalized.substring(tmpIdx) : `/tmp/plantillas_pedido/${path.basename(templateResult.filePath)}`;
+
+              await HistoryHandler.saveMessage(
+                fromNumber,
+                'assistant',
+                webUrl,
+                'document',
+                null,
+                context?.ctx?.userId || null,
+                null,
+                context?.ctx?.platform || 'whatsapp',
+                projectId,
+                serviceId || undefined,
+                { fileName, caption: "📄 Aquí tienes la plantilla oficial para confeccionar tu pedido." }
+              );
+              console.log(`[trustModule] 💾 Plantilla Excel guardada en el historial de la conversación para CRM (${fromNumber}): ${webUrl}`);
+            } catch (histErr: any) {
+              console.error("[trustModule] ⚠️ Error guardando plantilla Excel en el historial del CRM:", histErr?.message || histErr);
+            }
           }
         }
 
