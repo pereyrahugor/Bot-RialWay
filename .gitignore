@@ -68,3 +68,4 @@ docs/demo_media/
 
 # Scripts CLI de administración interna
 src/cli/
+docs/REFACTORIZACIONES_PENDIENTES_ALTO_RIESGO.md

@@ -3302,7 +3302,7 @@ export class HistoryHandler {
 
             const { data: defaultSettings, error: fetchErr } = await supabase
                 .from('settings')
-                .select('key')
+                .select('key, value')
                 .eq('project_id', currentProjectId)
                 .or('service_id.eq.default_service,service_id.is.null');
 
@@ -3313,39 +3313,63 @@ export class HistoryHandler {
 
             if (defaultSettings && defaultSettings.length > 0) {
                 // Obtener las llaves que YA están configuradas para el service_id activo
-                const { data: existingServiceSettings } = await supabase
+                const { data: existingServiceSettings, error: existingErr } = await supabase
                     .from('settings')
                     .select('key')
                     .eq('project_id', currentProjectId)
                     .eq('service_id', currentServiceId);
 
+                if (existingErr) {
+                    console.warn('[HistoryHandler] Error consultando settings existentes del servicio:', existingErr.message);
+                    return;
+                }
+
                 const existingKeys = new Set((existingServiceSettings || []).map(s => s.key));
 
-                console.log(`📡 [HistoryHandler] Verificando ${defaultSettings.length} settings de 'default_service' para migración a '${currentServiceId}' (Proyecto: ${currentProjectId})...`);
+                // Deduplicar registros por key para evitar que existan duplicados (ej. uno con default_service y otro con NULL)
+                const uniqueDefaults = new Map<string, any>();
+                for (const s of defaultSettings) {
+                    if (!uniqueDefaults.has(s.key) || (s.value !== null && !uniqueDefaults.get(s.key).value)) {
+                        uniqueDefaults.set(s.key, s);
+                    }
+                }
 
-                for (const setting of defaultSettings) {
-                    if (existingKeys.has(setting.key)) {
+                console.log(`📡 [HistoryHandler] Verificando ${uniqueDefaults.size} settings de 'default_service' para migración a '${currentServiceId}' (Proyecto: ${currentProjectId})...`);
+
+                for (const [key, setting] of uniqueDefaults.entries()) {
+                    if (existingKeys.has(key)) {
                         // El service_id activo ya tiene su propio registro (ej: ADMIN_PASS).
-                        // Intentar un UPDATE violaría la restricción de clave primaria (settings_pkey).
-                        // Eliminamos el registro huérfano/obsoleto de default_service para sanear la tabla.
+                        // Eliminamos el registro huérfano/obsoleto de default_service o NULL para sanear la tabla.
                         await supabase
                             .from('settings')
                             .delete()
                             .eq('project_id', currentProjectId)
-                            .eq('key', setting.key)
+                            .eq('key', key)
                             .or('service_id.eq.default_service,service_id.is.null');
                     } else {
-                        const { error: updateErr } = await supabase
+                        // En lugar de un UPDATE in-place de la clave primaria (que genera colisiones 'settings_pkey' si
+                        // hay múltiples filas coincidentes o concurrencia), realizamos un UPSERT atómico con onConflict.
+                        const { error: upsertErr } = await supabase
                             .from('settings')
-                            .update({ service_id: currentServiceId, updated_at: new Date().toISOString() })
-                            .eq('project_id', currentProjectId)
-                            .eq('key', setting.key)
-                            .or('service_id.eq.default_service,service_id.is.null');
+                            .upsert({
+                                project_id: currentProjectId,
+                                service_id: currentServiceId,
+                                key: key,
+                                value: setting.value,
+                                updated_at: new Date().toISOString()
+                            }, { onConflict: 'project_id,service_id,key' });
 
-                        if (updateErr) {
-                            console.warn(`[HistoryHandler] No se pudo migrar setting '${setting.key}':`, updateErr.message);
+                        if (upsertErr) {
+                            console.warn(`[HistoryHandler] No se pudo migrar setting '${key}':`, upsertErr.message);
                         } else {
-                            existingKeys.add(setting.key);
+                            existingKeys.add(key);
+                            // Limpiar registro(s) anterior(es) huérfano(s)
+                            await supabase
+                                .from('settings')
+                                .delete()
+                                .eq('project_id', currentProjectId)
+                                .eq('key', key)
+                                .or('service_id.eq.default_service,service_id.is.null');
                         }
                     }
                 }
