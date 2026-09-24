@@ -26,5 +26,9 @@ export function registerNotificationRoutes(app: Express, deps: NotificationModul
     app.post('/api/backoffice/quick-messages', auth, json, controller.createQuickMessage);
     app.delete('/api/backoffice/quick-messages/:id', auth, controller.deleteQuickMessage);
 
+    // --- BANNER SUPERIOR DE NOVEDADES Y ERRORES ---
+    app.get('/api/backoffice/system-banner', controller.getSystemBanner);
+    app.post('/api/backoffice/system-banner', auth, json, controller.setSystemBanner);
+
     console.log('✅ [Notification Module] Rutas de Notificaciones y Mensajes Rápidos registradas exitosamente en src/backend/notifications.');
 }

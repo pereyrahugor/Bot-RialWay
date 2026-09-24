@@ -152,9 +152,10 @@ export class ContactService {
         return (data as any) || null;
     }
 
-    static async createOrUpdateContact(projectId: string, serviceId: string, payload: ContactPayload): Promise<any> {
+    static async createOrUpdateContact(projectId: string, serviceId: string, payload: ContactPayload, isCrossSync = false): Promise<any> {
         const row = this.buildContactRow(projectId, serviceId, payload);
         const existing = await this.resolveExistingContact(projectId, serviceId, row);
+        let result: any = null;
 
         if (existing) {
             const { data, error } = await supabase
@@ -170,28 +171,55 @@ export class ContactService {
                 .single();
 
             if (error) throw error;
-            return data as any;
-        }
+            result = data as any;
+        } else {
+            const insertRow = { ...row, source: row.source || 'manual' };
+            const { data, error } = await supabase
+                .from('contactos')
+                .insert(insertRow)
+                .select(CONTACT_SELECT)
+                .single();
 
-        const insertRow = { ...row, source: row.source || 'manual' };
-        const { data, error } = await supabase
-            .from('contactos')
-            .insert(insertRow)
-            .select(CONTACT_SELECT)
-            .single();
-
-        if (error) {
-            if (isDuplicateError(error)) {
-                const duplicate = await this.resolveExistingContact(projectId, serviceId, row);
-                if (duplicate) return duplicate;
+            if (error) {
+                if (isDuplicateError(error)) {
+                    const duplicate = await this.resolveExistingContact(projectId, serviceId, row);
+                    if (duplicate) result = duplicate;
+                }
+                if (!result) throw error;
+            } else {
+                result = data as any;
             }
-            throw error;
         }
 
-        return data as any;
+        // Replicar en los demás servicios del proyecto si no es una llamada recursiva
+        if (!isCrossSync && projectId) {
+            try {
+                const { CrossServiceContactSync } = await import('./crossServiceContactSync');
+                const otherServices = await CrossServiceContactSync.getOtherServicesInProject(projectId, serviceId);
+                for (const targetService of otherServices) {
+                    await this.createOrUpdateContact(projectId, targetService, payload, true);
+                }
+
+                // Sincronizar también en la tabla chats para que esté visible en CRM y contactos de todas las instancias
+                const phone = payload.phoneNormalized || payload.phoneRaw || payload.whatsappChannel;
+                if (phone) {
+                    await CrossServiceContactSync.syncContactAndLeadAcrossServices(projectId, serviceId, {
+                        phone,
+                        name: payload.name,
+                        email: payload.email,
+                        source: payload.source || 'contactos_sync',
+                        metadata: payload.metadata || {}
+                    });
+                }
+            } catch (syncErr: any) {
+                console.warn('[ContactService] ⚠️ Error en propagación cross-service:', syncErr.message);
+            }
+        }
+
+        return result;
     }
 
-    static async updateContact(projectId: string, serviceId: string, contactId: string, payload: ContactPayload): Promise<any | null> {
+    static async updateContact(projectId: string, serviceId: string, contactId: string, payload: ContactPayload, isCrossSync = false): Promise<any | null> {
         const existing = await this.getContact(projectId, serviceId, contactId);
         if (!existing) return null;
 
@@ -209,7 +237,32 @@ export class ContactService {
             .single();
 
         if (error) throw error;
-        return data as any;
+        const result = data as any;
+
+        // Replicar actualización a los demás servicios
+        if (!isCrossSync && projectId) {
+            try {
+                const { CrossServiceContactSync } = await import('./crossServiceContactSync');
+                const otherServices = await CrossServiceContactSync.getOtherServicesInProject(projectId, serviceId);
+                for (const targetService of otherServices) {
+                    await this.createOrUpdateContact(projectId, targetService, payload, true);
+                }
+
+                const phone = payload.phoneNormalized || payload.phoneRaw || existing.phone_normalized || existing.phone_raw;
+                if (phone) {
+                    await CrossServiceContactSync.syncContactAndLeadAcrossServices(projectId, serviceId, {
+                        phone,
+                        name: payload.name !== undefined ? payload.name : existing.name,
+                        email: payload.email !== undefined ? payload.email : existing.email,
+                        metadata: payload.metadata || {}
+                    });
+                }
+            } catch (syncErr: any) {
+                console.warn('[ContactService] ⚠️ Error actualizando contacto cross-service:', syncErr.message);
+            }
+        }
+
+        return result;
     }
 
     static async deleteContact(projectId: string, serviceId: string, contactId: string) {

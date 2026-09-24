@@ -274,4 +274,55 @@ export class NotificationsService {
         await HistoryHandler.saveSetting('NOTIFICATIONS_ACTIVE', 'false', projectId);
         historyEvents.emit('notifications_deactivated', { projectId });
     }
+
+    /**
+     * Obtiene el banner de alerta/novedades del sistema activo (específico del proyecto o global).
+     */
+    static async getSystemBanner(projectId: string | null = null): Promise<any | null> {
+        try {
+            // 1. Buscar si hay banner para este proyecto específico
+            if (projectId && projectId !== 'global' && projectId !== 'default_project') {
+                const projectSetting = await HistoryHandler.getSetting('SYSTEM_BANNER_ALERT', projectId);
+                if (projectSetting) {
+                    try {
+                        const parsed = JSON.parse(projectSetting);
+                        if (parsed && parsed.active) return parsed;
+                    } catch (_) {}
+                }
+            }
+
+            // 2. Buscar si hay banner global ('global')
+            const globalSetting = await HistoryHandler.getSetting('SYSTEM_BANNER_ALERT', 'global');
+            if (globalSetting) {
+                try {
+                    const parsed = JSON.parse(globalSetting);
+                    if (parsed && parsed.active) return parsed;
+                } catch (_) {}
+            }
+
+            return null;
+        } catch (err: any) {
+            console.error('[NotificationsService] Error en getSystemBanner:', err.message);
+            return null;
+        }
+    }
+
+    /**
+     * Guarda o actualiza el banner del sistema y emite el evento de cambio.
+     */
+    static async setSystemBanner(bannerData: any, projectId: string = 'global'): Promise<boolean> {
+        try {
+            const val = typeof bannerData === 'string' ? bannerData : JSON.stringify(bannerData);
+            await HistoryHandler.saveSetting('SYSTEM_BANNER_ALERT', val, projectId);
+            historyEvents.emit('setting_changed', {
+                key: 'SYSTEM_BANNER_ALERT',
+                value: bannerData,
+                projectId
+            });
+            return true;
+        } catch (err: any) {
+            console.error('[NotificationsService] Error en setSystemBanner:', err.message);
+            return false;
+        }
+    }
 }

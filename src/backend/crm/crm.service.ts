@@ -1,5 +1,6 @@
 import { supabase, historyEvents, HistoryHandler, normalizeCuitDni, normalizeEmpresa } from '../db/historyHandler';
 import { LocalHistoryStore } from '../db/localHistoryStore';
+import { CrossServiceContactSync } from '../contacts/crossServiceContactSync';
 
 export interface TicketPayload {
     chatId?: string;
@@ -456,6 +457,27 @@ export class CrmService {
                     const { error: upChatErr } = await query;
                     if (upChatErr) throw upChatErr;
 
+                    // Multi-Servicio: Sincronizar datos de contacto y ficha de lead a servicios hermanos
+                    try {
+                        await CrossServiceContactSync.syncContactAndLeadAcrossServices(currentProjectId, currentServiceId, {
+                            phone: activeChatTargetId,
+                            name: chatUpdate.name,
+                            email: chatUpdate.email,
+                            cuit_dni: chatUpdate.cuit_dni,
+                            address: chatUpdate.address,
+                            notes: chatUpdate.notes,
+                            is_lead: chatUpdate.is_lead,
+                            crm_status: chatUpdate.crm_status,
+                            crm_due_date: chatUpdate.crm_due_date,
+                            tax_status: chatUpdate.tax_status,
+                            offered_product: chatUpdate.offered_product,
+                            source: chatUpdate.source,
+                            metadata: chatUpdate.metadata
+                        });
+                    } catch (crossSyncErr: any) {
+                        console.error('[CrmService] Error sincronizando lead con servicios hermanos:', crossSyncErr.message);
+                    }
+
                     // Sincronizar Notas compartidas de empresa por CUIT o Empresa
                     if (hasContactDetails && currentProjectId && (targetCuit || targetEmpresa)) {
                         const notesToSync = chatUpdate.metadata?.shared_notes;
@@ -553,7 +575,7 @@ export class CrmService {
 
             const { data: ticket } = await sb
                 .from('tickets')
-                .select('chat_id')
+                .select('chat_id, service_id')
                 .eq('id', ticketId)
                 .eq('project_id', currentProjectId)
                 .single();
@@ -581,6 +603,16 @@ export class CrmService {
                     .update(chatUpdate)
                     .eq('id', ticket.chat_id)
                     .eq('project_id', currentProjectId);
+
+                try {
+                    await CrossServiceContactSync.syncContactAndLeadAcrossServices(currentProjectId, ticket.service_id || null, {
+                        phone: ticket.chat_id,
+                        is_lead: false,
+                        crm_status: null
+                    });
+                } catch (crossSyncErr: any) {
+                    console.error('[CrmService] Error sincronizando eliminación de ticket con servicios hermanos:', crossSyncErr.message);
+                }
 
                 historyEvents.emit('contact_updated', {
                     chatId: ticket.chat_id,
@@ -769,6 +801,18 @@ export class CrmService {
 
         const { error } = await query;
         if (error) throw error;
+
+        // Multi-Servicio: Sincronizar estado y fecha límite de lead a todos los servicios hermanos
+        try {
+            await CrossServiceContactSync.syncContactAndLeadAcrossServices(targetProjectId, serviceId || null, {
+                phone: leadId,
+                crm_status: updateData.crm_status,
+                crm_due_date: updateData.crm_due_date
+            });
+        } catch (crossSyncErr: any) {
+            console.error('[CrmService] Error sincronizando estado de lead con servicios hermanos:', crossSyncErr.message);
+        }
+
         return { success: true };
     }
 

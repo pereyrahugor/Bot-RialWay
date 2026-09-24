@@ -117,4 +117,26 @@ export class NotificationsController {
             res.status(500).json({ success: false, error: err.message });
         }
     };
+
+    getSystemBanner = async (req: Request, res: Response) => {
+        try {
+            const { projectId } = this.getContext(req);
+            const banner = await NotificationsService.getSystemBanner(projectId);
+            res.json({ success: true, banner });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    };
+
+    setSystemBanner = async (req: Request, res: Response) => {
+        try {
+            const { projectId } = this.getContext(req);
+            const { banner, targetProjectId } = req.body;
+            const targetProj = targetProjectId || projectId || 'global';
+            const ok = await NotificationsService.setSystemBanner(banner, targetProj);
+            res.json({ success: ok });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    };
 }

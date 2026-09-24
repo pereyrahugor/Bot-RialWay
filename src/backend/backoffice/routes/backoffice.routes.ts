@@ -15,6 +15,7 @@ import { getAdapterProvider, getGroupProvider } from "../../providers/instances"
 import { upload } from "../../middleware/upload";
 import { getIdsByHost } from '../utils/routingResolver';
 import { ContactService } from "../../contacts/contactService";
+import { CrossServiceContactSync } from "../../contacts/crossServiceContactSync";
 import { getVisibleServiceIds } from '../utils/databaseSync';
 import { registerCrmRoutes } from '../../crm/crm.routes';
 import { registerBlacklistRoutes } from '../../blacklist/blacklist.routes';
@@ -6550,6 +6551,13 @@ export const processImportExcel = async (req: any, res: any) => {
         // 1. Upsert de Chats (Normalizados)
         await depsHistoryHandler.syncChats(chatsToSync, projectId, effectiveServiceId);
 
+        // Replicar lote a otros servicios del proyecto (multi-servicio)
+        try {
+            await CrossServiceContactSync.syncBatchContactsAcrossServices(projectId, effectiveServiceId, chatsToSync);
+        } catch (syncErr: any) {
+            console.error('[processImportExcel] Error sincronizando contactos a otros servicios:', syncErr.message);
+        }
+
         // 2. Procesar Etiquetas
         if (allUniqueTags.size > 0) {
             const existingTags = await depsHistoryHandler.getTags(projectId, effectiveServiceId);
@@ -6680,7 +6688,19 @@ export const processCreateIndividualContact = async (req: any, res: any) => {
             }
         }
 
-        console.log(`âœ… [create-individual] Contacto ${phone} (${name || 'Sin nombre'}) creado para proyecto ${targetProjectId}`);
+        console.log(`✅ [create-individual] Contacto ${phone} (${name || 'Sin nombre'}) creado para proyecto ${targetProjectId}`);
+
+        // Replicar contacto a otros servicios del proyecto (multi-servicio)
+        try {
+            await CrossServiceContactSync.syncContactAndLeadAcrossServices(targetProjectId, targetServiceId, {
+                phone,
+                name: name && String(name).trim() !== '' ? String(name).trim() : null,
+                is_lead: false,
+                tagIds: Array.isArray(tagIds) ? tagIds : []
+            });
+        } catch (syncErr: any) {
+            console.error('[create-individual] Error sincronizando contacto a otros servicios:', syncErr.message);
+        }
 
         return res.json({
             success: true,

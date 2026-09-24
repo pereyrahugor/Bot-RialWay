@@ -1242,6 +1242,32 @@ export class HistoryHandler {
                     insertData.service_id = HistoryHandler.SERVICE_IDENTIFIER;
                 }
 
+                // Multi-Servicio: Heredar datos de contacto y ficha de lead desde servicio hermano del mismo proyecto si ya existe
+                try {
+                    const { CrossServiceContactSync } = await import('../contacts/crossServiceContactSync');
+                    const inherited = await CrossServiceContactSync.inheritContactDataFromSibling(
+                        currentProjectId,
+                        insertData.service_id,
+                        chatId
+                    );
+                    if (inherited) {
+                        if (!insertData.name && inherited.name) insertData.name = inherited.name;
+                        if (inherited.email) insertData.email = inherited.email;
+                        if (inherited.cuit_dni) insertData.cuit_dni = inherited.cuit_dni;
+                        if (inherited.address) insertData.address = inherited.address;
+                        if (inherited.notes) insertData.notes = inherited.notes;
+                        if (inherited.is_lead !== undefined) insertData.is_lead = inherited.is_lead;
+                        if (inherited.crm_status) insertData.crm_status = inherited.crm_status;
+                        if (inherited.crm_due_date) insertData.crm_due_date = inherited.crm_due_date;
+                        if (inherited.tax_status) insertData.tax_status = inherited.tax_status;
+                        if (inherited.offered_product) insertData.offered_product = inherited.offered_product;
+                        if (inherited.source) insertData.source = inherited.source;
+                        if (inherited.metadata) insertData.metadata = inherited.metadata;
+                    }
+                } catch (inheritErr: any) {
+                    console.warn('[HistoryHandler] No se pudieron heredar datos de contacto hermano:', inheritErr.message);
+                }
+
                 const { data: newData, error: insertError } = await supabase
                     .from('chats')
                     .insert(insertData)
