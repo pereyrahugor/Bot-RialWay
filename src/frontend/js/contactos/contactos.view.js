@@ -28,7 +28,7 @@ window.contactosView = (() => {
 
     function getHTML() {
         return `
-        <main class="crm-main-container contactos-page" style="z-index:10; padding:0;">
+        <main class="crm-main-container contactos-page" style="z-index:10; padding:0; width:100%; height:100%; min-height:0; flex:1; display:flex; flex-direction:column; overflow-y:auto; overflow-x:hidden;">
             ${window.renderSectionTabs ? window.renderSectionTabs('messaging') : ''}
 
             <header class="contactos-header animate-fade">
