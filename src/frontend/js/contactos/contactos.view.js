@@ -12,6 +12,9 @@ window.contactosView = (() => {
         token: '',
         contacts: [],
         tags: [],
+        page: 1,
+        limit: 50,
+        total: 0,
         importRows: [],
         selectedChannel: '',
         selectedFileName: '',
@@ -28,7 +31,7 @@ window.contactosView = (() => {
 
     function getHTML() {
         return `
-        <main class="crm-main-container contactos-page" style="z-index:10; padding:0; width:100%; height:100%; min-height:0; flex:1; display:flex; flex-direction:column; overflow-y:auto; overflow-x:hidden;">
+        <main class="crm-main-container contactos-page" style="z-index:10; padding:0; width:100%; height:100%; min-height:0; flex:1; display:flex; flex-direction:column; overflow:hidden;">
             ${window.renderSectionTabs ? window.renderSectionTabs('messaging') : ''}
 
             <header class="contactos-header animate-fade">
@@ -87,6 +90,7 @@ window.contactosView = (() => {
                 <div id="contactos-list" class="contactos-list">
                     ${typeof batLoaderHtml === 'function' ? batLoaderHtml('Cargando contactos...') : '<div class="contactos-empty"><i class="fas fa-circle-notch fa-spin"></i> Cargando contactos...</div>'}
                 </div>
+                <div id="contactos-pagination-bar" class="contactos-pagination-bar"></div>
             </section>
 
             ${renderEditModal()}
@@ -376,7 +380,8 @@ window.contactosView = (() => {
         select.value = currentVal || '';
     }
 
-    async function loadContacts() {
+    async function loadContacts(page = state.page) {
+        state.page = Math.max(1, parseInt(page, 10) || 1);
         const list = document.getElementById('contactos-list');
         if (list) {
             list.innerHTML = typeof batLoaderHtml === 'function' 
@@ -385,9 +390,11 @@ window.contactosView = (() => {
         }
 
         try {
+            const offset = (state.page - 1) * state.limit;
             const params = new URLSearchParams();
             params.set('token', state.token);
-            params.set('limit', '200');
+            params.set('limit', String(state.limit));
+            params.set('offset', String(offset));
             if (window.railwayProjectId) params.set('projectId', window.railwayProjectId);
             if (window.railwayServiceId) params.set('serviceId', window.railwayServiceId);
             if (state.search) params.set('search', state.search);
@@ -399,9 +406,21 @@ window.contactosView = (() => {
             const data = await res.json();
             if (!res.ok || !data.success) throw new Error(data.error || 'No se pudieron cargar los contactos');
 
-            state.contacts = Array.isArray(data.contacts) ? data.contacts : [];
+            if (Array.isArray(data.contacts)) {
+                state.contacts = data.contacts;
+                state.total = typeof data.total === 'number' ? data.total : data.contacts.length;
+            } else if (data.contacts && Array.isArray(data.contacts.contacts)) {
+                state.contacts = data.contacts.contacts;
+                state.total = typeof data.contacts.total === 'number' ? data.contacts.total : state.contacts.length;
+            } else {
+                state.contacts = [];
+                state.total = 0;
+            }
+
             updateTotalBadge();
             renderContacts();
+            renderPagination();
+            if (list) list.scrollTop = 0;
         } catch (error) {
             console.error('[Contactos] Error cargando:', error);
             if (list) list.innerHTML = `<div class="contactos-empty error"><i class="fas fa-triangle-exclamation"></i> ${escapeHtml(error.message)}</div>`;
@@ -410,7 +429,7 @@ window.contactosView = (() => {
 
     function updateTotalBadge() {
         const badge = document.getElementById('contactos-total-count');
-        if (badge) badge.textContent = `${state.contacts.length} contactos`;
+        if (badge) badge.textContent = `${Number(state.total || state.contacts.length).toLocaleString()} contactos`;
     }
 
     function renderContacts() {
@@ -627,25 +646,90 @@ window.contactosView = (() => {
         }
     }
 
+    function renderPagination() {
+        const bar = document.getElementById('contactos-pagination-bar');
+        if (!bar) return;
+
+        const totalPages = Math.max(1, Math.ceil(state.total / state.limit));
+        const startItem = state.total === 0 ? 0 : (state.page - 1) * state.limit + 1;
+        const endItem = Math.min(state.page * state.limit, state.total);
+
+        const prevDisabled = state.page <= 1 ? 'disabled' : '';
+        const nextDisabled = state.page >= totalPages ? 'disabled' : '';
+
+        bar.innerHTML = `
+            <div class="contactos-pagination-info">
+                <span>Mostrando <strong>${startItem} - ${endItem}</strong> de <strong>${state.total.toLocaleString()}</strong> contactos</span>
+            </div>
+            <div class="contactos-pagination-controls">
+                <button class="contactos-pagination-btn" onclick="window.contactosView.goToPage(1)" ${prevDisabled} title="Primera página">
+                    <i class="fas fa-angles-left"></i>
+                </button>
+                <button class="contactos-pagination-btn" onclick="window.contactosView.goToPage(${state.page - 1})" ${prevDisabled} title="Página anterior">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <span style="font-size:0.83rem; font-weight:700; padding:0 0.5rem; color:var(--text-main); white-space:nowrap;">
+                    Página ${state.page} de ${totalPages}
+                </span>
+                <button class="contactos-pagination-btn" onclick="window.contactosView.goToPage(${state.page + 1})" ${nextDisabled} title="Página siguiente">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+                <button class="contactos-pagination-btn" onclick="window.contactosView.goToPage(${totalPages})" ${nextDisabled} title="Última página">
+                    <i class="fas fa-angles-right"></i>
+                </button>
+            </div>
+            <div class="contactos-pagination-limit">
+                <label for="contactos-limit-select">Por página:</label>
+                <select id="contactos-limit-select" onchange="window.contactosView.changeLimit(this.value)">
+                    <option value="25" ${state.limit === 25 ? 'selected' : ''}>25</option>
+                    <option value="50" ${state.limit === 50 ? 'selected' : ''}>50</option>
+                    <option value="100" ${state.limit === 100 ? 'selected' : ''}>100</option>
+                    <option value="200" ${state.limit === 200 ? 'selected' : ''}>200</option>
+                </select>
+            </div>
+        `;
+    }
+
+    function goToPage(page) {
+        const totalPages = Math.max(1, Math.ceil(state.total / state.limit));
+        const targetPage = Math.max(1, Math.min(page, totalPages));
+        if (targetPage !== state.page) {
+            loadContacts(targetPage);
+        }
+    }
+
+    function changeLimit(newLimit) {
+        const parsed = parseInt(newLimit, 10);
+        if (parsed > 0 && parsed !== state.limit) {
+            state.limit = parsed;
+            state.page = 1;
+            loadContacts(1);
+        }
+    }
+
     function handleSearch(value) {
         state.search = String(value || '').trim();
+        state.page = 1;
         window.clearTimeout(state.searchTimer);
-        state.searchTimer = window.setTimeout(loadContacts, 250);
+        state.searchTimer = window.setTimeout(() => loadContacts(1), 250);
     }
 
     function handleChannelFilter(value) {
         state.channelFilter = value || '';
-        loadContacts();
+        state.page = 1;
+        loadContacts(1);
     }
 
     function handleTagFilter(value) {
         state.tagFilter = value || '';
-        loadContacts();
+        state.page = 1;
+        loadContacts(1);
     }
 
     function handleLeadFilter(value) {
         state.leadFilter = value || '';
-        loadContacts();
+        state.page = 1;
+        loadContacts(1);
     }
 
     function openCreateModal() {
@@ -1297,6 +1381,8 @@ window.contactosView = (() => {
         closeImportModal,
         selectImportChannel,
         handleImportFile,
-        saveImport
+        saveImport,
+        goToPage,
+        changeLimit
     };
 })();

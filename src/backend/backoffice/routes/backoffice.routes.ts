@@ -1132,15 +1132,23 @@ export const registerBackofficeRoutes = (app: any) => {
         try {
             const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
             const serviceId = resolveServiceId(req) || depsHistoryHandler.SERVICE_IDENTIFIER;
-            const contacts = await ContactService.listContacts(projectId, serviceId, {
-                limit: parseInt(req.query.limit as string) || 100,
-                offset: parseInt(req.query.offset as string) || 0,
+            const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 50, 1), 200);
+            const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
+            const result = await ContactService.listContacts(projectId, serviceId, {
+                limit,
+                offset,
                 search: req.query.search as string,
                 channel: req.query.channel as any,
                 tagId: req.query.tagId as string,
                 leadOnly: req.query.leadOnly === 'true'
             });
-            res.json({ success: true, contacts });
+            res.json({
+                success: true,
+                contacts: result.contacts,
+                total: result.total,
+                limit,
+                offset
+            });
         } catch (e: any) {
             res.status(500).json({ success: false, error: e.message });
         }

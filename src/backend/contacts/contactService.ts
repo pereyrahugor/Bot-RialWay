@@ -119,7 +119,7 @@ export class ContactService {
      * Lista todos los contactos del proyecto y servicio consultando la tabla principal `chats`
      * cumpliendo estrictamente con la regla de segregación Multi-Tenant y Multi-Servicio.
      */
-    static async listContacts(projectId: string, serviceId: string, options: ListContactsOptions = {}): Promise<any[]> {
+    static async listContacts(projectId: string, serviceId: string, options: ListContactsOptions = {}): Promise<{ contacts: any[]; total: number }> {
         const limit = Math.min(Math.max(Number(options.limit) || 50, 1), 200);
         const offset = Math.max(Number(options.offset) || 0, 0);
 
@@ -129,7 +129,7 @@ export class ContactService {
 
         let query = supabase
             .from('chats')
-            .select(selectQuery)
+            .select(selectQuery, { count: 'exact' })
             .eq('project_id', projectId)
             .eq('service_id', serviceId);
 
@@ -151,7 +151,7 @@ export class ContactService {
             query = query.or(`name.ilike.%${escapedSearch}%,id.ilike.%${escapedSearch}%,cuit_dni.ilike.%${escapedSearch}%,email.ilike.%${escapedSearch}%`);
         }
 
-        const { data, error } = await query
+        const { data, error, count } = await query
             .order('last_message_at', { ascending: false, nullsFirst: false })
             .range(offset, offset + limit - 1);
 
@@ -161,7 +161,10 @@ export class ContactService {
         }
 
         const rawList = (data as any[]) || [];
-        return rawList.map(row => this.formatContactRow(row));
+        return {
+            contacts: rawList.map(row => this.formatContactRow(row)),
+            total: count ?? rawList.length
+        };
     }
 
     /**
