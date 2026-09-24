@@ -1066,12 +1066,30 @@ export const registerBackofficeRoutes = (app: any) => {
     // --- CONTACTOS (Agenda central) ---
 
     const mapContactPayload = (body: any = {}) => ({
+        id: body.id ?? body.phone ?? null,
+        phone: body.phone ?? body.phoneNormalized ?? body.phone_normalized ?? body.phoneRaw ?? body.phone_raw ?? body.whatsappChannel ?? body.whatsapp_channel ?? null,
         channel: body.channel ?? null,
         channelValue: body.channelValue ?? body.channel_value ?? null,
         name: body.name ?? null,
+        apellido: body.apellido ?? body.lastName ?? null,
         phoneRaw: body.phoneRaw ?? body.phone_raw ?? null,
         phoneNormalized: body.phoneNormalized ?? body.phone_normalized ?? null,
+        cuit_dni: body.cuit_dni ?? body.cuit ?? null,
+        empresa: body.empresa ?? body.company ?? null,
         email: body.email ?? null,
+        address: body.address ?? body.direccion ?? null,
+        localidad: body.localidad ?? body.city ?? null,
+        provincia: body.provincia ?? body.state ?? null,
+        transporte: body.transporte ?? null,
+        tax_status: body.tax_status ?? body.situacion_impositiva ?? null,
+        offered_product: body.offered_product ?? body.producto ?? null,
+        crm_status: body.crm_status ?? body.status ?? body.estado ?? null,
+        crm_due_date: body.crm_due_date ?? body.alert_date ?? null,
+        is_lead: body.is_lead !== undefined ? body.is_lead : (body.crm_status ? true : undefined),
+        priority: body.priority ?? 'Media',
+        notes: body.notes ?? body.notas ?? null,
+        shared_notes: body.shared_notes ?? body.notas_compartidas ?? null,
+        tagIds: Array.isArray(body.tagIds) ? body.tagIds : (Array.isArray(body.tags) ? body.tags.map((t: any) => typeof t === 'object' ? t.id : t) : undefined),
         whatsappChannel: body.whatsappChannel ?? body.whatsapp_channel ?? null,
         instagramChannel: body.instagramChannel ?? body.instagram_channel ?? null,
         facebookChannel: body.facebookChannel ?? body.facebook_channel ?? null,
@@ -1083,7 +1101,10 @@ export const registerBackofficeRoutes = (app: any) => {
 
     const hasContactIdentity = (body: any = {}) => {
         return [
+            body.id,
+            body.phone,
             body.name,
+            body.apellido,
             body.channelValue,
             body.channel_value,
             body.phoneRaw,
@@ -1091,6 +1112,9 @@ export const registerBackofficeRoutes = (app: any) => {
             body.phoneNormalized,
             body.phone_normalized,
             body.email,
+            body.cuit,
+            body.cuit_dni,
+            body.empresa,
             body.whatsappChannel,
             body.whatsapp_channel,
             body.instagramChannel,
@@ -1109,10 +1133,12 @@ export const registerBackofficeRoutes = (app: any) => {
             const projectId = resolveProjectId(req) || depsHistoryHandler.PROJECT_IDENTIFIER;
             const serviceId = resolveServiceId(req) || depsHistoryHandler.SERVICE_IDENTIFIER;
             const contacts = await ContactService.listContacts(projectId, serviceId, {
-                limit: parseInt(req.query.limit as string) || 50,
+                limit: parseInt(req.query.limit as string) || 100,
                 offset: parseInt(req.query.offset as string) || 0,
                 search: req.query.search as string,
-                channel: req.query.channel as any
+                channel: req.query.channel as any,
+                tagId: req.query.tagId as string,
+                leadOnly: req.query.leadOnly === 'true'
             });
             res.json({ success: true, contacts });
         } catch (e: any) {
@@ -1146,7 +1172,7 @@ export const registerBackofficeRoutes = (app: any) => {
         }
     });
 
-    app.patch('/api/backoffice/contacts/:contactId', backofficeAuth, bodyParser.json(), async (req: any, res: any) => {
+    const handleUpdateContact = async (req: any, res: any) => {
         try {
             if (!hasContactIdentity(req.body)) {
                 return res.status(400).json({ success: false, error: 'Se requiere al menos un dato del contacto' });
@@ -1159,7 +1185,10 @@ export const registerBackofficeRoutes = (app: any) => {
         } catch (e: any) {
             res.status(500).json({ success: false, error: e.message });
         }
-    });
+    };
+
+    app.patch('/api/backoffice/contacts/:contactId', backofficeAuth, bodyParser.json(), handleUpdateContact);
+    app.put('/api/backoffice/contacts/:contactId', backofficeAuth, bodyParser.json(), handleUpdateContact);
 
     app.delete('/api/backoffice/contacts/:contactId', backofficeAuth, async (req: any, res: any) => {
         try {
