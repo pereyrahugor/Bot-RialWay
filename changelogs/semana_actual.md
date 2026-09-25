@@ -10,6 +10,9 @@
   * Ficha expandible por cliente con datos de contacto, ubicación, CUIT/DNI, condición fiscal, empresa y notas históricas.
   * Selector visual de etiquetas para clasificación y segmentación de clientes.
   * Formulario completo para agregar nuevos contactos y descargar plantilla de importación.
+* **Documentación y Arquitectura para Pasarela de Pagos HG.Cash (25/09)**:
+  * Especificación técnica y funcional para automatizar cobros (Cash-In) y transferencias bancarias directas (Cash-Out) a CBU/CVU conectadas con bots de Selenium.
+  * Definición del modelo contable B2B con esquema de comisiones sobre ingresos y retiros 1:1 a favor del usuario final.
 * **Sistema de Banners de Notificaciones Prioritarias (23/09)**:
   * Sistema de avisos emergentes superiores en tiempo real para comunicar a los usuarios del CRM novedades, mantenimientos programados o alertas técnicas directamente desde la consola y sin necesidad de deploys.
 
